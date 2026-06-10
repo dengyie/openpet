@@ -1,0 +1,21 @@
+/**
+ * ibot Control Center 预加载脚本。
+ *
+ * 暴露配置管理 UI 需要的最小主进程接口。AI、插件和本地服务后续也从这里扩展，
+ * 不让管理页面直接接触 Node.js / Electron API。
+ */
+const { contextBridge, ipcRenderer } = require('electron')
+
+const IPC = {
+  SETTINGS_GET: 'settings:get',
+  SETTINGS_SAVE: 'settings:save',
+  SETTINGS_PREVIEW_SCALE: 'settings:preview-scale',
+  SETTINGS_CLOSE: 'settings:close'
+}
+
+contextBridge.exposeInMainWorld('controlCenterAPI', {
+  getSettings: () => ipcRenderer.invoke(IPC.SETTINGS_GET),
+  saveSettings: (settings) => ipcRenderer.invoke(IPC.SETTINGS_SAVE, settings),
+  previewScale: (scale) => ipcRenderer.send(IPC.SETTINGS_PREVIEW_SCALE, scale),
+  close: () => ipcRenderer.send(IPC.SETTINGS_CLOSE)
+})

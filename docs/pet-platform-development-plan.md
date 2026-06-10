@@ -20,7 +20,7 @@
 
 - Phase 1 Core service layer：已完成基础落地。
 - Phase 2 Runtime contract：已完成基础落地。
-- Phase 3 Control Center：未开始。
+- Phase 3 Control Center：已完成基础落地。
 - Phase 4 AI chat：未开始。
 - Phase 5 Plugin runtime：未开始。
 - Phase 6 Local HTTP/MCP：未开始。
@@ -59,6 +59,25 @@ Phase 2 当前范围：
 - 支持把当前 `cat_anime/animations.json` legacy 配置包装成 runtime pet pack。
 - `ActionService` 内部面向 pet pack，外部仍保持 renderer 需要的旧动画配置形状。
 - 尚未实现 Control Center 的动作帧导入 UI。
+
+Phase 3 已新增：
+
+```text
+control-center-preload.js
+src/control-center/index.html
+src/control-center/vite.config.js
+src/control-center/src/main.jsx
+src/control-center/src/styles.css
+```
+
+Phase 3 当前范围：
+
+- 引入 Vite/React Control Center。
+- `npm start` 会先构建 Control Center，再启动 Electron。
+- Electron 设置窗口优先加载 `dist/control-center/index.html`，缺少构建产物时回退旧 `settings.html`。
+- Control Center 的 Pet 页面覆盖现有设置项：大小、散步速度、散步时长、气泡时长、开机自启。
+- Actions、AI、Plugins、Service、About 页面先保留结构化入口。
+- 尚未实现动作帧导入 UI、AI API Key UI、插件配置 UI 和本地 HTTP API。
 
 ## 2. 参考方向
 
