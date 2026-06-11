@@ -332,17 +332,71 @@ function AiSettings({
   )
 }
 
+function ActionPreview({ action }) {
+  const [frameIndex, setFrameIndex] = useState(0)
+
+  useEffect(() => {
+    setFrameIndex(0)
+    if (!action || action.frameCount <= 1) return undefined
+    const timer = window.setInterval(() => {
+      setFrameIndex((current) => (current + 1) % action.frameCount)
+    }, action.frameMs || 100)
+    return () => window.clearInterval(timer)
+  }, [action])
+
+  if (!action) {
+    return <div className="action-preview empty-chat">暂无可预览动作</div>
+  }
+
+  const frameWidth = Number(action.frameWidth || 0)
+  const frameHeight = Number(action.frameHeight || 0)
+  const fitScale = frameWidth && frameHeight
+    ? Math.min(1, 220 / frameWidth, 180 / frameHeight)
+    : 1
+  const displayWidth = Math.max(1, Math.round(frameWidth * fitScale))
+  const displayHeight = Math.max(1, Math.round(frameHeight * fitScale))
+  const sprite = action.previewSprite || action.sprite
+
+  return (
+    <div className="action-preview">
+      <div className="preview-stage">
+        {sprite && frameWidth && frameHeight ? (
+          <div
+            className="preview-sprite"
+            style={{
+              width: `${displayWidth}px`,
+              height: `${displayHeight}px`,
+              backgroundImage: `url(${sprite})`,
+              backgroundPositionX: `${-(frameIndex * displayWidth)}px`
+            }}
+          />
+        ) : <div className="empty-chat">无预览图片</div>}
+      </div>
+      <div className="preview-meta">
+        <strong>{action.label || action.id}</strong>
+        <span>{action.frameCount || 0} frames · {action.frameMs || 100}ms</span>
+      </div>
+    </div>
+  )
+}
+
 function ActionsPane({
   actionsConfig,
+  selectedActionId,
   importDraft,
   setImportDraft,
   status,
   working,
+  onSelectAction,
   onChangeConfig,
   onSaveConfig,
   onImport,
   onDelete
 }) {
+  const selectedAction = actionsConfig.actions.find((action) => action.id === selectedActionId)
+    || actionsConfig.actions.find((action) => action.id === actionsConfig.defaultAction)
+    || actionsConfig.actions[0]
+
   return (
     <section className="pane">
       <header className="pane-header">
@@ -408,30 +462,45 @@ function ActionsPane({
         </div>
       </div>
 
-      <div className="action-list">
-        {actionsConfig.actions.length === 0 ? (
-          <div className="empty-chat">暂无动作</div>
-        ) : actionsConfig.actions.map((action) => (
-          <div className="action-row" key={action.id}>
-            <div>
-              <strong>{action.label}</strong>
-              <span>{action.id}</span>
+      <div className="actions-workspace">
+        <ActionPreview action={selectedAction} />
+        <div className="action-list">
+          {actionsConfig.actions.length === 0 ? (
+            <div className="empty-chat">暂无动作</div>
+          ) : actionsConfig.actions.map((action) => (
+            <div
+              className={selectedAction?.id === action.id ? 'action-row selected' : 'action-row'}
+              key={action.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => onSelectAction(action.id)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') onSelectAction(action.id)
+              }}
+            >
+              <div>
+                <strong>{action.label}</strong>
+                <span>{action.id}</span>
+              </div>
+              <div className="action-meta">
+                <span>{action.frameCount} 帧</span>
+                <span>{action.frameWidth}x{action.frameHeight}</span>
+                <span>{action.loop ? '循环' : '单次'}</span>
+                <button
+                  type="button"
+                  className="danger-text"
+                  disabled={working || actionsConfig.actions.length <= 1}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onDelete(action.id)
+                  }}
+                >
+                  删除
+                </button>
+              </div>
             </div>
-            <div className="action-meta">
-              <span>{action.frameCount} 帧</span>
-              <span>{action.frameWidth}x{action.frameHeight}</span>
-              <span>{action.loop ? '循环' : '单次'}</span>
-              <button
-                type="button"
-                className="danger-text"
-                disabled={working || actionsConfig.actions.length <= 1}
-                onClick={() => onDelete(action.id)}
-              >
-                删除
-              </button>
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
       {status ? <div className="status-line">{status}</div> : null}
@@ -590,6 +659,7 @@ function App() {
   const [settings, setSettings] = useState(defaultSettings)
   const [originalSettings, setOriginalSettings] = useState(defaultSettings)
   const [actionsConfig, setActionsConfig] = useState(defaultActionsConfig)
+  const [selectedActionId, setSelectedActionId] = useState('')
   const [importDraft, setImportDraft] = useState({ actionId: '', label: '' })
   const [actionStatus, setActionStatus] = useState('')
   const [actionWorking, setActionWorking] = useState(false)
@@ -635,6 +705,11 @@ function App() {
     return () => window.removeEventListener('beforeunload', restorePreview)
   }, [])
 
+  useEffect(() => {
+    if (actionsConfig.actions.some((action) => action.id === selectedActionId)) return
+    setSelectedActionId(actionsConfig.defaultAction || actionsConfig.actions[0]?.id || '')
+  }, [actionsConfig, selectedActionId])
+
   const page = useMemo(() => {
     if (activeTab === 'pet') {
       return (
@@ -667,10 +742,12 @@ function App() {
       return (
         <ActionsPane
           actionsConfig={actionsConfig}
+          selectedActionId={selectedActionId}
           importDraft={importDraft}
           setImportDraft={setImportDraft}
           status={actionStatus}
           working={actionWorking}
+          onSelectAction={setSelectedActionId}
           onChangeConfig={(partial) => setActionsConfig({ ...actionsConfig, ...partial })}
           onSaveConfig={async () => {
             setActionWorking(true)
@@ -697,6 +774,7 @@ function App() {
                 setActionStatus('已取消导入')
               } else {
                 setActionsConfig(cloneActionsConfig(response.animations))
+                if (response.result.importedAction?.id) setSelectedActionId(response.result.importedAction.id)
                 setActionStatus(`已导入 ${response.result.importedAction?.label || importDraft.actionId}`)
               }
             } catch (error) {

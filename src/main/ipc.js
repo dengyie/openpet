@@ -86,7 +86,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, aiService, pluginServic
   // 设置面板启动时读取当前设置
   ipcMain.handle(IPC.SETTINGS_GET, () => petService.getSettings())
 
-  ipcMain.handle(IPC.ACTIONS_GET, () => petService.getAnimations())
+  ipcMain.handle(IPC.ACTIONS_GET, () => petService.getPreviewAnimations())
 
   ipcMain.handle(IPC.ACTIONS_IMPORT_FRAMES, async (_event, payload) => {
     const selected = await dialog.showOpenDialog({
@@ -101,19 +101,19 @@ const registerIpcHandlers = ({ getPetWindow, petService, aiService, pluginServic
       label: payload.label
     })
     const animations = reloadAndSendAnimations(getPetWindow, petService)
-    return { canceled: false, result, animations }
+    return { canceled: false, result, animations: petService.getPreviewAnimations() }
   })
 
   ipcMain.handle(IPC.ACTIONS_SAVE_CONFIG, async (_event, payload) => {
     const result = await actionImportService.updateActionConfig(payload)
-    const animations = reloadAndSendAnimations(getPetWindow, petService)
-    return { result, animations }
+    reloadAndSendAnimations(getPetWindow, petService)
+    return { result, animations: petService.getPreviewAnimations() }
   })
 
   ipcMain.handle(IPC.ACTIONS_DELETE, async (_event, payload) => {
     const result = await actionImportService.deleteAction(payload.actionId)
-    const animations = reloadAndSendAnimations(getPetWindow, petService)
-    return { result, animations }
+    reloadAndSendAnimations(getPetWindow, petService)
+    return { result, animations: petService.getPreviewAnimations() }
   })
 
   // 设置面板点击"保存"：持久化并通知宠物窗口应用变更

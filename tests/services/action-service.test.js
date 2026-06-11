@@ -73,3 +73,28 @@ test('action service can expose the normalized pet pack while preserving animati
     ]
   })
 })
+
+test('action service can expose preview-safe file urls for sprites', () => {
+  const service = createActionService({
+    projectRoot: '/app/ibot',
+    getPetAnimations: () => ({
+      defaultAction: 'idle',
+      clickAction: 'idle',
+      actions: [
+        { id: 'idle', label: '待机', sprite: 'cat_anime/sprites/idle.png' }
+      ]
+    })
+  })
+
+  assert.deepEqual(service.getPreviewConfig().actions.map((action) => ({
+    id: action.id,
+    sprite: action.sprite,
+    previewSprite: action.previewSprite
+  })), [
+    {
+      id: 'idle',
+      sprite: 'cat_anime/sprites/idle.png',
+      previewSprite: 'file:///app/ibot/cat_anime/sprites/idle.png'
+    }
+  ])
+})

@@ -352,6 +352,49 @@ button {
   gap: 10px;
 }
 
+.actions-workspace {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 22px;
+  align-items: start;
+}
+
+.action-preview {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.preview-stage {
+  display: grid;
+  place-items: center;
+  width: 260px;
+  height: 210px;
+  border-top: 1px solid #dde2e8;
+  border-bottom: 1px solid #dde2e8;
+  background: #ffffff;
+}
+
+.preview-sprite {
+  background-repeat: no-repeat;
+  background-size: auto 100%;
+}
+
+.preview-meta {
+  display: grid;
+  gap: 3px;
+  font-size: 12px;
+}
+
+.preview-meta strong {
+  color: #202124;
+  font-size: 14px;
+}
+
+.preview-meta span {
+  color: #6b7280;
+}
+
 .action-list {
   display: grid;
   border-top: 1px solid #dde2e8;
@@ -364,6 +407,12 @@ button {
   align-items: center;
   min-height: 58px;
   border-bottom: 1px solid #dde2e8;
+  cursor: pointer;
+}
+
+.action-row:hover,
+.action-row.selected {
+  background: #eef2f6;
 }
 
 .action-row div:first-child {
@@ -493,6 +542,14 @@ button {
 
   .plugin-row {
     grid-template-columns: 1fr;
+  }
+
+  .actions-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .preview-stage {
+    width: 100%;
   }
 
   .action-row {

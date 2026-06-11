@@ -1,4 +1,6 @@
 const { loadLegacyPetPack } = require('../pet-pack/loader')
+const path = require('path')
+const { pathToFileURL } = require('url')
 
 const emptyConfig = {
   defaultAction: '',
@@ -20,7 +22,7 @@ const emptyPetPack = {
   }
 }
 
-const createActionService = ({ getPetAnimations, loadPetPack }) => {
+const createActionService = ({ getPetAnimations, loadPetPack, projectRoot = path.join(__dirname, '..', '..', '..') }) => {
   let cachedPetPack = null
 
   const getPetPack = () => {
@@ -57,12 +59,25 @@ const createActionService = ({ getPetAnimations, loadPetPack }) => {
 
   const getAction = (actionId) => listActions().find((action) => action.id === actionId) || null
 
+  const getPreviewConfig = () => {
+    const config = getConfig()
+    return {
+      ...config,
+      actions: config.actions.map((action) => ({
+        ...action,
+        previewSprite: action.sprite
+          ? pathToFileURL(path.join(projectRoot, action.sprite)).toString()
+          : ''
+      }))
+    }
+  }
+
   const reload = () => {
     cachedPetPack = null
     return getConfig()
   }
 
-  return { getPetPack, getConfig, listActions, getAction, reload }
+  return { getPetPack, getConfig, getPreviewConfig, listActions, getAction, reload }
 }
 
 module.exports = { createActionService }
