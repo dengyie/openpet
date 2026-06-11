@@ -6,6 +6,27 @@ const { createLocalHttpService } = require('../../src/main/services/local-http-s
 
 const TEST_TOKEN = 'test-token'
 
+const createSettingsService = (initialSettings = {}) => {
+  let current = {
+    localHttp: {
+      enabled: false,
+      host: '127.0.0.1',
+      port: 0,
+      token: '',
+      logs: []
+    },
+    ...initialSettings
+  }
+
+  return {
+    get: () => current,
+    save: (settings) => {
+      current = settings
+      return current
+    }
+  }
+}
+
 const getAvailablePort = () => new Promise((resolve, reject) => {
   const server = http.createServer()
   server.once('error', reject)
@@ -27,6 +48,7 @@ const requestJson = async (url, { method = 'GET', body, token, headers = {} } = 
   })
   return {
     status: response.status,
+    headers: response.headers,
     body: await response.json()
   }
 }
@@ -341,6 +363,261 @@ test('local http service returns 404 json for unknown routes', async () => {
 
     assert.equal(result.status, 404)
     assert.deepEqual(result.body, { ok: false, error: 'Not found' })
+  } finally {
+    await service.stop()
+  }
+})
+
+test('local http service records access logs without token values', async () => {
+  const settingsService = createSettingsService()
+  const service = createLocalHttpService({
+    settingsService,
+    petService: {
+      getSnapshot: () => ({}),
+      say: (payload) => payload
+    }
+  })
+
+  try {
+    const started = await service.start({ enabled: true, host: '127.0.0.1', port: 0, token: TEST_TOKEN })
+    await requestJson(`http://${started.host}:${started.port}/api/status`)
+    await requestJson(`http://${started.host}:${started.port}/api/pet/say`, {
+      method: 'POST',
+      body: { text: 'nope' },
+      token: 'wrong-token'
+    })
+
+    const logs = service.getLogs()
+    assert.equal(logs.length, 2)
+    assert.deepEqual(logs.map((log) => [log.method, log.path, log.statusCode, log.authorized]), [
+      ['GET', '/api/status', 200, false],
+      ['POST', '/api/pet/say', 401, false]
+    ])
+    assert.equal(JSON.stringify(logs).includes(TEST_TOKEN), false)
+    assert.equal(JSON.stringify(logs).includes('wrong-token'), false)
+    assert.equal(settingsService.get().localHttp.logs.length, 2)
+  } finally {
+    await service.stop()
+  }
+})
+
+test('local http service filters exports and clears access logs', async () => {
+  const service = createLocalHttpService({
+    petService: {
+      getSnapshot: () => ({}),
+      say: (payload) => payload
+    }
+  })
+
+  try {
+    const started = await service.start({ enabled: true, host: '127.0.0.1', port: 0, token: TEST_TOKEN })
+    await requestJson(`http://${started.host}:${started.port}/api/status`, { token: TEST_TOKEN })
+    await requestJson(`http://${started.host}:${started.port}/api/missing`)
+
+    assert.equal(service.getLogs({ status: '404' }).length, 1)
+    assert.match(service.exportLogs({ format: 'csv' }), /^timestamp,method,path,statusCode,authorized,remoteAddress,error\n/)
+    assert.match(service.exportLogs({ query: 'missing' }), /\/api\/missing/)
+    assert.deepEqual(service.clearLogs(), [])
+    assert.deepEqual(service.getLogs(), [])
+  } finally {
+    await service.stop()
+  }
+})
+
+test('local http service honors a zero access log limit', async () => {
+  const service = createLocalHttpService({
+    maxAccessLogs: 0,
+    petService: {
+      getSnapshot: () => ({}),
+      say: (payload) => payload
+    }
+  })
+
+  try {
+    const started = await service.start({ enabled: true, host: '127.0.0.1', port: 0, token: TEST_TOKEN })
+    await requestJson(`http://${started.host}:${started.port}/api/status`)
+
+    assert.deepEqual(service.getLogs(), [])
+  } finally {
+    await service.stop()
+  }
+})
+
+test('local http service trims preloaded access logs by configured limit', () => {
+  const settingsService = createSettingsService({
+    localHttp: {
+      enabled: false,
+      host: '127.0.0.1',
+      port: 0,
+      token: '',
+      logs: [
+        { id: 'one', timestamp: '2026-06-12T00:00:00.000Z', method: 'GET', path: '/one', statusCode: 200 },
+        { id: 'two', timestamp: '2026-06-12T00:00:01.000Z', method: 'GET', path: '/two', statusCode: 200 }
+      ]
+    }
+  })
+  const service = createLocalHttpService({
+    settingsService,
+    maxAccessLogs: 1,
+    petService: {
+      getSnapshot: () => ({}),
+      say: (payload) => payload
+    }
+  })
+
+  assert.deepEqual(service.getLogs().map((log) => log.id), ['two'])
+})
+
+test('local http service exposes mcp tools behind token and session', async () => {
+  const sayEvents = []
+  const service = createLocalHttpService({
+    petService: {
+      getSnapshot: () => ({ settings: { scale: 1 }, actions: { actions: [] } }),
+      say: (payload) => {
+        sayEvents.push(payload)
+        return payload
+      },
+      playAction: (payload) => payload,
+      setEvent: (payload) => payload
+    }
+  })
+
+  try {
+    const started = await service.start({ enabled: true, host: '127.0.0.1', port: 0, token: TEST_TOKEN })
+    const endpoint = `http://${started.host}:${started.port}/mcp`
+    const unauthorized = await requestJson(endpoint, {
+      method: 'POST',
+      body: { jsonrpc: '2.0', id: 1, method: 'initialize' }
+    })
+    const initialized = await requestJson(endpoint, {
+      method: 'POST',
+      token: TEST_TOKEN,
+      body: { jsonrpc: '2.0', id: 1, method: 'initialize' }
+    })
+    const sessionId = initialized.headers.get('mcp-session-id')
+    const missingSession = await requestJson(endpoint, {
+      method: 'POST',
+      token: TEST_TOKEN,
+      body: { jsonrpc: '2.0', id: 2, method: 'tools/list' }
+    })
+    const tools = await requestJson(endpoint, {
+      method: 'POST',
+      token: TEST_TOKEN,
+      headers: { 'Mcp-Session-Id': sessionId },
+      body: { jsonrpc: '2.0', id: 3, method: 'tools/list' }
+    })
+    const call = await requestJson(endpoint, {
+      method: 'POST',
+      token: TEST_TOKEN,
+      headers: { 'Mcp-Session-Id': sessionId },
+      body: {
+        jsonrpc: '2.0',
+        id: 4,
+        method: 'tools/call',
+        params: { name: 'ibot.say', arguments: { text: 'hello mcp', ttlMs: 700 } }
+      }
+    })
+
+    assert.equal(unauthorized.status, 401)
+    assert.equal(initialized.status, 200)
+    assert.equal(Boolean(sessionId), true)
+    assert.equal(initialized.body.result.serverInfo.name, 'ibot')
+    assert.equal(missingSession.status, 401)
+    assert.equal(tools.status, 200)
+    assert.deepEqual(tools.body.result.tools.map((tool) => tool.name), [
+      'ibot.status',
+      'ibot.say',
+      'ibot.play_action',
+      'ibot.set_event'
+    ])
+    assert.equal(call.status, 200)
+    assert.deepEqual(call.body.result.structuredContent, { text: 'hello mcp', ttlMs: 700, source: 'mcp' })
+    assert.deepEqual(sayEvents, [{ text: 'hello mcp', ttlMs: 700, source: 'mcp' }])
+  } finally {
+    await service.stop()
+  }
+})
+
+test('local http service clears mcp sessions when the token changes in place', async () => {
+  const service = createLocalHttpService({
+    petService: {
+      getSnapshot: () => ({}),
+      say: (payload) => payload,
+      playAction: (payload) => payload,
+      setEvent: (payload) => payload
+    }
+  })
+
+  try {
+    const port = await getAvailablePort()
+    const started = await service.start({ enabled: true, host: '127.0.0.1', port, token: TEST_TOKEN })
+    const endpoint = `http://${started.host}:${started.port}/mcp`
+    const initialized = await requestJson(endpoint, {
+      method: 'POST',
+      token: TEST_TOKEN,
+      body: { jsonrpc: '2.0', id: 1, method: 'initialize' }
+    })
+    const sessionId = initialized.headers.get('mcp-session-id')
+
+    await service.start({ enabled: true, host: '127.0.0.1', port, token: 'new-token' })
+
+    const oldToken = await requestJson(endpoint, {
+      method: 'POST',
+      token: TEST_TOKEN,
+      headers: { 'Mcp-Session-Id': sessionId },
+      body: { jsonrpc: '2.0', id: 2, method: 'tools/list' }
+    })
+    const newTokenOldSession = await requestJson(endpoint, {
+      method: 'POST',
+      token: 'new-token',
+      headers: { 'Mcp-Session-Id': sessionId },
+      body: { jsonrpc: '2.0', id: 3, method: 'tools/list' }
+    })
+
+    assert.equal(oldToken.status, 401)
+    assert.equal(newTokenOldSession.status, 401)
+  } finally {
+    await service.stop()
+  }
+})
+
+test('local http service validates mcp tool arguments before side effects', async () => {
+  const sayEvents = []
+  const service = createLocalHttpService({
+    petService: {
+      getSnapshot: () => ({}),
+      say: (payload) => {
+        sayEvents.push(payload)
+        return payload
+      },
+      playAction: (payload) => payload,
+      setEvent: (payload) => payload
+    }
+  })
+
+  try {
+    const started = await service.start({ enabled: true, host: '127.0.0.1', port: 0, token: TEST_TOKEN })
+    const endpoint = `http://${started.host}:${started.port}/mcp`
+    const initialized = await requestJson(endpoint, {
+      method: 'POST',
+      token: TEST_TOKEN,
+      body: { jsonrpc: '2.0', id: 1, method: 'initialize' }
+    })
+    const invalidCall = await requestJson(endpoint, {
+      method: 'POST',
+      token: TEST_TOKEN,
+      headers: { 'Mcp-Session-Id': initialized.headers.get('mcp-session-id') },
+      body: {
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'tools/call',
+        params: { name: 'ibot.say', arguments: { text: '' } }
+      }
+    })
+
+    assert.equal(invalidCall.status, 200)
+    assert.equal(invalidCall.body.error.code, -32602)
+    assert.deepEqual(sayEvents, [])
   } finally {
     await service.stop()
   }

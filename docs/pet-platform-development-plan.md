@@ -131,7 +131,7 @@ Phase 6 当前范围：
 
 - 新增本地 HTTP 服务，默认关闭，只允许绑定 loopback：`127.0.0.1`、`localhost`、`::1`。
 - Control Center 的 Service 页面支持启停、端口配置、运行状态和当前端点展示。
-- `settings.localHttp` 保存非敏感服务配置：enabled、host、port。
+- `settings.localHttp` 保存服务配置与有上限访问日志：enabled、host、port、token、logs。token 只通过 Control Center 展示和轮换，不写入访问日志。
 - 已提供最小 HTTP API：
   - `GET /api/status`
   - `POST /api/pet/say`
@@ -140,7 +140,8 @@ Phase 6 当前范围：
 - HTTP API 统一走 `PetService` intent，不直接操作 renderer。
 - `PetService.playAction()` 会推送到宠物窗口切换动作。
 - `PetService.setEvent()` 第一版映射为气泡消息，后续可扩展为完整 runtime event。
-- MCP bridge 暂不实现，等本地 HTTP API 和插件权限模型更稳定后再接。
+- HTTP 访问日志持久化到设置中，Control Center Service 页支持刷新、JSON/CSV 导出和清空。
+- MCP bridge 已通过 `POST /mcp` 暴露最小 JSON-RPC 工具集：`ibot.status`、`ibot.say`、`ibot.play_action`、`ibot.set_event`。MCP 请求必须先带 token 完成 `initialize`，后续请求还必须携带 `Mcp-Session-Id`；token 原地轮换会清空 MCP session。
 
 Actions 导入已新增：
 
@@ -309,13 +310,13 @@ POST /api/pet/event
 
 ### Phase 6: Local HTTP/MCP
 
-HTTP 基础已落地。Control Center Service 页面完成。默认不启动，从 UI 启用。MCP bridge 保持后置。
+HTTP/MCP 已落地。Control Center Service 页面完成。默认不启动，从 UI 启用；访问日志、令牌轮换和 MCP session 保护已接入。
 
 ## 10. 风险与约束
 
 主要风险：
 
-- 重构必须小步验证（当前已有 106 个测试覆盖全部 service 和 pet-pack/plugin 模块）。
+- 重构必须小步验证（当前已有 113 个测试覆盖全部 service 和 pet-pack/plugin 模块）。
 - API Key 存储不能放普通设置 JSON。
 - 插件系统不能为了快而放开 Node/Electron 权限。
 - Control Center 引入前端构建后，需要处理 dev/prod 加载路径。

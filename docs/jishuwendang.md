@@ -11,7 +11,7 @@
 | Electron | ^42.4.0 | 桌面窗口框架 |
 | React + Vite | ^19.2 / ^8.0 | Control Center UI |
 | sharp | ^0.34.5 | 精灵图合成（开发时） |
-| Node 原生 test runner | — | 测试框架（106 个测试） |
+| Node 原生 test runner | — | 测试框架（113 个测试） |
 | HTML / CSS / JS | — | 宠物窗口渲染层 UI 与动画 |
 
 ---
@@ -229,6 +229,10 @@ EventBus → SettingsService → ActionService → PetService
 | `plugins:clear-logs` | CC→主 | invoke | 清空插件运行日志 |
 | `service:get-status` | CC→主 | invoke | 获取本地 HTTP 服务状态与访问令牌配置 |
 | `service:save-config` | CC→主 | invoke | 保存本地 HTTP 服务配置；运行时启动/停止成功后才持久化 |
+| `service:get-logs` | CC→主 | invoke | 获取本地 HTTP 访问日志 |
+| `service:export-logs` | CC→主 | invoke | 导出本地 HTTP 访问日志 |
+| `service:clear-logs` | CC→主 | invoke | 清空本地 HTTP 访问日志 |
+| `service:rotate-token` | CC→主 | invoke | 轮换本地 HTTP 访问令牌 |
 
 ### 4.3 预加载脚本 `preload.js`
 
@@ -258,7 +262,7 @@ React + Vite 构建的 Web 应用，嵌入 Electron BrowserWindow（900×640px, 
 - **Actions**：动作列表、导入帧文件夹、删除、设置默认/点击动作
 - **AI**：provider 配置、API Key、连接测试、聊天窗口
 - **Plugins**：插件列表、启用/禁用、运行命令、运行日志/错误面板
-- **Service**：本地 HTTP 服务启停、端口配置、访问令牌、状态显示
+- **Service**：本地 HTTP 服务启停、端口配置、访问令牌、MCP endpoint、访问日志
 - **About**：占位
 
 ### 4.6 Service 层
@@ -279,7 +283,7 @@ React + Vite 构建的 Web 应用，嵌入 Electron BrowserWindow（900×640px, 
 
 **PluginService：** 插件发现、启用/禁用、配置保存、私有存储、命令运行。本地插件通过短生命周期子进程 runner 执行，runner 启用 Node permission model，只放行 runner 与插件入口文件读取；入口 `main` 必须是插件目录内的安全相对 JS 路径。`configSchema` 支持 string/number/boolean/enum/default 动态表单并保存到 `settings.plugins.config`；声明 `storage` 权限的插件可通过 `ctx.storage.get/set/remove/clear()` 使用 `settings.plugins.storage` 中的插件私有 JSON 数据，storage key 受限且写入前校验 64KB/插件与 16KB/value 配额；SDK 还暴露只读 `ctx.config.get()`，以及带权限校验的 `ctx.pet.say()`、`ctx.pet.playAction()`、`ctx.pet.setEvent()`、`ctx.ai.chat()`、`ctx.network.fetch()` 和 `ctx.commands.register()`。AI 调用只走主进程 `AiService`，API Key 不进入插件进程；网络调用只允许 manifest `network.allowlist` 中的 HTTPS host，并拒绝敏感 header。服务维护最多 200 条持久运行日志供 Control Center 筛选、导出和清空；插件列表只展示私有存储用量，并提供清理入口，不暴露存储内容。
 
-**LocalHttpService：** 本地 loopback HTTP API（status/say/action/event）。服务默认关闭，只允许 loopback；mutating endpoint 必须带 `Authorization: Bearer <token>` 或 `X-ibot-Token`，未鉴权 status 只返回 runtime 状态。同 host/port 保存时原地更新 token/config，换端口失败时保留旧 server。
+**LocalHttpService：** 本地 loopback HTTP API（status/say/action/event）与 `POST /mcp` JSON-RPC bridge。服务默认关闭，只允许 loopback；mutating endpoint 必须带 `Authorization: Bearer <token>` 或 `X-ibot-Token`，未鉴权 status 只返回 runtime 状态。同 host/port 保存时原地更新 token/config，换端口失败时保留旧 server。访问日志持久化在 `settings.localHttp.logs` 且不记录 token；Control Center 支持刷新、JSON/CSV 导出和清空。MCP bridge 支持 `ibot.status`、`ibot.say`、`ibot.play_action`、`ibot.set_event`，必须先用 token initialize 获取 `Mcp-Session-Id`，token 轮换会清空 session。
 
 **ActionImportService：** 动作帧文件夹导入、配置更新、删除。删除动作时服务层禁止删除最后一个有效动作，并在 regenerate 周围使用备份/恢复流程。
 
@@ -335,6 +339,6 @@ npm start                     # 构建 Control Center + 启动 Electron
 npm run dev:control-center    # 仅启动 Control Center dev server（热更新）
 npm run build:control-center  # 仅构建 Control Center
 npm run generate-sprites      # 重新生成精灵图
-npm test                      # 运行测试（106 个测试）
+npm test                      # 运行测试（113 个测试）
 npm run check:syntax          # 语法检查
 ```

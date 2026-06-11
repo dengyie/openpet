@@ -42,7 +42,8 @@ const defaultSettings = {
     enabled: false,
     host: '127.0.0.1',
     port: 0,
-    token: ''
+    token: '',
+    logs: []
   }
 }
 
@@ -75,7 +76,8 @@ const mergeSettings = (settings = {}) => ({
   },
   localHttp: {
     ...defaultSettings.localHttp,
-    ...(settings.localHttp || {})
+    ...(settings.localHttp || {}),
+    logs: Array.isArray(settings.localHttp?.logs) ? settings.localHttp.logs : defaultSettings.localHttp.logs
   }
 })
 

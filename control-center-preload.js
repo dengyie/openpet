@@ -33,7 +33,11 @@ const IPC = {
   PLUGINS_CLEAR_LOGS: 'plugins:clear-logs',
   PLUGINS_CLEAR_STORAGE: 'plugins:clear-storage',
   SERVICE_GET_STATUS: 'service:get-status',
-  SERVICE_SAVE_CONFIG: 'service:save-config'
+  SERVICE_SAVE_CONFIG: 'service:save-config',
+  SERVICE_GET_LOGS: 'service:get-logs',
+  SERVICE_EXPORT_LOGS: 'service:export-logs',
+  SERVICE_CLEAR_LOGS: 'service:clear-logs',
+  SERVICE_ROTATE_TOKEN: 'service:rotate-token'
 }
 
 contextBridge.exposeInMainWorld('controlCenterAPI', {
@@ -63,5 +67,9 @@ contextBridge.exposeInMainWorld('controlCenterAPI', {
   clearPluginStorage: (pluginId) => ipcRenderer.invoke(IPC.PLUGINS_CLEAR_STORAGE, { pluginId }),
   getServiceStatus: () => ipcRenderer.invoke(IPC.SERVICE_GET_STATUS),
   saveServiceConfig: (config) => ipcRenderer.invoke(IPC.SERVICE_SAVE_CONFIG, config),
+  getServiceLogs: (filters) => ipcRenderer.invoke(IPC.SERVICE_GET_LOGS, filters),
+  exportServiceLogs: (filters) => ipcRenderer.invoke(IPC.SERVICE_EXPORT_LOGS, filters),
+  clearServiceLogs: () => ipcRenderer.invoke(IPC.SERVICE_CLEAR_LOGS),
+  rotateServiceToken: () => ipcRenderer.invoke(IPC.SERVICE_ROTATE_TOKEN),
   close: () => ipcRenderer.send(IPC.SETTINGS_CLOSE)
 })

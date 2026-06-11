@@ -708,6 +708,10 @@ button {
   overflow-wrap: anywhere;
 }
 
+.service-log-row {
+  grid-template-columns: 76px 58px 58px minmax(0, 1fr);
+}
+
 .loading {
   display: grid;
   place-items: center;

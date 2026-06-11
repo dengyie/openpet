@@ -53,7 +53,8 @@ const defaultServiceStatus = {
     enabled: false,
     host: '127.0.0.1',
     port: 0,
-    token: ''
+    token: '',
+    logs: []
   },
   runtime: {
     enabled: false,
@@ -115,6 +116,10 @@ const api = window.controlCenterAPI || {
   clearPluginStorage: async (pluginId) => ({ id: pluginId, storage: { keyCount: 0, byteSize: 2 } }),
   getServiceStatus: async () => defaultServiceStatus,
   saveServiceConfig: async (config) => ({ config, runtime: { ...config, enabled: config.enabled } }),
+  getServiceLogs: async () => [],
+  exportServiceLogs: async () => '[]',
+  clearServiceLogs: async () => [],
+  rotateServiceToken: async () => defaultServiceStatus,
   close: () => {}
 }
 
@@ -124,6 +129,18 @@ const cloneServiceStatus = (status) => ({
   config: { ...defaultServiceStatus.config, ...(status?.config || {}) },
   runtime: { ...defaultServiceStatus.runtime, ...(status?.runtime || {}) }
 })
+const cloneServiceLogs = (logs) => (Array.isArray(logs) ? logs : [])
+  .filter((log) => log && typeof log.path === 'string')
+  .map((log) => ({
+    id: log.id || `${log.timestamp}-${log.method}-${log.path}-${log.statusCode}`,
+    timestamp: log.timestamp || '',
+    method: log.method || '',
+    path: log.path,
+    statusCode: Number(log.statusCode || 0),
+    authorized: Boolean(log.authorized),
+    remoteAddress: log.remoteAddress || '',
+    error: log.error || ''
+  }))
 const cloneActionsConfig = (config) => ({
   ...defaultActionsConfig,
   ...config,
@@ -800,11 +817,14 @@ function PluginsPane({ plugins, logs, filters, status, runningCommand, savingCon
   )
 }
 
-function ServicePane({ serviceStatus, status, saving, onChange, onSave }) {
+function ServicePane({ serviceStatus, logs, status, saving, onChange, onSave, onRotateToken, onRefreshLogs, onExportLogs, onClearLogs }) {
   const config = serviceStatus.config
   const runtime = serviceStatus.runtime
   const endpoint = runtime.enabled && runtime.port
     ? `http://${runtime.host}:${runtime.port}/api/status`
+    : '未启动'
+  const mcpEndpoint = runtime.enabled && runtime.port
+    ? `http://${runtime.host}:${runtime.port}/mcp`
     : '未启动'
 
   return (
@@ -815,6 +835,9 @@ function ServicePane({ serviceStatus, status, saving, onChange, onSave }) {
           <p>本机 HTTP API</p>
         </div>
         <div className="header-actions">
+          <button type="button" className="ghost" onClick={onRotateToken} disabled={saving}>
+            轮换令牌
+          </button>
           <button type="button" className="primary" onClick={onSave} disabled={saving}>
             {saving ? '保存中' : '保存'}
           </button>
@@ -862,7 +885,34 @@ function ServicePane({ serviceStatus, status, saving, onChange, onSave }) {
 
         <div className="readonly-row">
           <span>MCP</span>
-          <strong>后续阶段</strong>
+          <strong className="endpoint-text">{mcpEndpoint}</strong>
+        </div>
+      </div>
+
+      <div className="plugin-log-panel">
+        <div className="plugin-log-header">
+          <div>
+            <h2>访问日志</h2>
+            <span>最近 {logs.length} 条请求</span>
+          </div>
+          <div className="plugin-log-actions">
+            <button type="button" className="ghost" onClick={onRefreshLogs}>刷新</button>
+            <button type="button" className="ghost" onClick={() => onExportLogs('json')} disabled={logs.length === 0}>JSON</button>
+            <button type="button" className="ghost" onClick={() => onExportLogs('csv')} disabled={logs.length === 0}>CSV</button>
+            <button type="button" className="ghost" onClick={onClearLogs} disabled={logs.length === 0}>清空</button>
+          </div>
+        </div>
+        <div className="plugin-log-list">
+          {logs.length === 0 ? (
+            <div className="empty-state">暂无请求</div>
+          ) : logs.map((log) => (
+            <div className={log.statusCode >= 400 ? 'plugin-log-row error service-log-row' : 'plugin-log-row service-log-row'} key={log.id}>
+              <span>{formatPluginLogTime(log.timestamp)}</span>
+              <strong>{log.statusCode || '-'}</strong>
+              <div>{log.method}</div>
+              <p>{log.path}</p>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -918,6 +968,7 @@ function App() {
   const [savingPluginConfig, setSavingPluginConfig] = useState('')
   const [clearingPluginStorage, setClearingPluginStorage] = useState('')
   const [serviceStatus, setServiceStatus] = useState(defaultServiceStatus)
+  const [serviceLogs, setServiceLogs] = useState([])
   const [serviceMessage, setServiceMessage] = useState('')
   const originalRef = useRef(defaultSettings)
 
@@ -930,8 +981,9 @@ function App() {
       api.getAiConversation('control-center'),
       api.getPlugins(),
       api.getPluginLogs(pluginLogFilters),
-      api.getServiceStatus()
-    ]).then(([loadedSettings, loadedActions, loadedAiConfig, loadedChatMessages, loadedPlugins, loadedPluginLogs, loadedServiceStatus]) => {
+      api.getServiceStatus(),
+      api.getServiceLogs()
+    ]).then(([loadedSettings, loadedActions, loadedAiConfig, loadedChatMessages, loadedPlugins, loadedPluginLogs, loadedServiceStatus, loadedServiceLogs]) => {
       if (!mounted) return
       const nextSettings = cloneSettings(loadedSettings)
       originalRef.current = nextSettings
@@ -943,6 +995,7 @@ function App() {
       setPlugins(loadedPlugins)
       setPluginLogs(Array.isArray(loadedPluginLogs) ? loadedPluginLogs : [])
       setServiceStatus(cloneServiceStatus(loadedServiceStatus))
+      setServiceLogs(cloneServiceLogs(loadedServiceLogs))
       setLoading(false)
     })
     return () => { mounted = false }
@@ -1310,6 +1363,7 @@ function App() {
       return (
         <ServicePane
           serviceStatus={serviceStatus}
+          logs={serviceLogs}
           status={serviceMessage}
           saving={saving}
           onChange={(partial) => {
@@ -1324,11 +1378,53 @@ function App() {
             try {
               const nextStatus = cloneServiceStatus(await api.saveServiceConfig(serviceStatus.config))
               setServiceStatus(nextStatus)
+              setServiceLogs(cloneServiceLogs(await api.getServiceLogs()))
               setServiceMessage(nextStatus.runtime.enabled ? '本地服务已启动' : '本地服务已停止')
             } catch (error) {
               setServiceMessage(error.message || '服务配置保存失败')
             } finally {
               setSaving(false)
+            }
+          }}
+          onRotateToken={async () => {
+            setSaving(true)
+            setServiceMessage('')
+            try {
+              const nextStatus = cloneServiceStatus(await api.rotateServiceToken())
+              setServiceStatus(nextStatus)
+              setServiceMessage('访问令牌已轮换')
+            } catch (error) {
+              setServiceMessage(error.message || '令牌轮换失败')
+            } finally {
+              setSaving(false)
+            }
+          }}
+          onRefreshLogs={async () => {
+            setServiceMessage('')
+            try {
+              setServiceLogs(cloneServiceLogs(await api.getServiceLogs()))
+            } catch (error) {
+              setServiceMessage(error.message || '日志加载失败')
+            }
+          }}
+          onExportLogs={async (format) => {
+            setServiceMessage('')
+            try {
+              const content = await api.exportServiceLogs({ format })
+              const extension = format === 'csv' ? 'csv' : 'json'
+              const type = format === 'csv' ? 'text/csv;charset=utf-8' : 'application/json;charset=utf-8'
+              downloadTextFile(`ibot-service-logs.${extension}`, content, type)
+              setServiceMessage('访问日志已导出')
+            } catch (error) {
+              setServiceMessage(error.message || '日志导出失败')
+            }
+          }}
+          onClearLogs={async () => {
+            setServiceMessage('')
+            try {
+              setServiceLogs(cloneServiceLogs(await api.clearServiceLogs()))
+            } catch (error) {
+              setServiceMessage(error.message || '日志清空失败')
             }
           }}
         />
@@ -1339,7 +1435,7 @@ function App() {
       { label: 'Control Center', value: 'Phase 5' },
       { label: 'Runtime contract', value: 'Phase 2' }
     ]} />
-  }, [activeTab, actionStatus, actionWorking, actionsConfig, aiConfig, aiStatus, apiKeyDraft, chatDraft, chatMessages, chatting, clearingPluginStorage, importDraft, importInspection, originalSettings, pluginLogFilters, pluginLogs, pluginStatus, plugins, runningCommand, saving, savingPluginConfig, serviceMessage, serviceStatus, settings])
+  }, [activeTab, actionStatus, actionWorking, actionsConfig, aiConfig, aiStatus, apiKeyDraft, chatDraft, chatMessages, chatting, clearingPluginStorage, importDraft, importInspection, originalSettings, pluginLogFilters, pluginLogs, pluginStatus, plugins, runningCommand, saving, savingPluginConfig, serviceLogs, serviceMessage, serviceStatus, settings])
 
   return (
     <main className="shell">

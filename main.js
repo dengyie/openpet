@@ -50,7 +50,7 @@ app.whenReady().then(() => {
   const petService = createPetService({ eventBus, settingsService, actionService })
   const secretService = createSecretService()
   const aiService = createAiService({ settingsService, secretService })
-  const localHttpService = createLocalHttpService({ petService })
+  const localHttpService = createLocalHttpService({ petService, settingsService })
   const actionImportService = createActionImportService({
     framesRoot: path.join(__dirname, 'cat_anime', 'flames'),
     spritesDir: path.join(__dirname, 'cat_anime', 'sprites'),

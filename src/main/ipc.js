@@ -245,6 +245,25 @@ const registerIpcHandlers = ({ getPetWindow, petService, aiService, pluginServic
     runtime: localHttpService.getStatus()
   }))
 
+  ipcMain.handle(IPC.SERVICE_GET_LOGS, (_event, filters) => localHttpService.getLogs(filters))
+
+  ipcMain.handle(IPC.SERVICE_EXPORT_LOGS, (_event, filters) => localHttpService.exportLogs(filters))
+
+  ipcMain.handle(IPC.SERVICE_CLEAR_LOGS, () => localHttpService.clearLogs())
+
+  ipcMain.handle(IPC.SERVICE_ROTATE_TOKEN, async () => {
+    const currentSettings = petService.getSettings()
+    const nextConfig = normalizeLocalHttpConfig(currentSettings.localHttp, {
+      ...currentSettings.localHttp,
+      token: createLocalHttpToken()
+    })
+    const runtime = nextConfig.enabled
+      ? await localHttpService.start(nextConfig)
+      : localHttpService.getStatus()
+    const savedSettings = petService.saveSettings({ ...currentSettings, localHttp: nextConfig })
+    return { config: savedSettings.localHttp, runtime }
+  })
+
   ipcMain.handle(IPC.SERVICE_SAVE_CONFIG, async (_event, config) => {
     const currentSettings = petService.getSettings()
     const nextConfig = normalizeLocalHttpConfig(currentSettings.localHttp, config)

@@ -42,7 +42,11 @@ const IPC = {
   PLUGINS_CLEAR_LOGS: 'plugins:clear-logs',
   PLUGINS_CLEAR_STORAGE: 'plugins:clear-storage',
   SERVICE_GET_STATUS: 'service:get-status',
-  SERVICE_SAVE_CONFIG: 'service:save-config'
+  SERVICE_SAVE_CONFIG: 'service:save-config',
+  SERVICE_GET_LOGS: 'service:get-logs',
+  SERVICE_EXPORT_LOGS: 'service:export-logs',
+  SERVICE_CLEAR_LOGS: 'service:clear-logs',
+  SERVICE_ROTATE_TOKEN: 'service:rotate-token'
 }
 
 module.exports = { IPC }
