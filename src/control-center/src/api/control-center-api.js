@@ -1,4 +1,4 @@
-import { defaultActionsConfig, defaultAiConfig, defaultPetPacks, defaultServiceStatus, defaultSettings } from '../lib/defaults.js'
+import { defaultAboutInfo, defaultActionsConfig, defaultAiConfig, defaultPetPacks, defaultServiceStatus, defaultSettings, defaultUpdateCheck } from '../lib/defaults.js'
 
 const createDemoInspection = (actionId = 'wave') => ({
   canceled: false,
@@ -66,6 +66,12 @@ const demoApi = {
   clearServiceLogs: async () => [],
   rotateServiceToken: async () => defaultServiceStatus,
   revokeMcpSessions: async () => defaultServiceStatus,
+  getAboutInfo: async () => defaultAboutInfo,
+  checkForUpdates: async () => ({
+    ...defaultUpdateCheck,
+    status: 'not-configured',
+    message: 'Update feed is not configured.'
+  }),
   close: () => {}
 }
 

@@ -1,0 +1,114 @@
+name: Release
+
+on:
+  pull_request:
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+      - 'main.js'
+      - 'control-center-preload.js'
+      - 'renderer.js'
+      - 'preload.js'
+      - 'src/**'
+      - 'tests/**'
+      - 'build/**'
+      - '.github/workflows/release.yml'
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  test-build:
+    if: github.event_name == 'pull_request'
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: Check syntax
+        run: npm run check:syntax
+
+      - name: Pack unsigned app
+        run: npm run pack
+
+  signed-release:
+    if: github.event_name == 'push'
+    runs-on: macos-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: Check syntax
+        run: npm run check:syntax
+
+      - name: Validate signing secrets
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          test -n "$CSC_LINK" || { echo "CSC_LINK is required for tag releases"; exit 1; }
+          test -n "$CSC_KEY_PASSWORD" || { echo "CSC_KEY_PASSWORD is required for tag releases"; exit 1; }
+          test -n "$APPLE_ID" || { echo "APPLE_ID is required for tag releases"; exit 1; }
+          test -n "$APPLE_APP_SPECIFIC_PASSWORD" || { echo "APPLE_APP_SPECIFIC_PASSWORD is required for tag releases"; exit 1; }
+          test -n "$APPLE_TEAM_ID" || { echo "APPLE_TEAM_ID is required for tag releases"; exit 1; }
+
+      - name: Build signed distribution
+        run: npm run dist -- --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Publish GitHub Release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/*.dmg
+            release/*.zip
+            release/*.blockmap
+            release/latest*.yml
+          generate_release_notes: true
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ibot-macos-${{ github.ref_name }}
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/latest*.yml
+          if-no-files-found: error

@@ -75,7 +75,7 @@ const executeBehaviorDecision = (petService, decision) => {
 /**
  * 注册所有 IPC 处理器。接收依赖注入对象，各 handler 只通过注入的函数访问外部能力。
  */
-const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiService, behaviorOrchestratorService, pluginService, pluginInstallService, localHttpService, actionImportService, applyWindowScale,
+const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiService, behaviorOrchestratorService, pluginService, pluginInstallService, localHttpService, aboutService, actionImportService, applyWindowScale,
   clampToWorkArea, getMovementState, createSettingsWindow }) => {
   let pendingActionFrameSelection = null
 
@@ -380,6 +380,10 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     const savedSettings = petService.saveSettings({ ...currentSettings, localHttp: nextConfig })
     return { config: savedSettings.localHttp, runtime: localHttpService.getStatus() || runtime }
   })
+
+  ipcMain.handle(IPC.ABOUT_GET_INFO, () => aboutService.getInfo())
+
+  ipcMain.handle(IPC.ABOUT_CHECK_UPDATES, () => aboutService.checkForUpdates())
 
   // 设置面板拖动滑块：实时预览缩放（不持久化）
   ipcMain.on(IPC.SETTINGS_PREVIEW_SCALE, (_event, scale) => {

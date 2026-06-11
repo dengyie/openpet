@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { tabs } from './constants.js'
+import { useAboutPane } from './hooks/useAboutPane.js'
 import { useActionsPane } from './hooks/useActionsPane.js'
 import { useAiPane } from './hooks/useAiPane.js'
 import { usePetSettingsPane } from './hooks/usePetSettingsPane.js'
@@ -12,12 +13,6 @@ import { PetPane } from './panes/PetPane.jsx'
 import { PluginsPane } from './panes/PluginsPane.jsx'
 import { ServicePane } from './panes/ServicePane.jsx'
 
-const aboutRows = [
-  { label: 'Electron', value: '42.4.0' },
-  { label: 'Control Center', value: 'Phase 5' },
-  { label: 'Runtime contract', value: 'Phase 2' }
-]
-
 export function App() {
   const [activeTab, setActiveTab] = useState('pet')
   const pet = usePetSettingsPane()
@@ -25,9 +20,10 @@ export function App() {
   const ai = useAiPane()
   const plugins = usePluginsPane()
   const service = useServicePane()
-  const loading = pet.loading || actions.loading || ai.loading || plugins.loading || service.loading
+  const about = useAboutPane()
+  const loading = pet.loading || actions.loading || ai.loading || plugins.loading || service.loading || about.loading
 
-  let page = <AboutPane title="About" rows={aboutRows} />
+  let page = <AboutPane {...about.paneProps} />
   if (activeTab === 'pet') page = <PetPane {...pet.paneProps} />
   if (activeTab === 'actions') page = <ActionsPane {...actions.paneProps} />
   if (activeTab === 'ai') page = <AiPane {...ai.paneProps} />

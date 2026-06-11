@@ -53,6 +53,34 @@ export const defaultPetPacks = {
   packs: []
 }
 
+export const defaultAboutInfo = {
+  name: 'ibot',
+  productName: 'ibot',
+  version: '0.0.0',
+  packaged: false,
+  platform: '',
+  arch: '',
+  update: {
+    configured: false,
+    provider: '',
+    channel: '',
+    url: ''
+  }
+}
+
+export const defaultUpdateCheck = {
+  status: 'idle',
+  configured: false,
+  currentVersion: '',
+  latestVersion: '',
+  updateAvailable: false,
+  prerelease: false,
+  releaseUrl: '',
+  assets: [],
+  checkedAt: '',
+  message: ''
+}
+
 export const cloneSettings = (settings) => ({ ...defaultSettings, ...settings })
 
 export const cloneAiBehavior = (behavior) => ({
@@ -108,3 +136,18 @@ export const clonePetPacks = (petPacks) => ({
 export const cloneChatMessages = (messages) => (Array.isArray(messages) ? messages : [])
   .filter((message) => ['user', 'assistant'].includes(message?.role) && typeof message.content === 'string')
   .map((message) => ({ role: message.role, content: message.content }))
+
+export const cloneAboutInfo = (info) => ({
+  ...defaultAboutInfo,
+  ...(info || {}),
+  update: {
+    ...defaultAboutInfo.update,
+    ...(info?.update || {})
+  }
+})
+
+export const cloneUpdateCheck = (result) => ({
+  ...defaultUpdateCheck,
+  ...(result || {}),
+  assets: Array.isArray(result?.assets) ? result.assets : []
+})

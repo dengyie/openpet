@@ -26,7 +26,9 @@ const { createPluginService } = require('./src/main/services/plugin-service')
 const { createPluginInstallService } = require('./src/main/services/plugin-install-service')
 const { createLocalHttpService } = require('./src/main/services/local-http-service')
 const { createActionImportService } = require('./src/main/services/action-import-service')
+const { createAboutService } = require('./src/main/services/about-service')
 const { createBasicBehaviorPlugin } = require('./src/main/plugins/official/basic-behavior')
+const packageJson = require('./package.json')
 
 let petWindow = null
 const getPetWindow = () => petWindow
@@ -64,6 +66,7 @@ app.whenReady().then(() => {
   const aiService = createAiService({ settingsService, secretService })
   const behaviorOrchestratorService = createBehaviorOrchestratorService({ settingsService })
   const localHttpService = createLocalHttpService({ petService, settingsService })
+  const aboutService = createAboutService({ app, packageJson })
   const actionImportService = createActionImportService({
     framesRoot: path.join(__dirname, 'cat_anime', 'flames'),
     spritesDir: path.join(__dirname, 'cat_anime', 'sprites'),
@@ -107,6 +110,7 @@ app.whenReady().then(() => {
     pluginService,
     pluginInstallService,
     localHttpService,
+    aboutService,
     actionImportService,
     applyWindowScale: (scale) => applyWindowScale(petWindow, scale),
     clampToWorkArea,
