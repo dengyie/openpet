@@ -12,6 +12,7 @@ test('normalizes a plugin manifest with permissions and commands', () => {
     main: 'index.js',
     configSchema: 'config.schema.json',
     permissions: ['pet:say'],
+    network: { allowlist: ['https://api.example.com', 'cdn.example.com:8443'] },
     commands: [{ id: 'start', title: 'Start focus' }]
   }, { source: 'local', basePath: '/plugins/focus-timer' })
 
@@ -25,8 +26,46 @@ test('normalizes a plugin manifest with permissions and commands', () => {
     main: 'index.js',
     configSchema: 'config.schema.json',
     permissions: ['pet:say'],
+    network: { allowlist: ['api.example.com', 'cdn.example.com:8443'] },
     commands: [{ id: 'start', title: 'Start focus' }]
   })
+})
+
+test('rejects unsafe plugin network allowlist entries', () => {
+  assert.throws(() => normalizePluginManifest({
+    id: 'bad-network',
+    name: 'Bad Network',
+    version: '1.0.0',
+    network: { allowlist: ['http://api.example.com'] }
+  }), /only supports HTTPS hosts/)
+
+  assert.throws(() => normalizePluginManifest({
+    id: 'bad-network',
+    name: 'Bad Network',
+    version: '1.0.0',
+    network: { allowlist: ['https://api.example.com/path'] }
+  }), /must be hosts/)
+
+  assert.throws(() => normalizePluginManifest({
+    id: 'bad-network',
+    name: 'Bad Network',
+    version: '1.0.0',
+    network: { allowlist: ['localhost'] }
+  }), /must use public DNS hosts/)
+
+  assert.throws(() => normalizePluginManifest({
+    id: 'bad-network',
+    name: 'Bad Network',
+    version: '1.0.0',
+    network: { allowlist: ['10.0.0.5'] }
+  }), /must use public DNS hosts/)
+
+  assert.throws(() => normalizePluginManifest({
+    id: 'bad-network',
+    name: 'Bad Network',
+    version: '1.0.0',
+    network: { allowlist: ['https://[::1]'] }
+  }), /must use public DNS hosts/)
 })
 
 test('rejects plugin manifests with unknown permissions', () => {

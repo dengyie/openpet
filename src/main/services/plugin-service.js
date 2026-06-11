@@ -10,6 +10,8 @@ const STORAGE_KEY_PATTERN = /^[a-zA-Z0-9_.:-]{1,128}$/
 const MAX_PLUGIN_STORAGE_BYTES = 64 * 1024
 const MAX_PLUGIN_STORAGE_VALUE_BYTES = 16 * 1024
 const MAX_PLUGIN_LOG_ENTRIES = 200
+const MAX_PLUGIN_NETWORK_REQUEST_BYTES = 64 * 1024
+const MAX_PLUGIN_NETWORK_RESPONSE_BYTES = 128 * 1024
 const LOCAL_PLUGIN_RUNNER_PATH = path.join(__dirname, '../plugins/local-plugin-runner.js')
 
 const resolveLocalPluginFile = (manifest, fieldName) => {
@@ -112,6 +114,64 @@ const exportLogs = (logs, format = 'json') => {
     return rows.map((row) => row.map(escapeCsvCell).join(',')).join('\n')
   }
   return JSON.stringify(logs, null, 2)
+}
+
+const normalizeNetworkRequest = (manifest, { url, options = {} } = {}) => {
+  const targetUrl = new URL(String(url || ''))
+  if (targetUrl.protocol !== 'https:') throw new Error('Plugin network requests must use HTTPS')
+  if (!manifest.network.allowlist.includes(targetUrl.host.toLowerCase())) {
+    throw new Error(`Plugin ${manifest.id} cannot access network host: ${targetUrl.host}`)
+  }
+  const method = String(options.method || 'GET').toUpperCase()
+  if (!['GET', 'POST'].includes(method)) throw new Error('Plugin network requests only support GET and POST')
+  const headers = Object.entries(options.headers || {}).reduce((nextHeaders, [key, value]) => {
+    const headerName = String(key).toLowerCase()
+    if (!/^[a-z0-9-]+$/.test(headerName)) throw new Error(`Plugin network header is invalid: ${key}`)
+    if (['authorization', 'cookie', 'set-cookie', 'proxy-authorization'].includes(headerName)) {
+      throw new Error(`Plugin network header is not allowed: ${key}`)
+    }
+    nextHeaders[headerName] = String(value)
+    return nextHeaders
+  }, {})
+  const request = { method, headers }
+  if (hasOwn(options, 'body')) {
+    request.body = String(options.body)
+    if (Buffer.byteLength(request.body, 'utf-8') > MAX_PLUGIN_NETWORK_REQUEST_BYTES) {
+      throw new Error(`Plugin network request body exceeds ${MAX_PLUGIN_NETWORK_REQUEST_BYTES} bytes`)
+    }
+  }
+  return { url: targetUrl.toString(), request }
+}
+
+const readLimitedResponseText = async (response) => {
+  const contentLength = Number(response.headers?.get?.('content-length') || 0)
+  if (Number.isFinite(contentLength) && contentLength > MAX_PLUGIN_NETWORK_RESPONSE_BYTES) {
+    throw new Error(`Plugin network response exceeds ${MAX_PLUGIN_NETWORK_RESPONSE_BYTES} bytes`)
+  }
+  if (!response.body?.getReader) {
+    const text = await response.text()
+    if (Buffer.byteLength(text, 'utf-8') > MAX_PLUGIN_NETWORK_RESPONSE_BYTES) {
+      throw new Error(`Plugin network response exceeds ${MAX_PLUGIN_NETWORK_RESPONSE_BYTES} bytes`)
+    }
+    return text
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let byteLength = 0
+  let text = ''
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    byteLength += value.byteLength
+    if (byteLength > MAX_PLUGIN_NETWORK_RESPONSE_BYTES) {
+      await reader.cancel().catch(() => {})
+      throw new Error(`Plugin network response exceeds ${MAX_PLUGIN_NETWORK_RESPONSE_BYTES} bytes`)
+    }
+    text += decoder.decode(value, { stream: true })
+  }
+  text += decoder.decode()
+  return text
 }
 
 const assertStorageValueSize = (value) => {
@@ -231,6 +291,8 @@ const handleLocalPluginSdkCall = async (sdk, operation, payload = {}) => {
   if (operation === 'pet:say') return sdk.pet.say(payload.payload)
   if (operation === 'pet:playAction') return sdk.pet.playAction(payload.payload)
   if (operation === 'pet:setEvent') return sdk.pet.setEvent(payload.payload)
+  if (operation === 'ai:chat') return sdk.ai.chat(payload.payload)
+  if (operation === 'network:fetch') return sdk.network.fetch(payload.url, payload.options)
   throw new Error(`Unsupported plugin SDK operation: ${operation}`)
 }
 
@@ -328,7 +390,7 @@ const readLocalPluginManifests = (pluginDirs = []) => {
   return plugins
 }
 
-const createPluginService = ({ settingsService, petService, pluginDirs = [], officialPlugins = [] }) => {
+const createPluginService = ({ settingsService, petService, aiService, fetchImpl = globalThis.fetch, pluginDirs = [], officialPlugins = [] }) => {
   if (!settingsService) throw new Error('settingsService is required')
   if (!petService) throw new Error('petService is required')
 
@@ -409,6 +471,39 @@ const createPluginService = ({ settingsService, petService, pluginDirs = [], off
     if (!manifest.permissions.includes(permission)) {
       throw new Error(`Plugin ${manifest.id} does not have ${permission} permission`)
     }
+  }
+
+  const runPluginNetworkRequest = async (manifest, payload) => {
+    assertPermission(manifest, 'network')
+    if (typeof fetchImpl !== 'function') throw new Error('Plugin network fetch is not available')
+    const { url, request } = normalizeNetworkRequest(manifest, payload)
+    const response = await fetchImpl(url, { ...request, redirect: 'manual' })
+    if (response.url) {
+      const responseUrl = new URL(response.url)
+      if (responseUrl.protocol !== 'https:' || !manifest.network.allowlist.includes(responseUrl.host.toLowerCase())) {
+        throw new Error(`Plugin ${manifest.id} cannot access network host: ${responseUrl.host}`)
+      }
+    }
+    const text = await readLimitedResponseText(response)
+    return {
+      ok: Boolean(response.ok),
+      status: response.status,
+      url: response.url || url,
+      headers: {
+        'content-type': response.headers?.get?.('content-type') || ''
+      },
+      text
+    }
+  }
+
+  const runPluginAiChat = async (manifest, payload = {}) => {
+    assertPermission(manifest, 'ai:chat')
+    if (!aiService?.chat) throw new Error('AI service is not available')
+    const message = typeof payload === 'string' ? payload : payload.message
+    const conversationId = typeof payload === 'object' && payload?.conversationId
+      ? `plugin:${manifest.id}:${payload.conversationId}`
+      : `plugin:${manifest.id}`
+    return aiService.chat({ message, conversationId })
   }
 
   const getPluginStorage = (pluginId) => cloneJsonValue(getStorageMap()[pluginId] || {}, 'value')
@@ -546,6 +641,12 @@ const createPluginService = ({ settingsService, petService, pluginDirs = [], off
           assertPermission(manifest, 'pet:event')
           return petService.setEvent({ ...payload, source: `plugin:${manifest.id}` })
         }
+      },
+      ai: {
+        chat: async (payload) => runPluginAiChat(manifest, payload)
+      },
+      network: {
+        fetch: async (url, options = {}) => runPluginNetworkRequest(manifest, { url, options })
       },
       commands: {
         register: (command) => {

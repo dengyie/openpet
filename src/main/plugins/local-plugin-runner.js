@@ -122,6 +122,16 @@ const runPluginCommand = async ({ mainPath, commandId, payload = {}, config = {}
         playAction: (payload) => bridge('pet:playAction', { payload }),
         setEvent: (payload) => bridge('pet:setEvent', { payload })
       }),
+      ai: Object.freeze({
+        chat: (payload) => bridge('ai:chat', { payload })
+      }),
+      network: Object.freeze({
+        fetch: (url, options) => {
+          const payload = { url };
+          if (options !== undefined) payload.options = options;
+          return bridge('network:fetch', payload);
+        }
+      }),
       commands: Object.freeze({
         register: (command) => {
           if (!command || !command.id) throw new Error('Plugin command id is required');

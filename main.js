@@ -59,6 +59,7 @@ app.whenReady().then(() => {
   const pluginService = createPluginService({
     settingsService,
     petService,
+    aiService,
     pluginDirs: [path.join(app.getPath('userData'), 'plugins')],
     officialPlugins: [createBasicBehaviorPlugin()]
   })

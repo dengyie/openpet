@@ -113,10 +113,10 @@ Phase 5 当前范围：
 - 插件启用状态保存到 `settings.plugins.enabled`，可在 Control Center 的 Plugins 页启停。
 - Control Center 的 Plugins 页显示插件来源、权限、命令，并可运行官方插件命令。
 - 本地插件 `main` 通过短生命周期子进程 runner 执行，runner 启用 Node permission model，只放行 runner 与插件入口文件读取；插件 VM 内不注入 `require` / `process` / Electron / fs，只能通过父进程验证过的受限 SDK 触发宠物能力。
-- 插件服务维护最多 100 条内存运行日志，记录启停、命令开始/完成/失败；Plugins 页可查看和清空日志。
+- 插件服务维护最多 200 条持久运行日志，记录启停、命令开始/完成/失败；Plugins 页可筛选、导出和清空日志。
 - 坏的本地 manifest 会被隔离跳过，不阻塞其他插件加载。
 - `PetService.say()` 成为 AI 和插件触发气泡的统一入口。
-- 尚未实现 SES 沙箱和完整 JSON Schema 表单。当前已支持基础 `configSchema` 动态表单（string/number/boolean/enum/default）、`ctx.config.get()` 和带 `storage` 权限的 `ctx.storage.get/set/remove/clear()`，并在服务层限制 storage key、64KB/插件与 16KB/value 配额；插件日志已持久化到设置中，Control Center 支持筛选、JSON/CSV 导出、清空日志和清理插件私有存储。
+- 尚未实现 SES 沙箱和完整 JSON Schema 表单。当前已支持基础 `configSchema` 动态表单（string/number/boolean/enum/default）、`ctx.config.get()`、带 `storage` 权限的 `ctx.storage.get/set/remove/clear()`、带 `ai:chat` 权限的 `ctx.ai.chat()`、带 `network` 权限和 manifest allowlist 的 `ctx.network.fetch()`；服务层限制 storage key、64KB/插件与 16KB/value 配额，网络仅允许 HTTPS allowlist host 并拒绝敏感 header。插件日志已持久化到设置中，Control Center 支持筛选、JSON/CSV 导出、清空日志和清理插件私有存储。
 
 Phase 6 已新增：
 
@@ -219,8 +219,11 @@ pet.json 示例：
   "version": "1.0.0",
   "description": "A plugin for ibot",
   "main": "index.js",
-  "permissions": ["pet:say", "pet:action", "storage"],
-  "configSchema": "config.schema.json"
+  "permissions": ["pet:say", "pet:action", "storage", "ai:chat", "network"],
+  "configSchema": "config.schema.json",
+  "network": {
+    "allowlist": ["api.example.com"]
+  }
 }
 ```
 
@@ -234,6 +237,9 @@ export default function activate(ctx) {
     handler: async () => {
       await ctx.pet.say("Focus mode started")
       await ctx.pet.playAction("working")
+      const ai = await ctx.ai.chat({ message: "给我一句鼓励", conversationId: "focus" })
+      const response = await ctx.network.fetch("https://api.example.com/status")
+      await ctx.pet.say(ai.reply || response.text)
     }
   })
 }

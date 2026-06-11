@@ -695,6 +695,239 @@ test('plugin service rejects invalid private storage keys', async () => {
   )
 })
 
+test('plugin service lets local plugins call ai chat through permissioned sdk', async () => {
+  const aiCalls = []
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'local-runner': true } }
+    }),
+    petService: { say: async () => {} },
+    aiService: {
+      chat: async (payload) => {
+        aiCalls.push(payload)
+        return { conversationId: payload.conversationId, reply: 'pong' }
+      }
+    },
+    officialPlugins: [],
+    pluginDirs: [createRunnablePluginDir({
+      manifest: {
+        permissions: ['ai:chat'],
+        commands: [{ id: 'start', title: 'Start' }]
+      },
+      source: `
+        module.exports = function activate(ctx) {
+          return {
+            start: async () => ctx.ai.chat({ message: 'ping', conversationId: 'thread-a' })
+          }
+        }
+      `
+    })]
+  })
+
+  const result = await service.runCommand('local-runner', 'start')
+
+  assert.deepEqual(result, { conversationId: 'plugin:local-runner:thread-a', reply: 'pong' })
+  assert.deepEqual(aiCalls, [{ message: 'ping', conversationId: 'plugin:local-runner:thread-a' }])
+})
+
+test('plugin service blocks ai chat without permission', async () => {
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'local-runner': true } }
+    }),
+    petService: { say: async () => {} },
+    aiService: {
+      chat: async () => {
+        throw new Error('ai should not be reached')
+      }
+    },
+    officialPlugins: [],
+    pluginDirs: [createRunnablePluginDir({
+      manifest: {
+        permissions: [],
+        commands: [{ id: 'start', title: 'Start' }]
+      },
+      source: `
+        module.exports = function activate(ctx) {
+          return { start: async () => ctx.ai.chat('ping') }
+        }
+      `
+    })]
+  })
+
+  await assert.rejects(() => service.runCommand('local-runner', 'start'), /does not have ai:chat permission/)
+})
+
+test('plugin service lets local plugins fetch allowlisted https hosts', async () => {
+  const fetchCalls = []
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'local-runner': true } }
+    }),
+    petService: { say: async () => {} },
+    fetchImpl: async (url, options) => {
+      fetchCalls.push({ url, options })
+      return {
+        ok: true,
+        status: 200,
+        url,
+        headers: { get: (name) => name === 'content-type' ? 'application/json' : '' },
+        text: async () => '{"ok":true}'
+      }
+    },
+    officialPlugins: [],
+    pluginDirs: [createRunnablePluginDir({
+      manifest: {
+        permissions: ['network'],
+        network: { allowlist: ['api.example.com'] },
+        commands: [{ id: 'start', title: 'Start' }]
+      },
+      source: `
+        module.exports = function activate(ctx) {
+          return {
+            start: async () => ctx.network.fetch('https://api.example.com/v1/status', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: '{"ping":true}'
+            })
+          }
+        }
+      `
+    })]
+  })
+
+  const result = await service.runCommand('local-runner', 'start')
+
+  assert.deepEqual(result, {
+    ok: true,
+    status: 200,
+    url: 'https://api.example.com/v1/status',
+    headers: { 'content-type': 'application/json' },
+    text: '{"ok":true}'
+  })
+  assert.deepEqual(fetchCalls, [{
+    url: 'https://api.example.com/v1/status',
+    options: {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      redirect: 'manual',
+      body: '{"ping":true}'
+    }
+  }])
+})
+
+test('plugin service rejects oversized network request and response bodies', async () => {
+  const createNetworkService = ({ source, fetchImpl }) => createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'local-runner': true } }
+    }),
+    petService: { say: async () => {} },
+    fetchImpl,
+    officialPlugins: [],
+    pluginDirs: [createRunnablePluginDir({
+      manifest: {
+        permissions: ['network'],
+        network: { allowlist: ['api.example.com'] },
+        commands: [{ id: 'start', title: 'Start' }]
+      },
+      source
+    })]
+  })
+
+  await assert.rejects(
+    () => createNetworkService({
+      source: `
+        module.exports = function activate(ctx) {
+          return { start: async () => ctx.network.fetch('https://api.example.com/data', { method: 'POST', body: 'x'.repeat(65 * 1024) }) }
+        }
+      `,
+      fetchImpl: async () => {
+        throw new Error('fetch should not be reached')
+      }
+    }).runCommand('local-runner', 'start'),
+    /request body exceeds/
+  )
+
+  await assert.rejects(
+    () => createNetworkService({
+      source: `
+        module.exports = function activate(ctx) {
+          return { start: async () => ctx.network.fetch('https://api.example.com/data') }
+        }
+      `,
+      fetchImpl: async (url) => ({
+        ok: true,
+        status: 200,
+        url,
+        headers: { get: (name) => name === 'content-length' ? String(129 * 1024) : '' },
+        text: async () => 'x'.repeat(129 * 1024)
+      })
+    }).runCommand('local-runner', 'start'),
+    /response exceeds/
+  )
+})
+
+test('plugin service blocks network calls without permission or allowlist match', async () => {
+  const createNetworkService = ({ permissions, allowlist }) => createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'local-runner': true } }
+    }),
+    petService: { say: async () => {} },
+    fetchImpl: async () => {
+      throw new Error('fetch should not be reached')
+    },
+    officialPlugins: [],
+    pluginDirs: [createRunnablePluginDir({
+      manifest: {
+        permissions,
+        network: { allowlist },
+        commands: [{ id: 'start', title: 'Start' }]
+      },
+      source: `
+        module.exports = function activate(ctx) {
+          return { start: async () => ctx.network.fetch('https://blocked.example.com/data') }
+        }
+      `
+    })]
+  })
+
+  await assert.rejects(
+    () => createNetworkService({ permissions: [], allowlist: ['blocked.example.com'] }).runCommand('local-runner', 'start'),
+    /does not have network permission/
+  )
+  await assert.rejects(
+    () => createNetworkService({ permissions: ['network'], allowlist: ['api.example.com'] }).runCommand('local-runner', 'start'),
+    /cannot access network host: blocked.example.com/
+  )
+})
+
+test('plugin service blocks sensitive network headers', async () => {
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'local-runner': true } }
+    }),
+    petService: { say: async () => {} },
+    fetchImpl: async () => {
+      throw new Error('fetch should not be reached')
+    },
+    officialPlugins: [],
+    pluginDirs: [createRunnablePluginDir({
+      manifest: {
+        permissions: ['network'],
+        network: { allowlist: ['api.example.com'] },
+        commands: [{ id: 'start', title: 'Start' }]
+      },
+      source: `
+        module.exports = function activate(ctx) {
+          return { start: async () => ctx.network.fetch('https://api.example.com/data', { headers: { Authorization: 'Bearer x' } }) }
+        }
+      `
+    })]
+  })
+
+  await assert.rejects(() => service.runCommand('local-runner', 'start'), /header is not allowed/)
+})
+
 test('plugin service blocks commands for disabled plugins', async () => {
   const service = createPluginService({
     settingsService: createSettingsService(),

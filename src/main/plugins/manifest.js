@@ -16,6 +16,28 @@ const normalizeCommands = (commands = []) => commands.map((command) => {
   }
 })
 
+const normalizeNetworkHost = (value) => {
+  if (typeof value !== 'string' || !value.trim()) throw new Error('Plugin network allowlist host must be a string')
+  const raw = value.trim()
+  const url = raw.includes('://') ? new URL(raw) : new URL(`https://${raw}`)
+  if (url.protocol !== 'https:') throw new Error('Plugin network allowlist only supports HTTPS hosts')
+  if (url.username || url.password || url.pathname !== '/' || url.search || url.hash) {
+    throw new Error('Plugin network allowlist entries must be hosts, not full URLs with paths')
+  }
+  const host = url.host.toLowerCase()
+  const hostname = url.hostname.toLowerCase()
+  const isIpv4Literal = /^\d+\.\d+\.\d+\.\d+$/.test(hostname)
+  const isIpv6Literal = hostname.startsWith('[') || hostname.includes(':')
+  if (!host || hostname === 'localhost' || isIpv4Literal || isIpv6Literal) {
+    throw new Error('Plugin network allowlist must use public DNS hosts')
+  }
+  return host
+}
+
+const normalizeNetwork = (network = {}) => ({
+  allowlist: Array.from(new Set((Array.isArray(network.allowlist) ? network.allowlist : []).map(normalizeNetworkHost)))
+})
+
 const getExtensionLabel = (extension) => {
   if (extension === '.js') return 'JavaScript'
   if (extension === '.json') return 'JSON'
@@ -62,6 +84,7 @@ const normalizePluginManifest = (manifest, { source = 'local', basePath = '' } =
     main: normalizeRelativeFilePath(manifest.main, 'main', '.js'),
     configSchema: normalizeRelativeFilePath(manifest.configSchema, 'configSchema', '.json'),
     permissions: [...permissions],
+    network: normalizeNetwork(manifest.network),
     commands: normalizeCommands(manifest.commands)
   }
 }
