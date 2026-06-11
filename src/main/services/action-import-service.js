@@ -19,6 +19,12 @@ const createActionImportService = ({ framesRoot, spritesDir, configPath }) => {
     }
   }
 
+  const getExistingLabels = () => Object.fromEntries(
+    (readCurrentConfig().actions || [])
+      .filter((action) => action.id && action.label)
+      .map((action) => [action.id, action.label])
+  )
+
   const regenerate = async (overrides = {}) => {
     const currentConfig = readCurrentConfig()
     return generateSpritesFromFrames({
@@ -26,7 +32,8 @@ const createActionImportService = ({ framesRoot, spritesDir, configPath }) => {
       spritesDir,
       configPath,
       defaultAction: overrides.defaultAction ?? currentConfig.defaultAction,
-      clickAction: overrides.clickAction ?? currentConfig.clickAction
+      clickAction: overrides.clickAction ?? currentConfig.clickAction,
+      labels: getExistingLabels()
     })
   }
 
@@ -44,7 +51,7 @@ const createActionImportService = ({ framesRoot, spritesDir, configPath }) => {
       configPath,
       defaultAction: readCurrentConfig().defaultAction,
       clickAction: readCurrentConfig().clickAction,
-      labels: label ? { [actionId]: label } : {}
+      labels: { ...getExistingLabels(), ...(label ? { [actionId]: label } : {}) }
     })
     const importedAction = config.actions.find((action) => action.id === actionId)
     return { ...config, importedAction }

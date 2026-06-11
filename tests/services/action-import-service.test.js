@@ -70,6 +70,24 @@ test('action import service updates default and click actions without dropping a
   assert.equal(JSON.parse(fs.readFileSync(configPath, 'utf-8')).defaultAction, 'wave')
 })
 
+test('action import service preserves custom labels after regenerating config', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ibot-action-label-'))
+  const sourceDir = path.join(root, 'source-wave')
+  const framesRoot = path.join(root, 'cat_anime', 'flames')
+  const spritesDir = path.join(root, 'cat_anime', 'sprites')
+  const configPath = path.join(root, 'cat_anime', 'animations.json')
+  fs.mkdirSync(sourceDir, { recursive: true })
+  await createFrame(path.join(sourceDir, '01_no_bg.png'))
+  await createFrame(path.join(sourceDir, '02_no_bg.png'))
+  const service = createActionImportService({ framesRoot, spritesDir, configPath })
+
+  await service.importActionFrames({ sourceDir, actionId: 'wave', label: '挥手' })
+  const result = await service.updateActionConfig({ defaultAction: 'wave', clickAction: 'wave' })
+
+  assert.equal(result.actions.find((action) => action.id === 'wave').label, '挥手')
+  assert.equal(JSON.parse(fs.readFileSync(configPath, 'utf-8')).actions[0].label, '挥手')
+})
+
 test('action import service deletes an action and regenerates config', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ibot-action-delete-'))
   const framesRoot = path.join(root, 'cat_anime', 'flames')
