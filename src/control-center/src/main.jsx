@@ -107,6 +107,8 @@ const api = window.controlCenterAPI || {
   getPlugins: async () => [],
   setPluginEnabled: async (pluginId, enabled) => ({ id: pluginId, enabled }),
   runPluginCommand: async () => ({ ok: true }),
+  getPluginLogs: async () => [],
+  clearPluginLogs: async () => [],
   getServiceStatus: async () => defaultServiceStatus,
   saveServiceConfig: async (config) => ({ config, runtime: { ...config, enabled: config.enabled } }),
   close: () => {}
@@ -123,6 +125,13 @@ const cloneActionsConfig = (config) => ({
   ...config,
   actions: Array.isArray(config?.actions) ? config.actions : []
 })
+
+const formatPluginLogTime = (timestamp) => {
+  if (!timestamp) return ''
+  const date = new Date(timestamp)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+}
 
 function SegmentedControl({ label, value, options, onChange }) {
   return (
@@ -600,7 +609,7 @@ function ActionsPane({
   )
 }
 
-function PluginsPane({ plugins, status, runningCommand, onToggle, onRun }) {
+function PluginsPane({ plugins, logs, status, runningCommand, onToggle, onRun, onClearLogs }) {
   return (
     <section className="pane">
       <header className="pane-header">
@@ -653,6 +662,33 @@ function PluginsPane({ plugins, status, runningCommand, onToggle, onRun }) {
       </div>
 
       {status ? <div className="status-line">{status}</div> : null}
+
+      <div className="plugin-log-panel">
+        <div className="plugin-log-header">
+          <div>
+            <h2>运行日志</h2>
+            <span>最近 {logs.length} 条事件</span>
+          </div>
+          <button type="button" className="ghost" onClick={onClearLogs} disabled={logs.length === 0}>
+            清空
+          </button>
+        </div>
+        <div className="plugin-log-list">
+          {logs.length === 0 ? (
+            <div className="empty-chat">暂无日志</div>
+          ) : logs.map((log) => (
+            <div className={log.level === 'error' ? 'plugin-log-row error' : 'plugin-log-row'} key={log.id}>
+              <span>{formatPluginLogTime(log.timestamp)}</span>
+              <strong>{log.level === 'error' ? 'Error' : 'Info'}</strong>
+              <div>
+                <span>{log.pluginId || 'plugin'}</span>
+                {log.commandId ? <span>/{log.commandId}</span> : null}
+              </div>
+              <p>{log.message}</p>
+            </div>
+          ))}
+        </div>
+      </div>
     </section>
   )
 }
@@ -768,6 +804,7 @@ function App() {
   const [chatMessages, setChatMessages] = useState([])
   const [chatting, setChatting] = useState(false)
   const [plugins, setPlugins] = useState([])
+  const [pluginLogs, setPluginLogs] = useState([])
   const [pluginStatus, setPluginStatus] = useState('')
   const [runningCommand, setRunningCommand] = useState('')
   const [serviceStatus, setServiceStatus] = useState(defaultServiceStatus)
@@ -781,8 +818,9 @@ function App() {
       api.getActions(),
       api.getAiConfig(),
       api.getPlugins(),
+      api.getPluginLogs(),
       api.getServiceStatus()
-    ]).then(([loadedSettings, loadedActions, loadedAiConfig, loadedPlugins, loadedServiceStatus]) => {
+    ]).then(([loadedSettings, loadedActions, loadedAiConfig, loadedPlugins, loadedPluginLogs, loadedServiceStatus]) => {
       if (!mounted) return
       const nextSettings = cloneSettings(loadedSettings)
       originalRef.current = nextSettings
@@ -791,6 +829,7 @@ function App() {
       setActionsConfig(cloneActionsConfig(loadedActions))
       setAiConfig(cloneAiConfig(loadedAiConfig))
       setPlugins(loadedPlugins)
+      setPluginLogs(Array.isArray(loadedPluginLogs) ? loadedPluginLogs : [])
       setServiceStatus(cloneServiceStatus(loadedServiceStatus))
       setLoading(false)
     })
@@ -1035,6 +1074,7 @@ function App() {
       return (
         <PluginsPane
           plugins={plugins}
+          logs={pluginLogs}
           status={pluginStatus}
           runningCommand={runningCommand}
           onToggle={async (pluginId, enabled) => {
@@ -1044,9 +1084,11 @@ function App() {
               setPlugins(plugins.map((plugin) => (
                 plugin.id === pluginId ? { ...plugin, ...updatedPlugin } : plugin
               )))
+              setPluginLogs(await api.getPluginLogs())
               setPluginStatus(enabled ? '插件已启用' : '插件已停用')
             } catch (error) {
               setPluginStatus(error.message || '插件状态更新失败')
+              setPluginLogs(await api.getPluginLogs())
             }
           }}
           onRun={async (pluginId, commandId) => {
@@ -1055,11 +1097,21 @@ function App() {
             setPluginStatus('')
             try {
               await api.runPluginCommand(pluginId, commandId)
+              setPluginLogs(await api.getPluginLogs())
               setPluginStatus('命令已运行')
             } catch (error) {
               setPluginStatus(error.message || '命令运行失败')
+              setPluginLogs(await api.getPluginLogs())
             } finally {
               setRunningCommand('')
+            }
+          }}
+          onClearLogs={async () => {
+            setPluginStatus('')
+            try {
+              setPluginLogs(await api.clearPluginLogs())
+            } catch (error) {
+              setPluginStatus(error.message || '日志清空失败')
             }
           }}
         />
@@ -1098,7 +1150,7 @@ function App() {
       { label: 'Control Center', value: 'Phase 5' },
       { label: 'Runtime contract', value: 'Phase 2' }
     ]} />
-  }, [activeTab, actionStatus, actionWorking, actionsConfig, aiConfig, aiStatus, apiKeyDraft, chatDraft, chatMessages, chatting, importDraft, importInspection, originalSettings, pluginStatus, plugins, runningCommand, saving, serviceMessage, serviceStatus, settings])
+  }, [activeTab, actionStatus, actionWorking, actionsConfig, aiConfig, aiStatus, apiKeyDraft, chatDraft, chatMessages, chatting, importDraft, importInspection, originalSettings, pluginLogs, pluginStatus, plugins, runningCommand, saving, serviceMessage, serviceStatus, settings])
 
   return (
     <main className="shell">

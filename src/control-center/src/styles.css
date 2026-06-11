@@ -558,6 +558,67 @@ button {
   margin-top: 4px;
 }
 
+.plugin-log-panel {
+  display: grid;
+  gap: 12px;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid #dde2e8;
+}
+
+.plugin-log-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.plugin-log-header h2 {
+  margin: 0;
+  color: #111827;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.plugin-log-header span {
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.plugin-log-list {
+  display: grid;
+  gap: 8px;
+}
+
+.plugin-log-row {
+  display: grid;
+  grid-template-columns: 76px 48px minmax(140px, 220px) minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 10px 0;
+  border-top: 1px solid #edf1f5;
+  color: #374151;
+  font-size: 12px;
+}
+
+.plugin-log-row > span,
+.plugin-log-row div {
+  color: #6b7280;
+}
+
+.plugin-log-row strong {
+  color: #2563eb;
+}
+
+.plugin-log-row.error strong {
+  color: #b91c1c;
+}
+
+.plugin-log-row p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .loading {
   display: grid;
   place-items: center;
@@ -593,6 +654,11 @@ button {
 
   .plugin-row {
     grid-template-columns: 1fr;
+  }
+
+  .plugin-log-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
   }
 
   .actions-workspace {

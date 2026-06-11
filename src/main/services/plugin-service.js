@@ -32,6 +32,24 @@ const createPluginService = ({ settingsService, petService, pluginDirs = [], off
   if (!settingsService) throw new Error('settingsService is required')
   if (!petService) throw new Error('petService is required')
 
+  const logs = []
+  let nextLogId = 1
+
+  const appendLog = ({ level = 'info', pluginId = '', commandId = '', message = '' } = {}) => {
+    const entry = {
+      id: nextLogId,
+      timestamp: new Date().toISOString(),
+      level,
+      pluginId,
+      commandId,
+      message: String(message || '')
+    }
+    nextLogId += 1
+    logs.unshift(entry)
+    logs.splice(100)
+    return entry
+  }
+
   const getPlugins = () => [
     ...officialPlugins.map((plugin) => ({
       manifest: normalizePluginManifest(plugin.manifest, { source: 'official' }),
@@ -61,6 +79,11 @@ const createPluginService = ({ settingsService, petService, pluginDirs = [], off
       }
     }
     settingsService.save(nextSettings)
+    appendLog({
+      pluginId,
+      level: 'info',
+      message: enabled ? 'Plugin enabled' : 'Plugin disabled'
+    })
     return listPlugins().find((plugin) => plugin.id === pluginId)
   }
 
@@ -76,18 +99,38 @@ const createPluginService = ({ settingsService, petService, pluginDirs = [], off
   })
 
   const runCommand = async (pluginId, commandId, payload = {}) => {
-    const plugin = getPlugins().find((candidate) => candidate.manifest.id === pluginId)
-    if (!plugin) throw new Error(`Plugin not found: ${pluginId}`)
-    if (!getEnabledMap()[pluginId]) throw new Error('Plugin is disabled')
-    if (typeof plugin.activate !== 'function') throw new Error('Plugin is not runnable')
+    try {
+      const plugin = getPlugins().find((candidate) => candidate.manifest.id === pluginId)
+      if (!plugin) throw new Error(`Plugin not found: ${pluginId}`)
+      if (!getEnabledMap()[pluginId]) throw new Error('Plugin is disabled')
+      if (typeof plugin.activate !== 'function') throw new Error('Plugin is not runnable')
 
-    const commands = plugin.activate(createSdk(plugin.manifest))
-    const handler = commands[commandId]
-    if (typeof handler !== 'function') throw new Error(`Plugin command not found: ${commandId}`)
-    return handler(payload)
+      const commands = plugin.activate(createSdk(plugin.manifest))
+      const handler = commands[commandId]
+      if (typeof handler !== 'function') throw new Error(`Plugin command not found: ${commandId}`)
+      appendLog({ pluginId, commandId, level: 'info', message: 'Command started' })
+      const result = await handler(payload)
+      appendLog({ pluginId, commandId, level: 'info', message: 'Command completed' })
+      return result
+    } catch (error) {
+      appendLog({
+        pluginId,
+        commandId,
+        level: 'error',
+        message: error.message || 'Command failed'
+      })
+      throw error
+    }
   }
 
-  return { listPlugins, setEnabled, runCommand }
+  const getLogs = () => logs.map((entry) => ({ ...entry }))
+
+  const clearLogs = () => {
+    logs.length = 0
+    return getLogs()
+  }
+
+  return { listPlugins, setEnabled, runCommand, getLogs, clearLogs }
 }
 
 module.exports = { createPluginService, readLocalPluginManifests }

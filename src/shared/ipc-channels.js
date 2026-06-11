@@ -35,6 +35,8 @@ const IPC = {
   PLUGINS_LIST: 'plugins:list',
   PLUGINS_SET_ENABLED: 'plugins:set-enabled',
   PLUGINS_RUN_COMMAND: 'plugins:run-command',
+  PLUGINS_GET_LOGS: 'plugins:get-logs',
+  PLUGINS_CLEAR_LOGS: 'plugins:clear-logs',
   SERVICE_GET_STATUS: 'service:get-status',
   SERVICE_SAVE_CONFIG: 'service:save-config'
 }

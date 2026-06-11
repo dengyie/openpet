@@ -156,3 +156,73 @@ test('plugin service blocks commands for disabled plugins', async () => {
     /Plugin is disabled/
   )
 })
+
+test('plugin service records command lifecycle logs', async () => {
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'official.basic-behavior': true } }
+    }),
+    petService: { say: async () => {} },
+    officialPlugins: [createOfficialPlugin()]
+  })
+
+  await service.runCommand('official.basic-behavior', 'greet')
+
+  assert.deepEqual(service.getLogs().map((entry) => ({
+    level: entry.level,
+    pluginId: entry.pluginId,
+    commandId: entry.commandId,
+    message: entry.message
+  })), [
+    {
+      level: 'info',
+      pluginId: 'official.basic-behavior',
+      commandId: 'greet',
+      message: 'Command completed'
+    },
+    {
+      level: 'info',
+      pluginId: 'official.basic-behavior',
+      commandId: 'greet',
+      message: 'Command started'
+    }
+  ])
+})
+
+test('plugin service records command failures and can clear logs', async () => {
+  const service = createPluginService({
+    settingsService: createSettingsService(),
+    petService: { say: async () => {} },
+    officialPlugins: [createOfficialPlugin()]
+  })
+
+  await assert.rejects(
+    () => service.runCommand('official.basic-behavior', 'greet'),
+    /Plugin is disabled/
+  )
+
+  const [errorLog] = service.getLogs()
+  assert.equal(errorLog.level, 'error')
+  assert.equal(errorLog.pluginId, 'official.basic-behavior')
+  assert.equal(errorLog.commandId, 'greet')
+  assert.equal(errorLog.message, 'Plugin is disabled')
+  assert.deepEqual(service.getLogs().map((entry) => entry.message), ['Plugin is disabled'])
+
+  assert.deepEqual(service.clearLogs(), [])
+  assert.deepEqual(service.getLogs(), [])
+})
+
+test('plugin service records enablement logs', () => {
+  const service = createPluginService({
+    settingsService: createSettingsService(),
+    petService: { say: async () => {} },
+    officialPlugins: [createOfficialPlugin()]
+  })
+
+  service.setEnabled('official.basic-behavior', true)
+
+  const [log] = service.getLogs()
+  assert.equal(log.level, 'info')
+  assert.equal(log.pluginId, 'official.basic-behavior')
+  assert.equal(log.message, 'Plugin enabled')
+})

@@ -11,7 +11,7 @@
 | Electron | ^42.4.0 | 桌面窗口框架 |
 | React + Vite | ^19.2 / ^8.0 | Control Center UI |
 | sharp | ^0.34.5 | 精灵图合成（开发时） |
-| Node 原生 test runner | — | 测试框架（47 个测试） |
+| Node 原生 test runner | — | 测试框架（66 个测试） |
 | HTML / CSS / JS | — | 宠物窗口渲染层 UI 与动画 |
 
 ---
@@ -57,15 +57,15 @@ ibot/
 │   │       ├── sprite-generator.js    # 精灵图生成 + 帧文件夹检验
 │   │       ├── ai-service.js      # provider-agnostic AI 聊天
 │   │       ├── secret-service.js  # API Key 安全存储（0600 权限）
-│   │       ├── plugin-service.js  # 插件发现、启用/禁用、命令运行
+│   │       ├── plugin-service.js  # 插件发现、启用/禁用、命令运行、运行日志
 │   │       ├── local-http-service.js  # 本地 loopback HTTP API
 │   │       └── (settings-service.js)  # 设置 service（注意：位于此目录）
 │   ├── control-center/
 │   │   ├── index.html
 │   │   ├── vite.config.js
 │   │   └── src/
-│   │       ├── main.jsx           # React Control Center（约 971 行）
-│   │       └── styles.css         # 样式（约 563 行）
+│   │       ├── main.jsx           # React Control Center（约 1182 行）
+│   │       └── styles.css         # 样式（约 684 行）
 │   └── shared/
 │       └── ipc-channels.js        # 所有 IPC 通道名常量（主进程侧）
 ├── tests/                         # Node 原生 test runner 测试
@@ -222,6 +222,8 @@ EventBus → SettingsService → ActionService → PetService
 | `plugins:list` | CC→主 | invoke | 列出所有插件 |
 | `plugins:set-enabled` | CC→主 | invoke | 启用/禁用插件 |
 | `plugins:run-command` | CC→主 | invoke | 运行插件命令 |
+| `plugins:get-logs` | CC→主 | invoke | 获取插件运行日志 |
+| `plugins:clear-logs` | CC→主 | invoke | 清空插件运行日志 |
 | `service:get-status` | CC→主 | invoke | 获取本地 HTTP 服务状态与访问令牌配置 |
 | `service:save-config` | CC→主 | invoke | 保存本地 HTTP 服务配置；运行时启动/停止成功后才持久化 |
 
@@ -252,7 +254,7 @@ React + Vite 构建的 Web 应用，嵌入 Electron BrowserWindow（900×640px, 
 - **Pet**：缩放、散步速度、散步时长、气泡时长、开机自启
 - **Actions**：动作列表、导入帧文件夹、删除、设置默认/点击动作
 - **AI**：provider 配置、API Key、连接测试、聊天窗口
-- **Plugins**：插件列表、启用/禁用、运行命令
+- **Plugins**：插件列表、启用/禁用、运行命令、运行日志/错误面板
 - **Service**：本地 HTTP 服务启停、端口配置、访问令牌、状态显示
 - **About**：占位
 
@@ -270,7 +272,7 @@ React + Vite 构建的 Web 应用，嵌入 Electron BrowserWindow（900×640px, 
 
 **SecretService（58 行）：** API Key 安全存储（0600 权限），renderer 不可见明文。
 
-**PluginService（93 行）：** 插件发现、启用/禁用、命令运行。
+**PluginService（136 行）：** 插件发现、启用/禁用、命令运行，并维护最多 100 条内存运行日志供 Control Center 展示和清空。
 
 **LocalHttpService：** 本地 loopback HTTP API（status/say/action/event）。服务默认关闭，只允许 loopback；mutating endpoint 必须带 `Authorization: Bearer <token>` 或 `X-ibot-Token`，未鉴权 status 只返回 runtime 状态。同 host/port 保存时原地更新 token/config，换端口失败时保留旧 server。
 
@@ -328,6 +330,6 @@ npm start                     # 构建 Control Center + 启动 Electron
 npm run dev:control-center    # 仅启动 Control Center dev server（热更新）
 npm run build:control-center  # 仅构建 Control Center
 npm run generate-sprites      # 重新生成精灵图
-npm test                      # 运行测试（63 个测试）
+npm test                      # 运行测试（66 个测试）
 npm run check:syntax          # 语法检查
 ```
