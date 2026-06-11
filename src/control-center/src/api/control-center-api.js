@@ -65,6 +65,7 @@ const demoApi = {
   exportServiceLogs: async () => '[]',
   clearServiceLogs: async () => [],
   rotateServiceToken: async () => defaultServiceStatus,
+  revokeMcpSessions: async () => defaultServiceStatus,
   close: () => {}
 }
 

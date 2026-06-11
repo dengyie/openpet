@@ -360,7 +360,15 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
       ? await localHttpService.start(nextConfig)
       : localHttpService.getStatus()
     const savedSettings = petService.saveSettings({ ...currentSettings, localHttp: nextConfig })
-    return { config: savedSettings.localHttp, runtime }
+    return { config: savedSettings.localHttp, runtime: localHttpService.getStatus() || runtime }
+  })
+
+  ipcMain.handle(IPC.SERVICE_REVOKE_MCP_SESSIONS, () => {
+    const mcp = localHttpService.revokeMcpSessions()
+    return {
+      config: petService.getSettings().localHttp,
+      runtime: { ...localHttpService.getStatus(), mcp }
+    }
   })
 
   ipcMain.handle(IPC.SERVICE_SAVE_CONFIG, async (_event, config) => {
@@ -370,7 +378,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
       ? await localHttpService.start(nextConfig)
       : await localHttpService.stop()
     const savedSettings = petService.saveSettings({ ...currentSettings, localHttp: nextConfig })
-    return { config: savedSettings.localHttp, runtime }
+    return { config: savedSettings.localHttp, runtime: localHttpService.getStatus() || runtime }
   })
 
   // 设置面板拖动滑块：实时预览缩放（不持久化）

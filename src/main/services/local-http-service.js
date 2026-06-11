@@ -1,13 +1,10 @@
 const crypto = require('crypto')
 const http = require('http')
+const { createMcpTransportService, MCP_PROTOCOL_VERSION } = require('./mcp-transport-service')
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1'])
 const MAX_BODY_BYTES = 1024 * 1024
 const DEFAULT_MAX_ACCESS_LOGS = 200
-const MCP_PROTOCOL_VERSION = '2025-03-26'
-const MCP_SESSION_TTL_MS = 60 * 60 * 1000
-const MAX_MCP_SESSIONS = 16
-
 const createLocalHttpToken = () => crypto.randomBytes(24).toString('base64url')
 
 const extractBearerToken = (header = '') => {
@@ -137,58 +134,17 @@ const closeServer = (server) => new Promise((resolve, reject) => {
   })
 })
 
-const MCP_TOOLS = [
-  {
-    name: 'ibot.status',
-    description: 'Get the current ibot pet snapshot.',
-    inputSchema: { type: 'object', properties: {}, additionalProperties: false }
-  },
-  {
-    name: 'ibot.say',
-    description: 'Show a speech bubble on the desktop pet.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        text: { type: 'string' },
-        ttlMs: { type: 'number' }
-      },
-      required: ['text'],
-      additionalProperties: false
-    }
-  },
-  {
-    name: 'ibot.play_action',
-    description: 'Play a pet action by id.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        actionId: { type: 'string' }
-      },
-      required: ['actionId'],
-      additionalProperties: false
-    }
-  },
-  {
-    name: 'ibot.set_event',
-    description: 'Set a pet event with an optional message.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        type: { type: 'string' },
-        message: { type: 'string' },
-        ttlMs: { type: 'number' }
-      },
-      required: ['type'],
-      additionalProperties: false
-    }
-  }
-]
+const sendEventStream = (response, statusCode, body, headers = {}) => {
+  response.writeHead(statusCode, {
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    'Cache-Control': 'no-store',
+    Connection: 'close',
+    ...headers
+  })
+  response.end(`event: endpoint\ndata: ${JSON.stringify(body)}\n\n`)
+}
 
-const createJsonRpcResult = (id, result) => ({ jsonrpc: '2.0', id, result })
-
-const createJsonRpcError = (id, code, message) => ({ jsonrpc: '2.0', id, error: { code, message } })
-
-const createLocalHttpService = ({ petService, settingsService, maxAccessLogs = DEFAULT_MAX_ACCESS_LOGS, now = () => new Date() }) => {
+const createLocalHttpService = ({ petService, settingsService, maxAccessLogs = DEFAULT_MAX_ACCESS_LOGS, now = () => new Date(), nowMs = () => Date.now(), mcpSessionTtlMs }) => {
   if (!petService) throw new Error('petService is required')
 
   let active = null
@@ -244,91 +200,6 @@ const createLocalHttpService = ({ petService, settingsService, maxAccessLogs = D
     sendJson(response, statusCode, body, options.headers)
   }
 
-  const createMcpSession = (runtime) => {
-    const sessionId = crypto.randomBytes(18).toString('base64url')
-    runtime.mcpSessions.set(sessionId, Date.now())
-    while (runtime.mcpSessions.size > MAX_MCP_SESSIONS) {
-      runtime.mcpSessions.delete(runtime.mcpSessions.keys().next().value)
-    }
-    return sessionId
-  }
-
-  const hasMcpSession = (runtime, request) => {
-    const sessionId = String(request.headers['mcp-session-id'] || '')
-    const createdAt = runtime.mcpSessions.get(sessionId)
-    if (!createdAt) return false
-    if (Date.now() - createdAt > MCP_SESSION_TTL_MS) {
-      runtime.mcpSessions.delete(sessionId)
-      return false
-    }
-    runtime.mcpSessions.set(sessionId, Date.now())
-    return true
-  }
-
-  const callMcpTool = (name, args = {}) => {
-    if (name === 'ibot.status') return petService.getSnapshot()
-    if (name === 'ibot.say') {
-      if (typeof args.text !== 'string' || !args.text.trim()) throw new Error('MCP tool ibot.say requires text')
-      return petService.say({ text: args.text, ttlMs: args.ttlMs, source: 'mcp' })
-    }
-    if (name === 'ibot.play_action') {
-      if (typeof args.actionId !== 'string' || !args.actionId.trim()) throw new Error('MCP tool ibot.play_action requires actionId')
-      return petService.playAction({ actionId: args.actionId, source: 'mcp' })
-    }
-    if (name === 'ibot.set_event') {
-      if (typeof args.type !== 'string' || !args.type.trim()) throw new Error('MCP tool ibot.set_event requires type')
-      return petService.setEvent({ ...args, source: 'mcp' })
-    }
-    throw new Error(`Unknown MCP tool: ${name}`)
-  }
-
-  const handleMcp = (runtime, request, body) => {
-    const id = body?.id ?? null
-    if (body?.jsonrpc !== '2.0' || typeof body.method !== 'string') {
-      return { statusCode: 200, body: createJsonRpcError(id, -32600, 'Invalid JSON-RPC request') }
-    }
-
-    if (body.method === 'initialize') {
-      const sessionId = createMcpSession(runtime)
-      return {
-        statusCode: 200,
-        headers: { 'Mcp-Session-Id': sessionId },
-        body: createJsonRpcResult(id, {
-          protocolVersion: MCP_PROTOCOL_VERSION,
-          capabilities: { tools: {} },
-          serverInfo: { name: 'ibot', version: '1.0.0' }
-        })
-      }
-    }
-
-    if (!hasMcpSession(runtime, request)) {
-      return { statusCode: 401, body: { ok: false, error: 'MCP session is required' } }
-    }
-
-    if (body.method === 'tools/list') {
-      return { statusCode: 200, body: createJsonRpcResult(id, { tools: MCP_TOOLS }) }
-    }
-
-    if (body.method === 'tools/call') {
-      const name = body.params?.name
-      const args = isPlainObject(body.params?.arguments) ? body.params.arguments : {}
-      try {
-        const result = callMcpTool(name, args)
-        return {
-          statusCode: 200,
-          body: createJsonRpcResult(id, {
-            content: [{ type: 'text', text: JSON.stringify(result) }],
-            structuredContent: result
-          })
-        }
-      } catch (error) {
-        return { statusCode: 200, body: createJsonRpcError(id, -32602, error.message) }
-      }
-    }
-
-    return { statusCode: 200, body: createJsonRpcError(id, -32601, 'Method not found') }
-  }
-
   const createRequestHandler = (runtime) => async (request, response) => {
     const requestConfig = runtime.config
     const authorized = isAuthorized(request, requestConfig)
@@ -357,8 +228,25 @@ const createLocalHttpService = ({ petService, settingsService, maxAccessLogs = D
           return
         }
         const body = await readJsonBody(request)
-        const result = handleMcp(runtime, request, body)
-        respond(request, response, runtime, result.statusCode, result.body, { path, authorized, headers: result.headers })
+        const result = runtime.mcp.handleJsonRpc(request, body)
+        respond(request, response, runtime, result.statusCode, result.body, { path: result.logPath || path, authorized, headers: result.headers })
+        return
+      }
+
+      if (request.method === 'GET' && url.pathname === '/mcp') {
+        if (!authorized) {
+          respond(request, response, runtime, 401, { ok: false, error: 'Unauthorized' }, { path, authorized })
+          return
+        }
+        if (!runtime.mcp.hasSession(request)) {
+          respond(request, response, runtime, 401, { ok: false, error: 'MCP session is required' }, { path: '/mcp/session-required', authorized })
+          return
+        }
+        recordAccess(request, runtime, 200, { path: '/mcp/stream', authorized })
+        sendEventStream(response, 200, {
+          protocolVersion: MCP_PROTOCOL_VERSION,
+          endpoint: '/mcp'
+        })
         return
       }
 
@@ -431,7 +319,7 @@ const createLocalHttpService = ({ petService, settingsService, maxAccessLogs = D
     }
 
     if (active && active.config.host === host && active.config.port === port) {
-      if (active.config.token !== nextConfig.token) active.mcpSessions.clear()
+      if (active.config.token !== nextConfig.token) active.mcp.revokeSessions()
       active.config = {
         ...active.config,
         token: nextConfig.token
@@ -442,7 +330,7 @@ const createLocalHttpService = ({ petService, settingsService, maxAccessLogs = D
 
     const runtime = {
       server: null,
-      mcpSessions: new Map(),
+      mcp: createMcpTransportService({ petService, nowMs, sessionTtlMs: mcpSessionTtlMs }),
       config: {
         enabled: true,
         host,
@@ -466,9 +354,11 @@ const createLocalHttpService = ({ petService, settingsService, maxAccessLogs = D
   }
 
   const getStatus = () => {
-    if (!active) return getState(null, config)
-    return getState(active.server, active.config)
+    const state = !active ? getState(null, config) : getState(active.server, active.config)
+    return { ...state, mcp: active?.mcp.getStatus() || { activeSessions: 0, sessionTtlMs: mcpSessionTtlMs || 0 } }
   }
+
+  const revokeMcpSessions = () => active?.mcp.revokeSessions() || { activeSessions: 0, sessionTtlMs: mcpSessionTtlMs || 0 }
 
   const getLogs = (filters = {}) => filterAccessLogs(readLogs(), filters)
 
@@ -476,7 +366,7 @@ const createLocalHttpService = ({ petService, settingsService, maxAccessLogs = D
 
   const exportLogs = (filters = {}) => exportAccessLogs(getLogs(filters), filters.format)
 
-  return { start, stop, getStatus, getLogs, clearLogs, exportLogs }
+  return { start, stop, getStatus, revokeMcpSessions, getLogs, clearLogs, exportLogs }
 }
 
 module.exports = {

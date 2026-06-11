@@ -34,7 +34,11 @@ export const defaultServiceStatus = {
   runtime: {
     enabled: false,
     host: '127.0.0.1',
-    port: 0
+    port: 0,
+    mcp: {
+      activeSessions: 0,
+      sessionTtlMs: 0
+    }
   }
 }
 
@@ -66,7 +70,14 @@ export const cloneAiConfig = (config) => ({
 
 export const cloneServiceStatus = (status) => ({
   config: { ...defaultServiceStatus.config, ...(status?.config || {}) },
-  runtime: { ...defaultServiceStatus.runtime, ...(status?.runtime || {}) }
+  runtime: {
+    ...defaultServiceStatus.runtime,
+    ...(status?.runtime || {}),
+    mcp: {
+      ...defaultServiceStatus.runtime.mcp,
+      ...(status?.runtime?.mcp || {})
+    }
+  }
 })
 
 export const cloneServiceLogs = (logs) => (Array.isArray(logs) ? logs : [])

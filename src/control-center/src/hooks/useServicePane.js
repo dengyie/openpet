@@ -53,6 +53,20 @@ export function useServicePane() {
     }
   }
 
+  const onRevokeMcpSessions = async () => {
+    setSaving(true)
+    setStatus('')
+    try {
+      const nextStatus = cloneServiceStatus(await api.revokeMcpSessions())
+      setServiceStatus(nextStatus)
+      setStatus('MCP sessions 已撤销')
+    } catch (error) {
+      setStatus(error.message || 'MCP sessions 撤销失败')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const onRefreshLogs = async () => {
     setStatus('')
     try {
@@ -99,6 +113,7 @@ export function useServicePane() {
       },
       onSave,
       onRotateToken,
+      onRevokeMcpSessions,
       onRefreshLogs,
       onExportLogs,
       onClearLogs

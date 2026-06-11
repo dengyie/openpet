@@ -8,7 +8,7 @@ const formatLogTime = (timestamp) => {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
 
-export function ServicePane({ serviceStatus, logs, status, saving, onChange, onSave, onRotateToken, onRefreshLogs, onExportLogs, onClearLogs }) {
+export function ServicePane({ serviceStatus, logs, status, saving, onChange, onSave, onRotateToken, onRevokeMcpSessions, onRefreshLogs, onExportLogs, onClearLogs }) {
   const config = serviceStatus.config
   const runtime = serviceStatus.runtime
   const endpoint = runtime.enabled && runtime.port
@@ -77,6 +77,16 @@ export function ServicePane({ serviceStatus, logs, status, saving, onChange, onS
         <div className="readonly-row">
           <span>MCP</span>
           <strong className="endpoint-text">{mcpEndpoint}</strong>
+        </div>
+
+        <div className="readonly-row">
+          <span>MCP Sessions</span>
+          <div className="inline-action">
+            <strong>{runtime.mcp?.activeSessions || 0}</strong>
+            <button type="button" className="ghost" onClick={onRevokeMcpSessions} disabled={saving || !runtime.enabled || !(runtime.mcp?.activeSessions)}>
+              撤销全部
+            </button>
+          </div>
         </div>
       </div>
 

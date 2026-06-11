@@ -60,7 +60,8 @@ const IPC = {
   SERVICE_GET_LOGS: 'service:get-logs',
   SERVICE_EXPORT_LOGS: 'service:export-logs',
   SERVICE_CLEAR_LOGS: 'service:clear-logs',
-  SERVICE_ROTATE_TOKEN: 'service:rotate-token'
+  SERVICE_ROTATE_TOKEN: 'service:rotate-token',
+  SERVICE_REVOKE_MCP_SESSIONS: 'service:revoke-mcp-sessions'
 }
 
 module.exports = { IPC }
