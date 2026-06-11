@@ -28,7 +28,9 @@ const IPC = {
   PLUGINS_SAVE_CONFIG: 'plugins:save-config',
   PLUGINS_RUN_COMMAND: 'plugins:run-command',
   PLUGINS_GET_LOGS: 'plugins:get-logs',
+  PLUGINS_EXPORT_LOGS: 'plugins:export-logs',
   PLUGINS_CLEAR_LOGS: 'plugins:clear-logs',
+  PLUGINS_CLEAR_STORAGE: 'plugins:clear-storage',
   SERVICE_GET_STATUS: 'service:get-status',
   SERVICE_SAVE_CONFIG: 'service:save-config'
 }
@@ -53,8 +55,10 @@ contextBridge.exposeInMainWorld('controlCenterAPI', {
   setPluginEnabled: (pluginId, enabled) => ipcRenderer.invoke(IPC.PLUGINS_SET_ENABLED, { pluginId, enabled }),
   savePluginConfig: (pluginId, config) => ipcRenderer.invoke(IPC.PLUGINS_SAVE_CONFIG, { pluginId, config }),
   runPluginCommand: (pluginId, commandId, payload) => ipcRenderer.invoke(IPC.PLUGINS_RUN_COMMAND, { pluginId, commandId, payload }),
-  getPluginLogs: () => ipcRenderer.invoke(IPC.PLUGINS_GET_LOGS),
+  getPluginLogs: (filters) => ipcRenderer.invoke(IPC.PLUGINS_GET_LOGS, filters),
+  exportPluginLogs: (filters) => ipcRenderer.invoke(IPC.PLUGINS_EXPORT_LOGS, filters),
   clearPluginLogs: () => ipcRenderer.invoke(IPC.PLUGINS_CLEAR_LOGS),
+  clearPluginStorage: (pluginId) => ipcRenderer.invoke(IPC.PLUGINS_CLEAR_STORAGE, { pluginId }),
   getServiceStatus: () => ipcRenderer.invoke(IPC.SERVICE_GET_STATUS),
   saveServiceConfig: (config) => ipcRenderer.invoke(IPC.SERVICE_SAVE_CONFIG, config),
   close: () => ipcRenderer.send(IPC.SETTINGS_CLOSE)

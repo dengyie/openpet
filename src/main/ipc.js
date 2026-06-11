@@ -216,9 +216,13 @@ const registerIpcHandlers = ({ getPetWindow, petService, aiService, pluginServic
     return pluginService.runCommand(payload.pluginId, payload.commandId, payload.payload)
   })
 
-  ipcMain.handle(IPC.PLUGINS_GET_LOGS, () => pluginService.getLogs())
+  ipcMain.handle(IPC.PLUGINS_GET_LOGS, (_event, filters) => pluginService.getLogs(filters))
+
+  ipcMain.handle(IPC.PLUGINS_EXPORT_LOGS, (_event, filters) => pluginService.exportLogs(filters))
 
   ipcMain.handle(IPC.PLUGINS_CLEAR_LOGS, () => pluginService.clearLogs())
+
+  ipcMain.handle(IPC.PLUGINS_CLEAR_STORAGE, (_event, payload) => pluginService.clearStorage(payload.pluginId))
 
   ipcMain.handle(IPC.SERVICE_GET_STATUS, () => ({
     config: petService.getSettings().localHttp,

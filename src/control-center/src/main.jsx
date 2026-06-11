@@ -109,7 +109,9 @@ const api = window.controlCenterAPI || {
   savePluginConfig: async (pluginId, config) => ({ id: pluginId, config }),
   runPluginCommand: async () => ({ ok: true }),
   getPluginLogs: async () => [],
+  exportPluginLogs: async () => '[]',
   clearPluginLogs: async () => [],
+  clearPluginStorage: async (pluginId) => ({ id: pluginId, storage: { keyCount: 0, byteSize: 2 } }),
   getServiceStatus: async () => defaultServiceStatus,
   saveServiceConfig: async (config) => ({ config, runtime: { ...config, enabled: config.enabled } }),
   close: () => {}
@@ -132,6 +134,23 @@ const formatPluginLogTime = (timestamp) => {
   const date = new Date(timestamp)
   if (Number.isNaN(date.getTime())) return ''
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+}
+
+const formatBytes = (bytes = 0) => {
+  if (bytes < 1024) return `${bytes} B`
+  return `${(bytes / 1024).toFixed(1)} KB`
+}
+
+const downloadTextFile = (filename, text, type) => {
+  const blob = new Blob([text], { type })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
 }
 
 function SegmentedControl({ label, value, options, onChange }) {
@@ -610,7 +629,7 @@ function ActionsPane({
   )
 }
 
-function PluginsPane({ plugins, logs, status, runningCommand, savingConfig, onToggle, onChangeConfig, onSaveConfig, onRun, onClearLogs }) {
+function PluginsPane({ plugins, logs, filters, status, runningCommand, savingConfig, clearingStorage, onToggle, onChangeConfig, onSaveConfig, onRun, onChangeFilters, onExportLogs, onClearLogs, onClearStorage }) {
   return (
     <section className="pane">
       <header className="pane-header">
@@ -637,6 +656,17 @@ function PluginsPane({ plugins, logs, status, runningCommand, savingConfig, onTo
               </div>
               <div className="permission-line">
                 {(plugin.permissions || []).length === 0 ? '无权限' : plugin.permissions.join(' · ')}
+              </div>
+              <div className="plugin-storage-line">
+                <span>{plugin.storage?.valid === false ? '存储数据无效' : `存储 ${plugin.storage?.keyCount || 0} 项 / ${formatBytes(plugin.storage?.byteSize || 2)}`}</span>
+                <button
+                  type="button"
+                  className="ghost"
+                  disabled={plugin.storage?.valid !== false && ((plugin.storage?.keyCount || 0) === 0 || clearingStorage === plugin.id)}
+                  onClick={() => onClearStorage(plugin.id)}
+                >
+                  {clearingStorage === plugin.id ? '清理中' : '清理存储'}
+                </button>
               </div>
               {plugin.commands?.length ? (
                 <div className="plugin-commands">
@@ -723,9 +753,28 @@ function PluginsPane({ plugins, logs, status, runningCommand, savingConfig, onTo
             <h2>运行日志</h2>
             <span>最近 {logs.length} 条事件</span>
           </div>
-          <button type="button" className="ghost" onClick={onClearLogs} disabled={logs.length === 0}>
-            清空
-          </button>
+          <div className="plugin-log-actions">
+            <button type="button" className="ghost" onClick={() => onExportLogs('json')} disabled={logs.length === 0}>JSON</button>
+            <button type="button" className="ghost" onClick={() => onExportLogs('csv')} disabled={logs.length === 0}>CSV</button>
+            <button type="button" className="ghost" onClick={onClearLogs} disabled={logs.length === 0}>清空</button>
+          </div>
+        </div>
+        <div className="plugin-log-filters">
+          <select className="text-input" value={filters.pluginId} onChange={(event) => onChangeFilters({ ...filters, pluginId: event.target.value })}>
+            <option value="">全部插件</option>
+            {plugins.map((plugin) => <option value={plugin.id} key={plugin.id}>{plugin.name}</option>)}
+          </select>
+          <select className="text-input" value={filters.level} onChange={(event) => onChangeFilters({ ...filters, level: event.target.value })}>
+            <option value="">全部级别</option>
+            <option value="info">Info</option>
+            <option value="error">Error</option>
+          </select>
+          <input
+            className="text-input"
+            value={filters.query}
+            placeholder="搜索日志"
+            onChange={(event) => onChangeFilters({ ...filters, query: event.target.value })}
+          />
         </div>
         <div className="plugin-log-list">
           {logs.length === 0 ? (
@@ -859,9 +908,11 @@ function App() {
   const [chatting, setChatting] = useState(false)
   const [plugins, setPlugins] = useState([])
   const [pluginLogs, setPluginLogs] = useState([])
+  const [pluginLogFilters, setPluginLogFilters] = useState({ pluginId: '', level: '', query: '' })
   const [pluginStatus, setPluginStatus] = useState('')
   const [runningCommand, setRunningCommand] = useState('')
   const [savingPluginConfig, setSavingPluginConfig] = useState('')
+  const [clearingPluginStorage, setClearingPluginStorage] = useState('')
   const [serviceStatus, setServiceStatus] = useState(defaultServiceStatus)
   const [serviceMessage, setServiceMessage] = useState('')
   const originalRef = useRef(defaultSettings)
@@ -873,7 +924,7 @@ function App() {
       api.getActions(),
       api.getAiConfig(),
       api.getPlugins(),
-      api.getPluginLogs(),
+      api.getPluginLogs(pluginLogFilters),
       api.getServiceStatus()
     ]).then(([loadedSettings, loadedActions, loadedAiConfig, loadedPlugins, loadedPluginLogs, loadedServiceStatus]) => {
       if (!mounted) return
@@ -901,6 +952,16 @@ function App() {
     if (actionsConfig.actions.some((action) => action.id === selectedActionId)) return
     setSelectedActionId(actionsConfig.defaultAction || actionsConfig.actions[0]?.id || '')
   }, [actionsConfig, selectedActionId])
+
+  useEffect(() => {
+    let mounted = true
+    api.getPluginLogs(pluginLogFilters).then((logs) => {
+      if (mounted) setPluginLogs(Array.isArray(logs) ? logs : [])
+    }).catch((error) => {
+      if (mounted) setPluginStatus(error.message || '日志加载失败')
+    })
+    return () => { mounted = false }
+  }, [pluginLogFilters])
 
   const page = useMemo(() => {
     if (activeTab === 'pet') {
@@ -1130,9 +1191,11 @@ function App() {
         <PluginsPane
           plugins={plugins}
           logs={pluginLogs}
+          filters={pluginLogFilters}
           status={pluginStatus}
           runningCommand={runningCommand}
           savingConfig={savingPluginConfig}
+          clearingStorage={clearingPluginStorage}
           onToggle={async (pluginId, enabled) => {
             setPluginStatus('')
             try {
@@ -1140,11 +1203,11 @@ function App() {
               setPlugins(plugins.map((plugin) => (
                 plugin.id === pluginId ? { ...plugin, ...updatedPlugin } : plugin
               )))
-              setPluginLogs(await api.getPluginLogs())
+              setPluginLogs(await api.getPluginLogs(pluginLogFilters))
               setPluginStatus(enabled ? '插件已启用' : '插件已停用')
             } catch (error) {
               setPluginStatus(error.message || '插件状态更新失败')
-              setPluginLogs(await api.getPluginLogs())
+              setPluginLogs(await api.getPluginLogs(pluginLogFilters))
             }
           }}
           onChangeConfig={(pluginId, key, value) => {
@@ -1164,11 +1227,11 @@ function App() {
               setPlugins(plugins.map((candidate) => (
                 candidate.id === pluginId ? { ...candidate, ...updatedPlugin } : candidate
               )))
-              setPluginLogs(await api.getPluginLogs())
+              setPluginLogs(await api.getPluginLogs(pluginLogFilters))
               setPluginStatus('插件配置已保存')
             } catch (error) {
               setPluginStatus(error.message || '插件配置保存失败')
-              setPluginLogs(await api.getPluginLogs())
+              setPluginLogs(await api.getPluginLogs(pluginLogFilters))
             } finally {
               setSavingPluginConfig('')
             }
@@ -1179,13 +1242,26 @@ function App() {
             setPluginStatus('')
             try {
               await api.runPluginCommand(pluginId, commandId)
-              setPluginLogs(await api.getPluginLogs())
+              setPluginLogs(await api.getPluginLogs(pluginLogFilters))
               setPluginStatus('命令已运行')
             } catch (error) {
               setPluginStatus(error.message || '命令运行失败')
-              setPluginLogs(await api.getPluginLogs())
+              setPluginLogs(await api.getPluginLogs(pluginLogFilters))
             } finally {
               setRunningCommand('')
+            }
+          }}
+          onChangeFilters={setPluginLogFilters}
+          onExportLogs={async (format) => {
+            setPluginStatus('')
+            try {
+              const content = await api.exportPluginLogs({ ...pluginLogFilters, format })
+              const extension = format === 'csv' ? 'csv' : 'json'
+              const type = format === 'csv' ? 'text/csv;charset=utf-8' : 'application/json;charset=utf-8'
+              downloadTextFile(`ibot-plugin-logs.${extension}`, content, type)
+              setPluginStatus('日志已导出')
+            } catch (error) {
+              setPluginStatus(error.message || '日志导出失败')
             }
           }}
           onClearLogs={async () => {
@@ -1194,6 +1270,24 @@ function App() {
               setPluginLogs(await api.clearPluginLogs())
             } catch (error) {
               setPluginStatus(error.message || '日志清空失败')
+            }
+          }}
+          onClearStorage={async (pluginId) => {
+            if (!window.confirm(`清理插件 ${pluginId} 的私有存储？`)) return
+            setClearingPluginStorage(pluginId)
+            setPluginStatus('')
+            try {
+              const updatedPlugin = await api.clearPluginStorage(pluginId)
+              setPlugins(plugins.map((plugin) => (
+                plugin.id === pluginId ? { ...plugin, ...updatedPlugin } : plugin
+              )))
+              setPluginLogs(await api.getPluginLogs(pluginLogFilters))
+              setPluginStatus('插件存储已清理')
+            } catch (error) {
+              setPluginStatus(error.message || '插件存储清理失败')
+              setPluginLogs(await api.getPluginLogs(pluginLogFilters))
+            } finally {
+              setClearingPluginStorage('')
             }
           }}
         />
@@ -1232,7 +1326,7 @@ function App() {
       { label: 'Control Center', value: 'Phase 5' },
       { label: 'Runtime contract', value: 'Phase 2' }
     ]} />
-  }, [activeTab, actionStatus, actionWorking, actionsConfig, aiConfig, aiStatus, apiKeyDraft, chatDraft, chatMessages, chatting, importDraft, importInspection, originalSettings, pluginLogs, pluginStatus, plugins, runningCommand, saving, savingPluginConfig, serviceMessage, serviceStatus, settings])
+  }, [activeTab, actionStatus, actionWorking, actionsConfig, aiConfig, aiStatus, apiKeyDraft, chatDraft, chatMessages, chatting, clearingPluginStorage, importDraft, importInspection, originalSettings, pluginLogFilters, pluginLogs, pluginStatus, plugins, runningCommand, saving, savingPluginConfig, serviceMessage, serviceStatus, settings])
 
   return (
     <main className="shell">

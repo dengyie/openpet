@@ -32,7 +32,8 @@ const defaultSettings = {
       'official.basic-behavior': true
     },
     config: {},
-    storage: {}
+    storage: {},
+    logs: []
   },
   localHttp: {
     enabled: false,
@@ -63,7 +64,8 @@ const mergeSettings = (settings = {}) => ({
     storage: {
       ...defaultSettings.plugins.storage,
       ...(settings.plugins?.storage || {})
-    }
+    },
+    logs: Array.isArray(settings.plugins?.logs) ? settings.plugins.logs : defaultSettings.plugins.logs
   },
   localHttp: {
     ...defaultSettings.localHttp,

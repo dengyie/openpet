@@ -9,6 +9,7 @@ const SUPPORTED_CONFIG_TYPES = new Set(['string', 'number', 'boolean'])
 const STORAGE_KEY_PATTERN = /^[a-zA-Z0-9_.:-]{1,128}$/
 const MAX_PLUGIN_STORAGE_BYTES = 64 * 1024
 const MAX_PLUGIN_STORAGE_VALUE_BYTES = 16 * 1024
+const MAX_PLUGIN_LOG_ENTRIES = 200
 const LOCAL_PLUGIN_RUNNER_PATH = path.join(__dirname, '../plugins/local-plugin-runner.js')
 
 const resolveLocalPluginFile = (manifest, fieldName) => {
@@ -71,6 +72,47 @@ const cloneJsonValue = (value, fieldName = 'value', { allowUndefined = false } =
 }
 
 const getJsonByteSize = (value) => Buffer.byteLength(JSON.stringify(value), 'utf-8')
+
+const normalizePluginLog = (entry = {}, index = 0) => ({
+  id: Number.isFinite(Number(entry.id)) ? Number(entry.id) : index + 1,
+  timestamp: entry.timestamp || new Date().toISOString(),
+  level: entry.level === 'error' ? 'error' : 'info',
+  pluginId: String(entry.pluginId || ''),
+  commandId: String(entry.commandId || ''),
+  message: String(entry.message || '')
+})
+
+const filterLogs = (logs, filters = {}) => {
+  const pluginId = String(filters.pluginId || '').trim()
+  const level = String(filters.level || '').trim()
+  const query = String(filters.query || '').trim().toLowerCase()
+
+  return logs.filter((entry) => {
+    if (pluginId && entry.pluginId !== pluginId) return false
+    if (level && entry.level !== level) return false
+    if (query) {
+      const haystack = `${entry.pluginId} ${entry.commandId} ${entry.message}`.toLowerCase()
+      if (!haystack.includes(query)) return false
+    }
+    return true
+  })
+}
+
+const escapeCsvCell = (value) => {
+  const cell = String(value ?? '')
+  return /[",\n\r]/.test(cell) ? `"${cell.replace(/"/g, '""')}"` : cell
+}
+
+const exportLogs = (logs, format = 'json') => {
+  if (format === 'csv') {
+    const rows = [
+      ['timestamp', 'level', 'pluginId', 'commandId', 'message'],
+      ...logs.map((entry) => [entry.timestamp, entry.level, entry.pluginId, entry.commandId, entry.message])
+    ]
+    return rows.map((row) => row.map(escapeCsvCell).join(',')).join('\n')
+  }
+  return JSON.stringify(logs, null, 2)
+}
 
 const assertStorageValueSize = (value) => {
   const byteSize = getJsonByteSize(value)
@@ -290,21 +332,35 @@ const createPluginService = ({ settingsService, petService, pluginDirs = [], off
   if (!settingsService) throw new Error('settingsService is required')
   if (!petService) throw new Error('petService is required')
 
-  const logs = []
-  let nextLogId = 1
+  const getLogStore = () => {
+    const logs = settingsService.get().plugins?.logs
+    return Array.isArray(logs) ? logs.map(normalizePluginLog) : []
+  }
+
+  const saveLogStore = (logs) => {
+    const settings = settingsService.get()
+    settingsService.save({
+      ...settings,
+      plugins: {
+        ...(settings.plugins || {}),
+        logs: logs.slice(0, MAX_PLUGIN_LOG_ENTRIES).map((entry, index) => normalizePluginLog(entry, index))
+      }
+    })
+  }
 
   const appendLog = ({ level = 'info', pluginId = '', commandId = '', message = '' } = {}) => {
+    const logs = getLogStore()
+    const maxLogId = logs.reduce((maxId, entry) => Math.max(maxId, entry.id), 0)
     const entry = {
-      id: nextLogId,
+      id: maxLogId + 1,
       timestamp: new Date().toISOString(),
-      level,
+      level: level === 'error' ? 'error' : 'info',
       pluginId,
       commandId,
       message: String(message || '')
     }
-    nextLogId += 1
     logs.unshift(entry)
-    logs.splice(100)
+    saveLogStore(logs)
     return entry
   }
 
@@ -323,6 +379,24 @@ const createPluginService = ({ settingsService, petService, pluginDirs = [], off
   const getConfigMap = () => settingsService.get().plugins?.config || {}
 
   const getStorageMap = () => settingsService.get().plugins?.storage || {}
+
+  const getPluginStorageStats = (pluginId) => {
+    try {
+      const storage = getPluginStorage(pluginId)
+      return {
+        keyCount: Object.keys(storage).length,
+        byteSize: getJsonByteSize(storage),
+        valid: true
+      }
+    } catch (error) {
+      return {
+        keyCount: 0,
+        byteSize: 0,
+        valid: false,
+        error: error.message || 'Plugin storage is invalid'
+      }
+    }
+  }
 
   const normalizePluginConfig = (schema, config = {}) => {
     if (!schema) return {}
@@ -354,12 +428,21 @@ const createPluginService = ({ settingsService, petService, pluginDirs = [], off
     })
   }
 
+  const clearStorage = (pluginId) => {
+    const plugin = getPlugins().find((candidate) => candidate.manifest.id === pluginId)
+    if (!plugin) throw new Error(`Plugin not found: ${pluginId}`)
+    savePluginStorage(pluginId, {})
+    appendLog({ pluginId, level: 'info', message: 'Plugin storage cleared' })
+    return listPlugins().find((candidate) => candidate.id === pluginId)
+  }
+
   const listPlugins = () => getPlugins().map((plugin) => ({
     ...plugin.manifest,
     enabled: Boolean(getEnabledMap()[plugin.manifest.id]),
     runnable: typeof plugin.activate === 'function' || Boolean(plugin.mainPath),
     configSchema: plugin.configSchema,
-    config: getPluginConfig(plugin.manifest.id, plugin.configSchema)
+    config: getPluginConfig(plugin.manifest.id, plugin.configSchema),
+    storage: getPluginStorageStats(plugin.manifest.id)
   }))
 
   const setEnabled = (pluginId, enabled) => {
@@ -516,14 +599,16 @@ const createPluginService = ({ settingsService, petService, pluginDirs = [], off
     }
   }
 
-  const getLogs = () => logs.map((entry) => ({ ...entry }))
+  const getLogs = (filters = {}) => filterLogs(getLogStore(), filters).map((entry) => ({ ...entry }))
+
+  const exportLogEntries = ({ format = 'json', ...filters } = {}) => exportLogs(getLogs(filters), format)
 
   const clearLogs = () => {
-    logs.length = 0
+    saveLogStore([])
     return getLogs()
   }
 
-  return { listPlugins, setEnabled, saveConfig, runCommand, getLogs, clearLogs }
+  return { listPlugins, setEnabled, saveConfig, clearStorage, runCommand, getLogs, exportLogs: exportLogEntries, clearLogs }
 }
 
 module.exports = { createPluginService, readLocalPluginManifests }

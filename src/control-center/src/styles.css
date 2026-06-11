@@ -551,6 +551,19 @@ button {
   overflow-wrap: anywhere;
 }
 
+.plugin-storage-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.plugin-storage-line .ghost {
+  padding: 5px 8px;
+}
+
 .plugin-commands {
   display: flex;
   flex-wrap: wrap;
@@ -638,6 +651,27 @@ button {
 .plugin-log-header span {
   color: #6b7280;
   font-size: 12px;
+}
+
+.plugin-log-actions,
+.plugin-log-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.plugin-log-actions .ghost {
+  padding: 7px 9px;
+}
+
+.plugin-log-filters .text-input {
+  width: auto;
+  min-width: 130px;
+}
+
+.plugin-log-filters input.text-input {
+  min-width: 180px;
 }
 
 .plugin-log-list {

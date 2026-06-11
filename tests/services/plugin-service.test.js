@@ -177,15 +177,12 @@ test('plugin service persists enablement without replacing unrelated settings', 
   const saved = service.setEnabled('official.basic-behavior', true)
 
   assert.equal(saved.enabled, true)
-  assert.deepEqual(settingsService.get(), {
-    theme: 'system',
-    plugins: {
-      enabled: {
-        existing: true,
-        'official.basic-behavior': true
-      }
-    }
+  assert.equal(settingsService.get().theme, 'system')
+  assert.deepEqual(settingsService.get().plugins.enabled, {
+    existing: true,
+    'official.basic-behavior': true
   })
+  assert.equal(settingsService.get().plugins.logs[0].message, 'Plugin enabled')
 })
 
 test('plugin service runs enabled official commands through a permissioned pet sdk', async () => {
@@ -426,16 +423,13 @@ test('plugin service saves schema-backed config without replacing enablement', (
   })
 
   assert.deepEqual(updatedPlugin.config, { greeting: 'Plan', rounds: 4, strict: true })
-  assert.deepEqual(settingsService.get(), {
-    theme: 'system',
-    plugins: {
-      enabled: { 'local-runner': true },
-      config: {
-        existing: { ok: true },
-        'local-runner': { greeting: 'Plan', rounds: 4, strict: true }
-      }
-    }
+  assert.equal(settingsService.get().theme, 'system')
+  assert.deepEqual(settingsService.get().plugins.enabled, { 'local-runner': true })
+  assert.deepEqual(settingsService.get().plugins.config, {
+    existing: { ok: true },
+    'local-runner': { greeting: 'Plan', rounds: 4, strict: true }
   })
+  assert.equal(settingsService.get().plugins.logs[0].message, 'Plugin config saved')
 })
 
 test('plugin service rejects config values outside schema enum', () => {
@@ -534,14 +528,11 @@ test('plugin service exposes private storage to plugins with storage permission'
   const result = await service.runCommand('local-runner', 'start')
 
   assert.deepEqual(result, { count: 2, meta: { ok: true } })
-  assert.deepEqual(settingsService.get(), {
-    theme: 'system',
-    plugins: {
-      enabled: { 'local-runner': true },
-      config: { 'local-runner': { greeting: 'Focus' } },
-      storage: { 'local-runner': { count: 2, meta: { ok: true } } }
-    }
-  })
+  assert.equal(settingsService.get().theme, 'system')
+  assert.deepEqual(settingsService.get().plugins.enabled, { 'local-runner': true })
+  assert.deepEqual(settingsService.get().plugins.config, { 'local-runner': { greeting: 'Focus' } })
+  assert.deepEqual(settingsService.get().plugins.storage, { 'local-runner': { count: 2, meta: { ok: true } } })
+  assert.deepEqual(settingsService.get().plugins.logs.map((entry) => entry.message), ['Command completed', 'Command started'])
 })
 
 test('plugin service blocks private storage without permission', async () => {
@@ -785,4 +776,108 @@ test('plugin service records enablement logs', () => {
   assert.equal(log.level, 'info')
   assert.equal(log.pluginId, 'official.basic-behavior')
   assert.equal(log.message, 'Plugin enabled')
+})
+
+test('plugin service persists logs through settings', async () => {
+  const settingsService = createSettingsService({
+    plugins: { enabled: { 'official.basic-behavior': true } }
+  })
+  const service = createPluginService({
+    settingsService,
+    petService: { say: async () => {} },
+    officialPlugins: [createOfficialPlugin()]
+  })
+
+  await service.runCommand('official.basic-behavior', 'greet')
+  const reloadedService = createPluginService({
+    settingsService,
+    petService: { say: async () => {} },
+    officialPlugins: [createOfficialPlugin()]
+  })
+
+  assert.deepEqual(reloadedService.getLogs().map((entry) => entry.message), ['Command completed', 'Command started'])
+  assert.equal(settingsService.get().plugins.logs.length, 2)
+})
+
+test('plugin service filters and exports persisted logs', async () => {
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'official.basic-behavior': true } }
+    }),
+    petService: { say: async () => {} },
+    officialPlugins: [createOfficialPlugin()]
+  })
+
+  await service.runCommand('official.basic-behavior', 'greet')
+  await assert.rejects(() => service.runCommand('official.basic-behavior', 'missing'), /Plugin command not found/)
+
+  assert.deepEqual(service.getLogs({ level: 'error' }).map((entry) => entry.message), ['Plugin command not found: missing'])
+  assert.deepEqual(service.getLogs({ query: 'completed' }).map((entry) => entry.message), ['Command completed'])
+
+  const exportedJson = JSON.parse(service.exportLogs({ level: 'error', format: 'json' }))
+  assert.equal(exportedJson.length, 1)
+  assert.equal(exportedJson[0].level, 'error')
+
+  const exportedCsv = service.exportLogs({ query: 'started', format: 'csv' })
+  assert.match(exportedCsv, /^timestamp,level,pluginId,commandId,message\n/)
+  assert.match(exportedCsv, /Command started/)
+})
+
+test('plugin service exposes private storage stats and clears storage from control center', () => {
+  const settingsService = createSettingsService({
+    plugins: {
+      storage: { 'local-runner': { count: 1, meta: { ok: true } } }
+    }
+  })
+  const service = createPluginService({
+    settingsService,
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [createRunnablePluginDir({
+      manifest: {
+        permissions: ['storage'],
+        commands: [{ id: 'start', title: 'Start' }]
+      },
+      source: 'module.exports = function activate() { return {} }'
+    })]
+  })
+
+  const [plugin] = service.listPlugins()
+  assert.equal(plugin.storage.keyCount, 2)
+  assert.ok(plugin.storage.byteSize > 2)
+
+  const updatedPlugin = service.clearStorage('local-runner')
+
+  assert.deepEqual(updatedPlugin.storage, { keyCount: 0, byteSize: 2, valid: true })
+  assert.deepEqual(settingsService.get().plugins.storage, { 'local-runner': {} })
+  assert.equal(service.getLogs()[0].message, 'Plugin storage cleared')
+})
+
+test('plugin service isolates invalid stored plugin storage from list rendering', () => {
+  const cyclicStorage = {}
+  cyclicStorage.self = cyclicStorage
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: {
+        storage: { 'local-runner': cyclicStorage }
+      }
+    }),
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [createRunnablePluginDir({
+      manifest: {
+        permissions: ['storage'],
+        commands: [{ id: 'start', title: 'Start' }]
+      },
+      source: 'module.exports = function activate() { return {} }'
+    })]
+  })
+
+  const [plugin] = service.listPlugins()
+  assert.deepEqual(plugin.storage, {
+    keyCount: 0,
+    byteSize: 0,
+    valid: false,
+    error: 'Plugin value must be JSON serializable at value.self'
+  })
 })

@@ -116,7 +116,7 @@ Phase 5 当前范围：
 - 插件服务维护最多 100 条内存运行日志，记录启停、命令开始/完成/失败；Plugins 页可查看和清空日志。
 - 坏的本地 manifest 会被隔离跳过，不阻塞其他插件加载。
 - `PetService.say()` 成为 AI 和插件触发气泡的统一入口。
-- 尚未实现 SES 沙箱、完整 JSON Schema 表单、插件日志持久化/筛选/导出和插件存储清理 UI。当前已支持基础 `configSchema` 动态表单（string/number/boolean/enum/default）、`ctx.config.get()` 和带 `storage` 权限的 `ctx.storage.get/set/remove/clear()`，并在服务层限制 storage key、64KB/插件与 16KB/value 配额。
+- 尚未实现 SES 沙箱和完整 JSON Schema 表单。当前已支持基础 `configSchema` 动态表单（string/number/boolean/enum/default）、`ctx.config.get()` 和带 `storage` 权限的 `ctx.storage.get/set/remove/clear()`，并在服务层限制 storage key、64KB/插件与 16KB/value 配额；插件日志已持久化到设置中，Control Center 支持筛选、JSON/CSV 导出、清空日志和清理插件私有存储。
 
 Phase 6 已新增：
 
