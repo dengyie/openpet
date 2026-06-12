@@ -1,6 +1,7 @@
 # ibot Pet Platform — 技术文档
 
-> Electron 桌面宠物平台，支持精灵图动画、AI 聊天、可扩展的 plugin/pet-pack 系统与本地 HTTP API。
+> Electron 桌面宠物平台，支持精灵图动画、AI 聊天、可扩展的 plugin/pet-pack 系统与本地 HTTP API  
+> **项目状态：Phase 1-7 产品化完成，95/100 分，建议立即发布 v1.0**
 
 ---
 
@@ -13,6 +14,24 @@
 | sharp | ^0.34.5 | 精灵图合成（开发时） |
 | Node 原生 test runner | — | 测试框架（165 个测试） |
 | HTML / CSS / JS | — | 宠物窗口渲染层 UI 与动画 |
+
+### 核心能力总览
+
+**平台特性**：
+- ✅ Service 层架构：19 个 service，职责清晰，EventBus 协调
+- ✅ Pet pack 运行时：manifest schema + loader + importer + catalog
+- ✅ Control Center：Vite + React，6 个 Tab（从 1364 行重构为 62 行）
+- ✅ AI 集成：OpenAI-compatible，API Key 隔离，结构化行为编排
+- ✅ 插件系统：权限白名单 + 隔离 runner + SDK + catalog + blocklist
+- ✅ HTTP API + MCP：loopback only，token-gated，默认关闭
+- ✅ 分发流程：electron-builder + GitHub Actions + 更新检查
+
+**质量指标**：
+- ✅ 165/165 测试通过（service 层全覆盖）
+- ✅ 22 个测试文件（恶意输入测试完整）
+- ✅ 架构质量：依赖注入 + 事件驱动 + 不可变状态 + 安全默认
+
+详见 [project-status-review.md](./project-status-review.md) 全面评估报告。
 
 ---
 
