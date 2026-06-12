@@ -27,6 +27,7 @@ const { createPluginInstallService } = require('./src/main/services/plugin-insta
 const { createLocalHttpService } = require('./src/main/services/local-http-service')
 const { createActionImportService } = require('./src/main/services/action-import-service')
 const { createAboutService } = require('./src/main/services/about-service')
+const { createCatalogService } = require('./src/main/services/catalog-service')
 const { createBasicBehaviorPlugin } = require('./src/main/plugins/official/basic-behavior')
 const packageJson = require('./package.json')
 
@@ -55,10 +56,12 @@ app.whenReady().then(() => {
     saveSettings,
     syncSideEffects: (settings) => syncLoginItemSettings(settings.autoStart)
   })
+  let catalogService = null
   const petPackService = createPetPackService({
     settingsService,
     userPacksDir: path.join(app.getPath('userData'), 'pet-packs'),
-    projectRoot: __dirname
+    projectRoot: __dirname,
+    getPetPackBlockStatus: (candidate) => catalogService?.getPetPackBlockStatus(candidate) || { blocked: false, reasons: [] }
   })
   const actionService = createActionService({ petPackService })
   const petService = createPetService({ eventBus, settingsService, actionService })
@@ -73,17 +76,26 @@ app.whenReady().then(() => {
     configPath: path.join(__dirname, 'cat_anime', 'animations.json')
   })
   const pluginDir = path.join(app.getPath('userData'), 'plugins')
+  const pluginInstallService = createPluginInstallService({
+    settingsService,
+    pluginDir,
+    getPluginBlockStatus: (candidate) => catalogService?.getPluginBlockStatus(candidate) || { blocked: false, reasons: [] }
+  })
   const pluginService = createPluginService({
     settingsService,
     petService,
     petPackService,
     aiService,
     pluginDirs: [pluginDir],
-    officialPlugins: [createBasicBehaviorPlugin()]
+    officialPlugins: [createBasicBehaviorPlugin()],
+    getPluginBlockStatus: (candidate) => catalogService?.getPluginBlockStatus(candidate) || { blocked: false, reasons: [] }
   })
-  const pluginInstallService = createPluginInstallService({
+  catalogService = createCatalogService({
     settingsService,
-    pluginDir
+    pluginInstallService,
+    pluginService,
+    petPackService,
+    catalogPath: path.join(__dirname, 'catalog', 'ibot-catalog.json')
   })
   let localHttpConfig = petService.getSettings().localHttp
   if (localHttpConfig?.enabled) {
@@ -109,6 +121,7 @@ app.whenReady().then(() => {
     behaviorOrchestratorService,
     pluginService,
     pluginInstallService,
+    catalogService,
     localHttpService,
     aboutService,
     actionImportService,

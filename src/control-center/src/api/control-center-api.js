@@ -1,4 +1,4 @@
-import { defaultAboutInfo, defaultActionsConfig, defaultAiConfig, defaultPetPacks, defaultServiceStatus, defaultSettings, defaultUpdateCheck } from '../lib/defaults.js'
+import { defaultAboutInfo, defaultActionsConfig, defaultAiConfig, defaultCatalog, defaultPetPacks, defaultServiceStatus, defaultSettings, defaultUpdateCheck } from '../lib/defaults.js'
 
 const createDemoInspection = (actionId = 'wave') => ({
   canceled: false,
@@ -72,6 +72,12 @@ const demoApi = {
     status: 'not-configured',
     message: 'Update feed is not configured.'
   }),
+  getCatalog: async () => defaultCatalog,
+  prepareCatalogInstall: async () => ({ kind: 'plugin', selectionId: 'demo-catalog-selection', pluginReview: null }),
+  installCatalogSelection: async () => ({ ok: true, catalog: defaultCatalog }),
+  clearCatalogSelection: async () => ({ ok: true }),
+  addCatalogBlocklistEntry: async () => ({ catalog: defaultCatalog, blocklist: defaultCatalog.localBlocklist }),
+  removeCatalogBlocklistEntry: async () => ({ catalog: defaultCatalog, blocklist: defaultCatalog.localBlocklist }),
   close: () => {}
 }
 

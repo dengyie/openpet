@@ -53,6 +53,29 @@ export const defaultPetPacks = {
   packs: []
 }
 
+export const defaultCatalog = {
+  schemaVersion: 1,
+  updatedAt: '',
+  feedbackUrl: '',
+  localBlocklist: {
+    pluginIds: [],
+    packIds: [],
+    sha256: []
+  },
+  catalogBlocklist: {
+    pluginIds: [],
+    packIds: [],
+    sha256: []
+  },
+  blocklist: {
+    pluginIds: [],
+    packIds: [],
+    sha256: []
+  },
+  plugins: [],
+  petPacks: []
+}
+
 export const defaultAboutInfo = {
   name: 'ibot',
   productName: 'ibot',
@@ -131,6 +154,22 @@ export const clonePetPacks = (petPacks) => ({
   ...defaultPetPacks,
   ...petPacks,
   packs: Array.isArray(petPacks?.packs) ? petPacks.packs : []
+})
+
+export const cloneBlocklist = (blocklist) => ({
+  pluginIds: Array.isArray(blocklist?.pluginIds) ? blocklist.pluginIds : [],
+  packIds: Array.isArray(blocklist?.packIds) ? blocklist.packIds : [],
+  sha256: Array.isArray(blocklist?.sha256) ? blocklist.sha256 : []
+})
+
+export const cloneCatalog = (catalog) => ({
+  ...defaultCatalog,
+  ...(catalog || {}),
+  localBlocklist: cloneBlocklist(catalog?.localBlocklist),
+  catalogBlocklist: cloneBlocklist(catalog?.catalogBlocklist),
+  blocklist: cloneBlocklist(catalog?.blocklist),
+  plugins: Array.isArray(catalog?.plugins) ? catalog.plugins : [],
+  petPacks: Array.isArray(catalog?.petPacks) ? catalog.petPacks : []
 })
 
 export const cloneChatMessages = (messages) => (Array.isArray(messages) ? messages : [])

@@ -1,5 +1,6 @@
 const fs = require('fs')
 const path = require('path')
+const crypto = require('crypto')
 const { pathToFileURL } = require('url')
 const { getLegacyPetAnimations, loadLegacyPetPack, loadPetPackFromDirectory } = require('../pet-pack/loader')
 
@@ -9,6 +10,28 @@ const PET_PACK_SELECTION_TTL_MS = 10 * 60 * 1000
 const isSafePackId = (packId) => /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(packId || '')
 
 const ensureDirectory = (dirPath) => fs.mkdirSync(dirPath, { recursive: true })
+
+const hashBuffer = (buffer) => crypto.createHash('sha256').update(buffer).digest('hex')
+
+const listFiles = (rootPath) => {
+  const files = []
+  const walk = (currentPath, relativeRoot = '') => {
+    const entries = fs.readdirSync(currentPath, { withFileTypes: true })
+    for (const entry of entries) {
+      const relativePath = relativeRoot ? `${relativeRoot}/${entry.name}` : entry.name
+      const entryPath = path.join(currentPath, entry.name)
+      if (entry.isDirectory()) walk(entryPath, relativePath)
+      else if (entry.isFile()) files.push(relativePath)
+    }
+  }
+  walk(rootPath)
+  return files.sort()
+}
+
+const getDirectoryPackageHash = (rootPath) => hashBuffer(Buffer.from(listFiles(rootPath).map((relativePath) => {
+  const fileHash = hashBuffer(fs.readFileSync(path.join(rootPath, relativePath)))
+  return `${relativePath}:${fileHash}`
+}).join('\n'), 'utf-8'))
 
 const normalizePetPackSettings = (settings = {}) => ({
   activePackId: settings.activePackId || BUILT_IN_PACK_ID,
@@ -84,6 +107,8 @@ const createPackSummary = (pack, { active = false, installedAt = '', updatedAt =
     active,
     installedAt,
     updatedAt,
+    packageHash: pack.metadata?.packageHash || '',
+    sourcePackageHash: pack.metadata?.sourcePackageHash || '',
     actionCount: pack.manifest.actions.length,
     defaultAction: pack.manifest.defaultAction,
     clickAction: pack.manifest.clickAction,
@@ -112,7 +137,8 @@ const createPetPackService = ({
   userPacksDir,
   projectRoot = path.join(__dirname, '..', '..', '..'),
   loadLegacyAnimations = getLegacyPetAnimations,
-  now = () => new Date()
+  now = () => new Date(),
+  getPetPackBlockStatus = () => ({ blocked: false, reasons: [] })
 }) => {
   if (!settingsService) throw new Error('settingsService is required')
   if (!userPacksDir) throw new Error('userPacksDir is required')
@@ -128,6 +154,14 @@ const createPetPackService = ({
   }
 
   const getBuiltInPack = () => createBuiltInPack({ projectRoot, loadLegacyAnimations })
+
+  const getPolicyStatus = ({ id, sha256, sourceSha256, packageHash } = {}) => getPetPackBlockStatus({ id, sha256, sourceSha256, packageHash }) || { blocked: false, reasons: [] }
+
+  const assertPackAllowed = ({ id, sha256, sourceSha256, packageHash } = {}) => {
+    const status = getPolicyStatus({ id, sha256, sourceSha256, packageHash })
+    if (status.blocked) throw new Error(`Pet pack is blocked: ${status.reasons.join(', ')}`)
+    return status
+  }
 
   const loadInstalledPack = (packId) => {
     const metadata = getSettings().installed[packId]
@@ -146,6 +180,8 @@ const createPetPackService = ({
     const petPackSettings = getSettings()
     if (petPackSettings.activePackId && petPackSettings.activePackId !== BUILT_IN_PACK_ID) {
       try {
+        const metadata = petPackSettings.installed[petPackSettings.activePackId]
+        assertPackAllowed({ id: petPackSettings.activePackId, packageHash: metadata?.packageHash || '', sourceSha256: metadata?.sourcePackageHash || '' })
         return loadInstalledPack(petPackSettings.activePackId)
       } catch (error) {
         console.error('Failed to load active pet pack:', error.message)
@@ -157,16 +193,22 @@ const createPetPackService = ({
   const listPacks = () => {
     const petPackSettings = getSettings()
     const builtInPack = getBuiltInPack()
-    const packs = [createPackSummary(builtInPack, { active: petPackSettings.activePackId === BUILT_IN_PACK_ID })]
+    const packs = [{
+      ...createPackSummary(builtInPack, { active: petPackSettings.activePackId === BUILT_IN_PACK_ID }),
+      blockStatus: getPolicyStatus({ id: BUILT_IN_PACK_ID })
+    }]
 
     for (const [packId, metadata] of Object.entries(petPackSettings.installed)) {
       try {
         const pack = loadInstalledPack(packId)
-        packs.push(createPackSummary(pack, {
-          active: petPackSettings.activePackId === packId,
-          installedAt: metadata.installedAt,
-          updatedAt: metadata.updatedAt
-        }))
+        packs.push({
+          ...createPackSummary(pack, {
+            active: petPackSettings.activePackId === packId,
+            installedAt: metadata.installedAt,
+            updatedAt: metadata.updatedAt
+          }),
+          blockStatus: getPolicyStatus({ id: packId, packageHash: metadata.packageHash, sourceSha256: metadata.sourcePackageHash }),
+        })
       } catch (error) {
         packs.push({
           id: packId,
@@ -182,6 +224,7 @@ const createPetPackService = ({
           clickAction: '',
           previewSprite: '',
           valid: false,
+          blockStatus: getPolicyStatus({ id: packId, packageHash: metadata.packageHash, sourceSha256: metadata.sourcePackageHash }),
           error: error.message || 'Failed to load pet pack'
         })
       }
@@ -205,12 +248,14 @@ const createPetPackService = ({
         throw new Error('Pet pack folder does not exist')
       }
       assertNoSymlinks(sourceDir)
+      const packageHash = getDirectoryPackageHash(sourceDir)
       const pack = loadPetPackFromDirectory(sourceDir)
       if (!isSafePackId(pack.manifest.id)) throw new Error('Pet pack id is invalid')
       if (pack.manifest.id === BUILT_IN_PACK_ID) throw new Error('Pet pack id is reserved for the built-in pack')
+      const blockStatus = assertPackAllowed({ id: pack.manifest.id, sha256: packageHash })
       validatePackFiles(pack)
       result.valid = true
-      result.pack = createPackSummary({ ...pack, source: { type: 'directory', path: sourceDir } })
+      result.pack = { ...createPackSummary({ ...pack, source: { type: 'directory', path: sourceDir } }), packageHash, blockStatus }
       pendingSelection = {
         id: selectionId,
         sourceDir,
@@ -241,7 +286,7 @@ const createPetPackService = ({
     return { ok: true }
   }
 
-  const importPack = (selectionId) => {
+  const importPack = (selectionId, { packageHash = '', sourcePackageHash = '' } = {}) => {
     const selection = getPendingSelection(selectionId)
     assertNoSymlinks(selection.sourceDir)
     const pack = loadPetPackFromDirectory(selection.sourceDir)
@@ -249,6 +294,9 @@ const createPetPackService = ({
     const packId = pack.manifest.id
     if (!isSafePackId(packId)) throw new Error('Pet pack id is invalid')
     if (packId === BUILT_IN_PACK_ID) throw new Error('Pet pack id is reserved for the built-in pack')
+    const contentPackageHash = packageHash || getDirectoryPackageHash(selection.sourceDir)
+    const downloadedPackageHash = sourcePackageHash || ''
+    assertPackAllowed({ id: packId, packageHash: contentPackageHash, sourceSha256: downloadedPackageHash })
     ensureDirectory(userPacksDir)
     const targetDir = path.join(userPacksDir, packId)
     const sourceRealPath = fs.realpathSync(selection.sourceDir)
@@ -272,6 +320,8 @@ const createPetPackService = ({
           id: packId,
           displayName: installedPack.manifest.displayName,
           version: installedPack.manifest.version,
+          packageHash: contentPackageHash,
+          sourcePackageHash: downloadedPackageHash,
           installedAt: previousMetadata.installedAt || timestamp,
           updatedAt: timestamp
         }
@@ -283,6 +333,8 @@ const createPetPackService = ({
 
   const setActivePack = (packId) => {
     if (!isSafePackId(packId)) throw new Error('Pet pack id is invalid')
+    const metadata = getSettings().installed[packId]
+    assertPackAllowed({ id: packId, packageHash: metadata?.packageHash || '', sourceSha256: metadata?.sourcePackageHash || '' })
     if (packId !== BUILT_IN_PACK_ID) loadInstalledPack(packId)
     const current = getSettings()
     const nextSettings = savePetPackSettings({ ...current, activePackId: packId })

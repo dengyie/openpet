@@ -15,7 +15,7 @@
 - 插件已有 manifest 权限白名单、本地插件短生命周期子进程 runner、Node permission model、VM 隔离、受限 SDK、AI/network/storage 能力、插件日志与私有存储 UI。
 - 本地服务已有 token-gated HTTP API、访问日志、`POST /mcp` JSON-RPC bridge、MCP session。
 - `npm run pack` 已通过目录打包验证，`electron-builder` 基础配置可用。
-- CI / 测试已覆盖 service、pet-pack、plugin 核心路径，当前文档记录为 123 个测试。
+- CI / 测试已覆盖 service、pet-pack、plugin、AI、MCP、release、catalog 核心路径，当前验证为 165 个测试。
 
 ### 1.2 仍未产品化的深水区
 
@@ -585,9 +585,11 @@ CSC_KEY_PASSWORD
 | 签名/公证失败阻塞发布 | 无法安装 | 先建立 unsigned beta 包，再补 signed release；流水线分阶段 |
 | Control Center 继续膨胀 | 后续功能难维护 | Phase 1 强制拆分并设文件体量阈值 |
 
-## 14. 推荐下一步
+## 14. 当前收尾状态
 
-Phase 1 和 Phase 2 已完成，下一步进入 Phase 3：插件生态产品化。这个阶段会把已有 runner/权限 SDK/AI/network/storage 能力补齐为安装包、权限 review、签名校验和更新流。
+Phase 1-7 已在 `codex/productization-completion` 分阶段完成。每个阶段均有开发文档与 Production Code Quality Review 文档；Phase 7 完成后，项目已具备 Control Center 模块化、Pet pack 管理、插件安装/权限 review、AI 行为编排、MCP transport、分发流水线、生态 catalog 与本地 blocklist 治理闭环。
+
+剩余可选增强不属于本轮产品化闭环阻塞项：远端 marketplace 后端、真实第三方签名根信任、更多浏览器级 UI 自动化、以及 SES / Electron utilityProcess 等更强插件沙箱候选方案。
 
 建议下一张任务卡：
 

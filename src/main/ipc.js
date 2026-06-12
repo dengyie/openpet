@@ -75,7 +75,7 @@ const executeBehaviorDecision = (petService, decision) => {
 /**
  * 注册所有 IPC 处理器。接收依赖注入对象，各 handler 只通过注入的函数访问外部能力。
  */
-const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiService, behaviorOrchestratorService, pluginService, pluginInstallService, localHttpService, aboutService, actionImportService, applyWindowScale,
+const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiService, behaviorOrchestratorService, pluginService, pluginInstallService, catalogService, localHttpService, aboutService, actionImportService, applyWindowScale,
   clampToWorkArea, getMovementState, createSettingsWindow }) => {
   let pendingActionFrameSelection = null
 
@@ -384,6 +384,31 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
   ipcMain.handle(IPC.ABOUT_GET_INFO, () => aboutService.getInfo())
 
   ipcMain.handle(IPC.ABOUT_CHECK_UPDATES, () => aboutService.checkForUpdates())
+
+  ipcMain.handle(IPC.CATALOG_GET, () => catalogService.listCatalog())
+
+  ipcMain.handle(IPC.CATALOG_PREPARE_INSTALL, (_event, payload) => catalogService.prepareInstall(payload))
+
+  ipcMain.handle(IPC.CATALOG_INSTALL_SELECTION, (_event, payload) => {
+    const result = catalogService.installSelection(payload.selectionId)
+    if (result.kind === 'pet-pack' && result.petPacks?.activePackId === result.itemId) {
+      reloadAndSendAnimations(getPetWindow, petService)
+      return { ...result, animations: petService.getPreviewAnimations(), catalog: catalogService.listCatalog() }
+    }
+    return { ...result, catalog: catalogService.listCatalog() }
+  })
+
+  ipcMain.handle(IPC.CATALOG_CLEAR_SELECTION, (_event, payload) => catalogService.clearSelection(payload?.selectionId))
+
+  ipcMain.handle(IPC.CATALOG_ADD_BLOCKLIST, (_event, payload) => ({
+    blocklist: catalogService.addBlocklistEntry(payload),
+    catalog: catalogService.listCatalog()
+  }))
+
+  ipcMain.handle(IPC.CATALOG_REMOVE_BLOCKLIST, (_event, payload) => ({
+    blocklist: catalogService.removeBlocklistEntry(payload),
+    catalog: catalogService.listCatalog()
+  }))
 
   // 设置面板拖动滑块：实时预览缩放（不持久化）
   ipcMain.on(IPC.SETTINGS_PREVIEW_SCALE, (_event, scale) => {

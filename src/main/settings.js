@@ -49,6 +49,13 @@ const defaultSettings = {
     activePackId: 'legacy-cat',
     installed: {}
   },
+  ecosystem: {
+    blocklist: {
+      pluginIds: [],
+      packIds: [],
+      sha256: []
+    }
+  },
   localHttp: {
     enabled: false,
     host: '127.0.0.1',
@@ -97,6 +104,17 @@ const mergeSettings = (settings = {}) => ({
     installed: isPlainObject(settings.petPacks?.installed)
       ? settings.petPacks.installed
       : defaultSettings.petPacks.installed
+  },
+  ecosystem: {
+    ...defaultSettings.ecosystem,
+    ...(isPlainObject(settings.ecosystem) ? settings.ecosystem : {}),
+    blocklist: {
+      ...defaultSettings.ecosystem.blocklist,
+      ...(isPlainObject(settings.ecosystem?.blocklist) ? settings.ecosystem.blocklist : {}),
+      pluginIds: Array.isArray(settings.ecosystem?.blocklist?.pluginIds) ? settings.ecosystem.blocklist.pluginIds : defaultSettings.ecosystem.blocklist.pluginIds,
+      packIds: Array.isArray(settings.ecosystem?.blocklist?.packIds) ? settings.ecosystem.blocklist.packIds : defaultSettings.ecosystem.blocklist.packIds,
+      sha256: Array.isArray(settings.ecosystem?.blocklist?.sha256) ? settings.ecosystem.blocklist.sha256 : defaultSettings.ecosystem.blocklist.sha256
+    }
   },
   localHttp: {
     ...defaultSettings.localHttp,

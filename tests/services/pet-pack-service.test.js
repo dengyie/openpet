@@ -167,6 +167,34 @@ test('pet pack service protects built-in and active packs from removal', () => {
   assert.throws(() => service.removePack('remove-cat'), /active/)
 })
 
+test('pet pack service blocks importing and activating packs denied by ecosystem policy', () => {
+  const sourceDir = createTempDir('pet-pack-blocked')
+  createPetPackDirectory(sourceDir, { id: 'blocked-cat' })
+  const settingsService = createSettingsService({
+    petPacks: {
+      activePackId: BUILT_IN_PACK_ID,
+      installed: {
+        'blocked-cat': { id: 'blocked-cat', displayName: 'Blocked Cat', version: '1.0.0' }
+      }
+    }
+  })
+  const service = createPetPackService({
+    settingsService,
+    userPacksDir: createTempDir('pet-packs'),
+    projectRoot: '/app/ibot',
+    loadLegacyAnimations: () => ({ defaultAction: 'idle', clickAction: 'idle', actions: [{ id: 'idle', sprite: 'cat_anime/sprites/idle.png', frameCount: 1, frameMs: 100, frameWidth: 1, frameHeight: 1 }] }),
+    getPetPackBlockStatus: ({ id }) => id === 'blocked-cat'
+      ? { blocked: true, reasons: ['packId:blocked-cat'] }
+      : { blocked: false, reasons: [] }
+  })
+
+  const inspection = service.inspectPackDirectory(sourceDir)
+
+  assert.equal(inspection.valid, false)
+  assert.match(inspection.errors[0], /blocked/)
+  assert.throws(() => service.setActivePack('blocked-cat'), /blocked/)
+})
+
 test('pet pack service removes non-active installed packs', () => {
   const sourceDir = createTempDir('pet-pack-removable')
   createPetPackDirectory(sourceDir, { id: 'removable-cat' })

@@ -199,7 +199,7 @@ const normalizeSourceRoot = (sourcePath) => {
   throw new Error('Plugin source must be a directory or .ibot-plugin.zip file')
 }
 
-const createPluginInstallService = ({ settingsService, pluginDir }) => {
+const createPluginInstallService = ({ settingsService, pluginDir, getPluginBlockStatus = () => ({ blocked: false, reasons: [] }) }) => {
   if (!settingsService) throw new Error('settingsService is required')
   if (!pluginDir) throw new Error('pluginDir is required')
 
@@ -243,6 +243,7 @@ const createPluginInstallService = ({ settingsService, pluginDir }) => {
     const permissionDiff = diffPluginPermissions(currentManifest, manifest)
     const installMode = currentManifest ? 'update' : 'install'
     const selectionId = createSelectionId()
+    const blockStatus = getPluginBlockStatus({ id: manifest.id, sha256: packageHash }) || { blocked: false, reasons: [] }
     const review = {
       selectionId,
       sourceType,
@@ -261,11 +262,12 @@ const createPluginInstallService = ({ settingsService, pluginDir }) => {
       },
       signature,
       permissionDiff,
+      blockStatus,
       packageHash,
       fileCount: fileEntries.length,
       byteSize: fileEntries.reduce((total, relativePath) => total + fs.statSync(path.join(rootPath, relativePath)).size, 0),
       requiresReview: installMode === 'update' && hasRiskyDiff(permissionDiff),
-      riskLevel: signature.status === 'unsigned' || signature.errors.length || hasRiskyDiff(permissionDiff) ? 'review' : 'normal'
+      riskLevel: blockStatus.blocked || signature.status === 'unsigned' || signature.errors.length || hasRiskyDiff(permissionDiff) ? 'review' : 'normal'
     }
     pendingSelections.set(selectionId, {
       ...review,
@@ -287,7 +289,7 @@ const createPluginInstallService = ({ settingsService, pluginDir }) => {
     }
   }
 
-  const savePluginSettings = ({ pluginId, packageHash, signature, disable = true, removeStorage = false }) => {
+  const savePluginSettings = ({ pluginId, packageHash, sourcePackageHash = '', signature, disable = true, removeStorage = false }) => {
     const settings = settingsService.get()
     const plugins = settings.plugins || {}
     const enabled = { ...(plugins.enabled || {}), [pluginId]: disable ? false : Boolean(plugins.enabled?.[pluginId]) }
@@ -305,6 +307,7 @@ const createPluginInstallService = ({ settingsService, pluginDir }) => {
           ...(plugins.installed || {}),
           [pluginId]: {
             packageHash,
+            sourcePackageHash,
             signatureStatus: signature.status,
             signer: signature.signer,
             updatedAt: new Date().toISOString()
@@ -314,12 +317,14 @@ const createPluginInstallService = ({ settingsService, pluginDir }) => {
     })
   }
 
-  const installSelection = (selectionId, { update = false } = {}) => {
+  const installSelection = (selectionId, { update = false, sourcePackageHash = '' } = {}) => {
     const selection = getSelection(selectionId)
     if (update && selection.installMode !== 'update') throw new Error('Plugin is not installed yet')
     if (!update && selection.installMode === 'update') throw new Error('Plugin is already installed; use update')
     const targetDir = path.join(pluginDir, selection.plugin.id)
     if (selection.signature.errors.length) throw new Error('Plugin signature hash verification failed')
+    const blockStatus = getPluginBlockStatus({ id: selection.plugin.id, sha256: selection.packageHash, sourceSha256: sourcePackageHash }) || selection.blockStatus
+    if (blockStatus?.blocked) throw new Error(`Plugin is blocked: ${blockStatus.reasons.join(', ')}`)
     if (fs.existsSync(targetDir)) {
       const sourceRealPath = fs.realpathSync(selection.rootPath)
       const targetRealPath = fs.realpathSync(targetDir)
@@ -332,6 +337,7 @@ const createPluginInstallService = ({ settingsService, pluginDir }) => {
     savePluginSettings({
       pluginId: selection.plugin.id,
       packageHash: selection.packageHash,
+      sourcePackageHash,
       signature: selection.signature,
       disable: true
     })
@@ -345,9 +351,9 @@ const createPluginInstallService = ({ settingsService, pluginDir }) => {
     }
   }
 
-  const installPlugin = (selectionId) => installSelection(selectionId, { update: false })
+  const installPlugin = (selectionId, options = {}) => installSelection(selectionId, { ...options, update: false })
 
-  const updatePlugin = (selectionId) => installSelection(selectionId, { update: true })
+  const updatePlugin = (selectionId, options = {}) => installSelection(selectionId, { ...options, update: true })
 
   const uninstallPlugin = (pluginId, { removeStorage = false } = {}) => {
     const targetDir = path.join(pluginDir, pluginId)

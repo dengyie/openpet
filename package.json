@@ -25,6 +25,7 @@
       "preload.js",
       "control-center-preload.js",
       "cat_anime/**/*",
+      "catalog/**/*",
       "dist/control-center/**/*",
       "src/main/**/*",
       "src/shared/**/*",

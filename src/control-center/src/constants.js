@@ -3,6 +3,7 @@ export const tabs = [
   { id: 'actions', label: 'Actions' },
   { id: 'ai', label: 'AI' },
   { id: 'plugins', label: 'Plugins' },
+  { id: 'catalog', label: 'Catalog' },
   { id: 'service', label: 'Service' },
   { id: 'about', label: 'About' }
 ]
