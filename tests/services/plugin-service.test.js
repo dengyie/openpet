@@ -204,6 +204,26 @@ test('plugin service runs enabled official commands through a permissioned pet s
   }])
 })
 
+test('plugin service blocks enabled plugins from running when ecosystem policy denies them', async () => {
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'official.basic-behavior': true } }
+    }),
+    petService: { say: async () => {} },
+    officialPlugins: [createOfficialPlugin()],
+    getPluginBlockStatus: ({ id }) => id === 'official.basic-behavior'
+      ? { blocked: true, reasons: ['pluginId:official.basic-behavior'] }
+      : { blocked: false, reasons: [] }
+  })
+
+  assert.equal(service.listPlugins()[0].blockStatus.blocked, true)
+  assert.throws(() => service.setEnabled('official.basic-behavior', true), /blocked/)
+  await assert.rejects(
+    () => service.runCommand('official.basic-behavior', 'greet'),
+    /blocked/
+  )
+})
+
 test('plugin service runs local plugin commands inside the restricted sdk', async () => {
   const petEvents = []
   const service = createPluginService({

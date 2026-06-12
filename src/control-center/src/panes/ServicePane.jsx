@@ -1,4 +1,5 @@
 import React from 'react'
+import { Toggle } from '../components/Toggle.jsx'
 
 const formatLogTime = (timestamp) => {
   if (!timestamp) return ''
@@ -7,21 +8,7 @@ const formatLogTime = (timestamp) => {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
 
-function Toggle({ checked, onChange }) {
-  return (
-    <button
-      type="button"
-      className={checked ? 'toggle on' : 'toggle'}
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
-    >
-      <span />
-    </button>
-  )
-}
-
-export function ServicePane({ serviceStatus, logs, status, saving, onChange, onSave, onRotateToken, onRefreshLogs, onExportLogs, onClearLogs }) {
+export function ServicePane({ serviceStatus, logs, status, saving, onChange, onSave, onRotateToken, onRevokeMcpSessions, onRefreshLogs, onExportLogs, onClearLogs }) {
   const config = serviceStatus.config
   const runtime = serviceStatus.runtime
   const endpoint = runtime.enabled && runtime.port
@@ -90,6 +77,16 @@ export function ServicePane({ serviceStatus, logs, status, saving, onChange, onS
         <div className="readonly-row">
           <span>MCP</span>
           <strong className="endpoint-text">{mcpEndpoint}</strong>
+        </div>
+
+        <div className="readonly-row">
+          <span>MCP Sessions</span>
+          <div className="inline-action">
+            <strong>{runtime.mcp?.activeSessions || 0}</strong>
+            <button type="button" className="ghost" onClick={onRevokeMcpSessions} disabled={saving || !runtime.enabled || !(runtime.mcp?.activeSessions)}>
+              撤销全部
+            </button>
+          </div>
         </div>
       </div>
 

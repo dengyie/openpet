@@ -14,6 +14,21 @@ const MAX_PLUGIN_NETWORK_REQUEST_BYTES = 64 * 1024
 const MAX_PLUGIN_NETWORK_RESPONSE_BYTES = 128 * 1024
 const LOCAL_PLUGIN_RUNNER_PATH = path.join(__dirname, '../plugins/local-plugin-runner.js')
 
+const getSignatureStatus = (manifest) => {
+  if (manifest.source === 'official') {
+    return { status: 'official', label: 'Official plugin', signer: 'ibot', algorithm: 'bundled' }
+  }
+  if (!manifest.signature) {
+    return { status: 'unsigned', label: 'Unsigned plugin', signer: '', algorithm: '' }
+  }
+  return {
+    status: 'present-unverified',
+    label: 'Signature metadata present, not verified',
+    signer: manifest.signature.signer || '',
+    algorithm: manifest.signature.algorithm || 'unknown'
+  }
+}
+
 const resolveLocalPluginFile = (manifest, fieldName) => {
   const relativePath = manifest[fieldName]
   if (!relativePath) return ''
@@ -390,7 +405,7 @@ const readLocalPluginManifests = (pluginDirs = []) => {
   return plugins
 }
 
-const createPluginService = ({ settingsService, petService, aiService, fetchImpl = globalThis.fetch, pluginDirs = [], officialPlugins = [] }) => {
+const createPluginService = ({ settingsService, petService, aiService, fetchImpl = globalThis.fetch, pluginDirs = [], officialPlugins = [], getPluginBlockStatus = () => ({ blocked: false, reasons: [] }) }) => {
   if (!settingsService) throw new Error('settingsService is required')
   if (!petService) throw new Error('petService is required')
 
@@ -441,6 +456,35 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
   const getConfigMap = () => settingsService.get().plugins?.config || {}
 
   const getStorageMap = () => settingsService.get().plugins?.storage || {}
+
+  const getInstalledMap = () => settingsService.get().plugins?.installed || {}
+
+  const getPluginPolicyStatus = (manifestOrId) => {
+    const pluginId = typeof manifestOrId === 'string' ? manifestOrId : manifestOrId?.id
+    const installed = getInstalledMap()[pluginId] || {}
+    return getPluginBlockStatus({ id: pluginId, sha256: installed.packageHash || '', sourceSha256: installed.sourcePackageHash || '' }) || { blocked: false, reasons: [] }
+  }
+
+  const assertPluginAllowed = (manifestOrId) => {
+    const status = getPluginPolicyStatus(manifestOrId)
+    if (status.blocked) throw new Error(`Plugin is blocked: ${status.reasons.join(', ')}`)
+    return status
+  }
+
+  const getPluginSignatureStatus = (manifest) => {
+    if (manifest.source === 'official') return getSignatureStatus(manifest)
+    const installed = getInstalledMap()[manifest.id]
+    if (installed?.signatureStatus) {
+      if (installed.signatureStatus === 'hash-verified') {
+        return { status: 'hash-verified', label: 'Signature hash metadata verified', signer: installed.signer || '', algorithm: '' }
+      }
+      if (installed.signatureStatus === 'unsigned') {
+        return { status: 'unsigned', label: 'Unsigned plugin', signer: '', algorithm: '' }
+      }
+      return { status: installed.signatureStatus, label: 'Signature metadata present, not verified', signer: installed.signer || '', algorithm: '' }
+    }
+    return getSignatureStatus(manifest)
+  }
 
   const getPluginStorageStats = (pluginId) => {
     try {
@@ -535,12 +579,15 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
     ...plugin.manifest,
     enabled: Boolean(getEnabledMap()[plugin.manifest.id]),
     runnable: typeof plugin.activate === 'function' || Boolean(plugin.mainPath),
+    signatureStatus: getPluginSignatureStatus(plugin.manifest),
+    blockStatus: getPluginPolicyStatus(plugin.manifest),
     configSchema: plugin.configSchema,
     config: getPluginConfig(plugin.manifest.id, plugin.configSchema),
     storage: getPluginStorageStats(plugin.manifest.id)
   }))
 
   const setEnabled = (pluginId, enabled) => {
+    if (enabled) assertPluginAllowed(pluginId)
     const settings = settingsService.get()
     const nextSettings = {
       ...settings,
@@ -663,6 +710,7 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
     try {
       const plugin = getPlugins().find((candidate) => candidate.manifest.id === pluginId)
       if (!plugin) throw new Error(`Plugin not found: ${pluginId}`)
+      assertPluginAllowed(plugin.manifest)
       if (!getEnabledMap()[pluginId]) throw new Error('Plugin is disabled')
       appendLog({ pluginId, commandId, level: 'info', message: 'Command started' })
       let result

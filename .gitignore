@@ -1,6 +1,11 @@
 node_modules/
 dist/
-build/
+build/*
+!build/
+!build/icon.png
+!build/icon.icns
+!build/entitlements.mac.plist
+!build/notarize.js
 release/
 .DS_Store
 npm-debug.log*

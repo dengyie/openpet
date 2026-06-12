@@ -17,13 +17,19 @@ const { createPetRendererSettings, normalizeLocalHttpConfig, registerIpcHandlers
 const { createEventBus } = require('./src/main/services/event-bus')
 const { createSettingsService } = require('./src/main/services/settings-service')
 const { createActionService } = require('./src/main/services/action-service')
+const { createPetPackService } = require('./src/main/services/pet-pack-service')
 const { createPetService } = require('./src/main/services/pet-service')
 const { createSecretService } = require('./src/main/services/secret-service')
 const { createAiService } = require('./src/main/services/ai-service')
+const { createBehaviorOrchestratorService } = require('./src/main/services/behavior-orchestrator-service')
 const { createPluginService } = require('./src/main/services/plugin-service')
+const { createPluginInstallService } = require('./src/main/services/plugin-install-service')
 const { createLocalHttpService } = require('./src/main/services/local-http-service')
 const { createActionImportService } = require('./src/main/services/action-import-service')
+const { createAboutService } = require('./src/main/services/about-service')
+const { createCatalogService } = require('./src/main/services/catalog-service')
 const { createBasicBehaviorPlugin } = require('./src/main/plugins/official/basic-behavior')
+const packageJson = require('./package.json')
 
 let petWindow = null
 const getPetWindow = () => petWindow
@@ -50,22 +56,46 @@ app.whenReady().then(() => {
     saveSettings,
     syncSideEffects: (settings) => syncLoginItemSettings(settings.autoStart)
   })
-  const actionService = createActionService({})
+  let catalogService = null
+  const petPackService = createPetPackService({
+    settingsService,
+    userPacksDir: path.join(app.getPath('userData'), 'pet-packs'),
+    projectRoot: __dirname,
+    getPetPackBlockStatus: (candidate) => catalogService?.getPetPackBlockStatus(candidate) || { blocked: false, reasons: [] }
+  })
+  const actionService = createActionService({ petPackService })
   const petService = createPetService({ eventBus, settingsService, actionService })
   const secretService = createSecretService()
   const aiService = createAiService({ settingsService, secretService })
+  const behaviorOrchestratorService = createBehaviorOrchestratorService({ settingsService })
   const localHttpService = createLocalHttpService({ petService, settingsService })
+  const aboutService = createAboutService({ app, packageJson })
   const actionImportService = createActionImportService({
     framesRoot: path.join(__dirname, 'cat_anime', 'flames'),
     spritesDir: path.join(__dirname, 'cat_anime', 'sprites'),
     configPath: path.join(__dirname, 'cat_anime', 'animations.json')
   })
+  const pluginDir = path.join(app.getPath('userData'), 'plugins')
+  const pluginInstallService = createPluginInstallService({
+    settingsService,
+    pluginDir,
+    getPluginBlockStatus: (candidate) => catalogService?.getPluginBlockStatus(candidate) || { blocked: false, reasons: [] }
+  })
   const pluginService = createPluginService({
     settingsService,
     petService,
+    petPackService,
     aiService,
-    pluginDirs: [path.join(app.getPath('userData'), 'plugins')],
-    officialPlugins: [createBasicBehaviorPlugin()]
+    pluginDirs: [pluginDir],
+    officialPlugins: [createBasicBehaviorPlugin()],
+    getPluginBlockStatus: (candidate) => catalogService?.getPluginBlockStatus(candidate) || { blocked: false, reasons: [] }
+  })
+  catalogService = createCatalogService({
+    settingsService,
+    pluginInstallService,
+    pluginService,
+    petPackService,
+    catalogPath: path.join(__dirname, 'catalog', 'ibot-catalog.json')
   })
   let localHttpConfig = petService.getSettings().localHttp
   if (localHttpConfig?.enabled) {
@@ -86,9 +116,14 @@ app.whenReady().then(() => {
   registerIpcHandlers({
     getPetWindow,
     petService,
+    petPackService,
     aiService,
+    behaviorOrchestratorService,
     pluginService,
+    pluginInstallService,
+    catalogService,
     localHttpService,
+    aboutService,
     actionImportService,
     applyWindowScale: (scale) => applyWindowScale(petWindow, scale),
     clampToWorkArea,

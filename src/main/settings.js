@@ -28,6 +28,13 @@ const defaultSettings = {
     model: 'gpt-4o-mini',
     apiKeyRef: 'ai.default',
     systemPrompt: 'You are a friendly desktop pet companion.',
+    behavior: {
+      enabled: false,
+      useTools: true,
+      cooldownMs: 1500,
+      rules: [],
+      decisions: []
+    },
     conversations: {}
   },
   plugins: {
@@ -37,6 +44,17 @@ const defaultSettings = {
     config: {},
     storage: {},
     logs: []
+  },
+  petPacks: {
+    activePackId: 'legacy-cat',
+    installed: {}
+  },
+  ecosystem: {
+    blocklist: {
+      pluginIds: [],
+      packIds: [],
+      sha256: []
+    }
   },
   localHttp: {
     enabled: false,
@@ -53,6 +71,12 @@ const mergeSettings = (settings = {}) => ({
   ai: {
     ...defaultSettings.ai,
     ...(isPlainObject(settings.ai) ? settings.ai : {}),
+    behavior: {
+      ...defaultSettings.ai.behavior,
+      ...(isPlainObject(settings.ai?.behavior) ? settings.ai.behavior : {}),
+      rules: Array.isArray(settings.ai?.behavior?.rules) ? settings.ai.behavior.rules : defaultSettings.ai.behavior.rules,
+      decisions: Array.isArray(settings.ai?.behavior?.decisions) ? settings.ai.behavior.decisions : defaultSettings.ai.behavior.decisions
+    },
     conversations: isPlainObject(settings.ai?.conversations)
       ? settings.ai.conversations
       : defaultSettings.ai.conversations
@@ -73,6 +97,24 @@ const mergeSettings = (settings = {}) => ({
       ...(settings.plugins?.storage || {})
     },
     logs: Array.isArray(settings.plugins?.logs) ? settings.plugins.logs : defaultSettings.plugins.logs
+  },
+  petPacks: {
+    ...defaultSettings.petPacks,
+    ...(isPlainObject(settings.petPacks) ? settings.petPacks : {}),
+    installed: isPlainObject(settings.petPacks?.installed)
+      ? settings.petPacks.installed
+      : defaultSettings.petPacks.installed
+  },
+  ecosystem: {
+    ...defaultSettings.ecosystem,
+    ...(isPlainObject(settings.ecosystem) ? settings.ecosystem : {}),
+    blocklist: {
+      ...defaultSettings.ecosystem.blocklist,
+      ...(isPlainObject(settings.ecosystem?.blocklist) ? settings.ecosystem.blocklist : {}),
+      pluginIds: Array.isArray(settings.ecosystem?.blocklist?.pluginIds) ? settings.ecosystem.blocklist.pluginIds : defaultSettings.ecosystem.blocklist.pluginIds,
+      packIds: Array.isArray(settings.ecosystem?.blocklist?.packIds) ? settings.ecosystem.blocklist.packIds : defaultSettings.ecosystem.blocklist.packIds,
+      sha256: Array.isArray(settings.ecosystem?.blocklist?.sha256) ? settings.ecosystem.blocklist.sha256 : defaultSettings.ecosystem.blocklist.sha256
+    }
   },
   localHttp: {
     ...defaultSettings.localHttp,

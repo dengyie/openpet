@@ -58,10 +58,24 @@ const triggerAiSemanticAction = (petService, reply) => {
   }
 }
 
+const executeBehaviorDecision = (petService, decision) => {
+  if (!decision?.matched) return decision
+  if (decision.type === 'say') {
+    return { ...decision, result: petService.say({ text: decision.text, source: 'ai:behavior' }) }
+  }
+  if (decision.type === 'setEvent') {
+    return { ...decision, result: petService.setEvent({ event: decision.event, message: decision.message, source: 'ai:behavior' }) }
+  }
+  if (decision.type === 'playAction') {
+    return { ...decision, ...petService.playAction({ actionId: decision.actionId, source: 'ai:behavior' }) }
+  }
+  return decision
+}
+
 /**
  * 注册所有 IPC 处理器。接收依赖注入对象，各 handler 只通过注入的函数访问外部能力。
  */
-const registerIpcHandlers = ({ getPetWindow, petService, aiService, pluginService, localHttpService, actionImportService, applyWindowScale,
+const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiService, behaviorOrchestratorService, pluginService, pluginInstallService, catalogService, localHttpService, aboutService, actionImportService, applyWindowScale,
   clampToWorkArea, getMovementState, createSettingsWindow }) => {
   let pendingActionFrameSelection = null
 
@@ -191,6 +205,37 @@ const registerIpcHandlers = ({ getPetWindow, petService, aiService, pluginServic
     return { result, animations: petService.getPreviewAnimations() }
   })
 
+  ipcMain.handle(IPC.PET_PACKS_LIST, () => petPackService.listPacks())
+
+  ipcMain.handle(IPC.PET_PACKS_INSPECT_DIRECTORY, async () => {
+    const selected = await dialog.showOpenDialog({
+      title: '选择 Pet Pack 文件夹',
+      properties: ['openDirectory']
+    })
+    if (selected.canceled || !selected.filePaths[0]) return { canceled: true }
+    return { canceled: false, ...petPackService.inspectPackDirectory(selected.filePaths[0]) }
+  })
+
+  ipcMain.handle(IPC.PET_PACKS_CLEAR_SELECTION, (_event, payload) => {
+    return petPackService.clearPendingSelection(payload?.selectionId)
+  })
+
+  ipcMain.handle(IPC.PET_PACKS_IMPORT, (_event, payload) => {
+    const result = petPackService.importPack(payload.selectionId)
+    return { ...result, petPacks: petPackService.listPacks() }
+  })
+
+  ipcMain.handle(IPC.PET_PACKS_SET_ACTIVE, (_event, payload) => {
+    const result = petPackService.setActivePack(payload.packId)
+    reloadAndSendAnimations(getPetWindow, petService)
+    return { ...result, animations: petService.getPreviewAnimations(), petPacks: petPackService.listPacks() }
+  })
+
+  ipcMain.handle(IPC.PET_PACKS_REMOVE, (_event, payload) => {
+    const result = petPackService.removePack(payload.packId)
+    return { ...result, petPacks: petPackService.listPacks() }
+  })
+
   // 设置面板点击"保存"：持久化并通知宠物窗口应用变更
   ipcMain.handle(IPC.SETTINGS_SAVE, (_event, settings) => {
     const savedSettings = petService.saveSettings(settings)
@@ -214,8 +259,30 @@ const registerIpcHandlers = ({ getPetWindow, petService, aiService, pluginServic
   ipcMain.handle(IPC.AI_CHAT, async (_event, payload) => {
     const result = await aiService.chat(payload)
     petService.say({ text: result.reply, source: 'ai' })
+    if (behaviorOrchestratorService?.getConfig?.().enabled) {
+      const decision = behaviorOrchestratorService.evaluate({
+        reply: result.reply,
+        behaviorIntent: result.behaviorIntent,
+        actions: petService.getAnimations()?.actions || []
+      })
+      const behavior = executeBehaviorDecision(petService, decision)
+      return behavior?.matched && behavior.type === 'playAction'
+        ? { ...result, behavior, action: behavior }
+        : { ...result, behavior }
+    }
     const action = triggerAiSemanticAction(petService, result.reply)
     return action ? { ...result, action } : result
+  })
+
+  ipcMain.handle(IPC.AI_BEHAVIOR_GET, () => behaviorOrchestratorService.getConfig())
+
+  ipcMain.handle(IPC.AI_BEHAVIOR_SAVE, (_event, payload) => behaviorOrchestratorService.saveConfig(payload))
+
+  ipcMain.handle(IPC.AI_BEHAVIOR_DRY_RUN, (_event, payload) => {
+    return behaviorOrchestratorService.dryRun({
+      ...payload,
+      actions: petService.getAnimations()?.actions || []
+    })
   })
 
   ipcMain.handle(IPC.PLUGINS_LIST, () => pluginService.listPlugins())
@@ -230,6 +297,38 @@ const registerIpcHandlers = ({ getPetWindow, petService, aiService, pluginServic
 
   ipcMain.handle(IPC.PLUGINS_RUN_COMMAND, (_event, payload) => {
     return pluginService.runCommand(payload.pluginId, payload.commandId, payload.payload)
+  })
+
+  ipcMain.handle(IPC.PLUGINS_INSPECT_PACKAGE, async () => {
+    const selected = await dialog.showOpenDialog({
+      title: '选择插件目录或 .ibot-plugin.zip',
+      properties: ['openFile', 'openDirectory'],
+      filters: [
+        { name: 'ibot Plugin', extensions: ['zip'] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    })
+    if (selected.canceled || !selected.filePaths[0]) return { canceled: true }
+    return { canceled: false, ...pluginInstallService.inspectPluginPackage(selected.filePaths[0]) }
+  })
+
+  ipcMain.handle(IPC.PLUGINS_CLEAR_SELECTION, (_event, payload) => {
+    return pluginInstallService.clearPendingSelection(payload?.selectionId)
+  })
+
+  ipcMain.handle(IPC.PLUGINS_INSTALL, (_event, payload) => {
+    const result = pluginInstallService.installPlugin(payload.selectionId)
+    return { ...result, plugins: pluginService.listPlugins() }
+  })
+
+  ipcMain.handle(IPC.PLUGINS_UPDATE, (_event, payload) => {
+    const result = pluginInstallService.updatePlugin(payload.selectionId)
+    return { ...result, plugins: pluginService.listPlugins() }
+  })
+
+  ipcMain.handle(IPC.PLUGINS_UNINSTALL, (_event, payload) => {
+    const result = pluginInstallService.uninstallPlugin(payload.pluginId, { removeStorage: Boolean(payload.removeStorage) })
+    return { ...result, plugins: pluginService.listPlugins() }
   })
 
   ipcMain.handle(IPC.PLUGINS_GET_LOGS, (_event, filters) => pluginService.getLogs(filters))
@@ -261,7 +360,15 @@ const registerIpcHandlers = ({ getPetWindow, petService, aiService, pluginServic
       ? await localHttpService.start(nextConfig)
       : localHttpService.getStatus()
     const savedSettings = petService.saveSettings({ ...currentSettings, localHttp: nextConfig })
-    return { config: savedSettings.localHttp, runtime }
+    return { config: savedSettings.localHttp, runtime: localHttpService.getStatus() || runtime }
+  })
+
+  ipcMain.handle(IPC.SERVICE_REVOKE_MCP_SESSIONS, () => {
+    const mcp = localHttpService.revokeMcpSessions()
+    return {
+      config: petService.getSettings().localHttp,
+      runtime: { ...localHttpService.getStatus(), mcp }
+    }
   })
 
   ipcMain.handle(IPC.SERVICE_SAVE_CONFIG, async (_event, config) => {
@@ -271,8 +378,37 @@ const registerIpcHandlers = ({ getPetWindow, petService, aiService, pluginServic
       ? await localHttpService.start(nextConfig)
       : await localHttpService.stop()
     const savedSettings = petService.saveSettings({ ...currentSettings, localHttp: nextConfig })
-    return { config: savedSettings.localHttp, runtime }
+    return { config: savedSettings.localHttp, runtime: localHttpService.getStatus() || runtime }
   })
+
+  ipcMain.handle(IPC.ABOUT_GET_INFO, () => aboutService.getInfo())
+
+  ipcMain.handle(IPC.ABOUT_CHECK_UPDATES, () => aboutService.checkForUpdates())
+
+  ipcMain.handle(IPC.CATALOG_GET, () => catalogService.listCatalog())
+
+  ipcMain.handle(IPC.CATALOG_PREPARE_INSTALL, (_event, payload) => catalogService.prepareInstall(payload))
+
+  ipcMain.handle(IPC.CATALOG_INSTALL_SELECTION, (_event, payload) => {
+    const result = catalogService.installSelection(payload.selectionId)
+    if (result.kind === 'pet-pack' && result.petPacks?.activePackId === result.itemId) {
+      reloadAndSendAnimations(getPetWindow, petService)
+      return { ...result, animations: petService.getPreviewAnimations(), catalog: catalogService.listCatalog() }
+    }
+    return { ...result, catalog: catalogService.listCatalog() }
+  })
+
+  ipcMain.handle(IPC.CATALOG_CLEAR_SELECTION, (_event, payload) => catalogService.clearSelection(payload?.selectionId))
+
+  ipcMain.handle(IPC.CATALOG_ADD_BLOCKLIST, (_event, payload) => ({
+    blocklist: catalogService.addBlocklistEntry(payload),
+    catalog: catalogService.listCatalog()
+  }))
+
+  ipcMain.handle(IPC.CATALOG_REMOVE_BLOCKLIST, (_event, payload) => ({
+    blocklist: catalogService.removeBlocklistEntry(payload),
+    catalog: catalogService.listCatalog()
+  }))
 
   // 设置面板拖动滑块：实时预览缩放（不持久化）
   ipcMain.on(IPC.SETTINGS_PREVIEW_SCALE, (_event, scale) => {
@@ -294,4 +430,4 @@ const registerIpcHandlers = ({ getPetWindow, petService, aiService, pluginServic
   })
 }
 
-module.exports = { createPetRendererSettings, normalizeLocalHttpConfig, registerIpcHandlers, triggerAiSemanticAction }
+module.exports = { createPetRendererSettings, normalizeLocalHttpConfig, registerIpcHandlers, triggerAiSemanticAction, executeBehaviorDecision }

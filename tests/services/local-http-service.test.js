@@ -622,3 +622,146 @@ test('local http service validates mcp tool arguments before side effects', asyn
     await service.stop()
   }
 })
+
+test('local http service expires mcp sessions by ttl', async () => {
+  let now = 1000
+  const service = createLocalHttpService({
+    nowMs: () => now,
+    mcpSessionTtlMs: 50,
+    petService: {
+      getSnapshot: () => ({}),
+      say: (payload) => payload,
+      playAction: (payload) => payload,
+      setEvent: (payload) => payload
+    }
+  })
+
+  try {
+    const started = await service.start({ enabled: true, host: '127.0.0.1', port: 0, token: TEST_TOKEN })
+    const endpoint = `http://${started.host}:${started.port}/mcp`
+    const initialized = await requestJson(endpoint, {
+      method: 'POST',
+      token: TEST_TOKEN,
+      body: { jsonrpc: '2.0', id: 1, method: 'initialize' }
+    })
+    const sessionId = initialized.headers.get('mcp-session-id')
+    now += 51
+    const expired = await requestJson(endpoint, {
+      method: 'POST',
+      token: TEST_TOKEN,
+      headers: { 'Mcp-Session-Id': sessionId },
+      body: { jsonrpc: '2.0', id: 2, method: 'tools/list' }
+    })
+
+    assert.equal(expired.status, 401)
+    assert.equal(service.getStatus().mcp.activeSessions, 0)
+  } finally {
+    await service.stop()
+  }
+})
+
+test('local http service exposes authenticated mcp stream handshake', async () => {
+  const service = createLocalHttpService({
+    petService: {
+      getSnapshot: () => ({}),
+      say: (payload) => payload,
+      playAction: (payload) => payload,
+      setEvent: (payload) => payload
+    }
+  })
+
+  try {
+    const started = await service.start({ enabled: true, host: '127.0.0.1', port: 0, token: TEST_TOKEN })
+    const endpoint = `http://${started.host}:${started.port}/mcp`
+    const initialized = await requestJson(endpoint, {
+      method: 'POST',
+      token: TEST_TOKEN,
+      body: { jsonrpc: '2.0', id: 1, method: 'initialize' }
+    })
+    const response = await fetch(endpoint, {
+      headers: {
+        Authorization: `Bearer ${TEST_TOKEN}`,
+        'Mcp-Session-Id': initialized.headers.get('mcp-session-id')
+      }
+    })
+    const text = await response.text()
+
+    assert.equal(response.status, 200)
+    assert.match(response.headers.get('content-type'), /text\/event-stream/)
+    assert.match(text, /event: endpoint/)
+    assert.match(text, /"endpoint":"\/mcp"/)
+  } finally {
+    await service.stop()
+  }
+})
+
+test('local http service can revoke all mcp sessions', async () => {
+  const service = createLocalHttpService({
+    petService: {
+      getSnapshot: () => ({}),
+      say: (payload) => payload,
+      playAction: (payload) => payload,
+      setEvent: (payload) => payload
+    }
+  })
+
+  try {
+    const started = await service.start({ enabled: true, host: '127.0.0.1', port: 0, token: TEST_TOKEN })
+    const endpoint = `http://${started.host}:${started.port}/mcp`
+    const initialized = await requestJson(endpoint, {
+      method: 'POST',
+      token: TEST_TOKEN,
+      body: { jsonrpc: '2.0', id: 1, method: 'initialize' }
+    })
+    const sessionId = initialized.headers.get('mcp-session-id')
+
+    assert.equal(service.getStatus().mcp.activeSessions, 1)
+    assert.equal(service.revokeMcpSessions().activeSessions, 0)
+
+    const revoked = await requestJson(endpoint, {
+      method: 'POST',
+      token: TEST_TOKEN,
+      headers: { 'Mcp-Session-Id': sessionId },
+      body: { jsonrpc: '2.0', id: 2, method: 'tools/list' }
+    })
+    assert.equal(revoked.status, 401)
+  } finally {
+    await service.stop()
+  }
+})
+
+test('local http service logs mcp tool calls with tool-specific paths', async () => {
+  const service = createLocalHttpService({
+    petService: {
+      getSnapshot: () => ({}),
+      say: (payload) => payload,
+      playAction: (payload) => payload,
+      setEvent: (payload) => payload
+    }
+  })
+
+  try {
+    const started = await service.start({ enabled: true, host: '127.0.0.1', port: 0, token: TEST_TOKEN })
+    const endpoint = `http://${started.host}:${started.port}/mcp`
+    const initialized = await requestJson(endpoint, {
+      method: 'POST',
+      token: TEST_TOKEN,
+      body: { jsonrpc: '2.0', id: 1, method: 'initialize' }
+    })
+    await requestJson(endpoint, {
+      method: 'POST',
+      token: TEST_TOKEN,
+      headers: { 'Mcp-Session-Id': initialized.headers.get('mcp-session-id') },
+      body: {
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'tools/call',
+        params: { name: 'ibot.say', arguments: { text: 'logged' } }
+      }
+    })
+
+    assert.equal(service.getLogs({ query: 'ibot.say' }).some((log) => log.path === '/mcp/tools/call/ibot.say'), true)
+  } finally {
+    await service.stop()
+  }
+})
