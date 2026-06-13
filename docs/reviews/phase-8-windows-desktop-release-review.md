@@ -1,6 +1,6 @@
 # Phase 8 Windows Desktop Release Review
 
-> Reviewed scope: Phase 8.1 Windows packaging config, Phase 8.2 dual-platform release workflow, and Phase 8.3 platform-aware About/update asset filtering.
+> Reviewed scope: Phase 8.1 Windows packaging config, Phase 8.2 dual-platform release workflow, Phase 8.3 platform-aware About/update asset filtering, and Phase 8.4 Windows signing policy enforcement.
 
 ## Phase 8.1 Findings
 
@@ -89,4 +89,32 @@ No blocking issues found in the platform-aware update asset filtering change.
 ```bash
 npm run check:syntax                         # pass
 npm test                                     # 172/172 pass
+```
+
+## Phase 8.4 Findings
+
+No blocking issues found in the Windows signing policy enforcement change.
+
+## Phase 8.4 Review Notes
+
+- `release-windows` now distinguishes stable tags from RC/beta/alpha tags. Stable Windows releases fail before build when `WINDOWS_CSC_LINK` or `WINDOWS_CSC_KEY_PASSWORD` is missing, preventing accidental unsigned stable artifacts.
+- Signed Windows builds use electron-builder's standard `CSC_LINK` / `CSC_KEY_PASSWORD` environment variables, but the repository-level secret names are Windows-specific so they do not collide with macOS certificate inputs.
+- Unsigned prerelease builds remain possible for validation and are explicitly labeled by `npm run prepare-windows-release-assets` before upload.
+- The asset labeling script updates `latest.yml` after renaming files, so update metadata does not point to stale pre-rename filenames.
+- The script updates `latest.yml` with a single combined filename match, which avoids corrupting `.exe.blockmap` references through repeated `.exe` substring replacements.
+- The script protects existing `unsigned` filenames from double-labeling and refuses to overwrite conflicting destination files.
+
+## Phase 8.4 Residual Risk
+
+- This phase does not prove a real signed Windows artifact because no Windows signing certificate secret is present in the local workspace.
+- SmartScreen reputation remains an external product trust signal even after Authenticode signing works.
+- The Windows release job still needs GitHub Actions run evidence and real Windows install/uninstall/runtime smoke validation before public Windows support claims.
+
+## Phase 8.4 Verification
+
+```bash
+node --check scripts/prepare-windows-release-assets.js # pass
+ruby -e 'require "yaml"; YAML.load_file(".github/workflows/release.yml"); puts "workflow yaml ok"' # pass
+npm run check:syntax                         # pass
+npm test                                     # 175/175 pass
 ```

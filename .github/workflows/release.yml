@@ -203,16 +203,60 @@ jobs:
           INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            echo "tag=$INPUT_RELEASE_TAG" >> "$GITHUB_OUTPUT"
+            tag="$INPUT_RELEASE_TAG"
           else
-            echo "tag=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+            tag="$GITHUB_REF_NAME"
           fi
 
-      - name: Build unsigned Windows distribution
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if [[ "$tag" =~ -(alpha|beta|rc)(\.|-|$) ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Inspect Windows signing secrets
+        id: signing
+        shell: bash
+        env:
+          WINDOWS_CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+          WINDOWS_CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          IS_PRERELEASE: ${{ steps.release.outputs.prerelease }}
+        run: |
+          missing=""
+          test -n "$WINDOWS_CSC_LINK" || missing="$missing WINDOWS_CSC_LINK"
+          test -n "$WINDOWS_CSC_KEY_PASSWORD" || missing="$missing WINDOWS_CSC_KEY_PASSWORD"
+
+          if [ -z "$missing" ]; then
+            echo "mode=signed" >> "$GITHUB_OUTPUT"
+            echo "All Windows signing secrets are present. Building a signed Windows release."
+          elif [ "$IS_PRERELEASE" = "true" ]; then
+            echo "mode=unsigned-prerelease" >> "$GITHUB_OUTPUT"
+            echo "::notice::Missing Windows signing secrets:$missing. Building unsigned prerelease assets for $RELEASE_TAG; filenames will include unsigned."
+          else
+            echo "::error::Missing Windows signing secrets:$missing. Stable Windows releases must be signed. Use a prerelease tag such as vX.Y.Z-rc.N for unsigned validation artifacts."
+            exit 1
+          fi
+
+      - name: Build signed Windows distribution
+        if: steps.signing.outputs.mode == 'signed'
+        run: npm run dist -- --win --x64 --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+
+      - name: Build unsigned Windows prerelease distribution
+        if: steps.signing.outputs.mode == 'unsigned-prerelease'
         run: npm run dist -- --win --x64 --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Mark unsigned Windows prerelease assets
+        if: steps.signing.outputs.mode == 'unsigned-prerelease'
+        run: npm run prepare-windows-release-assets
 
       - name: Publish GitHub Release assets
         uses: softprops/action-gh-release@v2

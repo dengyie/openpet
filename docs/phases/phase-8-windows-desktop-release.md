@@ -64,10 +64,18 @@
 
 目标：文档化 Windows 官方签名策略，并给 unsigned prerelease 明确边界。
 
-计划：
+交付：
 
 - 在 release checklist 中补 Windows 证书来源、CI secret 名称和 unsigned artifact 标签策略。
 - 官方 release 要求 signed；开发/RC 可 unsigned，但不能声称可规避 SmartScreen。
+- release workflow 对稳定 Windows tag 强制要求 signing secrets。
+- unsigned Windows prerelease artifact 自动加 `unsigned` 文件名标记，并同步更新 `latest.yml`。
+
+验收：
+
+- `node --check scripts/prepare-windows-release-assets.js` 通过。
+- `npm run check:syntax` 通过。
+- `npm test` 通过。
 
 ### Phase 8.5：Windows 冒烟验证
 
@@ -131,9 +139,9 @@
 - macOS 接受 `.dmg` 和当前平台 `.zip`；Windows 接受 `.exe` 和当前平台 `.zip`。
 - 没有平台 token 的 legacy `.zip` 仍按当前平台保留，避免旧单平台 release 的 zip 被完全隐藏；但当前 `artifactName` 已带 `${os}-${arch}`，双平台 release 不会依赖这个兼容路径。
 
-剩余风险：
+当时剩余风险：
 
-- Windows 签名策略仍未落地，官方 Windows release 不能声称 SmartScreen trust。
+- Phase 8.3 时 Windows 签名策略仍未落地；已在 Phase 8.4 补为 release workflow 护栏，但官方 Windows release 仍不能声称 SmartScreen trust。
 - Windows release job 仍需要 GitHub Actions 实跑证据。
 - 真实 Windows 安装、卸载、透明窗口与 plugin runner 冒烟仍未完成。
 
@@ -141,3 +149,29 @@
 
 - `npm run check:syntax` 通过。
 - `npm test` 通过，当前为 172/172。
+
+## 5. Phase 8.4 实施记录
+
+本阶段把 Windows 签名策略从文档风险推进为 release workflow 的显式护栏。目标不是伪造“Windows 已可发布”，而是防止稳定版 tag 在缺少代码签名证书时产出看起来像正式版的 Windows 安装包，同时允许 RC/beta/alpha 继续生成可测试的 unsigned artifact。
+
+实现决策：
+
+- Windows 官方签名使用 electron-builder Authenticode 路径，CI secret 名称固定为 `WINDOWS_CSC_LINK` 与 `WINDOWS_CSC_KEY_PASSWORD`。
+- `release-windows` job 会解析 tag：`vX.Y.Z` 视为稳定版，`vX.Y.Z-rc.N` / `beta` / `alpha` 视为 prerelease。
+- 稳定版 Windows tag 缺少任一签名 secret 时 workflow 直接失败，不再上传 unsigned 正式资产。
+- prerelease 缺签名时仍可构建，但会运行 `npm run prepare-windows-release-assets`，把 `.exe`、`.zip`、`.blockmap` 文件名加上 `unsigned`，并同步更新 `latest.yml` 中的文件引用。
+- 新增 `scripts/prepare-windows-release-assets.js`，将 unsigned asset 命名逻辑做成可测试脚本，避免在 YAML 中堆叠易碎 shell rename。
+- 新增 `tests/services/windows-release-assets.test.js`，覆盖 unsigned 文件名插入、`latest.yml` 引用更新、冲突文件保护。
+
+剩余风险：
+
+- 仓库尚未配置真实 Windows 签名证书 secret，也尚未产出可验证的 signed Windows artifact。
+- SmartScreen reputation 仍取决于证书信誉和发布后的安装反馈，不能仅靠签名策略保证。
+- 真实 Windows 安装、卸载、透明窗口与 plugin runner 冒烟仍未完成。
+
+验证：
+
+- `node --check scripts/prepare-windows-release-assets.js` 通过。
+- `ruby -e 'require "yaml"; YAML.load_file(".github/workflows/release.yml"); puts "workflow yaml ok"'` 通过。
+- `npm run check:syntax` 通过。
+- `npm test` 通过，当前为 175/175。

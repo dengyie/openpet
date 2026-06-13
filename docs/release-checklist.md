@@ -2,12 +2,12 @@
 
 > Purpose: keep local test builds, signed releases, and public artifacts reproducible without exposing signing credentials.
 
-Current desktop scope: macOS and Windows. macOS has a validated release baseline; Windows has packaging/CI/update-asset baselines, but must not be called release-ready until signing policy and smoke tests are complete.
+Current desktop scope: macOS and Windows. macOS has a validated release baseline; Windows has packaging/CI/update-asset/signing-policy baselines, but must not be called release-ready until signed release evidence and smoke tests are complete.
 
 | Platform | Status | Public Claim |
 |----------|--------|--------------|
 | macOS | Baseline implemented | Release candidate path exists; official artifacts should be signed/notarized |
-| Windows | Packaging/CI baseline implemented | Do not publish as supported until the Windows checklist passes |
+| Windows | Packaging/CI/signing-policy baseline implemented | Do not publish as supported until the Windows checklist passes |
 | Linux | Deferred | Out of current release scope |
 | Mobile | Out of scope | Not part of this desktop release track |
 
@@ -60,7 +60,29 @@ codesign --verify --deep --strict --verbose=2 "release/mac/OpenPet.app"
 spctl --assess --type execute --verbose=4 "release/mac/OpenPet.app"
 ```
 
-## 6. Windows Release Readiness
+## 6. Windows Signing Inputs
+
+Official Windows releases use electron-builder's Authenticode signing path. Keep certificate material outside source control and provide it only through GitHub Actions secrets or a local release environment:
+
+- `WINDOWS_CSC_LINK`: Windows code-signing certificate as a secure URL, local path, or base64-encoded `.pfx` value supported by electron-builder.
+- `WINDOWS_CSC_KEY_PASSWORD`: password for the certificate referenced by `WINDOWS_CSC_LINK`.
+
+Windows release policy:
+
+- Stable tags such as `v1.2.3` must be signed. The `release-windows` workflow fails before building if either Windows signing secret is missing.
+- Prerelease tags such as `v1.2.3-rc.1`, `v1.2.3-beta.1`, or `v1.2.3-alpha.1` may be unsigned for validation.
+- Unsigned Windows prerelease assets must include `unsigned` in `.exe`, `.zip`, and `.blockmap` filenames. The workflow runs `npm run prepare-windows-release-assets` to apply that label and update `latest.yml` references before upload.
+- Unsigned prerelease assets are for testing only and must not be described as SmartScreen-trusted or production-supported.
+
+Before calling a Windows build official, verify the downloaded installer signature on Windows:
+
+```powershell
+Get-AuthenticodeSignature .\OpenPet-*-win32-x64.exe | Format-List
+```
+
+The expected result for an official build is `Status : Valid` and a signer certificate that matches the release owner.
+
+## 7. Windows Release Readiness
 
 Windows release support requires these gates before public release claims:
 
@@ -68,8 +90,8 @@ Windows release support requires these gates before public release claims:
 - [x] Add a `windows-latest` CI release job or platform matrix.
 - [x] Upload Windows artifacts: `.exe`, `.zip`, `.blockmap`, and `latest.yml`.
 - [x] Filter About/update assets by current desktop platform.
-- [ ] Document the Windows signing provider and CI secret names before producing official signed releases.
-- [ ] Allow unsigned local/prerelease builds only when artifacts are clearly labeled as unsigned.
+- [x] Document the Windows signing provider and CI secret names before producing official signed releases.
+- [x] Allow unsigned local/prerelease builds only when artifacts are clearly labeled as unsigned.
 - [ ] Verify install, launch, update check, and uninstall on a clean Windows machine.
 
 Windows smoke checks:
@@ -84,7 +106,7 @@ Windows smoke checks:
 
 See [desktop-release-design.md](./desktop-release-design.md) for the full macOS + Windows design and acceptance gates.
 
-## 7. Update Check
+## 8. Update Check
 
 - Publish the GitHub Release for the tag.
 - Open Control Center → About.
@@ -94,7 +116,7 @@ See [desktop-release-design.md](./desktop-release-design.md) for the full macOS 
 - On Windows, confirm `.exe` and Windows `.zip` assets are shown while macOS `.dmg` / macOS `.zip` assets are hidden.
 - Confirm `.blockmap`, `latest.yml`, and `latest-mac.yml` feed metadata are not shown as user-installable assets.
 
-## 8. Rollback
+## 9. Rollback
 
 - Unpublish or mark a bad release as draft if it should not be discovered by update checks.
 - Keep the previous release artifact available.
