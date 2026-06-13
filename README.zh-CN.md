@@ -29,7 +29,7 @@
 - 📦 **Pet Pack 管理** - 多宠物包支持，一键安装
 - 🌐 **HTTP API + MCP** - 本地 API 支持外部 agent 集成
 - 🎛️ **Control Center** - React + Vite 控制面板，所有配置可视化
-- 🚀 **分发就绪** - electron-builder + GitHub Actions，支持自动更新
+- 🚀 **macOS 分发基线** - electron-builder + GitHub Actions，支持更新检查；Windows 桌面分发已进入规划
 
 ---
 
@@ -99,7 +99,7 @@
 
 - **Node.js**: >= 18.x
 - **npm**: >= 9.x
-- **操作系统**: macOS / Windows / Linux
+- **操作系统**: macOS 已验证；Windows 桌面分发规划中；Linux / 移动端不在当前发布范围
 
 ### 安装
 
@@ -124,7 +124,7 @@ npm test                     # 运行全部测试（171 个测试）
 npm run check:syntax         # JS 语法验证
 npm run generate-sprites     # 从 cat_anime/flames/ 重新生成 sprite sheets
 npm run pack                 # electron-builder 目录打包
-npm run dist                 # 生成安装包（DMG/ZIP）
+npm run dist                 # 生成当前宿主平台安装包（macOS 已验证：DMG/ZIP）
 ```
 
 ---
@@ -138,6 +138,7 @@ npm run dist                 # 生成安装包（DMG/ZIP）
 - **[jishuwendang.md](./docs/jishuwendang.md)** - 技术文档（中文）
 - **[productization-roadmap.md](./docs/productization-roadmap.md)** - 产品化路线图
 - **[project-status-review.md](./docs/project-status-review.md)** - 项目全面评估报告
+- **[desktop-release-design.md](./docs/desktop-release-design.md)** - macOS + Windows 桌面分发设计
 
 ### 架构文档
 
@@ -355,11 +356,12 @@ npm run build:control-center # Control Center 构建验证
 - ✅ 插件生态产品化
 - ✅ AI 行为编排
 - ✅ MCP transport 产品化
-- ✅ 分发与 release pipeline
+- ✅ macOS 分发与 release pipeline
 - ✅ 生态 catalog 运营闭环
 
 ### v1.1（规划中）
 
+- ⚡ Windows 桌面分发配置与冒烟验证
 - ⚡ 前端自动化测试（Playwright）
 - ⚡ 更多示例插件（天气、番茄钟、RSS）
 - ⚡ 插件开发教程视频

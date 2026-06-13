@@ -1,6 +1,15 @@
-# OpenPet Release Checklist
+# OpenPet Desktop Release Checklist
 
 > Purpose: keep local test builds, signed releases, and public artifacts reproducible without exposing signing credentials.
+
+Current desktop scope: macOS and Windows. macOS has a validated release baseline; Windows is documented as a planned desktop target and must not be called release-ready until its build config, CI artifacts, signing policy, and smoke tests are complete.
+
+| Platform | Status | Public Claim |
+|----------|--------|--------------|
+| macOS | Baseline implemented | Release candidate path exists; official artifacts should be signed/notarized |
+| Windows | Planned | Do not publish as supported until the Windows checklist passes |
+| Linux | Deferred | Out of current release scope |
+| Mobile | Out of scope | Not part of this desktop release track |
 
 ## 1. Preflight
 
@@ -32,7 +41,7 @@ Release signing and notarization must only read credentials from environment var
 
 The app must continue to build unsigned local packages when these variables are absent.
 
-## 4. Release Build
+## 4. macOS Release Build
 
 - Create a tag named `vX.Y.Z` or `vX.Y.Z-rc.N`.
 - Let GitHub Actions run the release workflow from the tag.
@@ -51,14 +60,37 @@ codesign --verify --deep --strict --verbose=2 "release/mac/OpenPet.app"
 spctl --assess --type execute --verbose=4 "release/mac/OpenPet.app"
 ```
 
-## 6. Update Check
+## 6. Windows Release Readiness
+
+Windows release support requires a follow-up implementation pass before public release claims:
+
+- Add Windows targets to electron-builder (`nsis`, `zip`) and include `build/icon.ico`.
+- Add a `windows-latest` CI release job or platform matrix.
+- Upload Windows artifacts: `.exe`, `.zip`, `.blockmap`, and `latest.yml`.
+- Document the Windows signing provider and CI secret names before producing official signed releases.
+- Allow unsigned local/prerelease builds only when artifacts are clearly labeled as unsigned.
+- Verify install, launch, update check, and uninstall on a clean Windows machine.
+
+Windows smoke checks:
+
+- Transparent pet window renders with alpha and remains draggable.
+- `alwaysOnTop`, taskbar behavior, focus, and screen bounds work as intended.
+- Control Center opens Pet, Actions, AI, Plugins, Catalog, Service, and About tabs.
+- Legacy user data compatibility is verified against the Windows app data path strategy.
+- Plugin runner, pet-pack import, and sprite/native dependencies work with Windows paths.
+- Local HTTP/MCP remains off by default, loopback only, and token-gated.
+- API keys remain unavailable to renderer code and ordinary plugins.
+
+See [desktop-release-design.md](./desktop-release-design.md) for the full macOS + Windows design and acceptance gates.
+
+## 7. Update Check
 
 - Publish the GitHub Release for the tag.
 - Open Control Center → About.
 - Run Check Updates.
-- Confirm the latest version, release URL, and DMG/ZIP asset names are displayed.
+- Confirm the latest version, release URL, and platform-appropriate asset names are displayed.
 
-## 7. Rollback
+## 8. Rollback
 
 - Unpublish or mark a bad release as draft if it should not be discovered by update checks.
 - Keep the previous release artifact available.

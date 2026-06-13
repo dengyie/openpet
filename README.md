@@ -31,7 +31,7 @@
 - 📦 **Pet Pack Management** - Multi-pet pack support with one-click installation
 - 🌐 **HTTP API + MCP** - Local API for external agent integration
 - 🎛️ **Control Center** - React + Vite control panel with full UI configuration
-- 🚀 **Distribution Ready** - electron-builder + GitHub Actions with auto-update support
+- 🚀 **macOS Release Baseline** - electron-builder + GitHub Actions with update-check support; Windows desktop release is planned
 
 ---
 
@@ -101,7 +101,7 @@
 
 - **Node.js**: >= 18.x
 - **npm**: >= 9.x
-- **OS**: macOS / Windows / Linux
+- **OS**: macOS validated; Windows desktop release planned; Linux/mobile are out of the current release scope
 
 ### Installation
 
@@ -126,7 +126,7 @@ npm test                     # Run all tests (171 tests)
 npm run check:syntax         # JS syntax validation
 npm run generate-sprites     # Regenerate sprite sheets from cat_anime/flames/
 npm run pack                 # electron-builder directory package
-npm run dist                 # Generate installer (DMG/ZIP)
+npm run dist                 # Generate current-host installer (macOS validated: DMG/ZIP)
 ```
 
 ---
@@ -140,6 +140,7 @@ npm run dist                 # Generate installer (DMG/ZIP)
 - **[jishuwendang.md](./docs/jishuwendang.md)** - Technical documentation (Chinese)
 - **[productization-roadmap.md](./docs/productization-roadmap.md)** - Productization roadmap
 - **[project-status-review.md](./docs/project-status-review.md)** - Comprehensive project review
+- **[desktop-release-design.md](./docs/desktop-release-design.md)** - macOS + Windows desktop release design
 
 ### Architecture Docs
 
@@ -357,11 +358,12 @@ Contributions of code, plugins, pet packs, or documentation are welcome!
 - ✅ Plugin ecosystem productization
 - ✅ AI behavior orchestration
 - ✅ MCP transport productization
-- ✅ Distribution & release pipeline
+- ✅ macOS distribution & release pipeline
 - ✅ Ecosystem catalog operations
 
 ### v1.1 (Planned)
 
+- ⚡ Windows desktop release configuration and smoke testing
 - ⚡ Frontend automation testing (Playwright)
 - ⚡ More example plugins (weather, pomodoro, RSS)
 - ⚡ Plugin development tutorial videos

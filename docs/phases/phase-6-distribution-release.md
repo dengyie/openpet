@@ -2,6 +2,7 @@
 
 > 阶段目标：从“开发者能 pack”升级为“用户可安装、系统可信、版本可更新、发布可重复”。  
 > 范围约束：不泄露签名/公证凭据；PR 只跑 test/build，tag release 才执行签名、公证与 artifact 发布。
+> 平台边界：本阶段交付 macOS 分发基线；Windows 桌面分发属于后续扩展，设计见 [`docs/desktop-release-design.md`](../desktop-release-design.md)。
 
 ## 1. 本阶段交付
 
@@ -25,6 +26,7 @@
 - `npm run pack` 可生成目录包。
 - About 页可读取 app version / packaged 状态，并可触发更新检查。
 - release workflow 存在 PR 和 tag 路径。
+- 当前验收只证明 macOS release path；Windows 需要新增 build config、CI runner、签名策略和冒烟矩阵后再声明支持。
 
 ## 4. Production Code Quality Review 关注点
 

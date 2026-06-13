@@ -1,7 +1,7 @@
 # OpenPet Pet Platform — 技术文档
 
 > Electron 桌面宠物平台，支持精灵图动画、AI 聊天、可扩展的 plugin/pet-pack 系统与本地 HTTP API  
-> **项目状态：v1.0 产品化基线完成；当前版本 v1.0.1-rc.1 用于 OpenPet 改名与升级兼容验证**
+> **项目状态：v1.0 产品化基线完成；当前版本 v1.0.1-rc.1 用于 OpenPet 改名与升级兼容验证；macOS 分发基线已完成，Windows 桌面分发见 [`desktop-release-design.md`](./desktop-release-design.md)**
 
 ---
 
@@ -24,7 +24,7 @@
 - ✅ AI 集成：OpenAI-compatible，API Key 隔离，结构化行为编排
 - ✅ 插件系统：权限白名单 + 隔离 runner + SDK + catalog + blocklist
 - ✅ HTTP API + MCP：loopback only，token-gated，默认关闭
-- ✅ 分发流程：electron-builder + GitHub Actions + 更新检查
+- ✅ macOS 分发流程：electron-builder + GitHub Actions + 更新检查；Windows 桌面分发已完成设计、待实现
 
 **质量指标**：
 - ✅ 171/171 测试通过（service 层全覆盖）
@@ -374,7 +374,7 @@ Control Center 构建产物位于 `dist/control-center/index.html`；`npm start`
 npm start                     # 构建 Control Center + 启动 Electron
 npm run dev:control-center    # 仅启动 Control Center dev server（热更新）
 npm run build:control-center  # 仅构建 Control Center
-npm run pack                  # electron-builder 目录打包验证
+npm run pack                  # electron-builder macOS 目录打包验证
 npm run generate-sprites      # 重新生成精灵图
 npm test                      # 运行测试（171 个测试）
 npm run check:node            # 逐个 node --check 主进程 / service / test JS 文件

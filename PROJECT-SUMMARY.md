@@ -73,13 +73,14 @@ OpenPet 是一个从单体桌宠演化为**可扩展 pet runtime 平台**的 Ele
 
 **提交**: `1db6f17 feat: productize mcp transport`
 
-### 6️⃣ Phase 6: 分发与 Release Pipeline
-- ✅ electron-builder 配置
+### 6️⃣ Phase 6: macOS 分发与 Release Pipeline
+- ✅ electron-builder macOS 配置
 - ✅ GitHub Actions CI/CD
 - ✅ 代码签名 + 公证（macOS）
-- ✅ 自动更新（Electron autoUpdater）
+- ✅ About 更新检查（GitHub Releases 摘要，不静默安装）
 - ✅ Release checklist 文档
 - ✅ DMG/ZIP 打包成功
+- 📝 Windows 桌面分发设计已补齐，后续需实现 build target、CI、签名策略与冒烟验证
 
 **提交**: `cb4895a feat: add distribution release pipeline`
 
@@ -207,7 +208,8 @@ BehaviorOrchestrator  CatalogService  McpTransport
 | 插件生态系统 | ✅ | 105%* |
 | Pet Pack 管理 | ✅ | 100% |
 | HTTP API + MCP | ✅ | 100% |
-| 分发就绪 | ✅ | 100% |
+| macOS 分发就绪 | ✅ | 100% |
+| Windows 桌面分发设计 | 📝 | 设计完成，待实现 |
 
 *超额完成：新增 Catalog + Blocklist 生态运营闭环
 
@@ -230,8 +232,10 @@ BehaviorOrchestrator  CatalogService  McpTransport
 - [x] electron-builder 打包
 - [x] 代码签名配置
 - [x] 更新检查机制
+- [x] macOS + Windows 桌面分发设计文档
 
 ### 📋 发布前建议（可选）
+- [ ] 按 `docs/desktop-release-design.md` 补齐 Windows 桌面分发实现
 - [ ] 添加真实截图/GIF 到 README
 - [ ] 创建 2-3 个示例插件（天气、番茄钟、RSS）
 - [ ] 录制演示视频
@@ -291,7 +295,7 @@ git push origin v1.0.1
 1. **从桌宠到平台** - 完整的演化路径
 2. **UI 配置化** - 所有操作均可通过 Control Center 完成
 3. **开发者友好** - 清晰的插件 SDK，完整的文档
-4. **分发就绪** - GitHub Actions + 自动更新
+4. **macOS 分发就绪** - GitHub Actions + About 更新检查；Windows 桌面分发已完成设计、待实现
 5. **双语支持** - 英文/中文文档完整
 
 ### 工程亮点

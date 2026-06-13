@@ -1,8 +1,8 @@
 # OpenPet 产品化补齐开发设计文档
 
 > 最后更新：2026-06-13
-> 基线：`main` 已完成平台骨架、核心服务、Control Center、AI 聊天、插件隔离 runner、本地 HTTP/MCP、electron-builder 打包目录验证。
-> 目标：把 OpenPet 从“可开发、可验证、可推 main”的可扩展桌面宠物平台，补齐为“可分发、可运营、可承载生态”的产品。
+> 基线：`main` 已完成平台骨架、核心服务、Control Center、AI 聊天、插件隔离 runner、本地 HTTP/MCP、electron-builder 打包目录验证与 macOS 分发基线。
+> 目标：把 OpenPet 从“可开发、可验证、可推 main”的可扩展桌面宠物平台，补齐为“可分发、可运营、可承载生态”的产品；当前桌面发布范围只覆盖 macOS 与 Windows，移动端不进入本轮设计。
 
 ## 1. 当前基线
 
@@ -14,7 +14,7 @@
 - AI 已支持 OpenAI-compatible provider、API Key secret 隔离、请求超时、有界持久会话、轻量语义动作触发。
 - 插件已有 manifest 权限白名单、本地插件短生命周期子进程 runner、Node permission model、VM 隔离、受限 SDK、AI/network/storage 能力、插件日志与私有存储 UI。
 - 本地服务已有 token-gated HTTP API、访问日志、`POST /mcp` JSON-RPC bridge、MCP session。
-- `npm run pack` 已通过目录打包验证，`electron-builder` 基础配置可用。
+- `npm run pack` 已通过目录打包验证，`electron-builder` macOS 基础配置可用；Windows 桌面分发尚未配置。
 - CI / 测试已覆盖 service、pet-pack、plugin、AI、MCP、release、catalog 核心路径，当前验证为 171 个测试。
 - v1.0.1-rc.1 已完成 OpenPet 改名、GitHub 仓库迁移、旧 userData 路径保留与公开 API 命名兼容。
 
@@ -26,7 +26,7 @@
 | Pet pack | Phase 2 已支持多 pack 列表、整包检查/导入/启用/删除 | 后续补版本升级、包导出、catalog 运营 |
 | AI 行为编排 | 关键词/label/kind 语义匹配 | 结构化 tool-call、可配置行为规则、调试/回放、规则安全边界 |
 | MCP | 最小 JSON-RPC bridge | 客户端兼容矩阵、streamable HTTP/SSE、外部 agent 使用文档、会话管理 |
-| 分发 | `pack` 可跑 | app icon、签名/公证、安装包验证、自动更新、发布流水线 |
+| 分发 | macOS release baseline 已完成；Windows 未配置 | Windows targets、CI runner、签名策略、安装/卸载冒烟验证、平台化更新资产 |
 | Control Center | 已完成 Phase 1 模块化 | 继续承载 Pet pack / 插件安装 / AI 规则 / MCP session 等生态页面 |
 
 ## 2. 产品化原则
@@ -52,6 +52,8 @@ Phase 5  MCP / 外部 agent 产品化
 Phase 6  分发、更新与发布流水线
 Phase 7  生态运营闭环
 ```
+
+桌面发布扩展说明：Phase 6 的已交付范围是 macOS 分发基线。Windows 桌面分发属于后续 release-track 扩展，设计与验收门槛见 [`desktop-release-design.md`](./desktop-release-design.md)。
 
 ## 4. Phase 0：基线冻结与开发日志对齐
 
@@ -464,7 +466,7 @@ LocalHttpService
 
 ### 目标
 
-从“开发者能 pack”升级为“用户可安装、系统可信、版本可更新、发布可重复”。
+从“开发者能 pack”升级为“用户可安装、系统可信、版本可更新、发布可重复”。本阶段先完成 macOS release path；Windows 桌面分发不在 Phase 6 已完成范围内。
 
 ### 打包配置
 
@@ -499,12 +501,12 @@ CSC_KEY_PASSWORD
 - PR：只跑 test/build，不签名。
 - tag：跑 signed dist + notarization + artifact upload。
 
-### 自动更新
+### 更新检查
 
-第一版建议使用 GitHub Releases + `electron-updater`：
+第一版使用 GitHub Releases 做 About 页更新检查：
 
 - release channel：`latest` / `beta`。
-- Control Center About 页显示当前版本、检查更新、下载状态。
+- Control Center About 页显示当前版本、检查更新状态和 release asset 摘要。
 - 更新不自动静默安装，先做用户确认。
 
 ### 安装包验证清单
@@ -524,6 +526,10 @@ CSC_KEY_PASSWORD
 - 公证通过：`spctl --assess` 不报阻止。
 - GitHub tag 发布能产出安装包 artifact。
 - About 页可检查更新。
+
+### Windows 桌面扩展
+
+后续补齐 Windows 桌面分发时，按 [`desktop-release-design.md`](./desktop-release-design.md) 执行：新增 `build/win` targets（NSIS + ZIP）、`build/icon.ico`、`windows-latest` release job、Windows 签名策略和安装/卸载/透明窗口/插件 runner 冒烟矩阵。完成前，文档与 README 不应声明 Windows release-ready。
 
 ## 11. Phase 7：生态运营闭环
 
@@ -572,8 +578,9 @@ CSC_KEY_PASSWORD
 ### 打包层
 
 - `npm run pack` 保持每阶段可跑。
-- 分发阶段增加 `npm run dist` 验证。
+- 分发阶段增加 `npm run dist` 验证；当前验证对象是 macOS DMG/ZIP。
 - 对 macOS 签名/公证使用单独 release workflow，避免 PR 泄露证书。
+- Windows 分发落地后增加 `windows-latest` 构建、安装/卸载冒烟和平台资产更新检查。
 
 ## 13. 风险清单
 
@@ -584,11 +591,12 @@ CSC_KEY_PASSWORD
 | AI tool-call 被模型误用 | 宠物行为混乱 | actionId 白名单、规则 cooldown、dry-run、关闭开关 |
 | MCP token 泄漏 | 外部控制宠物 | 默认关闭、token 轮换、session revoke、访问日志、loopback only |
 | 签名/公证失败阻塞发布 | 无法安装 | 先建立 unsigned beta 包，再补 signed release；流水线分阶段 |
+| Windows 分发未验证却被对外承诺 | 用户无法安装或被 SmartScreen/路径问题阻断 | 文档只声明 macOS baseline；Windows 必须通过独立 build config、CI 和冒烟矩阵后再发布 |
 | Control Center 继续膨胀 | 后续功能难维护 | Phase 1 强制拆分并设文件体量阈值 |
 
 ## 14. 当前收尾状态
 
-Phase 1-7 已完成并合入 `main`。每个阶段均有开发文档与 Production Code Quality Review 文档；Phase 7 完成后，项目已具备 Control Center 模块化、Pet pack 管理、插件安装/权限 review、AI 行为编排、MCP transport、分发流水线、生态 catalog 与本地 blocklist 治理闭环。v1.0.1-rc.1 在此基线上完成 OpenPet 改名和升级兼容验证准备。
+Phase 1-7 已完成并合入 `main`。每个阶段均有开发文档与 Production Code Quality Review 文档；Phase 7 完成后，项目已具备 Control Center 模块化、Pet pack 管理、插件安装/权限 review、AI 行为编排、MCP transport、macOS 分发流水线、生态 catalog 与本地 blocklist 治理闭环。v1.0.1-rc.1 在此基线上完成 OpenPet 改名和升级兼容验证准备。Windows 桌面分发已形成设计文档，但尚未进入“已发布就绪”状态。
 
 ### 完成验证
 
@@ -610,7 +618,7 @@ npm run pack                  # ✅ electron-builder pass
 | 3 | 插件安装与权限 | `ef3ad40` | ✅ | ✅ | 完成 |
 | 4 | AI 行为编排 | `6beb3d2` | ✅ | ✅ | 完成 |
 | 5 | MCP transport 产品化 | `1db6f17` | ✅ | ✅ | 完成 |
-| 6 | 分发与 release pipeline | `cb4895a` | ✅ | ✅ | 完成 |
+| 6 | macOS 分发与 release pipeline | `cb4895a` | ✅ | ✅ | 完成 |
 | 7 | 生态 catalog 运营闭环 | `edd1307` | ✅ | ✅ | 完成 |
 
 **项目评估结果**：
@@ -630,11 +638,13 @@ RC 重点验证：
 1. 旧 `appData/ibot` 数据可被 OpenPet 继续读取。
 2. `openpet.*` 新 MCP tool 名可用，旧 `ibot.*` alias 仍可用。
 3. GitHub Releases、About 更新检查和本地 remote 均指向 `dengyie/OpenPet`。
+4. macOS DMG/ZIP artifact 与签名/公证状态符合发布清单。
 
 v1.1 版本规划（可选）：
-1. 前端自动化测试（Playwright）
-2. 更多示例插件（天气、番茄钟、RSS）
-3. 插件开发教程
-4. 用户反馈收集与迭代
+1. Windows 桌面分发配置、CI 与冒烟验证
+2. 前端自动化测试（Playwright）
+3. 更多示例插件（天气、番茄钟、RSS）
+4. 插件开发教程
+5. 用户反馈收集与迭代
 
 剩余可选增强不属于本轮产品化闭环阻塞项：远端 marketplace 后端、真实第三方签名根信任、更多浏览器级 UI 自动化、以及 SES / Electron utilityProcess 等更强插件沙箱候选方案。

@@ -144,17 +144,18 @@ docs/mcp-usage.md                            # 使用文档
 docs/mcp-compatibility.md                    # 兼容矩阵
 ```
 
-### 7. 分发与更新 ✅ 完全实现
+### 7. 分发与更新 ✅ macOS 基线完成，Windows 桌面规划中
 
-**期望**：可打包、可分发、自动更新
+**期望**：可打包、可分发、可检查更新
 
 **实现**：
-- ✅ electron-builder 配置完整
+- ✅ macOS electron-builder 配置完整
 - ✅ macOS app icon + entitlements
 - ✅ GitHub Actions release workflow
 - ✅ About 页面：版本信息 + 更新检查
 - ✅ notarize.js 公证脚本
-- ✅ `npm run pack` / `npm run dist` 可用
+- ✅ `npm run pack` / `npm run dist` 可用于当前 macOS release path
+- 📝 Windows 桌面分发设计已补齐，仍需新增 build target、Windows CI、签名策略和冒烟验证
 
 **证据**：
 ```
@@ -163,6 +164,7 @@ build/icon.icns + icon.png        # App 图标
 build/notarize.js                 # 公证流程
 src/main/services/about-service.js # 版本 + 更新检查
 docs/release-checklist.md         # 发布清单
+docs/desktop-release-design.md    # macOS + Windows 桌面分发设计
 ```
 
 ---
@@ -401,7 +403,7 @@ npm run pack                  # electron-builder pass
 1. 所有核心功能已完成并验证
 2. 测试覆盖完整（171/171 通过）
 3. 架构稳定、代码质量高
-4. 分发流程已就绪
+4. macOS 分发流程已就绪；Windows 桌面分发进入设计与待实施阶段
 5. 剩余项为增强项，不阻塞发布
 
 ### RC 验证建议
