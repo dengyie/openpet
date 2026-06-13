@@ -59,16 +59,43 @@ const withTimeout = async (promise, controller, timeoutMs) => {
   }
 }
 
-const selectInstallAssets = (assets = []) => assets
+const hasPlatformToken = (assetName, tokens) => {
+  const lowerName = String(assetName || '').toLowerCase()
+  return tokens.some((token) => new RegExp(`(^|[-_.\\s])${token}([-_.\\s]|$)`, 'i').test(lowerName))
+}
+
+const inferAssetPlatform = (assetName) => {
+  if (hasPlatformToken(assetName, ['darwin', 'mac', 'macos'])) return 'darwin'
+  if (hasPlatformToken(assetName, ['win', 'win32', 'windows'])) return 'win32'
+  return ''
+}
+
+const isInstallAssetForPlatform = (assetName, platform) => {
+  if (/\.blockmap$/i.test(assetName) || /^latest(?:-mac)?\.ya?ml$/i.test(assetName)) return false
+
+  const assetPlatform = inferAssetPlatform(assetName)
+  if (platform === 'darwin') {
+    if (assetPlatform && assetPlatform !== 'darwin') return false
+    return /\.dmg$/i.test(assetName) || /\.zip$/i.test(assetName)
+  }
+  if (platform === 'win32') {
+    if (assetPlatform && assetPlatform !== 'win32') return false
+    return /\.exe$/i.test(assetName) || /\.zip$/i.test(assetName)
+  }
+
+  return !assetPlatform && /\.zip$/i.test(assetName)
+}
+
+const selectInstallAssets = (assets = [], platform = process.platform) => assets
   .filter((asset) => typeof asset?.name === 'string' && typeof asset?.browser_download_url === 'string')
-  .filter((asset) => /\.(dmg|zip)$/i.test(asset.name))
+  .filter((asset) => isInstallAssetForPlatform(asset.name, platform))
   .map((asset) => ({
     name: asset.name,
     url: asset.browser_download_url,
     size: Number(asset.size || 0)
   }))
 
-const createAboutService = ({ app, packageJson, fetchImpl = globalThis.fetch, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) => {
+const createAboutService = ({ app, packageJson, fetchImpl = globalThis.fetch, timeoutMs = DEFAULT_TIMEOUT_MS, platform = process.platform, arch = process.arch } = {}) => {
   if (!app) throw new Error('app is required')
   const pkg = packageJson || {}
   const publish = normalizeGithubPublish(pkg.build?.publish)
@@ -78,8 +105,8 @@ const createAboutService = ({ app, packageJson, fetchImpl = globalThis.fetch, ti
     productName: pkg.build?.productName || app.getName?.() || pkg.name || 'OpenPet',
     version: app.getVersion?.() || pkg.version || '0.0.0',
     packaged: Boolean(app.isPackaged),
-    platform: process.platform,
-    arch: process.arch,
+    platform,
+    arch,
     update: publish
       ? {
           configured: true,
@@ -158,7 +185,7 @@ const createAboutService = ({ app, packageJson, fetchImpl = globalThis.fetch, ti
         updateAvailable,
         prerelease: Boolean(release?.prerelease),
         releaseUrl: typeof release?.html_url === 'string' ? release.html_url : publish.url,
-        assets: selectInstallAssets(release?.assets),
+        assets: selectInstallAssets(release?.assets, platform),
         checkedAt,
         message: updateAvailable ? 'A newer version is available.' : 'You are on the latest version.'
       }

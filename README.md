@@ -4,7 +4,7 @@
 
 **An extensible, distributable, and operable Electron desktop pet platform**
 
-[![Tests](https://img.shields.io/badge/tests-171%20passed-success)](./tests)
+[![Tests](https://img.shields.io/badge/tests-172%20passed-success)](./tests)
 [![Build](https://img.shields.io/badge/build-passing-success)](./package.json)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Version](https://img.shields.io/badge/version-1.0.1--rc.1-blue.svg)](./package.json)
@@ -31,7 +31,7 @@
 - 📦 **Pet Pack Management** - Multi-pet pack support with one-click installation
 - 🌐 **HTTP API + MCP** - Local API for external agent integration
 - 🎛️ **Control Center** - React + Vite control panel with full UI configuration
-- 🚀 **macOS Release Baseline** - electron-builder + GitHub Actions with update-check support; Windows desktop release is planned
+- 🚀 **Desktop Release Track** - macOS release baseline; Windows packaging/CI baseline with release-readiness gates still open
 
 ---
 
@@ -101,7 +101,7 @@
 
 - **Node.js**: >= 18.x
 - **npm**: >= 9.x
-- **OS**: macOS validated; Windows desktop release planned; Linux/mobile are out of the current release scope
+- **OS**: macOS validated; Windows packaging/CI baseline implemented but not release-ready; Linux/mobile are out of the current release scope
 
 ### Installation
 
@@ -122,7 +122,7 @@ npm start
 ```bash
 npm start                    # Build Control Center + launch Electron
 npm run dev:control-center   # Control Center hot reload (http://127.0.0.1:5173)
-npm test                     # Run all tests (171 tests)
+npm test                     # Run all tests (172 tests)
 npm run check:syntax         # JS syntax validation
 npm run generate-sprites     # Regenerate sprite sheets from cat_anime/flames/
 npm run pack                 # electron-builder directory package
@@ -140,6 +140,7 @@ npm run dist                 # Generate current-host installer (macOS validated:
 - **[jishuwendang.md](./docs/jishuwendang.md)** - Technical documentation (Chinese)
 - **[productization-roadmap.md](./docs/productization-roadmap.md)** - Productization roadmap
 - **[project-status-review.md](./docs/project-status-review.md)** - Comprehensive project review
+- **[project-documentation-design.md](./docs/project-documentation-design.md)** - Project goal and documentation architecture
 - **[desktop-release-design.md](./docs/desktop-release-design.md)** - macOS + Windows desktop release design
 
 ### Architecture Docs
@@ -297,7 +298,7 @@ For more details, see [plugin-sandbox-evaluation.md](./docs/plugin-sandbox-evalu
 
 ## 🧪 Testing
 
-The project uses **Node native test runner** with **171 tests all passing**.
+The project uses **Node native test runner** with **172 tests all passing**.
 
 ```bash
 npm test                     # Run all tests
@@ -364,7 +365,7 @@ Contributions of code, plugins, pet packs, or documentation are welcome!
 
 ### v1.1 (Planned)
 
-- ⚡ Windows desktop release configuration and smoke testing
+- ⚡ Windows signing policy and smoke testing
 - ⚡ Frontend automation testing (Playwright)
 - ⚡ More example plugins (weather, pomodoro, RSS)
 - ⚡ Plugin development tutorial videos

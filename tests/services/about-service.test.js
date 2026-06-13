@@ -55,7 +55,7 @@ test('about service reports update checks as not configured without a publish ta
   assert.equal(result.updateAvailable, false)
 })
 
-test('about service checks GitHub releases and filters install assets', async () => {
+test('about service checks GitHub releases and filters macOS install assets', async () => {
   const requests = []
   const service = createAboutService({
     app: createApp(),
@@ -66,6 +66,8 @@ test('about service checks GitHub releases and filters install assets', async ()
         publish: { provider: 'github', owner: 'dengyie', repo: 'OpenPet' }
       }
     },
+    platform: 'darwin',
+    arch: 'arm64',
     fetchImpl: async (url, options) => {
       requests.push({ url, options })
       return {
@@ -75,8 +77,13 @@ test('about service checks GitHub releases and filters install assets', async ()
           html_url: 'https://github.com/dengyie/OpenPet/releases/tag/v1.1.0',
           prerelease: false,
           assets: [
-            { name: 'OpenPet.dmg', browser_download_url: 'https://example.test/OpenPet.dmg', size: 1024 },
-            { name: 'OpenPet.blockmap', browser_download_url: 'https://example.test/OpenPet.blockmap', size: 12 }
+            { name: 'OpenPet-1.1.0-darwin-arm64.dmg', browser_download_url: 'https://example.test/OpenPet-1.1.0-darwin-arm64.dmg', size: 1024 },
+            { name: 'OpenPet-1.1.0-darwin-arm64.zip', browser_download_url: 'https://example.test/OpenPet-1.1.0-darwin-arm64.zip', size: 2048 },
+            { name: 'OpenPet-1.1.0-win32-x64.exe', browser_download_url: 'https://example.test/OpenPet-1.1.0-win32-x64.exe', size: 4096 },
+            { name: 'OpenPet-1.1.0-win32-x64.zip', browser_download_url: 'https://example.test/OpenPet-1.1.0-win32-x64.zip', size: 8192 },
+            { name: 'OpenPet-1.1.0-darwin-arm64.dmg.blockmap', browser_download_url: 'https://example.test/OpenPet-1.1.0-darwin-arm64.dmg.blockmap', size: 12 },
+            { name: 'latest-mac.yml', browser_download_url: 'https://example.test/latest-mac.yml', size: 42 },
+            { name: 'latest.yml', browser_download_url: 'https://example.test/latest.yml', size: 42 }
           ]
         })
       }
@@ -90,7 +97,49 @@ test('about service checks GitHub releases and filters install assets', async ()
   assert.equal(result.status, 'ok')
   assert.equal(result.latestVersion, '1.1.0')
   assert.equal(result.updateAvailable, true)
-  assert.deepEqual(result.assets, [{ name: 'OpenPet.dmg', url: 'https://example.test/OpenPet.dmg', size: 1024 }])
+  assert.deepEqual(result.assets, [
+    { name: 'OpenPet-1.1.0-darwin-arm64.dmg', url: 'https://example.test/OpenPet-1.1.0-darwin-arm64.dmg', size: 1024 },
+    { name: 'OpenPet-1.1.0-darwin-arm64.zip', url: 'https://example.test/OpenPet-1.1.0-darwin-arm64.zip', size: 2048 }
+  ])
+})
+
+test('about service filters Windows install assets without showing macOS artifacts', async () => {
+  const service = createAboutService({
+    app: createApp(),
+    packageJson: {
+      name: 'openpet',
+      version: '1.0.0',
+      build: {
+        publish: { provider: 'github', owner: 'dengyie', repo: 'OpenPet' }
+      }
+    },
+    platform: 'win32',
+    arch: 'x64',
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => ({
+        tag_name: 'v1.1.0',
+        html_url: 'https://github.com/dengyie/OpenPet/releases/tag/v1.1.0',
+        prerelease: false,
+        assets: [
+          { name: 'OpenPet-1.1.0-darwin-arm64.dmg', browser_download_url: 'https://example.test/OpenPet-1.1.0-darwin-arm64.dmg', size: 1024 },
+          { name: 'OpenPet-1.1.0-darwin-arm64.zip', browser_download_url: 'https://example.test/OpenPet-1.1.0-darwin-arm64.zip', size: 2048 },
+          { name: 'OpenPet-1.1.0-win32-x64.exe', browser_download_url: 'https://example.test/OpenPet-1.1.0-win32-x64.exe', size: 4096 },
+          { name: 'OpenPet-1.1.0-win32-x64.zip', browser_download_url: 'https://example.test/OpenPet-1.1.0-win32-x64.zip', size: 8192 },
+          { name: 'OpenPet-1.1.0-win32-x64.exe.blockmap', browser_download_url: 'https://example.test/OpenPet-1.1.0-win32-x64.exe.blockmap', size: 12 },
+          { name: 'latest.yml', browser_download_url: 'https://example.test/latest.yml', size: 42 }
+        ]
+      })
+    })
+  })
+
+  const result = await service.checkForUpdates()
+
+  assert.equal(result.status, 'ok')
+  assert.deepEqual(result.assets, [
+    { name: 'OpenPet-1.1.0-win32-x64.exe', url: 'https://example.test/OpenPet-1.1.0-win32-x64.exe', size: 4096 },
+    { name: 'OpenPet-1.1.0-win32-x64.zip', url: 'https://example.test/OpenPet-1.1.0-win32-x64.zip', size: 8192 }
+  ])
 })
 
 test('about service returns a safe error summary for failed update checks', async () => {

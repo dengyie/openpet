@@ -2,12 +2,12 @@
 
 > Purpose: keep local test builds, signed releases, and public artifacts reproducible without exposing signing credentials.
 
-Current desktop scope: macOS and Windows. macOS has a validated release baseline; Windows is documented as a planned desktop target and must not be called release-ready until its build config, CI artifacts, signing policy, and smoke tests are complete.
+Current desktop scope: macOS and Windows. macOS has a validated release baseline; Windows has packaging/CI/update-asset baselines, but must not be called release-ready until signing policy and smoke tests are complete.
 
 | Platform | Status | Public Claim |
 |----------|--------|--------------|
 | macOS | Baseline implemented | Release candidate path exists; official artifacts should be signed/notarized |
-| Windows | Planned | Do not publish as supported until the Windows checklist passes |
+| Windows | Packaging/CI baseline implemented | Do not publish as supported until the Windows checklist passes |
 | Linux | Deferred | Out of current release scope |
 | Mobile | Out of scope | Not part of this desktop release track |
 
@@ -62,14 +62,15 @@ spctl --assess --type execute --verbose=4 "release/mac/OpenPet.app"
 
 ## 6. Windows Release Readiness
 
-Windows release support requires a follow-up implementation pass before public release claims:
+Windows release support requires these gates before public release claims:
 
-- Add Windows targets to electron-builder (`nsis`, `zip`) and include `build/icon.ico`.
-- Add a `windows-latest` CI release job or platform matrix.
-- Upload Windows artifacts: `.exe`, `.zip`, `.blockmap`, and `latest.yml`.
-- Document the Windows signing provider and CI secret names before producing official signed releases.
-- Allow unsigned local/prerelease builds only when artifacts are clearly labeled as unsigned.
-- Verify install, launch, update check, and uninstall on a clean Windows machine.
+- [x] Add Windows targets to electron-builder (`nsis`, `zip`) and include `build/icon.ico`.
+- [x] Add a `windows-latest` CI release job or platform matrix.
+- [x] Upload Windows artifacts: `.exe`, `.zip`, `.blockmap`, and `latest.yml`.
+- [x] Filter About/update assets by current desktop platform.
+- [ ] Document the Windows signing provider and CI secret names before producing official signed releases.
+- [ ] Allow unsigned local/prerelease builds only when artifacts are clearly labeled as unsigned.
+- [ ] Verify install, launch, update check, and uninstall on a clean Windows machine.
 
 Windows smoke checks:
 
@@ -89,6 +90,9 @@ See [desktop-release-design.md](./desktop-release-design.md) for the full macOS 
 - Open Control Center → About.
 - Run Check Updates.
 - Confirm the latest version, release URL, and platform-appropriate asset names are displayed.
+- On macOS, confirm `.dmg` and macOS `.zip` assets are shown while Windows `.exe` / Windows `.zip` assets are hidden.
+- On Windows, confirm `.exe` and Windows `.zip` assets are shown while macOS `.dmg` / macOS `.zip` assets are hidden.
+- Confirm `.blockmap`, `latest.yml`, and `latest-mac.yml` feed metadata are not shown as user-installable assets.
 
 ## 8. Rollback
 

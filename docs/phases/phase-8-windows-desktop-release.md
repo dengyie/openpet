@@ -43,7 +43,24 @@
 - `npm run pack` 仍可生成 macOS 目录包。
 - `npm run check:syntax` 和 `npm test` 通过。
 
-### Phase 8.3：Windows 签名策略与发布清单
+### Phase 8.3：About 更新资产平台筛选与发布清单
+
+目标：让 About 更新检查在同一个 GitHub Release 中只展示当前桌面平台可安装资产，并把发布文档口径从“Windows 仅规划”更新为“构建/CI 基线已落地，签名和冒烟仍待完成”。
+
+交付：
+
+- `AboutService` 支持注入 `platform` / `arch`，便于测试 macOS 与 Windows 更新资产选择。
+- macOS 只展示 `.dmg` 与 macOS `.zip`，不展示 Windows `.exe` 或 Windows `.zip`。
+- Windows 只展示 `.exe` 与 Windows `.zip`，不展示 macOS `.dmg` 或 macOS `.zip`。
+- `.blockmap`、`latest.yml`、`latest-mac.yml` 不作为用户可安装资产展示。
+- release checklist 补充平台资产验收项。
+
+验收：
+
+- `npm run check:syntax` 通过。
+- `npm test` 通过。
+
+### Phase 8.4：Windows 签名策略与发布清单
 
 目标：文档化 Windows 官方签名策略，并给 unsigned prerelease 明确边界。
 
@@ -51,9 +68,8 @@
 
 - 在 release checklist 中补 Windows 证书来源、CI secret 名称和 unsigned artifact 标签策略。
 - 官方 release 要求 signed；开发/RC 可 unsigned，但不能声称可规避 SmartScreen。
-- About/update 检查必须展示平台相关 asset，而不是假设 macOS DMG/ZIP。
 
-### Phase 8.4：Windows 冒烟验证
+### Phase 8.5：Windows 冒烟验证
 
 目标：Windows 支持声明前完成真实运行验证。
 
@@ -100,5 +116,28 @@
 
 - Windows release job 需要 GitHub Actions 实跑验证。
 - Windows 代码签名和 SmartScreen reputation 尚未解决。
-- About/update asset 展示目前仍只做通用 install asset 摘要，后续需要按当前平台筛选。
+- About/update asset 展示在 Phase 8.2 时仍只做通用 install asset 摘要，已在 Phase 8.3 改为按当前平台筛选。
 - 真实 Windows 安装、卸载、透明窗口与 plugin runner 冒烟仍未完成。
+
+## 4. Phase 8.3 实施记录
+
+本阶段补齐 About/update 与双平台 release artifact 的连接点。GitHub Release 会同时包含 macOS 和 Windows 资产；用户在 About 页检查更新时，不应看到另一个平台的安装包，也不应把 `.blockmap` 或 update feed YAML 当成可下载安装包。
+
+实现决策：
+
+- `createAboutService()` 新增可注入的 `platform` / `arch`，生产环境默认继续使用 `process.platform` / `process.arch`，测试可以稳定模拟 `darwin` 和 `win32`。
+- asset 过滤先排除 `.blockmap`、`latest.yml`、`latest-mac.yml`。
+- asset 名称包含 `darwin` / `mac` / `macos` 时视为 macOS 资产，包含 `win` / `win32` / `windows` 时视为 Windows 资产。
+- macOS 接受 `.dmg` 和当前平台 `.zip`；Windows 接受 `.exe` 和当前平台 `.zip`。
+- 没有平台 token 的 legacy `.zip` 仍按当前平台保留，避免旧单平台 release 的 zip 被完全隐藏；但当前 `artifactName` 已带 `${os}-${arch}`，双平台 release 不会依赖这个兼容路径。
+
+剩余风险：
+
+- Windows 签名策略仍未落地，官方 Windows release 不能声称 SmartScreen trust。
+- Windows release job 仍需要 GitHub Actions 实跑证据。
+- 真实 Windows 安装、卸载、透明窗口与 plugin runner 冒烟仍未完成。
+
+验证：
+
+- `npm run check:syntax` 通过。
+- `npm test` 通过，当前为 172/172。

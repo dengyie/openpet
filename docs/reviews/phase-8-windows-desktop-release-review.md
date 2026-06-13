@@ -1,6 +1,6 @@
 # Phase 8 Windows Desktop Release Review
 
-> Reviewed scope: Phase 8.1 Windows packaging config and Phase 8.2 dual-platform release workflow.
+> Reviewed scope: Phase 8.1 Windows packaging config, Phase 8.2 dual-platform release workflow, and Phase 8.3 platform-aware About/update asset filtering.
 
 ## Phase 8.1 Findings
 
@@ -51,8 +51,8 @@ No blocking issues found in the workflow split.
 ## Phase 8.2 Residual Risk
 
 - GitHub Actions must run the new Windows job before this can be treated as CI-proven.
-- Windows code signing and certificate secret policy remain for Phase 8.3.
-- About/update asset filtering still needs platform awareness before Windows release UX is complete.
+- Windows code signing and certificate secret policy remain for Phase 8.4.
+- About/update asset filtering has since been completed in Phase 8.3.
 - Windows installer behavior still needs manual or CI-backed smoke validation.
 
 ## Phase 8.2 Verification
@@ -64,4 +64,29 @@ npm test                                     # 171/171 pass
 npm run build:control-center && npx electron-builder --win --x64 --dir --publish never
                                                # pass; generated release/win-unpacked on macOS
 npm run pack                                 # pass; generated release/mac-arm64
+```
+
+## Phase 8.3 Findings
+
+No blocking issues found in the platform-aware update asset filtering change.
+
+## Phase 8.3 Review Notes
+
+- `AboutService` now accepts injectable `platform` and `arch` values, keeping production behavior tied to `process.platform` / `process.arch` while making macOS and Windows update paths deterministic in tests.
+- The asset filter excludes `.blockmap`, `latest.yml`, and `latest-mac.yml`, so About does not present update feed metadata as user-installable downloads.
+- macOS release checks now prefer `.dmg` and macOS `.zip` assets; Windows release checks now prefer `.exe` and Windows `.zip` assets.
+- Platform tokens in artifact names prevent cross-platform ZIP leakage when a GitHub Release contains both `darwin` and `win32` archives.
+- Legacy ZIP assets without platform tokens remain visible for compatibility with old single-platform releases, but the current `artifactName` includes `${os}-${arch}` so new dual-platform releases should be unambiguous.
+
+## Phase 8.3 Residual Risk
+
+- Windows signing and SmartScreen reputation are still unresolved; this change only fixes update asset presentation.
+- GitHub Actions still needs to run the Windows release job before the Windows pipeline can be treated as CI-proven.
+- Real Windows installer, uninstall, transparent-window, and plugin-runner smoke validation remain for Phase 8.5.
+
+## Phase 8.3 Verification
+
+```bash
+npm run check:syntax                         # pass
+npm test                                     # 172/172 pass
 ```

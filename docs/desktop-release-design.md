@@ -4,27 +4,29 @@
 
 ## 1. Current Baseline
 
-OpenPet is already an Electron desktop pet runtime platform with a macOS release baseline:
+OpenPet is already an Electron desktop pet runtime platform with a macOS release baseline and a Windows packaging/CI baseline:
 
 - `npm start` builds the Control Center and launches Electron for development.
 - `npm run pack` creates a local directory package with the current electron-builder config.
-- `npm run dist` uses electron-builder and currently validates the macOS release path.
-- `package.json` contains macOS build targets (`dmg`, `zip`) and macOS signing/notarization settings.
-- `.github/workflows/release.yml` runs on `macos-latest` and uploads macOS release artifacts.
+- `npm run dist` uses electron-builder and validates the current host release path.
+- `package.json` contains macOS build targets (`dmg`, `zip`), macOS signing/notarization settings, and Windows x64 targets (`nsis`, `zip`).
+- `build/icon.ico` exists for Windows installer/taskbar identity and can be regenerated from `build/icon.png` with `npm run generate-icons`.
+- `.github/workflows/release.yml` has macOS and Windows PR packaging checks and separate release jobs.
+- About/update asset selection is platform-aware: macOS users see macOS installers, Windows users see Windows installers, and feed metadata/blockmaps are hidden from the user-facing asset list.
 - `docs/release-checklist.md` documents macOS signing, notarization, update checks, and upgrade compatibility.
 
-Windows is an Electron-compatible target, but it is not release-ready yet. The repository does not currently define Windows package targets, Windows signing inputs, Windows CI runners, or a Windows smoke-test matrix.
+Windows is an Electron-compatible target with build configuration and CI release jobs in place, but it is not release-ready yet. The remaining gates are Windows signing policy, SmartScreen/reputation expectations, GitHub Actions run evidence, and a real Windows smoke-test matrix.
 
 ## 2. Platform Support Statement
 
 | Platform | Current Status | Release Claim |
 |----------|----------------|---------------|
 | macOS | Implemented and locally validated | Release baseline exists; official release requires signed/notarized artifacts |
-| Windows | Planned desktop target | Do not claim release-ready until build config, CI, signing notes, and smoke tests land |
+| Windows | Packaging and CI baseline implemented | Do not claim release-ready until signing policy and smoke tests land |
 | Linux | Deferred | Do not include in current support matrix |
 | Mobile | Out of scope | Do not design or document for this release track |
 
-Public docs should describe OpenPet as a desktop platform. When platform specifics are needed, say macOS is the current validated release baseline and Windows desktop support is planned.
+Public docs should describe OpenPet as a desktop platform. When platform specifics are needed, say macOS is the current validated release baseline and Windows desktop packaging/CI is present but not yet user-supported.
 
 ## 3. Target Release Model
 
@@ -48,21 +50,23 @@ spctl --assess --type execute --verbose=4 "release/mac/OpenPet.app"
 - Local/dev builds may be unsigned.
 - Official releases should use Windows code signing. Without signing and reputation, SmartScreen warnings are expected.
 
-## 4. Build Configuration Plan
+## 4. Build Configuration Baseline
 
-Keep the existing macOS configuration unchanged, then add Windows-specific config in a follow-up implementation pass:
+The shared electron-builder configuration now covers both desktop targets:
 
-- Add `build/win` to `package.json` with `target: ["nsis", "zip"]`.
-- Add `build/icon.ico` for Windows installers and taskbar identity.
-- Add NSIS metadata such as one-click behavior, per-machine/per-user install decision, shortcut behavior, uninstall display name, and artifact naming.
+- macOS keeps `dmg` and `zip` targets, `build/icon.icns`, hardened runtime, entitlements, and the notarization hook.
+- Windows defines `build.win` with x64 `nsis` and `zip` targets.
+- Windows uses `build/icon.ico`, generated from `build/icon.png` by `scripts/generate-icons.js`.
+- NSIS is configured for assisted install, per-user default install, desktop/start-menu shortcuts, and user data preservation on uninstall.
+- Artifact names use `${productName}-${version}-${os}-${arch}.${ext}` so multi-platform release uploads do not collide.
 - Keep `appId`, `productName`, `publish`, `files`, and `extraResources` shared where possible.
 - Keep all platform-specific signing credentials outside source control and only read them from CI secrets or local environment variables.
 
-Before this lands, README commands should not imply that `npm run dist` already produces validated Windows installers.
+Remaining build work is signing-related, not target-definition-related. README commands should still avoid implying that an unsigned Windows artifact has completed support validation.
 
 ## 5. CI And Release Plan
 
-The release workflow should become a two-job desktop matrix or two explicit jobs:
+The release workflow now uses a PR matrix and separate release jobs:
 
 | Job | Runner | Purpose | Expected Artifacts |
 |-----|--------|---------|--------------------|
@@ -71,7 +75,7 @@ The release workflow should become a two-job desktop matrix or two explicit jobs
 
 Release uploads should keep artifact names platform-explicit, for example `OpenPet-${version}-mac.dmg` and `OpenPet-${version}-win-x64.exe`, so About/update checks and manual downloads are unambiguous.
 
-PR workflows should remain unsigned and must not require signing secrets. Tag workflows can require official signing secrets for public release artifacts, or publish clearly labeled unsigned prerelease artifacts when the release owner chooses that policy.
+PR workflows remain unsigned and must not require signing secrets. The macOS tag/manual release job can sign and notarize when Apple secrets are present, otherwise it produces unsigned artifacts. The Windows tag/manual release job currently produces unsigned artifacts with code signing auto-discovery disabled; official Windows releases still need a documented signing path.
 
 ## 6. Desktop Verification Matrix
 
@@ -115,4 +119,4 @@ Windows desktop support can be called release-ready only after all of these are 
 - About/update behavior distinguishes macOS and Windows release assets.
 - `npm start`, `npm test`, `npm run check:syntax`, and macOS packaging remain functional after the Windows changes.
 
-Until those gates pass, the correct project status is: macOS release baseline complete; Windows desktop release planned and documented.
+Current gate status: package targets, icon assets, release workflow, and platform-aware update asset filtering are implemented; signing policy and Windows smoke validation remain open. Until those remaining gates pass, the correct project status is: macOS release baseline complete; Windows desktop build/CI baseline implemented but not release-ready.
