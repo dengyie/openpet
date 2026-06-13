@@ -301,10 +301,10 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
 
   ipcMain.handle(IPC.PLUGINS_INSPECT_PACKAGE, async () => {
     const selected = await dialog.showOpenDialog({
-      title: '选择插件目录或 .openpet-plugin.zip',
+      title: '选择插件目录或 OpenPet 插件包',
       properties: ['openFile', 'openDirectory'],
       filters: [
-        { name: 'OpenPet Plugin', extensions: ['zip'] },
+        { name: 'OpenPet Plugin Package', extensions: ['zip'] },
         { name: 'All Files', extensions: ['*'] }
       ]
     })

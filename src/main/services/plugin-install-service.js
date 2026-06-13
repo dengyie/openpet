@@ -196,7 +196,7 @@ const normalizeSourceRoot = (sourcePath) => {
     const rootPath = extractZipToTemp(sourcePath)
     return { rootPath, sourceType: 'zip', cleanupPath: rootPath }
   }
-  throw new Error('Plugin source must be a directory or .openpet-plugin.zip file')
+  throw new Error('Plugin source must be a directory or OpenPet plugin package (.openpet-plugin.zip)')
 }
 
 const createPluginInstallService = ({ settingsService, pluginDir, getPluginBlockStatus = () => ({ blocked: false, reasons: [] }) }) => {

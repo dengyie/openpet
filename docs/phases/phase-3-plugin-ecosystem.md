@@ -44,7 +44,7 @@ my-plugin.openpet-plugin.zip
 ```json
 {
   "algorithm": "sha256",
-  "signer": "openpet-labs",
+  "signer": "OpenPet Labs",
   "value": "signature-value",
   "manifestSha256": "...",
   "files": {
