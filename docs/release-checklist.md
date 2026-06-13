@@ -17,6 +17,8 @@
 - Confirm existing `settings.json`, `secrets.json`, installed plugins, installed pet packs, and local HTTP logs remain available.
 - Confirm no duplicate OpenPet-only userData directory becomes the active data source during the upgrade.
 
+Latest local RC smoke test: PASS on 2026-06-13. A temporary HOME with seeded `Library/Application Support/ibot` data launched the packaged `release/mac-arm64/OpenPet.app`, stayed running after startup, preserved legacy settings/secrets/plugins/pet-packs, and did not create an active `Library/Application Support/OpenPet` data source.
+
 ## 3. macOS Signing Inputs
 
 Release signing and notarization must only read credentials from environment variables or the runner keychain:
