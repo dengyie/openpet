@@ -31,7 +31,7 @@
 - 📦 **Pet Pack Management** - Multi-pet pack support with one-click installation
 - 🌐 **HTTP API + MCP** - Local API for external agent integration
 - 🎛️ **Control Center** - React + Vite control panel with full UI configuration
-- 🚀 **Desktop Release Track** - macOS release baseline; Windows packaging/CI/signing-policy/smoke-evidence/reporting/runbook/collector tooling baseline with release-readiness gates still open
+- 🚀 **Desktop Release Track** - macOS release baseline; Windows packaging/CI/signing-policy/smoke-evidence/reporting/runbook/collector/bundle-validation tooling baseline with release-readiness gates still open
 
 ---
 
@@ -101,7 +101,7 @@
 
 - **Node.js**: >= 18.x
 - **npm**: >= 9.x
-- **OS**: macOS validated; Windows packaging/CI/signing-policy/smoke-evidence/reporting/runbook/collector tooling baseline implemented but not release-ready; Linux/mobile are out of the current release scope
+- **OS**: macOS validated; Windows packaging/CI/signing-policy/smoke-evidence/reporting/runbook/collector/bundle-validation tooling baseline implemented but not release-ready; Linux/mobile are out of the current release scope
 
 ### Installation
 
@@ -307,7 +307,7 @@ npm run build:control-center # Control Center build verification
 ```
 
 Test Coverage:
-- ✅ Full service/release coverage (29 test files)
+- ✅ Full service/release coverage (30 test files)
 - ✅ Pet pack schema / loader / importer
 - ✅ Plugin manifest / runner / SDK
 - ✅ AI service / behavior orchestrator

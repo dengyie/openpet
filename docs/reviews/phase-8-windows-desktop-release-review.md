@@ -1,6 +1,6 @@
 # Phase 8 Windows Desktop Release Review
 
-> Reviewed scope: Phase 8.1 Windows packaging config, Phase 8.2 dual-platform release workflow, Phase 8.3 platform-aware About/update asset filtering, Phase 8.4 Windows signing policy enforcement, Phase 8.5a Windows smoke evidence gate, Phase 8.5b Windows smoke report CI artifact generation, Phase 8.5c Windows smoke report filling/update tooling, Phase 8.5d Windows smoke validation runbook generation, and Phase 8.5e Windows smoke evidence collector generation.
+> Reviewed scope: Phase 8.1 Windows packaging config, Phase 8.2 dual-platform release workflow, Phase 8.3 platform-aware About/update asset filtering, Phase 8.4 Windows signing policy enforcement, Phase 8.5a Windows smoke evidence gate, Phase 8.5b Windows smoke report CI artifact generation, Phase 8.5c Windows smoke report filling/update tooling, Phase 8.5d Windows smoke validation runbook generation, Phase 8.5e Windows smoke evidence collector generation, and Phase 8.5f Windows smoke evidence bundle validation.
 
 ## Phase 8.1 Findings
 
@@ -275,4 +275,37 @@ ruby -e 'require "yaml"; YAML.load_file(".github/workflows/release.yml"); puts "
 find tests -name '*.test.js' | wc -l # 29
 npm run check:syntax # pass
 npm test # 210/210 pass
+```
+
+## Phase 8.5f Findings
+
+No blocking issues found in the Windows smoke evidence bundle validation change.
+
+## Phase 8.5f Review Notes
+
+- `scripts/validate-windows-smoke-evidence-bundle.js` checks the exact collector evidence file set instead of accepting arbitrary directories, so missing local snapshots are caught before a report references them.
+- The validator records `bytes` and SHA-256 hashes for required files, giving future release reviews stable evidence summaries without embedding full transcripts in docs.
+- `manual-checks.md` is checked against `REQUIRED_CHECKS`, keeping the collector checklist aligned with the JSON readiness validator.
+- `update-report-commands.md` is rejected if it contains `--status pass`, preserving the boundary that evidence helpers do not mark smoke checks as passed.
+- Unsigned bundles are allowed as structure evidence with a warning, while `--require-signed` requires an Authenticode `Status : Valid` line.
+- Paired reports are validated with `allowPending: true`, so an in-progress Windows smoke report can be checked without implying release readiness.
+- Tests cover argument parsing, Authenticode status parsing, complete/partial evidence directories, automatic pass rejection, signed readiness gating, paired pending reports, and deterministic manifest metadata.
+
+## Phase 8.5f Residual Risk
+
+- This phase still does not run the Windows installer or app, and it does not create real clean-machine smoke evidence.
+- The evidence bundle validator can catch incomplete or unsigned evidence packages, but visual/interactive Windows checks still require real operator or automation evidence.
+- Official Windows readiness still requires a filled smoke report that passes default readiness validation and, for stable releases, signed artifact validation with `--require-signed`.
+- SmartScreen reputation remains outside repository control.
+
+## Phase 8.5f Verification
+
+```bash
+node --check scripts/validate-windows-smoke-evidence-bundle.js # pass
+node --check tests/release/validate-windows-smoke-evidence-bundle.test.js # pass
+node --test tests/release/validate-windows-smoke-evidence-bundle.test.js # 9/9 pass
+find tests -name '*.test.js' | wc -l # 30
+npm run check:syntax # pass
+npm test # 219/219 pass
+git diff --check # pass
 ```

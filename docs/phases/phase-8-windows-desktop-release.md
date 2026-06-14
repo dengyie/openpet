@@ -174,6 +174,28 @@
 - 无效或缺项 report 不能生成 collector。
 - 真实 Windows release-ready 仍必须由填写后的 JSON report 通过 validator 证明。
 
+### Phase 8.5f：Windows 冒烟证据包校验
+
+目标：让真实 Windows 验证机器上由 collector 生成的 `windows-smoke-evidence/` 目录可以被本地工具校验完整性、哈希和签名证据边界，避免后续把缺文件、空文件或 unsigned evidence 当成可审计证据包。
+
+计划：
+
+- 新增 `scripts/validate-windows-smoke-evidence-bundle.js`，校验 collector evidence directory。
+- 新增 `npm run validate-windows-smoke-evidence-bundle`。
+- 校验必需文件：`environment.txt`、`authenticode.txt`、`process.txt`、`install-registry.txt`、`manual-checks.md`、`update-report-commands.md`。
+- 为每个证据文件输出 size 与 SHA-256，便于报告或 issue 中引用稳定证据摘要。
+- 校验 `manual-checks.md` 覆盖全部 `REQUIRED_CHECKS`，并拒绝 `update-report-commands.md` 中出现自动 `--status pass` 命令。
+- 支持 `--report <report.json>`，用 `allowPending` 语义校验配套 report 的结构。
+- 支持 `--require-signed`，要求 `authenticode.txt` 中存在 `Status : Valid` 证据。
+- 新增测试覆盖参数解析、缺失/空文件、manual check 覆盖、自动 pass 拒绝、签名门禁、配套 pending report 与 manifest hash。
+
+验收：
+
+- unsigned evidence bundle 默认只能结构通过并给出签名 warning，不能证明 official readiness。
+- `--require-signed` 必须看到 Authenticode `Status : Valid`，否则失败。
+- paired report 可以保持 pending；bundle validation 不会声称 runtime smoke 已通过。
+- 真实 Windows release-ready 仍必须由填写后的 JSON report 通过 validator 证明。
+
 ### Phase 8.5：Windows 冒烟验证
 
 目标：Windows 支持声明前完成真实运行验证。
@@ -188,6 +210,7 @@
 - 验证 Local HTTP/MCP 默认关闭、loopback only、token-gated。
 - 验证 API key 不暴露给 renderer 或普通插件。
 - 使用 `npm run update-windows-smoke-report` 逐项填写真实证据。
+- 运行 `npm run validate-windows-smoke-evidence-bundle -- windows-smoke-evidence --report docs/release-evidence/<report>.json` 校验证据包完整性。
 - 对 RC/beta/alpha 报告运行 `npm run validate-windows-smoke-report -- docs/release-evidence/<report>.json`。
 - 对官方稳定版报告额外运行 `npm run validate-windows-smoke-report -- docs/release-evidence/<report>.json --require-signed`。
 
@@ -422,3 +445,34 @@
 - `find tests -name '*.test.js' | wc -l` 输出 29。
 - `npm run check:syntax` 通过。
 - `npm test` 通过，当前为 210/210。
+
+## 11. Phase 8.5f 实施记录
+
+本阶段继续服务于真实 Windows smoke validation 的证据治理，但仍不执行或伪造真实 Windows 验证结果。它补齐的是 collector 运行之后的本地校验层：验证人员可以先确认 `windows-smoke-evidence/` 是否包含完整、非空、可哈希追踪的证据文件，再把证据摘录到 smoke report 中。
+
+实现决策：
+
+- `validate-windows-smoke-evidence-bundle.js` 固定校验 collector 产出的 6 个必需文件：`environment.txt`、`authenticode.txt`、`process.txt`、`install-registry.txt`、`manual-checks.md` 和 `update-report-commands.md`。
+- 校验结果为每个文件生成 `bytes` 与 `sha256`，方便在 release issue、PR 或 versioned report 中引用不可变证据摘要。
+- `manual-checks.md` 必须包含全部 `REQUIRED_CHECKS` id，避免验证清单和 JSON validator 漂移。
+- `update-report-commands.md` 中如果出现 `--status pass` 会失败，继续维持“collector/证据包不自动制造通过状态”的边界。
+- 默认未签名或 `NotSigned` evidence bundle 可以结构通过，但会警告它不能证明 signed official readiness。
+- `--require-signed` 要求 `authenticode.txt` 出现独立的 `Status : Valid` 行；没有该证据时失败。
+- `--report <report.json>` 会用 `allowPending` 语义校验配套 Windows smoke report，因此可以验证进行中的报告结构，但不会把 pending checks 视为 runtime smoke 通过。
+
+剩余风险：
+
+- 仓库仍未包含真实 Windows clean-machine smoke report。
+- evidence bundle validator 只能证明证据目录完整和签名文本边界，不能替代真实安装、启动、透明窗口、插件 runner、pet pack、Local HTTP/MCP、API key isolation 和卸载验证。
+- 官方稳定版仍需要真实 signed artifact 与填写完成的 JSON smoke report 同时通过 `--require-signed` readiness 校验。
+- SmartScreen reputation 仍是外部信任问题，不能由 evidence bundle validator 证明。
+
+验证：
+
+- `node --check scripts/validate-windows-smoke-evidence-bundle.js` 通过。
+- `node --check tests/release/validate-windows-smoke-evidence-bundle.test.js` 通过。
+- `node --test tests/release/validate-windows-smoke-evidence-bundle.test.js` 通过，9/9。
+- `find tests -name '*.test.js' | wc -l` 输出 30。
+- `npm run check:syntax` 通过。
+- `npm test` 通过，当前为 219/219。
+- `git diff --check` 通过。

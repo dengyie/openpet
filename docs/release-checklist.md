@@ -2,12 +2,12 @@
 
 > Purpose: keep local test builds, signed releases, and public artifacts reproducible without exposing signing credentials.
 
-Current desktop scope: macOS and Windows. macOS has a validated release baseline; Windows has packaging/CI/update-asset/signing-policy/smoke-evidence/reporting/runbook/collector baselines, but must not be called release-ready until signed release evidence and real smoke tests are complete.
+Current desktop scope: macOS and Windows. macOS has a validated release baseline; Windows has packaging/CI/update-asset/signing-policy/smoke-evidence/reporting/runbook/collector/bundle-validation baselines, but must not be called release-ready until signed release evidence and real smoke tests are complete.
 
 | Platform | Status | Public Claim |
 |----------|--------|--------------|
 | macOS | Baseline implemented | Release candidate path exists; official artifacts should be signed/notarized |
-| Windows | Packaging/CI/signing-policy/smoke-evidence/reporting/runbook/collector baseline implemented | Do not publish as supported until the Windows checklist passes |
+| Windows | Packaging/CI/signing-policy/smoke-evidence/reporting/runbook/collector/bundle-validation baseline implemented | Do not publish as supported until the Windows checklist passes |
 | Linux | Deferred | Out of current release scope |
 | Mobile | Out of scope | Not part of this desktop release track |
 
@@ -118,9 +118,10 @@ Windows release support requires these gates before public release claims:
 - [x] Add command-driven Windows smoke report filling/update tooling.
 - [x] Generate and upload a Windows smoke validation runbook beside the pending report.
 - [x] Generate and upload a Windows smoke evidence collector beside the pending report and runbook.
+- [x] Add a Windows smoke evidence bundle validator for collector output.
 - [ ] Verify install, launch, update check, and uninstall on a clean Windows machine.
 
-The generated `release/windows-smoke-report.json` captures artifact metadata and Authenticode status from the Windows runner, `release/windows-smoke-runbook.md` gives the operator the matching required-check commands, and `release/windows-smoke-collector.ps1` gathers local Windows evidence snapshots. All runtime smoke checks remain `pending` until a real Windows validation run fills evidence.
+The generated `release/windows-smoke-report.json` captures artifact metadata and Authenticode status from the Windows runner, `release/windows-smoke-runbook.md` gives the operator the matching required-check commands, and `release/windows-smoke-collector.ps1` gathers local Windows evidence snapshots. After running the collector on Windows, use `npm run validate-windows-smoke-evidence-bundle` to check the evidence directory shape, required files, hashes, and optional signed-evidence gate. All runtime smoke checks remain `pending` until a real Windows validation run fills evidence.
 
 For a real Windows validation run, copy `docs/release-evidence/windows-smoke-report.template.json` to a versioned report path or download the generated CI pending report plus runbook/collector artifact, then fill environment/artifact/check evidence with the update tool:
 
@@ -145,6 +146,18 @@ powershell -ExecutionPolicy Bypass -File .\windows-smoke-collector.ps1 -ReportPa
 ```
 
 The collector writes evidence snapshots only; it does not mark checks as pass and does not prove release readiness by itself.
+
+Validate the collector output before using it as report evidence:
+
+```bash
+npm run validate-windows-smoke-evidence-bundle -- windows-smoke-evidence --report docs/release-evidence/<report>.json
+```
+
+For official stable Windows release readiness, require signed evidence in both the evidence bundle and the filled report:
+
+```bash
+npm run validate-windows-smoke-evidence-bundle -- windows-smoke-evidence --report docs/release-evidence/<report>.json --require-signed
+```
 
 During validation, updates default to structural validation and may leave other checks pending. Once all checks have evidence, run readiness validation:
 
