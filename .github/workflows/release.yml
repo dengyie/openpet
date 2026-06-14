@@ -264,6 +264,9 @@ jobs:
       - name: Validate pending Windows smoke report
         run: npm run validate-windows-smoke-report -- release/windows-smoke-report.json --allow-pending
 
+      - name: Create Windows smoke validation runbook
+        run: npm run create-windows-smoke-runbook -- release/windows-smoke-report.json --output release/windows-smoke-runbook.md
+
       - name: Publish GitHub Release assets
         uses: softprops/action-gh-release@v2
         with:
@@ -289,6 +292,8 @@ jobs:
       - name: Upload Windows smoke report
         uses: actions/upload-artifact@v4
         with:
-          name: openpet-windows-smoke-report-${{ steps.release.outputs.tag }}
-          path: release/windows-smoke-report.json
+          name: openpet-windows-smoke-evidence-${{ steps.release.outputs.tag }}
+          path: |
+            release/windows-smoke-report.json
+            release/windows-smoke-runbook.md
           if-no-files-found: error

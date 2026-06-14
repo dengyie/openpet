@@ -1,6 +1,6 @@
 # Phase 8 Windows Desktop Release Review
 
-> Reviewed scope: Phase 8.1 Windows packaging config, Phase 8.2 dual-platform release workflow, Phase 8.3 platform-aware About/update asset filtering, Phase 8.4 Windows signing policy enforcement, Phase 8.5a Windows smoke evidence gate, Phase 8.5b Windows smoke report CI artifact generation, and Phase 8.5c Windows smoke report filling/update tooling.
+> Reviewed scope: Phase 8.1 Windows packaging config, Phase 8.2 dual-platform release workflow, Phase 8.3 platform-aware About/update asset filtering, Phase 8.4 Windows signing policy enforcement, Phase 8.5a Windows smoke evidence gate, Phase 8.5b Windows smoke report CI artifact generation, Phase 8.5c Windows smoke report filling/update tooling, and Phase 8.5d Windows smoke validation runbook generation.
 
 ## Phase 8.1 Findings
 
@@ -207,5 +207,37 @@ node --check tests/release/update-windows-smoke-report.test.js # pass
 node --test tests/release/update-windows-smoke-report.test.js # 10/10 pass
 npm run check:syntax                         # pass
 npm test                                     # 196/196 pass
+git diff --check                             # pass
+```
+
+## Phase 8.5d Findings
+
+No blocking issues found in the Windows smoke validation runbook artifact change.
+
+## Phase 8.5d Review Notes
+
+- `scripts/create-windows-smoke-runbook.js` validates the input report with `allowPending: true` before generating Markdown, so a missing or malformed required check cannot silently produce an operator guide.
+- The runbook derives its check matrix from `REQUIRED_CHECKS`, keeping the operator checklist aligned with the JSON readiness validator.
+- Each required check includes the validator id, evidence guidance, and the matching `npm run update-windows-smoke-report` command, which reduces manual drift during a real Windows validation session.
+- The release workflow generates the runbook only after the pending report passes structural validation, then uploads both files as a single smoke evidence Actions artifact.
+- The runbook text explicitly states that it is an operator guide and does not prove Windows support or smoke success by itself.
+- Tests cover CLI argument parsing, default output placement, required-check coverage, invalid report rejection, and Markdown file writing.
+
+## Phase 8.5d Residual Risk
+
+- This phase still does not run the Windows installer or app, and it does not create real clean-machine smoke evidence.
+- A runbook can make validation more repeatable, but the final Windows support claim still depends on a filled JSON report that passes the readiness validator.
+- Official Windows readiness still requires a signed artifact with `Get-AuthenticodeSignature` reporting `Status : Valid` plus full smoke evidence.
+- SmartScreen reputation remains outside repository control.
+
+## Phase 8.5d Verification
+
+```bash
+node --check scripts/create-windows-smoke-runbook.js # pass
+node --check tests/release/create-windows-smoke-runbook.test.js # pass
+node --test tests/release/create-windows-smoke-runbook.test.js # 6/6 pass
+ruby -e 'require "yaml"; YAML.load_file(".github/workflows/release.yml"); puts "workflow yaml ok"' # pass
+npm run check:syntax                         # pass
+npm test                                     # 202/202 pass
 git diff --check                             # pass
 ```

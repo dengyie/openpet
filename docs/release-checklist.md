@@ -2,12 +2,12 @@
 
 > Purpose: keep local test builds, signed releases, and public artifacts reproducible without exposing signing credentials.
 
-Current desktop scope: macOS and Windows. macOS has a validated release baseline; Windows has packaging/CI/update-asset/signing-policy/smoke-evidence/reporting baselines, but must not be called release-ready until signed release evidence and real smoke tests are complete.
+Current desktop scope: macOS and Windows. macOS has a validated release baseline; Windows has packaging/CI/update-asset/signing-policy/smoke-evidence/reporting/runbook baselines, but must not be called release-ready until signed release evidence and real smoke tests are complete.
 
 | Platform | Status | Public Claim |
 |----------|--------|--------------|
 | macOS | Baseline implemented | Release candidate path exists; official artifacts should be signed/notarized |
-| Windows | Packaging/CI/signing-policy/smoke-evidence/reporting baseline implemented | Do not publish as supported until the Windows checklist passes |
+| Windows | Packaging/CI/signing-policy/smoke-evidence/reporting/runbook baseline implemented | Do not publish as supported until the Windows checklist passes |
 | Linux | Deferred | Out of current release scope |
 | Mobile | Out of scope | Not part of this desktop release track |
 
@@ -27,6 +27,7 @@ npm run validate-windows-smoke-report -- docs/release-evidence/windows-smoke-rep
 ```bash
 npm run create-windows-smoke-report -- --output release/windows-smoke-report.json
 npm run validate-windows-smoke-report -- release/windows-smoke-report.json --allow-pending
+npm run create-windows-smoke-runbook -- release/windows-smoke-report.json --output release/windows-smoke-runbook.md
 ```
 
 - Confirm the Windows smoke report filling tool lists the current required check ids:
@@ -114,17 +115,24 @@ Windows release support requires these gates before public release claims:
 - [x] Add a structured Windows smoke report validator and pending evidence template.
 - [x] Generate and upload a pending Windows smoke report artifact from the Windows release job.
 - [x] Add command-driven Windows smoke report filling/update tooling.
+- [x] Generate and upload a Windows smoke validation runbook beside the pending report.
 - [ ] Verify install, launch, update check, and uninstall on a clean Windows machine.
 
-The generated `release/windows-smoke-report.json` captures artifact metadata and Authenticode status from the Windows runner, but all runtime smoke checks remain `pending` until a real Windows validation run fills evidence.
+The generated `release/windows-smoke-report.json` captures artifact metadata and Authenticode status from the Windows runner, and `release/windows-smoke-runbook.md` gives the operator the matching required-check commands. All runtime smoke checks remain `pending` until a real Windows validation run fills evidence.
 
-For a real Windows validation run, copy `docs/release-evidence/windows-smoke-report.template.json` to a versioned report path or download the generated CI pending report, then fill environment/artifact/check evidence with the update tool:
+For a real Windows validation run, copy `docs/release-evidence/windows-smoke-report.template.json` to a versioned report path or download the generated CI pending report plus runbook artifact, then fill environment/artifact/check evidence with the update tool:
 
 ```bash
 npm run update-windows-smoke-report -- docs/release-evidence/<report>.json --list-checks
 npm run update-windows-smoke-report -- docs/release-evidence/<report>.json --set-env windowsVersion="Windows 11 23H2" --set-env machine="clean Windows VM"
 npm run update-windows-smoke-report -- docs/release-evidence/<report>.json --set-artifact version="1.0.1-rc.1" --set-artifact installer="OpenPet-1.0.1-rc.1-win32-x64.exe"
 npm run update-windows-smoke-report -- docs/release-evidence/<report>.json --check launch --status pass --evidence "Installed app launched from Start Menu and stayed running for 60 seconds"
+```
+
+If starting from an existing pending report, generate or refresh its local runbook before validation:
+
+```bash
+npm run create-windows-smoke-runbook -- docs/release-evidence/<report>.json --output docs/release-evidence/<report>-runbook.md
 ```
 
 During validation, updates default to structural validation and may leave other checks pending. Once all checks have evidence, run readiness validation:

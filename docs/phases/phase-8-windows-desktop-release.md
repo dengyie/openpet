@@ -135,6 +135,25 @@
 - `--require-signed` 必须与 `--validate-ready` 搭配使用，不能单独制造 signed-ready 口径。
 - 本阶段不声称真实 Windows smoke validation 已完成。
 
+### Phase 8.5d：Windows 冒烟验证 Runbook 产物
+
+目标：让每次 Windows release job 不只上传 pending smoke report，还随附一份基于同一 required check 矩阵生成的操作 runbook，指导验证人员在真实 Windows 环境逐项补证据。
+
+计划：
+
+- 新增 `scripts/create-windows-smoke-runbook.js`，从 pending/进行中的 Windows smoke report 生成 Markdown runbook。
+- 新增 `npm run create-windows-smoke-runbook`。
+- Windows release workflow 在生成并校验 pending report 后生成 `release/windows-smoke-runbook.md`。
+- Windows smoke evidence artifact 同时上传 JSON report 与 Markdown runbook。
+- 新增测试覆盖参数解析、结构校验保护、required check 覆盖和文件写入。
+
+验收：
+
+- runbook 必须复用 `REQUIRED_CHECKS`，不能维护另一套检查项。
+- runbook 只能作为操作指南，不能声明 Windows smoke validation 已通过。
+- 无效或缺项 report 不能生成 runbook。
+- 真实 Windows release-ready 仍必须由填写后的 JSON report 通过 validator 证明。
+
 ### Phase 8.5：Windows 冒烟验证
 
 目标：Windows 支持声明前完成真实运行验证。
@@ -321,3 +340,32 @@
 - `node --test tests/release/update-windows-smoke-report.test.js` 通过，10/10。
 - `npm run check:syntax` 通过。
 - `npm test` 通过，当前为 196/196。
+
+## 9. Phase 8.5d 实施记录
+
+本阶段继续推进真实 Windows smoke validation 的可执行性，但仍不执行或伪造真实 Windows 验证结果。它把 Windows release job 的 evidence artifact 从单一 pending JSON 扩展为“pending JSON + 操作 runbook”：验证人员下载 artifact 后，可以直接按 runbook 的 required check 表、填写命令和 readiness 命令逐项补证据。
+
+实现决策：
+
+- `create-windows-smoke-runbook.js` 复用 `validate-windows-smoke-report.js` 的 `REQUIRED_CHECKS` 和 `validateReport()`，生成前先确认 report 在 `--allow-pending` 语义下结构有效。
+- runbook 中的 13 个检查项与 validator 完全同源，每项包含要证明的行为、证据建议和对应的 `npm run update-windows-smoke-report` 填写命令。
+- runbook 明确区分 prerelease smoke readiness 与 official signed readiness，列出普通 validator 和 `--require-signed` validator 命令。
+- release workflow 在 `release/windows-smoke-report.json` 通过 `--allow-pending` 校验后生成 `release/windows-smoke-runbook.md`。
+- Actions artifact 名称调整为 `openpet-windows-smoke-evidence-<tag>`，同时包含 report 与 runbook，避免验证人员只拿到结构化 JSON 却缺少执行说明。
+- runbook 不作为公开 GitHub Release 用户下载资产上传，只作为 Actions artifact 附在 release job 上。
+
+剩余风险：
+
+- 仓库仍未包含真实 Windows clean-machine smoke report。
+- runbook 可以降低人工漏项风险，但不能替代真实安装、启动、透明窗口、插件 runner、pet pack、Local HTTP/MCP、API key isolation 和卸载验证。
+- 官方稳定版仍需要真实 signed artifact 与 `Get-AuthenticodeSignature` 的 `Status : Valid` 证据。
+- SmartScreen reputation 仍是外部信任问题，不能由 runbook 或本地脚本证明。
+
+验证：
+
+- `node --check scripts/create-windows-smoke-runbook.js` 通过。
+- `node --check tests/release/create-windows-smoke-runbook.test.js` 通过。
+- `node --test tests/release/create-windows-smoke-runbook.test.js` 通过，6/6。
+- `ruby -e 'require "yaml"; YAML.load_file(".github/workflows/release.yml"); puts "workflow yaml ok"'` 通过。
+- `npm run check:syntax` 通过。
+- `npm test` 通过，当前为 202/202。
