@@ -2,7 +2,7 @@
 
 OpenPet plugins are local JavaScript packages installed through the Control Center. They run in a short-lived isolated Node runner and can only reach the app through a permission-gated SDK.
 
-For a complete tested package, start with [`examples/plugins/focus-timer`](../examples/plugins/focus-timer/).
+For complete tested packages, start with [`examples/plugins/focus-timer`](../examples/plugins/focus-timer/) for storage and pet speech, or [`examples/plugins/weather-status`](../examples/plugins/weather-status/) for network allowlist usage.
 
 ## Package Layout
 
@@ -131,6 +131,29 @@ SDK calls are permission checked in the main process:
 - `ctx.ai.chat()` requires `ai:chat`; API keys never enter the plugin runner.
 - `ctx.network.fetch()` requires `network`; requests are limited to HTTPS hosts in `network.allowlist` and sensitive headers are rejected.
 
+### Network Example
+
+Use `network.allowlist` for public HTTPS hosts, then keep requests narrow and free of credentials:
+
+```json
+{
+  "permissions": ["network", "pet:say", "storage"],
+  "network": {
+    "allowlist": ["api.weather.example.com"]
+  }
+}
+```
+
+```js
+const response = await ctx.network.fetch('https://api.weather.example.com/v1/current?location=Tokyo', {
+  headers: {
+    accept: 'application/json'
+  }
+})
+```
+
+The runtime rejects non-HTTPS URLs, hosts outside the allowlist, unsupported methods, sensitive headers such as `authorization` or `cookie`, oversized request bodies, oversized responses, and redirects to non-allowlisted hosts. See [`examples/plugins/weather-status`](../examples/plugins/weather-status/) for a complete package.
+
 ## Install And Review Flow
 
 Third-party plugins should be installed through Control Center -> Plugins -> Install plugin package.
@@ -160,7 +183,8 @@ Do not zip the parent directory unless `plugin.json` still lands at the archive 
 
 Use the service tests as the source of truth for current runtime behavior:
 
-- `tests/examples/focus-timer-plugin.test.js` covers the example plugin install and run path.
+- `tests/examples/focus-timer-plugin.test.js` covers the storage-oriented example plugin install and run path.
+- `tests/examples/weather-status-plugin.test.js` covers the network allowlist example plugin install and run path with an injected fake fetch implementation.
 - `tests/services/plugin-install-service.test.js` covers package review, install, update, uninstall, signatures, zip safety, and symlink rejection.
 - `tests/services/plugin-service.test.js` covers runner isolation, SDK permissions, config, storage, AI, network, and logs.
 

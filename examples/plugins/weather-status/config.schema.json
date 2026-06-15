@@ -1,0 +1,26 @@
+{
+  "title": "Weather Status Settings",
+  "description": "Configurable defaults for the Weather Status example plugin.",
+  "type": "object",
+  "properties": {
+    "location": {
+      "type": "string",
+      "title": "Location",
+      "description": "Default location requested from the allowlisted weather API.",
+      "default": "Tokyo"
+    },
+    "units": {
+      "type": "string",
+      "title": "Units",
+      "description": "Temperature units requested from the weather API.",
+      "default": "metric",
+      "enum": ["metric", "imperial"]
+    },
+    "announce": {
+      "type": "boolean",
+      "title": "Announce results",
+      "description": "Ask the pet to say the latest weather after refresh.",
+      "default": true
+    }
+  }
+}

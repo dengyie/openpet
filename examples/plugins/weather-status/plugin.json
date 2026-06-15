@@ -1,0 +1,22 @@
+{
+  "id": "openpet.example.weather-status",
+  "name": "Weather Status",
+  "version": "1.0.0",
+  "description": "Example local plugin that fetches allowlisted weather JSON and asks the pet to summarize it.",
+  "main": "index.js",
+  "configSchema": "config.schema.json",
+  "permissions": ["network", "pet:say", "storage"],
+  "network": {
+    "allowlist": ["api.weather.example.com"]
+  },
+  "commands": [
+    {
+      "id": "refresh",
+      "title": "Refresh weather"
+    },
+    {
+      "id": "last",
+      "title": "Show last weather"
+    }
+  ]
+}
