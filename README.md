@@ -139,6 +139,7 @@ npm run dist                 # Generate current-host installer (macOS validated:
 - **[CHANGELOG.md](./CHANGELOG.md)** - Release notes and version history
 - **[project-documentation-design.md](./docs/project-documentation-design.md)** - Project goal, documentation layers, support-claim rules, and update playbooks
 - **[HANDOFF.md](./docs/HANDOFF.md)** - Project handoff document
+- **[development-summary.md](./docs/development-summary.md)** - Current phase-by-phase development summary
 - **[jishuwendang.md](./docs/jishuwendang.md)** - Technical documentation (Chinese)
 - **[productization-roadmap.md](./docs/productization-roadmap.md)** - Productization roadmap
 - **[project-status-review.md](./docs/project-status-review.md)** - Comprehensive project review

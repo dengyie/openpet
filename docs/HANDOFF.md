@@ -33,8 +33,9 @@
 
 1. [`project-documentation-design.md`](./project-documentation-design.md)：项目目标锚点、文档分层、支持声明规则和阶段治理。
 2. 本文件：当前事实状态、文件地图、待办和开发命令。
-3. [`desktop-release-design.md`](./desktop-release-design.md) 与 [`release-checklist.md`](./release-checklist.md)：macOS + Windows 桌面发布边界、签名、冒烟证据和验收门槛。
-4. 最新的 `docs/phases/phase-*.md` 与 `docs/reviews/phase-*-review.md`：具体阶段的实现记录、review、验证和残留风险。当前最新阶段为 [`phase-22-rss-example-plugin-developer-asset.md`](./phases/phase-22-rss-example-plugin-developer-asset.md) 与 [`phase-22-rss-example-plugin-developer-asset-review.md`](./reviews/phase-22-rss-example-plugin-developer-asset-review.md)。
+3. [`development-summary.md`](./development-summary.md)：截至 Phase 22 的阶段开发小结、质量基线和下一步建议。
+4. [`desktop-release-design.md`](./desktop-release-design.md) 与 [`release-checklist.md`](./release-checklist.md)：macOS + Windows 桌面发布边界、签名、冒烟证据和验收门槛。
+5. 最新的 `docs/phases/phase-*.md` 与 `docs/reviews/phase-*-review.md`：具体阶段的实现记录、review、验证和残留风险。当前最新阶段为 [`phase-22-rss-example-plugin-developer-asset.md`](./phases/phase-22-rss-example-plugin-developer-asset.md) 与 [`phase-22-rss-example-plugin-developer-asset-review.md`](./reviews/phase-22-rss-example-plugin-developer-asset-review.md)。
 
 当前支持口径必须保持为：macOS release baseline complete；Windows desktop build/CI/signing-policy/smoke-evidence/reporting/runbook/collector/bundle-validation/summary/archive-manifest and packaged native picker smoke evidence tooling baselines implemented but not release-ready；移动端不在当前范围。
 
@@ -234,6 +235,7 @@ scripts/create-desktop-picker-smoke-runbook.js # 从 report 生成 packaged nati
 tests/release/desktop-picker-smoke-report.test.js # desktop picker report / signature / artifact 选择测试
 tests/release/desktop-picker-smoke-runbook-update.test.js # desktop picker runbook / update tool 测试
 docs/project-documentation-design.md       # 项目目标、文档生命周期、阶段闭环、完成标准与支持声明规则
+docs/development-summary.md                # 截至 Phase 22 的阶段开发小结、质量基线与下一步建议
 docs/plugin-development.md                 # 插件开发者指南：manifest、config schema、SDK、安装 review 和测试入口
 examples/plugins/focus-timer/              # 已纳入测试的 Focus Timer 本地插件示例
 tests/examples/focus-timer-plugin.test.js  # 示例插件 inspect/install/run service 覆盖
