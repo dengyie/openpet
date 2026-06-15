@@ -1,57 +1,70 @@
-# Plugin Sandbox Evaluation
+# OpenPet Plugin Sandbox Evaluation
 
-> Date: 2026-06-12  
-> Phase: 3 plugin ecosystem productization
+Generated at: 2026-06-15T23:43:37.217Z
+Phase: 39
+Decision: keep-current-runner-for-v1.1
+Claim boundary: permission-limited-isolated-runner-not-absolute-sandbox
 
-## Summary
+Compare the current local plugin runner with SES and Electron utilityProcess before expanding third-party plugin trust.
 
-OpenPet should keep the current local plugin runner as the near-term default: a short-lived child process with Node permission model flags, VM execution, and a parent-mediated SDK. It is already integrated, testable, and fits the product goal of small user-installed JavaScript plugins.
+## Current Runner
 
-This is not an absolute security boundary. Product wording and UI should describe third-party plugins as permission reviewed and isolated, not as mathematically safe. The install flow therefore defaults plugins to disabled, shows unsigned/signed state, and requires the user to enable a plugin after review.
+Label: Current local plugin runner
 
-## Threat Model
+Files:
+- `src/main/services/plugin-service.js`
+- `src/main/plugins/local-plugin-runner.js`
 
-Primary risks:
+### Guarantees
 
-- Local plugin reads arbitrary user files.
-- Local plugin reaches Electron or Node APIs directly.
-- Plugin package writes files outside `userData/plugins/<plugin-id>`.
-- Plugin update silently gains new permissions or network hosts.
-- Plugin network code leaks secrets through headers or arbitrary hosts.
-- Plugin storage consumes unbounded settings space.
+- Local third-party plugins execute in a child process created with child_process.fork.
+- The runner starts with Node permission model flags and only allows filesystem reads for the runner file and the plugin main file.
+- Plugin source runs inside a VM context with string and WebAssembly code generation disabled.
+- The VM bootstrap exposes module exports and a no-op console, but does not expose require, process, Electron APIs, or Node globals as plugin SDK surfaces.
+- Plugin SDK operations are bridged to the parent process through JSON-serialized IPC messages.
+- Pet, AI, storage, and network operations are permission-checked in the main process before execution.
+- Network calls are restricted to HTTPS, manifest allowlisted hosts, GET/POST methods, size limits, and non-sensitive request headers.
+- Plugin command execution has a parent-side timeout of 5000ms and runner script execution has a VM timeout of 1000ms.
 
-Current mitigations:
+### Limits
 
-- Local runner does not inject `require`, `process`, Electron, or `fs` into plugin VM context.
-- Child process uses Node permission model read allowlist for runner and plugin entry only.
-- SDK operations are checked in the parent process against manifest permissions.
-- Network calls require `network` permission, HTTPS, public DNS allowlist, no sensitive headers, and request/response byte limits.
-- Storage requires `storage` permission, safe keys, per-value and per-plugin byte limits.
-- Install service rejects path traversal, symlinks, unsafe ids, unknown permissions, and non-HTTPS network allowlist entries.
+- The current runner should not be described as providing absolute sandbox safety.
+- Node permission model behavior depends on the bundled Electron/Node runtime and should stay covered by local smoke and package verification.
+- Crash isolation exists at child-process level, but there is no separate Electron utility process lifecycle or Chromium service sandbox boundary.
+- The VM context restricts exposed globals but is still in the same child process as the runner bridge code.
+- Long-lived background plugins are not part of the current trust model.
+- The current design does not grant arbitrary filesystem, shell, Electron, or unrestricted network access.
 
-## Options
+## Candidate Matrix
 
-| Option | Strengths | Weaknesses | Recommendation |
-|--------|-----------|------------|----------------|
-| Current child process runner | Clear process boundary, short-lived, parent-mediated SDK, already covered by tests | Node permission model is still young; VM is not a complete sandbox by itself | Keep as default for Phase 3 |
-| Worker thread | Lower overhead, simpler messaging | Same-process resource sharing and weaker isolation for untrusted code | Do not use for untrusted plugins |
-| SES / lockdown | Stronger object capability discipline for JavaScript | Integration and compatibility cost; needs deeper package audit | Prototype later for higher-risk plugins |
-| Electron utilityProcess | Native Electron process boundary and packaging fit | More platform/package complexity; needs additional IPC hardening | Medium-term candidate |
-| WASM plugin ABI | Strong sandbox and capability boundary | Higher developer burden; JS plugin ecosystem becomes harder | Long-term exploration |
+| Candidate | Isolation | API restriction | Filesystem | Network | Crash isolation | Packaging cost | Debug cost | Migration risk | Recommendation |
+|-----------|-----------|-----------------|------------|---------|-----------------|----------------|------------|----------------|----------------|
+| Current child process + Node permission model + VM runner | separate Node child process plus VM context | explicit OpenPet SDK bridge only | Node permission model allows runner and plugin main reads only | main-process HTTPS allowlist and header/body/response limits | child process can be killed and command timeout enforced | already integrated in packaged app path | low; errors already flow through plugin logs and command failures | low | keep for v1.1 while documenting limits |
+| SES | hardened JavaScript compartments inside a JavaScript realm | strong object-capability discipline if all endowments are audited | not a process or OS filesystem boundary by itself | must still be mediated by OpenPet SDK policy | no separate process crash boundary by itself | requires adding and validating a new runtime dependency | medium; hardened globals and lockdown can change plugin authoring behavior | medium | research candidate only until dependency, lockdown order, and plugin compatibility are validated |
+| Electron utilityProcess | Electron-managed utility process | can host a narrow bridge but still needs SDK mediation | must be combined with explicit runtime restrictions and app policy | must still be mediated by OpenPet SDK policy | stronger app-managed process isolation and lifecycle hooks than a generic child process | requires Electron-specific runner integration and packaged-app validation | medium; process lifecycle and logging become more Electron-specific | medium-high | re-evaluate when plugins need long-lived background execution or stronger crash/process lifecycle isolation |
 
-## Phase 3 Decision
+## Recommendation
 
-Use the current runner plus the new install review flow:
+Keep the current runner for v1.1, document its guarantees and limits, and avoid adding higher-risk plugin permissions until a utilityProcess or equivalent migration is justified by product requirements.
 
-- Treat unsigned plugins as installable but visibly risky.
-- Treat signature metadata as hash verification only unless a future certificate trust chain is added.
-- Disable plugins after install and update.
-- Show added permissions and network hosts before update.
-- Keep all privileged actions behind parent-validated SDK calls.
+Required language:
+- Describe plugins as permission-limited and isolated.
+- Do not describe third-party plugins as absolutely safe.
+- Keep API keys and secrets outside renderer code, ordinary plugin storage, and plugin config.
+- Treat sandbox strategy as a reviewable product boundary before adding new plugin capabilities.
 
-## Follow-Ups
+## Re-Evaluation Triggers
 
-- Add a SES proof of concept for one simple command plugin.
-- Evaluate Electron `utilityProcess` for long-running plugins.
-- Add catalog-level blocklist checks before install in Phase 7.
-- Document plugin authoring rules and the limits of the sandbox before public plugin distribution.
+- Plugins become long-lived background workers.
+- Plugins request broader filesystem access.
+- Plugins need direct desktop, shell, or Electron capabilities.
+- A plugin crash can affect host app stability or user trust.
+- Remote marketplace distribution expands beyond curated local review.
+- Electron utilityProcess integration can be validated in packaged macOS and Windows builds.
+
+## Next Actions
+
+- Generate and commit docs/plugin-sandbox-evaluation.md from this evaluation.
+- Keep the current runner for v1.1 unless a new plugin capability changes the threat model.
+- Add packaged-app smoke coverage if the runner implementation moves to utilityProcess.
+- Review sandbox wording whenever README, plugin docs, or submission tooling changes.

@@ -22,8 +22,8 @@ OpenPet is a desktop pet platform with:
 3. [`docs/project-context.json`](./project-context.json)
 4. [`CHANGELOG.md`](./CHANGELOG.md)
 5. [`docs/release-checklist.md`](./release-checklist.md)
-6. [`docs/productization-v1.1-todo-design.md`](./productization-v1.1-todo-design.md)
-7. [`docs/productization-next-steps-design.md`](./productization-next-steps-design.md)
+6. [`docs/productization-next-steps-design.md`](./productization-next-steps-design.md)
+7. [`docs/productization-v1.1-todo-design.md`](./productization-v1.1-todo-design.md)
 8. [`docs/productization-todo-design.md`](./productization-todo-design.md)
 
 ## Facts To Preserve
@@ -56,9 +56,11 @@ npm run create-release-evidence-archive-manifest
 - `docs/phases/` for phase records.
 - `docs/reviews/` for phase review notes.
 - `docs/project-status-review.md` for longer evaluation.
-- `docs/productization-v1.1-todo-design.md` for the Phase 38+ TODO design.
+- `docs/productization-next-steps-design.md` for the latest review-derived TODO design.
+- `docs/productization-v1.1-todo-design.md` for the Phase 38+ execution design.
 - `docs/productization-todo-design.md` for the prioritized TODO implementation design.
 - `docs/desktop-release-design.md` for desktop release evidence.
+- `docs/plugin-sandbox-evaluation.md` for current plugin runner guarantees, limits, and v1.1 recommendation.
 - `scripts/create-packaged-runtime-smoke-report.js` and `scripts/validate-packaged-runtime-smoke-report.js` for packaged app runtime evidence.
 - `scripts/create-release-evidence-archive-manifest.js` for release-level evidence archive validation.
 - `docs/plugin-submission-workflow-playbook.md` for plugin onboarding.
@@ -66,6 +68,6 @@ npm run create-release-evidence-archive-manifest
 
 ## Next Steps
 
-1. Use `docs/productization-v1.1-todo-design.md` as the near-term execution entry for the next productization phases.
-2. Continue with Phase 39 plugin sandbox evaluation before expanding plugin trust.
+1. Use `docs/productization-next-steps-design.md` as the current TODO design and `docs/productization-v1.1-todo-design.md` as the phase execution entry.
+2. Continue with Phase 40 pet pack export/provenance while preserving the Phase 38/39 plugin secrets and sandbox boundaries.
 3. Fill real packaged runtime, picker, and signed archive evidence before claiming packaged runtime or release readiness.

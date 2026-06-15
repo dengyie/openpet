@@ -3,7 +3,7 @@
 > 评估时间：2026-06-16
 > 分支：`main`
 > 评估人：项目全面审视
-> 状态：**Phase 1-7 产品化完成；v1.0.1-rc.2 完成当前发布轨道整理；Phase 8 已补 Windows 打包/CI/签名策略/冒烟证据、报告、runbook 与 collector/证据包校验/summary/archive-manifest 基线；Phase 9-10 完成项目文档治理与设计层；Phase 11-16 建立并扩展 Control Center Playwright UI 回归基线；Phase 17 已补主进程插件包 IPC + 真实 zip fixture 烟测；Phase 18 已补 desktop 原生文件选择器烟测证据工具链；Phase 19 已完成项目文档设计操作模型、阶段完成契约、完成标准和决策记录完善；Phase 20 已补 Focus Timer 示例插件、插件开发文档与真实本地插件服务测试；Phase 21 已补 Weather Status 示例插件、network allowlist 开发者路径与真实本地插件服务测试；Phase 22 已补 RSS Reader 示例插件、公开 feed 开发者路径与真实本地插件服务测试；Phase 23 已补插件提交前校验 CLI 与测试；Phase 24 已补插件提交审核包 CLI 与测试；Phase 25 已补插件提交 PR 模板与 PR packet CLI；Phase 26 已补插件提交工作流包 CLI；Phase 27 已补插件提交工作流包验证 CLI；Phase 28 已补插件提交工作流演练手册；Phase 29 已补 RC 升级兼容 smoke 证据工具；Phase 30 已补 Codex pet 原生导入；Phase 31 已补 Codex pet zip 原生导入；Phase 32 已补内置 Codex pets 基础资产；Phase 33 已补 TypeScript 迁移框架**
+> 状态：**Phase 1-7 产品化完成；v1.0.1-rc.2 完成当前发布轨道整理；Phase 8 已补 Windows 打包/CI/签名策略/冒烟证据、报告、runbook 与 collector/证据包校验/summary/archive-manifest 基线；Phase 9-10 完成项目文档治理与设计层；Phase 11-16 建立并扩展 Control Center Playwright UI 回归基线；Phase 17 已补主进程插件包 IPC + 真实 zip fixture 烟测；Phase 18 已补 desktop 原生文件选择器烟测证据工具链；Phase 19 已完成项目文档设计操作模型、阶段完成契约、完成标准和决策记录完善；Phase 20 已补 Focus Timer 示例插件、插件开发文档与真实本地插件服务测试；Phase 21 已补 Weather Status 示例插件、network allowlist 开发者路径与真实本地插件服务测试；Phase 22 已补 RSS Reader 示例插件、公开 feed 开发者路径与真实本地插件服务测试；Phase 23 已补插件提交前校验 CLI 与测试；Phase 24 已补插件提交审核包 CLI 与测试；Phase 25 已补插件提交 PR 模板与 PR packet CLI；Phase 26 已补插件提交工作流包 CLI；Phase 27 已补插件提交工作流包验证 CLI；Phase 28 已补插件提交工作流演练手册；Phase 29 已补 RC 升级兼容 smoke 证据工具；Phase 30 已补 Codex pet 原生导入；Phase 31 已补 Codex pet zip 原生导入；Phase 32 已补内置 Codex pets 基础资产；Phase 33 已补 TypeScript 迁移框架；Phase 39 已补插件沙箱评估**
 
 ---
 
@@ -32,7 +32,7 @@ OpenPet 项目已完成从单体桌宠到可扩展平台的完整重构，核心
 src/main/services/        # 19 个 service，职责清晰
 src/main/pet-pack/        # Pet pack 运行时
 src/main/plugins/         # 插件系统
-tests/                    # 44 个 Node 测试文件，319 个测试全过；Control Center Playwright UI 回归 9 个测试全过
+tests/                    # Node 测试 364 个全过；Control Center Playwright UI 回归 9 个测试全过
 ```
 
 ### 当前增量状态
@@ -41,7 +41,7 @@ tests/                    # 44 个 Node 测试文件，319 个测试全过；Con
 - Electron `userData` 保持旧版 `appData/ibot`，避免改名后丢失用户设置、密钥、插件、Pet packs 与本地服务日志。
 - 新公开命名为 `openpet.*` MCP tools、`openpet_behavior`、`X-OpenPet-Token`、`.openpet-plugin.zip`。
 - 旧 `ibot.*` MCP tools、`ibot_behavior`、`X-ibot-token`、`ibotApiVersion`、`.ibot-plugin.zip` 保留兼容。
-- 当前验证：`npm test` 319/319，`npm run test:control-center` 9/9，`npm run check:syntax` 通过。
+- 当前验证：`npm test` 364/364，`npm run test:control-center` 9/9，`npm run check:syntax` 通过。
 
 ### 2. UI 配置化 ✅ 完全实现
 
@@ -300,7 +300,7 @@ docs/desktop-release-design.md    # macOS + Windows 桌面分发设计
 
 | 指标 | 结果 |
 |------|------|
-| 测试通过率 | **319/319 Node + 9/9 UI (100%)** |
+| 测试通过率 | **364/364 Node + 9/9 UI (100%)** |
 | 语法检查 | ✅ 通过 |
 | Control Center 构建 | ✅ 通过 |
 | Git 工作区状态 | ✅ 阶段提交后应保持干净 |
@@ -435,7 +435,7 @@ npm run pack                  # electron-builder pass
 
 **理由**：
 1. 所有核心功能已完成并验证
-2. 测试覆盖完整（319/319 Node 测试通过，9/9 UI 测试通过）
+2. 测试覆盖完整（364/364 Node 测试通过，9/9 UI 测试通过）
 3. 架构稳定、代码质量高
 4. macOS 分发流程已就绪；Windows 打包/CI/签名策略/冒烟证据、报告、runbook 与 collector/证据包校验/summary/archive-manifest、packaged native picker smoke evidence 工具基线已落地但尚未 release-ready
 5. 剩余项为增强项，不阻塞发布
@@ -470,7 +470,7 @@ npm run pack                  # electron-builder pass
 
 **核心指标**：
 - ✅ 功能完整性：96%（关键承诺已实现，剩余主要为发布验证和生态增强）
-- ✅ 代码质量：319/319 Node 测试通过，9/9 UI 测试通过
+- ✅ 代码质量：364/364 Node 测试通过，9/9 UI 测试通过
 - ✅ 架构质量：优秀（分层清晰、安全可靠）
 - ✅ 可维护性：优秀（模块化彻底）
 - ✅ 文档完整性：双语 README、技术文档、版本记录与发布清单完整
