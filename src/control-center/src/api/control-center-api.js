@@ -1,4 +1,4 @@
-import { cloneAiConfig, cloneServiceStatus, cloneSettings, defaultAboutInfo, defaultActionsConfig, defaultAiConfig, defaultCatalog, defaultPetPacks, defaultServiceStatus, defaultSettings, defaultUpdateCheck } from '../lib/defaults.js'
+import { cloneAiConfig, cloneCatalog, cloneServiceStatus, cloneSettings, defaultAboutInfo, defaultActionsConfig, defaultAiConfig, defaultPetPacks, defaultServiceStatus, defaultSettings, defaultUpdateCheck } from '../lib/defaults.js'
 
 const createDemoInspection = (actionId = 'wave') => ({
   canceled: false,
@@ -22,10 +22,128 @@ const createDemoInspection = (actionId = 'wave') => ({
 
 const demoStorageKey = 'openpet.controlCenter.demoState'
 
+const demoCatalogHash = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
+
+const createDemoCatalog = () => cloneCatalog({
+  schemaVersion: 1,
+  updatedAt: '2026-06-15T00:00:00.000Z',
+  feedbackUrl: 'https://github.com/dengyie/OpenPet/issues',
+  localBlocklist: {
+    pluginIds: [],
+    packIds: [],
+    sha256: []
+  },
+  catalogBlocklist: {
+    pluginIds: [],
+    packIds: [],
+    sha256: []
+  },
+  blocklist: {
+    pluginIds: [],
+    packIds: [],
+    sha256: []
+  },
+  plugins: [
+    {
+      id: 'openpet.demo.weather',
+      name: 'Demo Weather',
+      version: '1.0.0',
+      author: 'OpenPet',
+      description: 'Shows a tiny weather companion message.',
+      openpetApiVersion: '1.0',
+      permissions: ['pet:say', 'network'],
+      downloadable: true,
+      installed: false,
+      updateAvailable: false,
+      sha256: demoCatalogHash,
+      reportUrl: 'https://github.com/dengyie/OpenPet/issues',
+      blockStatus: { blocked: false, reasons: [] }
+    },
+    {
+      id: 'openpet.demo.pomodoro',
+      name: 'Demo Pomodoro',
+      version: '1.1.0',
+      installedVersion: '1.0.0',
+      author: 'OpenPet',
+      description: 'A focus timer plugin with a catalog update available.',
+      openpetApiVersion: '1.0',
+      permissions: ['pet:say', 'storage'],
+      downloadable: true,
+      installed: true,
+      updateAvailable: true,
+      sha256: demoCatalogHash.replace('0', '1'),
+      reportUrl: 'https://github.com/dengyie/OpenPet/issues',
+      blockStatus: { blocked: false, reasons: [] }
+    }
+  ],
+  petPacks: [
+    {
+      id: 'openpet.demo.pixel-cat',
+      displayName: 'Demo Pixel Cat',
+      version: '1.0.0',
+      author: 'OpenPet',
+      description: 'A small catalog pet pack sample for UI regression.',
+      actionCount: 3,
+      downloadable: true,
+      installed: false,
+      updateAvailable: false,
+      sha256: demoCatalogHash.replace('1', '2'),
+      blockStatus: { blocked: false, reasons: [] }
+    }
+  ]
+})
+
+const createDemoPluginReview = (item) => ({
+  installMode: item.installed ? 'update' : 'install',
+  existingVersion: item.installedVersion || '',
+  riskLevel: item.installed ? 'review' : 'info',
+  plugin: {
+    id: item.id,
+    name: item.name,
+    version: item.version,
+    permissions: item.permissions || [],
+    commands: [{ id: 'demo', title: 'Demo command' }]
+  },
+  permissionDiff: {
+    permissions: {
+      added: item.installed ? ['storage'] : item.permissions || [],
+      removed: [],
+      unchanged: item.installed ? ['pet:say'] : []
+    },
+    networkAllowlist: {
+      added: item.permissions?.includes('network') ? ['api.weather.example'] : [],
+      removed: [],
+      unchanged: []
+    }
+  },
+  signature: {
+    label: 'Unsigned local demo',
+    errors: []
+  },
+  blockStatus: item.blockStatus || { blocked: false, reasons: [] },
+  fileCount: 4,
+  byteSize: item.installed ? 18432 : 12288,
+  packageHash: item.sha256 || demoCatalogHash
+})
+
+const createDemoPetPackReview = (item) => ({
+  pack: {
+    id: item.id,
+    displayName: item.displayName,
+    version: item.version,
+    actionCount: item.actionCount || 0,
+    defaultAction: 'idle',
+    clickAction: 'wave',
+    packageHash: item.sha256 || demoCatalogHash,
+    blockStatus: item.blockStatus || { blocked: false, reasons: [] }
+  }
+})
+
 const createDefaultDemoState = () => ({
   settings: cloneSettings(defaultSettings),
   aiConfig: cloneAiConfig(defaultAiConfig),
-  serviceStatus: cloneServiceStatus(defaultServiceStatus)
+  serviceStatus: cloneServiceStatus(defaultServiceStatus),
+  catalog: createDemoCatalog()
 })
 
 const readDemoState = () => {
@@ -37,7 +155,8 @@ const readDemoState = () => {
     return {
       settings: cloneSettings(state.settings),
       aiConfig: cloneAiConfig(state.aiConfig),
-      serviceStatus: cloneServiceStatus(state.serviceStatus)
+      serviceStatus: cloneServiceStatus(state.serviceStatus),
+      catalog: cloneCatalog(state.catalog || createDemoCatalog())
     }
   } catch {
     return createDefaultDemoState()
@@ -50,6 +169,26 @@ const writeDemoState = () => {
 }
 
 const demoState = readDemoState()
+const demoCatalogSelections = new Map()
+
+const findDemoCatalogItem = (kind, itemId) => {
+  const collection = kind === 'plugin' ? demoState.catalog.plugins : demoState.catalog.petPacks
+  return collection.find((item) => item.id === itemId)
+}
+
+const markDemoCatalogItemInstalled = (selection) => {
+  const collectionKey = selection.kind === 'plugin' ? 'plugins' : 'petPacks'
+  demoState.catalog = cloneCatalog({
+    ...demoState.catalog,
+    [collectionKey]: demoState.catalog[collectionKey].map((item) => (
+      item.id === selection.itemId
+        ? { ...item, installed: true, installedVersion: item.version, updateAvailable: false }
+        : item
+    ))
+  })
+  writeDemoState()
+  return cloneCatalog(demoState.catalog)
+}
 
 const demoApi = {
   getSettings: async () => cloneSettings(demoState.settings),
@@ -148,12 +287,54 @@ const demoApi = {
     status: 'not-configured',
     message: 'Update feed is not configured.'
   }),
-  getCatalog: async () => defaultCatalog,
-  prepareCatalogInstall: async () => ({ kind: 'plugin', selectionId: 'demo-catalog-selection', pluginReview: null }),
-  installCatalogSelection: async () => ({ ok: true, catalog: defaultCatalog }),
-  clearCatalogSelection: async () => ({ ok: true }),
-  addCatalogBlocklistEntry: async () => ({ catalog: defaultCatalog, blocklist: defaultCatalog.localBlocklist }),
-  removeCatalogBlocklistEntry: async () => ({ catalog: defaultCatalog, blocklist: defaultCatalog.localBlocklist }),
+  getCatalog: async () => cloneCatalog(demoState.catalog),
+  prepareCatalogInstall: async ({ kind, itemId } = {}) => {
+    const item = findDemoCatalogItem(kind, itemId)
+    if (!item) throw new Error('Catalog item not found')
+    const selectionId = `demo-catalog-selection-${kind}-${itemId}`
+    const selection = {
+      kind,
+      itemId,
+      selectionId,
+      ...(kind === 'plugin' ? { pluginReview: createDemoPluginReview(item) } : { petPackReview: createDemoPetPackReview(item) })
+    }
+    demoCatalogSelections.set(selectionId, selection)
+    return selection
+  },
+  installCatalogSelection: async (selectionId) => {
+    const selection = demoCatalogSelections.get(selectionId)
+    if (!selection) throw new Error('Catalog selection is no longer available')
+    demoCatalogSelections.delete(selectionId)
+    return { ok: true, catalog: markDemoCatalogItemInstalled(selection) }
+  },
+  clearCatalogSelection: async (selectionId) => {
+    demoCatalogSelections.delete(selectionId)
+    return { ok: true }
+  },
+  addCatalogBlocklistEntry: async (entry = {}) => {
+    const blocklistKey = entry.type === 'packId' ? 'packIds' : entry.type === 'sha256' ? 'sha256' : 'pluginIds'
+    const value = String(entry.value || '').trim()
+    const localBlocklist = {
+      ...demoState.catalog.localBlocklist,
+      [blocklistKey]: value && !demoState.catalog.localBlocklist[blocklistKey].includes(value)
+        ? [...demoState.catalog.localBlocklist[blocklistKey], value]
+        : demoState.catalog.localBlocklist[blocklistKey]
+    }
+    demoState.catalog = cloneCatalog({ ...demoState.catalog, localBlocklist })
+    writeDemoState()
+    return { catalog: cloneCatalog(demoState.catalog), blocklist: demoState.catalog.localBlocklist }
+  },
+  removeCatalogBlocklistEntry: async (entry = {}) => {
+    const blocklistKey = entry.type === 'packId' ? 'packIds' : entry.type === 'sha256' ? 'sha256' : 'pluginIds'
+    const value = String(entry.value || '').trim()
+    const localBlocklist = {
+      ...demoState.catalog.localBlocklist,
+      [blocklistKey]: demoState.catalog.localBlocklist[blocklistKey].filter((candidate) => candidate !== value)
+    }
+    demoState.catalog = cloneCatalog({ ...demoState.catalog, localBlocklist })
+    writeDemoState()
+    return { catalog: cloneCatalog(demoState.catalog), blocklist: demoState.catalog.localBlocklist }
+  },
   close: () => {}
 }
 

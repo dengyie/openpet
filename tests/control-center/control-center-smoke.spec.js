@@ -113,4 +113,61 @@ test.describe('Control Center smoke', () => {
     await expect(page.getByLabel('端口')).toHaveValue('4317')
     await expect(page.locator('.readonly-row', { hasText: '当前端点' })).toContainText('http://127.0.0.1:4317/api/status')
   })
+
+  test('installs Catalog plugins from the review panel with the demo API', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Catalog' }).click()
+
+    const weatherPlugin = page.locator('.catalog-item', { hasText: 'Demo Weather' })
+    await expect(weatherPlugin).toContainText('Available')
+    await weatherPlugin.getByRole('button', { name: 'Install' }).click()
+
+    const reviewPanel = page.locator('.plugin-review-panel', { hasText: 'Demo Weather' })
+    await expect(reviewPanel).toContainText('安装 1.0.0')
+    await expect(reviewPanel).toContainText('新增 pet:say, network')
+    await expect(reviewPanel).toContainText('Unsigned local demo')
+    await reviewPanel.getByRole('button', { name: '确认安装' }).click()
+
+    await expect(page.locator('.status-line')).toContainText('插件已安装，默认保持停用')
+    await expect(weatherPlugin).toContainText('Installed 1.0.0')
+    await expect(reviewPanel).toBeHidden()
+
+    await page.reload()
+    await page.getByRole('button', { name: 'Catalog' }).click()
+    await expect(page.locator('.catalog-item', { hasText: 'Demo Weather' })).toContainText('Installed 1.0.0')
+  })
+
+  test('updates Catalog plugins and installs Catalog pet packs with the demo API', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Catalog' }).click()
+
+    const pomodoroPlugin = page.locator('.catalog-item', { hasText: 'Demo Pomodoro' })
+    await expect(pomodoroPlugin).toContainText('Update 1.0.0 → 1.1.0')
+    await pomodoroPlugin.getByRole('button', { name: 'Update' }).click()
+
+    const pluginReviewPanel = page.locator('.plugin-review-panel', { hasText: 'Demo Pomodoro' })
+    await expect(pluginReviewPanel).toContainText('更新 1.0.0 → 1.1.0')
+    await expect(pluginReviewPanel).toContainText('保留 pet:say')
+    await pluginReviewPanel.getByRole('button', { name: '确认安装' }).click()
+
+    await expect(page.locator('.status-line')).toContainText('插件已安装，默认保持停用')
+    await expect(pomodoroPlugin).toContainText('Installed 1.1.0')
+
+    const pixelCatPack = page.locator('.catalog-item', { hasText: 'Demo Pixel Cat' })
+    await expect(pixelCatPack).toContainText('Available')
+    await pixelCatPack.getByRole('button', { name: 'Install' }).click()
+
+    const petPackReviewPanel = page.locator('.plugin-review-panel', { hasText: 'Demo Pixel Cat' })
+    await expect(petPackReviewPanel).toContainText('openpet.demo.pixel-cat · 1.0.0 · 3 actions')
+    await expect(petPackReviewPanel).toContainText('默认动作')
+    await petPackReviewPanel.getByRole('button', { name: '安装 Pet Pack' }).click()
+
+    await expect(page.locator('.status-line')).toContainText('Pet pack 已安装')
+    await expect(pixelCatPack).toContainText('Installed 1.0.0')
+
+    await page.reload()
+    await page.getByRole('button', { name: 'Catalog' }).click()
+    await expect(page.locator('.catalog-item', { hasText: 'Demo Pomodoro' })).toContainText('Installed 1.1.0')
+    await expect(page.locator('.catalog-item', { hasText: 'Demo Pixel Cat' })).toContainText('Installed 1.0.0')
+  })
 })
