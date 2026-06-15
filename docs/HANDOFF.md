@@ -1,7 +1,7 @@
 # OpenPet 项目交接文档
 
 > 最后更新：2026-06-15 | 分支：`main`
-> 当前状态：v1.0 产品化基线已完成；v1.0.1-rc.1 完成 OpenPet 改名、GitHub 仓库迁移与升级兼容；Control Center Playwright UI 回归基线已扩展至 Phase 16；Phase 17 已补主进程插件包 IPC + 真实 zip fixture 烟测；项目文档设计已完成 Phase 15 收口；macOS 分发基线已完成，Windows 打包/CI/签名策略/冒烟证据、报告、runbook 与 collector/证据包校验/summary/archive-manifest 工具基线已落地但尚未 release-ready
+> 当前状态：v1.0 产品化基线已完成；v1.0.1-rc.1 完成 OpenPet 改名、GitHub 仓库迁移与升级兼容；Control Center Playwright UI 回归基线已扩展至 Phase 16；Phase 17 已补主进程插件包 IPC + 真实 zip fixture 烟测；Phase 18 已补 macOS / Windows packaged app 原生文件选择器烟测证据工具链；项目文档设计已完成 Phase 15 收口；macOS 分发基线已完成，Windows 打包/CI/签名策略/冒烟证据、报告、runbook 与 collector/证据包校验/summary/archive-manifest、packaged native picker smoke evidence 工具基线已落地但尚未 release-ready
 > **项目评估：95/100 分，建议发布 v1.0.1 RC 后提升正式版**（详见 [project-status-review.md](./project-status-review.md)）
 
 ---
@@ -17,6 +17,7 @@
 - ✅ Vite + React Control Center（7 个 Tab：Pet/Actions/AI/Plugins/Catalog/Service/About）
 - ✅ Control Center Playwright UI 回归基线（demo API 模式覆盖 shell、全部 tab、Pet/About 关键交互、Pet/AI/Service 保存配置流程、Catalog 安装/更新流程、Service MCP session 管理，以及手动插件包安装 review）
 - ✅ 主进程插件包 IPC 烟测（真实 `.openpet-plugin.zip` fixture 覆盖 inspect + install，插件默认 disabled）
+- ✅ Desktop 原生文件选择器烟测证据工具链（packaged macOS / Windows pending report、runbook、更新命令与 readiness validator）
 - ✅ AI 聊天（OpenAI-compatible，API Key 安全存储、持久会话、结构化行为编排）
 - ✅ 权限化插件系统（隔离 runner + SDK + catalog + blocklist）
 - ✅ 本地 HTTP API + MCP transport（loopback only，默认关闭）
@@ -32,9 +33,9 @@
 1. [`project-documentation-design.md`](./project-documentation-design.md)：项目目标锚点、文档分层、支持声明规则和阶段治理。
 2. 本文件：当前事实状态、文件地图、待办和开发命令。
 3. [`desktop-release-design.md`](./desktop-release-design.md) 与 [`release-checklist.md`](./release-checklist.md)：macOS + Windows 桌面发布边界、签名、冒烟证据和验收门槛。
-4. 最新的 `docs/phases/phase-*.md` 与 `docs/reviews/phase-*-review.md`：具体阶段的实现记录、review、验证和残留风险。当前最新阶段为 [`phase-17-electron-plugin-package-ipc-smoke.md`](./phases/phase-17-electron-plugin-package-ipc-smoke.md) 与 [`phase-17-electron-plugin-package-ipc-smoke-review.md`](./reviews/phase-17-electron-plugin-package-ipc-smoke-review.md)。
+4. 最新的 `docs/phases/phase-*.md` 与 `docs/reviews/phase-*-review.md`：具体阶段的实现记录、review、验证和残留风险。当前最新阶段为 [`phase-18-desktop-native-picker-smoke-evidence.md`](./phases/phase-18-desktop-native-picker-smoke-evidence.md) 与 [`phase-18-desktop-native-picker-smoke-evidence-review.md`](./reviews/phase-18-desktop-native-picker-smoke-evidence-review.md)。
 
-当前支持口径必须保持为：macOS release baseline complete；Windows desktop build/CI/signing-policy/smoke-evidence/reporting/runbook/collector/bundle-validation/summary/archive-manifest baseline implemented but not release-ready；移动端不在当前范围。
+当前支持口径必须保持为：macOS release baseline complete；Windows desktop build/CI/signing-policy/smoke-evidence/reporting/runbook/collector/bundle-validation/summary/archive-manifest and packaged native picker smoke evidence tooling baselines implemented but not release-ready；移动端不在当前范围。
 
 ---
 
@@ -43,18 +44,18 @@
 | 指标 | 结果 | 说明 |
 |------|------|------|
 | **功能完整性** | 95% | 所有承诺功能已实现 |
-| **测试覆盖** | 238 Node + 9 UI ✅ | service / release / 主进程 IPC 门禁覆盖；Control Center Playwright UI 回归基线 |
+| **测试覆盖** | 260 Node + 9 UI ✅ | service / release / 主进程 IPC / desktop picker smoke evidence 门禁覆盖；Control Center Playwright UI 回归基线 |
 | **架构质量** | ⭐⭐⭐⭐⭐ | 分层清晰、安全可靠 |
 | **代码质量** | ⭐⭐⭐⭐⭐ | 模块化彻底、职责单一 |
 | **文档完整性** | ⭐⭐⭐⭐⭐ | 双语 README、技术文档、版本记录与发布清单完整 |
-| **可发布性** | ✅ macOS RC 可发布 | Windows 打包/CI/签名策略/冒烟证据、报告、runbook 与 collector/证据包校验/summary/archive-manifest 工具基线已落地，尚未 release-ready |
+| **可发布性** | ✅ macOS RC 可发布 | Windows 打包/CI/签名策略/冒烟证据、报告、runbook 与 collector/证据包校验/summary/archive-manifest、packaged native picker smoke evidence 工具基线已落地，尚未 release-ready |
 
 ---
 
 ## 测试与验收
 
 ```bash
-npm test                  # 238 Node tests, all pass
+npm test                  # 260 Node tests, all pass
 npm run test:control-center # 9 Control Center Playwright UI tests, all pass
 npm run build:control-center  # Vite build pass
 npm run generate-sprites  # CLI works
@@ -225,8 +226,16 @@ Control Center 页面（Tab 式导航）：
 ```
 src/main/ipc.js                           # IPC handler 注册支持 ipcMain/dialog 注入，生产默认仍用 Electron 对象
 tests/main/ipc-plugin-install.test.js     # 插件包 inspect/install 主进程 IPC 烟测，使用真实 .openpet-plugin.zip fixture
+scripts/create-desktop-picker-smoke-report.js # 生成 macOS / Windows packaged native picker pending smoke report
+scripts/update-desktop-picker-smoke-report.js # 填写 desktop picker smoke report 的环境、产物和检查项证据
+scripts/validate-desktop-picker-smoke-report.js # 校验 desktop picker smoke report readiness / signed readiness
+scripts/create-desktop-picker-smoke-runbook.js # 从 report 生成 packaged native picker smoke runbook
+tests/release/desktop-picker-smoke-report.test.js # desktop picker report / signature / artifact 选择测试
+tests/release/desktop-picker-smoke-runbook-update.test.js # desktop picker runbook / update tool 测试
 src/control-center/src/api/control-center-api.js # demo API 手动插件包 review fixture 与插件日志持久化
 tests/control-center/control-center-smoke.spec.js # Control Center Playwright UI 回归，含手动插件包 review
+docs/phases/phase-18-desktop-native-picker-smoke-evidence.md # Phase 18 开发记录
+docs/reviews/phase-18-desktop-native-picker-smoke-evidence-review.md # Phase 18 review 与验证记录
 docs/phases/phase-17-electron-plugin-package-ipc-smoke.md # Phase 17 开发记录
 docs/reviews/phase-17-electron-plugin-package-ipc-smoke-review.md # Phase 17 review 与验证记录
 docs/phases/phase-16-control-center-manual-plugin-install-automation.md # Phase 16 UI 自动化记录
@@ -246,7 +255,7 @@ docs/reviews/phase-16-control-center-manual-plugin-install-automation-review.md 
   - 安装/更新后的第三方插件默认保持 disabled，需用户手动启用。
   - 无效 zip、路径穿越、symlink、未知权限、非 HTTPS allowlist 会被拒绝。
   - 插件卸载可选择保留或删除该插件私有 storage，且不会影响其他插件 storage。
-  - Phase 16 已覆盖 Control Center demo API 手动插件包 review UI；Phase 17 已覆盖主进程 IPC 到真实 `.openpet-plugin.zip` inspect/install 服务链路。
+  - Phase 16 已覆盖 Control Center demo API 手动插件包 review UI；Phase 17 已覆盖主进程 IPC 到真实 `.openpet-plugin.zip` inspect/install 服务链路；Phase 18 已提供 packaged app 原生文件选择器烟测报告、runbook、填写和校验工具。
 
 - [ ] **插件后续强化**：
   - 第三方 JS 沙箱强化（当前已有子进程 runner + Node permission model；已新增 `docs/plugin-sandbox-evaluation.md`，后续可评估 SES / Electron utilityProcess）
@@ -278,7 +287,7 @@ docs/reviews/phase-16-control-center-manual-plugin-install-automation-review.md 
 - [x] autoStart 打包态同步逻辑迁入 SettingsService side effects，打包配置可用 `npm run pack` 验证
 - [x] 动作导入帧检验报告（利用 inspectFrameFolder）
 - [x] Pet pack 管理体验：内置/用户包列表、整包检查、导入、启用、删除
-- [ ] Windows 桌面分发：`build/win`、`build/icon.ico`、`windows-latest` release job、平台化更新资产、签名策略护栏、冒烟证据门禁、pending 报告/runbook/collector 产物、证据包校验、summary/archive-manifest 和报告填写工具已完成；仍需签名产物验证、安装/卸载/透明窗口/原生 OS 文件选择器冒烟验证
+- [ ] Windows 桌面分发：`build/win`、`build/icon.ico`、`windows-latest` release job、平台化更新资产、签名策略护栏、冒烟证据门禁、pending 报告/runbook/collector 产物、证据包校验、summary/archive-manifest、报告填写工具和 desktop picker smoke evidence 工具链已完成；仍需签名产物验证、安装/卸载/透明窗口/原生 OS 文件选择器真实冒烟证据
 
 ### 技术债
 
@@ -299,7 +308,7 @@ npm start                    # 构建 Control Center + 启动 Electron
 npm run dev:control-center   # http://127.0.0.1:5173
 
 # 测试
-npm test                     # 238 Node tests
+npm test                     # 260 Node tests
 npm run test:control-center  # 9 Control Center Playwright UI tests
 
 # 精灵图生成

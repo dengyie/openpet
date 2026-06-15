@@ -4,7 +4,7 @@
 
 **An extensible, distributable, and operable Electron desktop pet platform**
 
-[![Tests](https://img.shields.io/badge/tests-238%20node%20%2B%209%20ui-success)](./tests)
+[![Tests](https://img.shields.io/badge/tests-260%20node%20%2B%209%20ui-success)](./tests)
 [![Build](https://img.shields.io/badge/build-passing-success)](./package.json)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Version](https://img.shields.io/badge/version-1.0.1--rc.1-blue.svg)](./package.json)
@@ -31,7 +31,7 @@
 - 📦 **Pet Pack Management** - Multi-pet pack support with one-click installation
 - 🌐 **HTTP API + MCP** - Local API for external agent integration
 - 🎛️ **Control Center** - React + Vite control panel with full UI configuration
-- 🚀 **Desktop Release Track** - macOS release baseline; Windows packaging/CI/signing-policy/smoke-evidence/reporting/runbook/collector/bundle-validation/summary/archive-manifest tooling baseline with release-readiness gates still open
+- 🚀 **Desktop Release Track** - macOS release baseline; Windows packaging/CI/signing-policy/smoke-evidence/reporting/runbook/collector/bundle-validation/summary/archive-manifest tooling baseline; packaged native picker smoke evidence tooling, with release-readiness gates still open until real signed evidence is archived
 
 ---
 
@@ -101,7 +101,7 @@
 
 - **Node.js**: >= 18.x
 - **npm**: >= 9.x
-- **OS**: macOS validated; Windows packaging/CI/signing-policy/smoke-evidence/reporting/runbook/collector/bundle-validation/summary/archive-manifest tooling baseline implemented but not release-ready; Linux/mobile are out of the current release scope
+- **OS**: macOS validated; Windows packaging/CI/signing-policy/smoke-evidence/reporting/runbook/collector/bundle-validation/summary/archive-manifest and packaged native picker smoke evidence tooling baselines implemented but not release-ready; Linux/mobile are out of the current release scope
 
 ### Installation
 
@@ -122,7 +122,7 @@ npm start
 ```bash
 npm start                    # Build Control Center + launch Electron
 npm run dev:control-center   # Control Center hot reload (http://127.0.0.1:5173)
-npm test                     # Run Node tests (238 tests)
+npm test                     # Run Node tests (260 tests)
 npm run test:control-center  # Run Control Center Playwright UI regression tests
 npm run check:syntax         # JS syntax validation
 npm run generate-sprites     # Regenerate sprite sheets from cat_anime/flames/
@@ -170,6 +170,7 @@ npm run dist                 # Generate current-host installer (macOS validated:
 - [Phase 15 - Project Documentation Design Consolidation](./docs/phases/phase-15-project-documentation-design-consolidation.md)
 - [Phase 16 - Control Center Manual Plugin Install Automation](./docs/phases/phase-16-control-center-manual-plugin-install-automation.md)
 - [Phase 17 - Electron Plugin Package IPC Smoke](./docs/phases/phase-17-electron-plugin-package-ipc-smoke.md)
+- [Phase 18 - Desktop Native Picker Smoke Evidence](./docs/phases/phase-18-desktop-native-picker-smoke-evidence.md)
 
 ---
 
@@ -309,7 +310,7 @@ For more details, see [plugin-sandbox-evaluation.md](./docs/plugin-sandbox-evalu
 
 ## 🧪 Testing
 
-The project uses **Node native test runner** for service/release/IPC coverage with **238 tests all passing**, plus a **Playwright Control Center UI regression baseline** with 9 UI tests.
+The project uses **Node native test runner** for service/release/IPC coverage with **260 tests all passing**, plus a **Playwright Control Center UI regression baseline** with 9 UI tests.
 
 ```bash
 npm test                     # Run Node tests
@@ -319,9 +320,10 @@ npm run build:control-center # Control Center build verification
 ```
 
 Test Coverage:
-- ✅ Full service/release/IPC coverage (33 test files)
+- ✅ Full service/release/IPC coverage (35 test files)
 - ✅ Control Center shell / tab / Pet / About smoke coverage, Pet / AI / Service saved configuration flows, Catalog install/update flows, Service MCP session management, and manual plugin package install review (9 Playwright tests)
 - ✅ Main-process plugin package IPC smoke coverage with a real `.openpet-plugin.zip` fixture
+- ✅ Desktop native picker smoke evidence tooling for packaged macOS / Windows validation reports and runbooks
 - ✅ Pet pack schema / loader / importer
 - ✅ Plugin manifest / runner / SDK
 - ✅ AI service / behavior orchestrator
@@ -381,7 +383,7 @@ Contributions of code, plugins, pet packs, or documentation are welcome!
 ### v1.1 (Planned)
 
 - ⚡ Windows signed-artifact verification and smoke testing
-- ⚡ Electron-hosted native OS file picker validation in a launched packaged app
+- ⚡ Fill and archive real packaged-app native picker smoke evidence for macOS / Windows
 - ⚡ More example plugins (weather, pomodoro, RSS)
 - ⚡ Plugin development tutorial videos
 - ⚡ User feedback collection & iteration

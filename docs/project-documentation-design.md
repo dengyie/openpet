@@ -1,7 +1,7 @@
 # OpenPet Project Documentation Design
 
 > Scope: documentation architecture for the OpenPet desktop pet platform. The active product target is macOS + Windows desktop. Mobile is out of scope, and Linux is deferred until there is an explicit support decision.
-> Current release truth: macOS release baseline is complete; Windows desktop build/CI/signing-policy/smoke-evidence/reporting/runbook/collector/bundle-validation/summary/archive-manifest baseline is implemented but not release-ready.
+> Current release truth: macOS release baseline is complete; Windows desktop build/CI/signing-policy/smoke-evidence/reporting/runbook/collector/bundle-validation/summary/archive-manifest and packaged native picker smoke evidence tooling baselines are implemented but not release-ready.
 
 ## 1. Project Goal Anchor
 
@@ -157,7 +157,7 @@ The current answer to "does the project structure satisfy macOS and Windows desk
 |----------|----------------|---------------------------|
 | Can one shared Electron app structure serve macOS and Windows? | Yes. Runtime, service, IPC, Control Center, plugin, pet-pack, and catalog layers are platform-neutral by design. | Architecture docs can describe a shared desktop app structure. |
 | Are platform-specific concerns isolated? | Mostly yes. Packaging, signing, update assets, and smoke evidence live in `package.json`, `.github/workflows/`, `build/`, release scripts, and release docs. | Release docs own the OS-specific truth; feature docs should link instead of restating gates. |
-| Is Windows public release support proven? | No. Tooling exists, but signed artifacts and real Windows smoke validation are still missing. | README and HANDOFF must keep "baseline implemented but not release-ready" wording. |
+| Is Windows public release support proven? | No. Tooling exists, including packaged native picker smoke evidence tooling, but signed artifacts and real Windows smoke validation are still missing. | README and HANDOFF must keep "baseline implemented but not release-ready" wording. |
 | Is mobile supported by this structure? | No. Electron desktop structure does not imply mobile runtime support. | Mobile must remain out of scope unless a new product decision creates a separate architecture track. |
 
 Do not split app logic into `mac/` and `windows/` folders unless a concrete OS behavior cannot be expressed behind an injected service or release script. The preferred structure is shared application code with narrow platform adapters and explicit release evidence.
@@ -217,6 +217,8 @@ Phase 15 is a project documentation design consolidation phase. It keeps the sam
 Phase 16 is a Control Center manual plugin install automation phase. It expands the Playwright demo API baseline to cover the Plugins tab manual package review, cancel, install, disabled-by-default result, log persistence, and reload persistence, while keeping real Electron file picker and zip validation smoke out of scope.
 
 Phase 17 is an Electron plugin package IPC smoke phase. It keeps production IPC behavior unchanged, adds injectable `ipcMain` / `dialog` seams for tests, covers `plugins:inspect-package` and `plugins:install` with a real `.openpet-plugin.zip` fixture, and records that launched native OS file picker validation and Windows packaged-app smoke remain out of scope.
+
+Phase 18 is a desktop native picker smoke evidence phase. It adds macOS / Windows packaged-app picker smoke report generation, update tooling, runbook generation, and readiness validation. It records the remaining boundary explicitly: generated pending reports and runbooks do not prove picker success until a real packaged app run fills evidence and validates without `--allow-pending`.
 
 Do not skip the review document. If a phase changes release claims, security boundaries, plugin permissions, or API-key handling, the review must explicitly state whether those boundaries still hold.
 
@@ -291,11 +293,11 @@ Support language must match what the repository can actually prove:
 | Platform | Allowed Wording Now | Do Not Claim Yet |
 |----------|---------------------|------------------|
 | macOS | Validated release baseline; official artifacts should be signed/notarized | That every tag is notarized unless the release artifact was verified |
-| Windows | Packaging/CI/signing-policy/smoke-evidence/reporting/runbook/collector/bundle-validation/summary/archive-manifest baseline implemented; not release-ready until signed artifact evidence and real smoke validation pass | Public user support, SmartScreen trust, or completed installer validation |
+| Windows | Packaging/CI/signing-policy/smoke-evidence/reporting/runbook/collector/bundle-validation/summary/archive-manifest and packaged native picker smoke evidence tooling baselines implemented; not release-ready until signed artifact evidence and real smoke validation pass | Public user support, SmartScreen trust, or completed installer validation |
 | Linux | Deferred | Any active release target |
 | Mobile | Out of scope | Any mobile app plan for the current release track |
 
-If a document needs one sentence, use: "macOS release baseline is complete; Windows desktop build/CI/signing-policy/smoke-evidence/reporting/runbook/collector/bundle-validation/summary/archive-manifest baseline is implemented but not release-ready; mobile is out of scope."
+If a document needs one sentence, use: "macOS release baseline is complete; Windows desktop build/CI/signing-policy/smoke-evidence/reporting/runbook/collector/bundle-validation/summary/archive-manifest and packaged native picker smoke evidence tooling baselines are implemented but not release-ready; mobile is out of scope."
 
 Avoid these phrases until evidence exists:
 
@@ -484,7 +486,7 @@ Before committing documentation-only work, run at least a link/path sanity check
 
 ## 16. Current Documentation Status
 
-The repository now has a coherent phase history through Phase 17:
+The repository now has a coherent phase history through Phase 18:
 
 - Phase 1-7 document the platform productization arc from Control Center modularization through ecosystem operations.
 - Phase 8 documents the macOS + Windows desktop release extension.
@@ -497,9 +499,10 @@ The repository now has a coherent phase history through Phase 17:
 - Phase 15 consolidates the project documentation design, fixes live documentation drift, and adds durable structure/scope/update templates for future phases.
 - Phase 16 expands the Control Center Playwright baseline to manual plugin package install review flows in demo API mode.
 - Phase 17 expands Node regression coverage to the main-process plugin package IPC inspect/install path with a real zip fixture.
+- Phase 18 adds packaged macOS / Windows native picker smoke evidence tooling: pending report generation, report updates, runbook generation, signed-readiness validation, and release-document alignment.
 - macOS release baseline is complete.
 - Windows package targets, icon generation, CI/release jobs, platform-aware About/update asset filtering, signing policy enforcement, smoke evidence validation, CI pending report, runbook, collector generation, evidence bundle validation, evidence summary/archive generation, archive manifest generation, and report filling tooling are implemented.
-- Signed Windows artifact evidence and real Windows smoke validation remain open release gates.
+- Signed Windows artifact evidence, filled packaged native picker evidence, and real Windows smoke validation remain open release gates.
 
 ## 17. Next Documentation Priorities
 
@@ -508,4 +511,4 @@ The next documentation work should follow the implementation track rather than i
 - Add a filled Windows smoke report only after real Windows validation exists.
 - Update release status only after signed artifact evidence and real smoke evidence pass the checklist.
 - Keep mobile out of scope until a separate product decision introduces it.
-- Add launched Electron / packaged-app smoke evidence for native OS file picker behavior when that path changes.
+- Fill and archive real launched Electron / packaged-app smoke evidence for native OS file picker behavior using the Phase 18 toolchain.

@@ -2,12 +2,12 @@
 
 > Purpose: keep local test builds, signed releases, and public artifacts reproducible without exposing signing credentials.
 
-Current desktop scope: macOS and Windows. macOS has a validated release baseline; Windows has packaging/CI/update-asset/signing-policy/smoke-evidence/reporting/runbook/collector/bundle-validation/summary/archive-manifest baselines, but must not be called release-ready until signed release evidence and real smoke tests are complete.
+Current desktop scope: macOS and Windows. macOS has a validated release baseline; Windows has packaging/CI/update-asset/signing-policy/smoke-evidence/reporting/runbook/collector/bundle-validation/summary/archive-manifest baselines, and both desktop platforms have packaged native picker smoke evidence tooling. Windows must not be called release-ready until signed release evidence and real smoke tests are complete.
 
 | Platform | Status | Public Claim |
 |----------|--------|--------------|
 | macOS | Baseline implemented | Release candidate path exists; official artifacts should be signed/notarized |
-| Windows | Packaging/CI/signing-policy/smoke-evidence/reporting/runbook/collector/bundle-validation/summary/archive-manifest baseline implemented | Do not publish as supported until the Windows checklist passes |
+| Windows | Packaging/CI/signing-policy/smoke-evidence/reporting/runbook/collector/bundle-validation/summary/archive-manifest and desktop picker smoke evidence tooling baselines implemented | Do not publish as supported until the Windows checklist passes |
 | Linux | Deferred | Out of current release scope |
 | Mobile | Out of scope | Not part of this desktop release track |
 
@@ -20,6 +20,15 @@ Current desktop scope: macOS and Windows. macOS has a validated release baseline
 
 ```bash
 npm run validate-windows-smoke-report -- docs/release-evidence/windows-smoke-report.template.json --allow-pending
+```
+
+- Confirm the desktop native picker smoke report tools remain structurally valid for the target packaged artifact directory. Use the target platform that matches the release runner; `--allow-any-platform` is only for structure checks outside the target OS.
+
+```bash
+npm run create-desktop-picker-smoke-report -- --platform darwin --release-dir release --output release/desktop-picker-smoke-report.json
+npm run validate-desktop-picker-smoke-report -- release/desktop-picker-smoke-report.json --allow-pending
+npm run create-desktop-picker-smoke-runbook -- release/desktop-picker-smoke-report.json --output release/desktop-picker-smoke-runbook.md
+npm run update-desktop-picker-smoke-report -- release/desktop-picker-smoke-report.json --list-checks
 ```
 
 - For Windows release jobs, confirm the generated pending report remains structurally valid before uploading artifacts:
@@ -69,6 +78,13 @@ The app must continue to build unsigned local packages when these variables are 
 - Download the generated DMG/ZIP artifacts.
 - Verify the app launches and shows the pet window.
 - Open Control Center and smoke test Pet, Actions, AI, Plugins, Service, and About.
+- Generate a packaged desktop picker smoke report/runbook for the macOS artifact, then fill evidence during a real launched packaged-app run before claiming native picker smoke success:
+
+```bash
+npm run create-desktop-picker-smoke-report -- --platform darwin --release-dir release --output release/desktop-picker-smoke-report.json
+npm run create-desktop-picker-smoke-runbook -- release/desktop-picker-smoke-report.json --output release/desktop-picker-smoke-runbook.md
+npm run update-desktop-picker-smoke-report -- release/desktop-picker-smoke-report.json --list-checks
+```
 
 Current RC target: `v1.0.1-rc.1`.
 
@@ -80,6 +96,15 @@ Run these checks on the signed app or mounted DMG output:
 codesign --verify --deep --strict --verbose=2 "release/mac/OpenPet.app"
 spctl --assess --type execute --verbose=4 "release/mac/OpenPet.app"
 ```
+
+After all macOS packaged native picker checks are filled with concrete evidence, validate readiness:
+
+```bash
+npm run validate-desktop-picker-smoke-report -- release/desktop-picker-smoke-report.json
+npm run validate-desktop-picker-smoke-report -- release/desktop-picker-smoke-report.json --require-signed
+```
+
+The signed readiness command requires valid signing evidence. Do not use a generated pending picker report as proof of picker success.
 
 ## 6. Windows Signing Inputs
 
@@ -121,7 +146,9 @@ Windows release support requires these gates before public release claims:
 - [x] Add a Windows smoke evidence bundle validator for collector output.
 - [x] Add a Windows smoke evidence summary/archive tool for reviewed collector output.
 - [x] Add a Windows smoke archive manifest tool for reviewed archive hashing and consistency checks.
+- [x] Add packaged desktop native picker smoke report, runbook, update, and validation tooling.
 - [ ] Verify install, launch, update check, and uninstall on a clean Windows machine.
+- [ ] Fill and archive packaged native picker smoke evidence for the signed or release-candidate Windows artifact.
 
 The generated `release/windows-smoke-report.json` captures artifact metadata and Authenticode status from the Windows runner, `release/windows-smoke-runbook.md` gives the operator the matching required-check commands, and `release/windows-smoke-collector.ps1` gathers local Windows evidence snapshots. After running the collector on Windows, use `npm run validate-windows-smoke-evidence-bundle` to check the evidence directory shape, required files, hashes, and optional signed-evidence gate, then use `npm run create-windows-smoke-evidence-summary` to archive the reviewed evidence metadata and `npm run create-windows-smoke-archive-manifest` to hash and validate the assembled review archive. All runtime smoke checks remain `pending` until a real Windows validation run fills evidence.
 
@@ -182,6 +209,18 @@ npm run update-windows-smoke-report -- docs/release-evidence/<report>.json --val
 ```
 
 Do not mark the clean-machine validation item complete while the report is still pending or unsigned for an official stable release.
+
+For packaged native picker validation on Windows, generate a desktop picker report/runbook from the Windows artifact directory, fill every required check while running the packaged app, and validate the filled report:
+
+```bash
+npm run create-desktop-picker-smoke-report -- --platform win32 --release-dir release --output release/desktop-picker-smoke-report.json
+npm run create-desktop-picker-smoke-runbook -- release/desktop-picker-smoke-report.json --output release/desktop-picker-smoke-runbook.md
+npm run update-desktop-picker-smoke-report -- release/desktop-picker-smoke-report.json --list-checks
+npm run validate-desktop-picker-smoke-report -- release/desktop-picker-smoke-report.json
+npm run validate-desktop-picker-smoke-report -- release/desktop-picker-smoke-report.json --require-signed
+```
+
+The pending report and runbook are operator aids only. The report proves picker smoke success only after all required checks pass with evidence; the signed command is required before an official Windows support claim.
 
 Windows smoke checks:
 

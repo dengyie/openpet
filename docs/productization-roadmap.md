@@ -1,7 +1,7 @@
 # OpenPet 产品化补齐开发设计文档
 
 > 最后更新：2026-06-15
-> 基线：`main` 已完成平台骨架、核心服务、Control Center、AI 聊天、插件隔离 runner、本地 HTTP/MCP、electron-builder 打包目录验证、macOS 分发基线、Windows 打包/CI/签名策略/冒烟证据、报告、runbook 与 collector/证据包校验/summary/archive-manifest 基线、项目文档治理层，以及 Control Center Playwright UI 回归测试基线。
+> 基线：`main` 已完成平台骨架、核心服务、Control Center、AI 聊天、插件隔离 runner、本地 HTTP/MCP、electron-builder 打包目录验证、macOS 分发基线、Windows 打包/CI/签名策略/冒烟证据、报告、runbook 与 collector/证据包校验/summary/archive-manifest 基线、packaged desktop native picker smoke evidence 工具链、项目文档治理层，以及 Control Center Playwright UI 回归测试基线。
 > 目标：把 OpenPet 从“可开发、可验证、可推 main”的可扩展桌面宠物平台，补齐为“可分发、可运营、可承载生态”的产品；当前桌面发布范围只覆盖 macOS 与 Windows，移动端不进入本轮设计。
 
 ## 1. 当前基线
@@ -10,12 +10,12 @@
 
 - `PetService` 是唯一宠物状态源，AI、插件、HTTP、MCP 都通过它触发 `say`、`playAction`、`setEvent`。
 - Pet pack runtime 已有 `schema` / `loader` / `importer`，并已补齐用户可操作的整包检查、导入、启用、删除体验。
-- Control Center 已覆盖 Pet / Actions / AI / Plugins / Catalog / Service / About；Phase 1 已拆出 root、App shell、pane、hook、api facade、shared component 与 lib helper；Phase 11 已新增 Playwright 冒烟基线，Phase 12 已覆盖 Pet / AI / Service 保存配置 UI 回归，Phase 13 已覆盖 Catalog 安装/更新 UI 回归，Phase 14 已覆盖 Service MCP session 管理 UI 回归，Phase 15 已把文档设计收口为可执行的目标、结构、阶段和支持声明规则，Phase 16 已覆盖手动插件包安装 review UI 回归，Phase 17 已覆盖主进程插件包 IPC 到真实 zip 安装服务链路。
+- Control Center 已覆盖 Pet / Actions / AI / Plugins / Catalog / Service / About；Phase 1 已拆出 root、App shell、pane、hook、api facade、shared component 与 lib helper；Phase 11 已新增 Playwright 冒烟基线，Phase 12 已覆盖 Pet / AI / Service 保存配置 UI 回归，Phase 13 已覆盖 Catalog 安装/更新 UI 回归，Phase 14 已覆盖 Service MCP session 管理 UI 回归，Phase 15 已把文档设计收口为可执行的目标、结构、阶段和支持声明规则，Phase 16 已覆盖手动插件包安装 review UI 回归，Phase 17 已覆盖主进程插件包 IPC 到真实 zip 安装服务链路，Phase 18 已补 packaged app 原生文件选择器烟测证据工具链。
 - AI 已支持 OpenAI-compatible provider、API Key secret 隔离、请求超时、有界持久会话、轻量语义动作触发。
 - 插件已有 manifest 权限白名单、本地插件短生命周期子进程 runner、Node permission model、VM 隔离、受限 SDK、AI/network/storage 能力、插件日志与私有存储 UI。
 - 本地服务已有 token-gated HTTP API、访问日志、`POST /mcp` JSON-RPC bridge、MCP session。
-- `npm run pack` 已通过目录打包验证，`electron-builder` macOS 基础配置可用；Windows `nsis` / `zip` 打包配置、release workflow、平台化更新资产、签名策略护栏、冒烟证据门禁、pending 报告/runbook/collector 产物、证据包校验、summary/archive-manifest 与报告填写工具已落地，但尚未完成真实签名产物验证和 Windows 冒烟。
-- CI / 测试已覆盖 service、pet-pack、plugin、AI、MCP、release、catalog 与主进程 IPC 核心路径，当前 Node 验证为 238 个测试；Control Center 已有 9 个 Playwright UI 测试覆盖 shell、tab、Pet/About 基础交互、Pet/AI/Service 保存配置流程、Catalog 安装/更新流程、Service MCP session 管理，以及手动插件包安装 review。
+- `npm run pack` 已通过目录打包验证，`electron-builder` macOS 基础配置可用；Windows `nsis` / `zip` 打包配置、release workflow、平台化更新资产、签名策略护栏、冒烟证据门禁、pending 报告/runbook/collector 产物、证据包校验、summary/archive-manifest、报告填写工具和 desktop picker smoke evidence 工具链已落地，但尚未完成真实签名产物验证和 Windows 冒烟。
+- CI / 测试已覆盖 service、pet-pack、plugin、AI、MCP、release、catalog、主进程 IPC 与 desktop picker smoke evidence 核心路径，当前 Node 验证为 260 个测试；Control Center 已有 9 个 Playwright UI 测试覆盖 shell、tab、Pet/About 基础交互、Pet/AI/Service 保存配置流程、Catalog 安装/更新流程、Service MCP session 管理，以及手动插件包安装 review。
 - v1.0.1-rc.1 已完成 OpenPet 改名、GitHub 仓库迁移、旧 userData 路径保留与公开 API 命名兼容。
 
 ### 1.2 仍未产品化的深水区
@@ -26,8 +26,8 @@
 | Pet pack | Phase 2 已支持多 pack 列表、整包检查/导入/启用/删除 | 后续补版本升级、包导出、catalog 运营 |
 | AI 行为编排 | 关键词/label/kind 语义匹配 | 结构化 tool-call、可配置行为规则、调试/回放、规则安全边界 |
 | MCP | JSON-RPC bridge、stream handshake、token/session 管理与 Service 页撤销 sessions 已落地 | 外部客户端兼容矩阵与真实客户端验证继续补齐 |
-| 分发 | macOS release baseline 已完成；Windows 打包/CI/签名策略/冒烟证据、报告、runbook 与 collector/证据包校验/summary/archive-manifest 工具基线已落地 | Windows 签名产物验证、安装/卸载冒烟验证、真实 Windows 支持声明 |
-| Control Center / Electron IPC | 已完成 Phase 1 模块化，并新增 Playwright UI 回归基线；保存配置流程已覆盖 Pet / AI / Service；Catalog 安装/更新流程、Service MCP session 管理与手动插件包安装 review 已覆盖；插件包主进程 IPC inspect/install 已使用真实 zip fixture 覆盖 | 继续补 launched Electron / packaged app 下的原生 OS 文件选择器与跨平台安装包烟测 |
+| 分发 | macOS release baseline 已完成；Windows 打包/CI/签名策略/冒烟证据、报告、runbook 与 collector/证据包校验/summary/archive-manifest 工具基线已落地；desktop picker smoke evidence 工具链已落地 | Windows 签名产物验证、安装/卸载冒烟验证、真实 Windows 支持声明、真实 packaged picker evidence 归档 |
+| Control Center / Electron IPC | 已完成 Phase 1 模块化，并新增 Playwright UI 回归基线；保存配置流程已覆盖 Pet / AI / Service；Catalog 安装/更新流程、Service MCP session 管理与手动插件包安装 review 已覆盖；插件包主进程 IPC inspect/install 已使用真实 zip fixture 覆盖；packaged 原生 picker smoke 已有 evidence/report/runbook 工具链 | 继续补真实 launched Electron / packaged app 下的原生 OS 文件选择器与跨平台安装包烟测证据 |
 
 ## 2. 产品化原则
 
@@ -53,7 +53,7 @@ Phase 6  分发、更新与发布流水线
 Phase 7  生态运营闭环
 ```
 
-桌面发布扩展说明：Phase 6 的已交付范围是 macOS 分发基线。Windows 桌面分发属于后续 release-track 扩展；当前已完成打包/CI/签名策略/冒烟证据门禁、pending 报告/runbook/collector 产物、证据包校验、summary/archive-manifest 和报告填写工具，真实签名产物证据和 Windows 冒烟仍按 [`desktop-release-design.md`](./desktop-release-design.md) 的验收门槛推进。
+桌面发布扩展说明：Phase 6 的已交付范围是 macOS 分发基线。Windows 桌面分发属于后续 release-track 扩展；当前已完成打包/CI/签名策略/冒烟证据门禁、pending 报告/runbook/collector 产物、证据包校验、summary/archive-manifest、报告填写工具和 packaged native picker smoke evidence 工具链，真实签名产物证据、真实 packaged picker evidence 和 Windows 冒烟仍按 [`desktop-release-design.md`](./desktop-release-design.md) 的验收门槛推进。
 
 ## 4. Phase 0：基线冻结与开发日志对齐
 
@@ -529,7 +529,7 @@ CSC_KEY_PASSWORD
 
 ### Windows 桌面扩展
 
-后续补齐 Windows 桌面分发时，按 [`desktop-release-design.md`](./desktop-release-design.md) 执行。`build/win` targets（NSIS + ZIP）、`build/icon.ico`、`windows-latest` release job、平台化 About/update 资产筛选、Windows 签名策略护栏、冒烟证据门禁、pending 报告/runbook/collector 产物、证据包校验、summary/archive-manifest 和报告填写工具已经完成；剩余重点是签名产物验证和安装/卸载/透明窗口/插件 runner 冒烟矩阵。完成前，文档与 README 不应声明 Windows release-ready。
+后续补齐 Windows 桌面分发时，按 [`desktop-release-design.md`](./desktop-release-design.md) 执行。`build/win` targets（NSIS + ZIP）、`build/icon.ico`、`windows-latest` release job、平台化 About/update 资产筛选、Windows 签名策略护栏、冒烟证据门禁、pending 报告/runbook/collector 产物、证据包校验、summary/archive-manifest、报告填写工具和 packaged native picker smoke evidence 工具链已经完成；剩余重点是签名产物验证和安装/卸载/透明窗口/插件 runner/原生文件选择器真实冒烟矩阵。完成前，文档与 README 不应声明 Windows release-ready。
 
 ## 11. Phase 7：生态运营闭环
 
@@ -573,14 +573,14 @@ CSC_KEY_PASSWORD
 ### UI 层
 
 - 当前项目已有 Playwright Control Center UI 回归基线，覆盖 app shell、全部 tab、Pet scale / walk speed 交互、About 更新检查状态、Pet / AI / Service 保存配置流程、Catalog 安装/更新流程、Service MCP session 管理，以及手动插件包安装 review。
-- 后续继续扩展关键路径：launched Electron / packaged app 下的原生 OS 文件选择器、真实安装包烟测，以及 Windows clean-machine 验证。
+- 后续继续扩展关键路径：使用 desktop picker smoke evidence 工具链填写真实 packaged app 原生 OS 文件选择器证据、真实安装包烟测，以及 Windows clean-machine 验证。
 
 ### 打包层
 
 - `npm run pack` 保持每阶段可跑。
 - 分发阶段增加 `npm run dist` 验证；当前验证对象是 macOS DMG/ZIP。
 - 对 macOS 签名/公证使用单独 release workflow，避免 PR 泄露证书。
-- Windows 分发继续补齐签名产物验证、安装/卸载冒烟；`windows-latest` 构建、平台资产更新检查、签名策略护栏、冒烟证据门禁、pending 报告/runbook/collector 产物、证据包校验、summary/archive-manifest 和报告填写工具已进入基线。
+- Windows 分发继续补齐签名产物验证、安装/卸载冒烟；`windows-latest` 构建、平台资产更新检查、签名策略护栏、冒烟证据门禁、pending 报告/runbook/collector 产物、证据包校验、summary/archive-manifest、报告填写工具和 desktop picker smoke evidence 工具链已进入基线。
 
 ## 13. 风险清单
 
@@ -591,19 +591,19 @@ CSC_KEY_PASSWORD
 | AI tool-call 被模型误用 | 宠物行为混乱 | actionId 白名单、规则 cooldown、dry-run、关闭开关 |
 | MCP token 泄漏 | 外部控制宠物 | 默认关闭、token 轮换、session revoke、访问日志、loopback only |
 | 签名/公证失败阻塞发布 | 无法安装 | 先建立 unsigned beta 包，再补 signed release；流水线分阶段 |
-| Windows 分发未验证却被对外承诺 | 用户无法安装或被 SmartScreen/路径问题阻断 | 文档只声明 macOS baseline 与 Windows 打包/CI/签名策略/冒烟证据、报告、runbook 与 collector/证据包校验/summary/archive-manifest 基线；Windows 必须通过签名产物验证和冒烟矩阵后再发布 |
+| Windows 分发未验证却被对外承诺 | 用户无法安装或被 SmartScreen/路径问题阻断 | 文档只声明 macOS baseline 与 Windows 打包/CI/签名策略/冒烟证据、报告、runbook 与 collector/证据包校验/summary/archive-manifest、desktop picker smoke evidence 工具链基线；Windows 必须通过签名产物验证和冒烟矩阵后再发布 |
 | Control Center 继续膨胀 | 后续功能难维护 | Phase 1 强制拆分并设文件体量阈值 |
 
 ## 14. 当前收尾状态
 
-Phase 1-7 已完成并合入 `main`。每个阶段均有开发文档与 Production Code Quality Review 文档；Phase 7 完成后，项目已具备 Control Center 模块化、Pet pack 管理、插件安装/权限 review、AI 行为编排、MCP transport、macOS 分发流水线、生态 catalog 与本地 blocklist 治理闭环。v1.0.1-rc.1 在此基线上完成 OpenPet 改名和升级兼容验证准备。Phase 8 已完成 Windows 打包/CI/签名策略/冒烟证据、报告、runbook 与 collector/证据包校验/summary/archive-manifest 基线，但尚未进入“已发布就绪”状态。Phase 9-10 已补齐项目文档治理与文档设计层。Phase 11 新增 Control Center Playwright 冒烟基线，Phase 12 将 Pet / AI / Service 保存配置流程纳入 UI 回归，Phase 13 将 Catalog 安装/更新流程纳入 UI 回归，Phase 14 将 Service MCP session 管理纳入 UI 回归，继续把 UI 验收从纯手动清单推进到项目自带自动化。Phase 15 将项目文档设计进一步收口：修正入口测试徽章漂移，补齐 macOS/Windows 桌面结构决策记录、scope 变更规则、support claim 升级清单和 phase/review 模板。Phase 16 将手动插件包安装 review 纳入 demo API Playwright 回归。Phase 17 将插件包安装从 demo UI 推进到主进程 IPC + 真实 `.openpet-plugin.zip` fixture 覆盖，同时明确真实 Electron 原生 OS 文件选择器和 Windows 安装包验证仍需后续烟测。
+Phase 1-7 已完成并合入 `main`。每个阶段均有开发文档与 Production Code Quality Review 文档；Phase 7 完成后，项目已具备 Control Center 模块化、Pet pack 管理、插件安装/权限 review、AI 行为编排、MCP transport、macOS 分发流水线、生态 catalog 与本地 blocklist 治理闭环。v1.0.1-rc.1 在此基线上完成 OpenPet 改名和升级兼容验证准备。Phase 8 已完成 Windows 打包/CI/签名策略/冒烟证据、报告、runbook 与 collector/证据包校验/summary/archive-manifest 基线，但尚未进入“已发布就绪”状态。Phase 9-10 已补齐项目文档治理与文档设计层。Phase 11 新增 Control Center Playwright 冒烟基线，Phase 12 将 Pet / AI / Service 保存配置流程纳入 UI 回归，Phase 13 将 Catalog 安装/更新流程纳入 UI 回归，Phase 14 将 Service MCP session 管理纳入 UI 回归，继续把 UI 验收从纯手动清单推进到项目自带自动化。Phase 15 将项目文档设计进一步收口：修正入口测试徽章漂移，补齐 macOS/Windows 桌面结构决策记录、scope 变更规则、support claim 升级清单和 phase/review 模板。Phase 16 将手动插件包安装 review 纳入 demo API Playwright 回归。Phase 17 将插件包安装从 demo UI 推进到主进程 IPC + 真实 `.openpet-plugin.zip` fixture 覆盖。Phase 18 将真实 Electron 原生 OS 文件选择器缺口推进为 packaged app smoke evidence 工具链，但真实 macOS / Windows picker evidence 和 Windows 安装包验证仍需后续烟测归档。
 
 ### 完成验证
 
 **所有质量门槛已通过**：
 
 ```bash
-npm test                      # ✅ 238/238 Node tests pass
+npm test                      # ✅ 260/260 Node tests pass
 npm run test:control-center   # ✅ 9/9 Control Center Playwright UI tests pass
 npm run check:syntax          # ✅ all JS syntax pass
 npm run build:control-center  # ✅ Vite build pass
@@ -631,10 +631,11 @@ npm run pack                  # ✅ electron-builder pass
 | 15 | 项目文档设计收口 | 本阶段提交 | ✅ | ✅ | 完成 |
 | 16 | Control Center 手动插件安装自动化 | 本阶段提交 | ✅ | ✅ | 完成 |
 | 17 | Electron 插件包 IPC 安装烟测 | 本阶段提交 | ✅ | ✅ | 完成 |
+| 18 | Desktop 原生文件选择器烟测证据工具链 | 本阶段提交 | ✅ | ✅ | 完成 |
 
 **项目评估结果**：
 - 功能完整性：95%（所有承诺功能已实现）
-- 测试覆盖：238/238 Node 测试通过；9/9 Control Center Playwright UI 测试通过
+- 测试覆盖：260/260 Node 测试通过；9/9 Control Center Playwright UI 测试通过
 - 架构质量：⭐⭐⭐⭐⭐（分层清晰、安全可靠）
 - 代码质量：⭐⭐⭐⭐⭐（模块化彻底、职责单一）
 - 文档完整性：⭐⭐⭐⭐⭐（双语 README、技术文档、版本记录与发布清单完整）
@@ -653,7 +654,7 @@ RC 重点验证：
 
 v1.1 版本规划（可选）：
 1. Windows 签名产物验证与冒烟验证
-2. Launched Electron / packaged app 下的原生 OS 文件选择器验证
+2. 填写并归档 macOS / Windows packaged app 原生 OS 文件选择器真实烟测证据
 3. 更多示例插件（天气、番茄钟、RSS）
 4. 插件开发教程
 5. 用户反馈收集与迭代
