@@ -15,7 +15,7 @@
 - 插件已有 manifest 权限白名单、本地插件短生命周期子进程 runner、Node permission model、VM 隔离、受限 SDK、AI/network/storage 能力、插件日志与私有存储 UI。
 - 本地服务已有 token-gated HTTP API、访问日志、`POST /mcp` JSON-RPC bridge、MCP session。
 - `npm run pack` 已通过目录打包验证，`electron-builder` macOS 基础配置可用；Windows `nsis` / `zip` 打包配置、release workflow、平台化更新资产、签名策略护栏、冒烟证据门禁、pending 报告/runbook/collector 产物、证据包校验、summary/archive-manifest、报告填写工具和 desktop picker smoke evidence 工具链已落地，但尚未完成真实签名产物验证和 Windows 冒烟。
-- CI / 测试已覆盖 service、pet-pack、Codex pet import、plugin、example plugin、plugin submission validation、plugin submission report、plugin submission PR packet、plugin submission workflow bundle、plugin submission bundle validation、RC upgrade smoke evidence、AI、MCP、release、catalog、主进程 IPC 与 desktop picker smoke evidence 核心路径，当前 Node 验证为 305 个测试；Control Center 已有 9 个 Playwright UI 测试覆盖 shell、tab、Pet/About 基础交互、Pet/AI/Service 保存配置流程、Catalog 安装/更新流程、Service MCP session 管理，以及手动插件包安装 review。
+- CI / 测试已覆盖 service、pet-pack、Codex pet import、Codex pet zip import、plugin、example plugin、plugin submission validation、plugin submission report、plugin submission PR packet、plugin submission workflow bundle、plugin submission bundle validation、RC upgrade smoke evidence、AI、MCP、release、catalog、主进程 IPC 与 desktop picker smoke evidence 核心路径，当前 Node 验证为 311 个测试；Control Center 已有 9 个 Playwright UI 测试覆盖 shell、tab、Pet/About 基础交互、Pet/AI/Service 保存配置流程、Catalog 安装/更新流程、Service MCP session 管理，以及手动插件包安装 review。
 - v1.0.1-rc.1 已完成 OpenPet 改名、GitHub 仓库迁移、旧 userData 路径保留与公开 API 命名兼容。
 
 ### 1.2 仍未产品化的深水区
@@ -603,7 +603,7 @@ Phase 1-7 已完成并合入 `main`。每个阶段均有开发文档与 Producti
 **所有质量门槛已通过**：
 
 ```bash
-npm test                      # ✅ 305/305 Node tests pass
+npm test                      # ✅ 311/311 Node tests pass
 npm run test:control-center   # ✅ 9/9 Control Center Playwright UI tests pass
 npm run check:syntax          # ✅ all JS syntax pass
 npm run build:control-center  # ✅ Vite build pass
@@ -644,10 +644,11 @@ npm run pack                  # ✅ electron-builder pass
 | 28 | 插件提交工作流演练手册 | 本阶段提交 | ✅ | ✅ | 完成 |
 | 29 | RC 升级兼容 smoke 证据 | 本阶段提交 | ✅ | ✅ | 完成 |
 | 30 | Codex Pet 原生导入 | 本阶段提交 | ✅ | ✅ | 完成 |
+| 31 | Codex Pet Zip 原生导入 | 本阶段提交 | ✅ | ✅ | 完成 |
 
 **项目评估结果**：
 - 功能完整性：95%（所有承诺功能已实现）
-- 测试覆盖：305/305 Node 测试通过；9/9 Control Center Playwright UI 测试通过
+- 测试覆盖：311/311 Node 测试通过；9/9 Control Center Playwright UI 测试通过
 - 架构质量：⭐⭐⭐⭐⭐（分层清晰、安全可靠）
 - 代码质量：⭐⭐⭐⭐⭐（模块化彻底、职责单一）
 - 文档完整性：⭐⭐⭐⭐⭐（双语 README、技术文档、版本记录与发布清单完整）

@@ -209,11 +209,12 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
 
   ipcMainService.handle(IPC.PET_PACKS_INSPECT_DIRECTORY, async () => {
     const selected = await dialogService.showOpenDialog({
-      title: '选择 Pet Pack 文件夹',
-      properties: ['openDirectory']
+      title: '选择 Pet Pack 文件夹或 Codex Pet 包',
+      properties: ['openFile', 'openDirectory'],
+      filters: [{ name: 'Pet Pack Package', extensions: ['zip'] }]
     })
     if (selected.canceled || !selected.filePaths[0]) return { canceled: true }
-    return { canceled: false, ...petPackService.inspectPackDirectory(selected.filePaths[0]) }
+    return { canceled: false, ...petPackService.inspectPackSource(selected.filePaths[0]) }
   })
 
   ipcMainService.handle(IPC.PET_PACKS_CLEAR_SELECTION, (_event, payload) => {

@@ -3,6 +3,8 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
+const crypto = require('node:crypto')
+const { execFileSync } = require('node:child_process')
 
 const { createActionService } = require('../../src/main/services/action-service')
 const { BUILT_IN_PACK_ID, createPetPackService } = require('../../src/main/services/pet-pack-service')
@@ -25,6 +27,8 @@ const createSettingsService = (initialSettings = {}) => {
 }
 
 const createTempDir = (name) => fs.mkdtempSync(path.join(os.tmpdir(), `openpet-${name}-`))
+
+const sha256 = (filePath) => crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex')
 
 const createPetPackDirectory = (root, manifest = {}) => {
   fs.mkdirSync(path.join(root, 'sprites'), { recursive: true })
@@ -67,6 +71,23 @@ const createCodexPetDirectory = (root, manifest = {}) => {
     description: manifest.description || 'A Codex-compatible pet.',
     spritesheetPath: manifest.spritesheetPath || 'spritesheet.webp'
   }))
+}
+
+const createZipFromDirectory = (sourceDir, zipName = 'pet.codex-pet.zip') => {
+  const zipRoot = createTempDir('pet-pack-zip')
+  const zipPath = path.join(zipRoot, zipName)
+  execFileSync('zip', ['-qr', zipPath, '.'], { cwd: sourceDir })
+  return zipPath
+}
+
+const createUnsafeZip = () => {
+  const sourceRoot = createTempDir('pet-pack-unsafe-src')
+  const nested = path.join(sourceRoot, 'nested')
+  fs.mkdirSync(nested)
+  fs.writeFileSync(path.join(sourceRoot, 'evil.txt'), 'evil')
+  const zipPath = path.join(sourceRoot, 'unsafe.codex-pet.zip')
+  execFileSync('zip', ['-q', zipPath, '../evil.txt'], { cwd: nested })
+  return zipPath
 }
 
 const createService = (settingsService = createSettingsService()) => createPetPackService({
@@ -132,6 +153,118 @@ test('pet pack service inspects and imports a Codex-compatible pet directory', (
   assert.equal(imported.pack.id, 'codex-cat')
   assert.equal(settingsService.get().petPacks.installed['codex-cat'].displayName, 'Codex Cat')
   assert.equal(listed.packs.some((pack) => pack.id === 'codex-cat'), true)
+})
+
+test('pet pack service inspects and imports a Codex-compatible pet zip package', () => {
+  const sourceDir = createTempDir('codex-pet-zip-source')
+  createCodexPetDirectory(sourceDir, { id: 'zip-codex-cat', displayName: 'Zip Codex Cat' })
+  const zipPath = createZipFromDirectory(sourceDir)
+  const settingsService = createSettingsService()
+  const userPacksDir = createTempDir('pet-packs')
+  const service = createPetPackService({
+    settingsService,
+    userPacksDir,
+    projectRoot: '/app/openpet',
+    loadLegacyAnimations: () => ({ defaultAction: 'idle', clickAction: 'idle', actions: [] }),
+    now: () => new Date('2026-06-12T00:00:00.000Z')
+  })
+
+  const inspection = service.inspectPackSource(zipPath)
+  const extractedRoot = inspection.rootPath
+  const imported = service.importPack(inspection.selectionId)
+
+  assert.equal(inspection.valid, true)
+  assert.equal(inspection.folderName, path.basename(zipPath))
+  assert.equal(inspection.pack.id, 'zip-codex-cat')
+  assert.equal(inspection.pack.source, 'codex-pet')
+  assert.equal(inspection.pack.sourcePackageHash, sha256(zipPath))
+  assert.equal(imported.pack.id, 'zip-codex-cat')
+  assert.equal(settingsService.get().petPacks.installed['zip-codex-cat'].sourcePackageHash, sha256(zipPath))
+  assert.equal(fs.existsSync(path.join(userPacksDir, 'zip-codex-cat', 'pet.json')), true)
+  assert.equal(fs.existsSync(extractedRoot), false)
+})
+
+test('pet pack service clears extracted zip selections', () => {
+  const sourceDir = createTempDir('codex-pet-zip-clear-source')
+  createCodexPetDirectory(sourceDir, { id: 'clear-codex-cat' })
+  const zipPath = createZipFromDirectory(sourceDir)
+  const service = createService()
+
+  const inspection = service.inspectPackSource(zipPath)
+  const extractedRoot = inspection.rootPath
+  const result = service.clearPendingSelection(inspection.selectionId)
+
+  assert.equal(result.ok, true)
+  assert.equal(fs.existsSync(extractedRoot), false)
+})
+
+test('pet pack service removes expired extracted zip selections', () => {
+  const sourceDir = createTempDir('codex-pet-zip-expire-source')
+  createCodexPetDirectory(sourceDir, { id: 'expire-codex-cat' })
+  const zipPath = createZipFromDirectory(sourceDir)
+  const settingsService = createSettingsService()
+  let nowMs = 0
+  const service = createPetPackService({
+    settingsService,
+    userPacksDir: createTempDir('pet-packs'),
+    projectRoot: '/app/openpet',
+    loadLegacyAnimations: () => ({ defaultAction: 'idle', clickAction: 'idle', actions: [] }),
+    now: () => new Date('2026-06-12T00:00:00.000Z'),
+    nowMs: () => nowMs
+  })
+
+  const inspection = service.inspectPackSource(zipPath)
+  const extractedRoot = inspection.rootPath
+  nowMs += 11 * 60 * 1000
+
+  assert.throws(() => service.importPack(inspection.selectionId), /expired/)
+  assert.equal(fs.existsSync(extractedRoot), false)
+})
+
+test('pet pack service rejects unsafe pet pack zip entries before extraction', () => {
+  const zipPath = createUnsafeZip()
+  const service = createService()
+
+  const inspection = service.inspectPackSource(zipPath)
+
+  assert.equal(inspection.valid, false)
+  assert.match(inspection.errors[0], /unsafe paths/)
+})
+
+test('pet pack service rejects zip packages with multiple pet roots', () => {
+  const sourceRoot = createTempDir('codex-pet-zip-multiple')
+  fs.mkdirSync(path.join(sourceRoot, 'one'))
+  fs.mkdirSync(path.join(sourceRoot, 'two'))
+  createCodexPetDirectory(path.join(sourceRoot, 'one'), { id: 'one-cat' })
+  createCodexPetDirectory(path.join(sourceRoot, 'two'), { id: 'two-cat' })
+  const zipPath = createZipFromDirectory(sourceRoot)
+  const service = createService()
+
+  const inspection = service.inspectPackSource(zipPath)
+
+  assert.equal(inspection.valid, false)
+  assert.match(inspection.errors[0], /exactly one pet.json root/)
+})
+
+test('pet pack service blocks zip packages denied by source package hash', () => {
+  const sourceDir = createTempDir('codex-pet-zip-blocked-source')
+  createCodexPetDirectory(sourceDir, { id: 'hash-blocked-codex-cat' })
+  const zipPath = createZipFromDirectory(sourceDir)
+  const blockedHash = sha256(zipPath)
+  const service = createPetPackService({
+    settingsService: createSettingsService(),
+    userPacksDir: createTempDir('pet-packs'),
+    projectRoot: '/app/openpet',
+    loadLegacyAnimations: () => ({ defaultAction: 'idle', clickAction: 'idle', actions: [] }),
+    getPetPackBlockStatus: ({ sourceSha256 }) => sourceSha256 === blockedHash
+      ? { blocked: true, reasons: [`sha256:${blockedHash}`] }
+      : { blocked: false, reasons: [] }
+  })
+
+  const inspection = service.inspectPackSource(zipPath)
+
+  assert.equal(inspection.valid, false)
+  assert.match(inspection.errors[0], /blocked/)
 })
 
 test('action service loads the active installed pet pack and uses its root for previews', () => {

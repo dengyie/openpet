@@ -1,17 +1,22 @@
 const fs = require('fs')
 const path = require('path')
+const os = require('os')
 const crypto = require('crypto')
+const { execFileSync } = require('child_process')
 const { pathToFileURL } = require('url')
 const { getLegacyPetAnimations, loadLegacyPetPack, loadPetPackFromDirectory } = require('../pet-pack/loader')
 
 const BUILT_IN_PACK_ID = 'legacy-cat'
 const PET_PACK_SELECTION_TTL_MS = 10 * 60 * 1000
+const SAFE_ZIP_ENTRY_PATTERN = /^[^/\\\0][^\\\0]*$/
 
 const isSafePackId = (packId) => /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(packId || '')
 
 const ensureDirectory = (dirPath) => fs.mkdirSync(dirPath, { recursive: true })
 
 const hashBuffer = (buffer) => crypto.createHash('sha256').update(buffer).digest('hex')
+
+const getFileHash = (filePath) => hashBuffer(fs.readFileSync(filePath))
 
 const listFiles = (rootPath) => {
   const files = []
@@ -32,6 +37,38 @@ const getDirectoryPackageHash = (rootPath) => hashBuffer(Buffer.from(listFiles(r
   const fileHash = hashBuffer(fs.readFileSync(path.join(rootPath, relativePath)))
   return `${relativePath}:${fileHash}`
 }).join('\n'), 'utf-8'))
+
+const assertSafeZipEntry = (entryName) => {
+  if (
+    !SAFE_ZIP_ENTRY_PATTERN.test(entryName) ||
+    path.isAbsolute(entryName) ||
+    /^[a-zA-Z]:[\\/]/.test(entryName) ||
+    entryName.split('/').includes('..')
+  ) {
+    throw new Error('Pet pack package contains unsafe paths')
+  }
+}
+
+const extractZipToTemp = (zipPath) => {
+  if (!fs.existsSync(zipPath)) throw new Error('Pet pack package does not exist')
+  const entries = execFileSync('unzip', ['-Z1', zipPath], { encoding: 'utf-8' })
+    .split(/\r?\n/)
+    .filter(Boolean)
+  entries.forEach(assertSafeZipEntry)
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-pet-pack-zip-'))
+  execFileSync('unzip', ['-qq', zipPath, '-d', tempRoot])
+  return tempRoot
+}
+
+const findPetPackRoot = (extractRoot) => {
+  if (fs.existsSync(path.join(extractRoot, 'pet.json'))) return extractRoot
+  const candidates = fs.readdirSync(extractRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => path.join(extractRoot, entry.name))
+    .filter((entryPath) => fs.existsSync(path.join(entryPath, 'pet.json')))
+  if (candidates.length !== 1) throw new Error('Pet pack package must contain exactly one pet.json root')
+  return candidates[0]
+}
 
 const normalizePetPackSettings = (settings = {}) => ({
   activePackId: settings.activePackId || BUILT_IN_PACK_ID,
@@ -115,6 +152,7 @@ const createPackSummary = (pack, { active = false, installedAt = '', updatedAt =
     previewSprite: previewAction?.sprite
       ? pathToFileURL(path.join(pack.rootPath, previewAction.sprite)).toString()
       : '',
+    sourcePackageHash: pack.metadata?.sourcePackageHash || '',
     previewAction: previewAction ? {
       id: previewAction.id,
       label: previewAction.label || previewAction.id,
@@ -138,6 +176,7 @@ const createPetPackService = ({
   projectRoot = path.join(__dirname, '..', '..', '..'),
   loadLegacyAnimations = getLegacyPetAnimations,
   now = () => new Date(),
+  nowMs = () => Date.now(),
   getPetPackBlockStatus = () => ({ blocked: false, reasons: [] })
 }) => {
   if (!settingsService) throw new Error('settingsService is required')
@@ -244,6 +283,7 @@ const createPetPackService = ({
     }
 
     try {
+      cleanupPendingSelection()
       if (!sourceDir || !fs.existsSync(sourceDir) || !fs.statSync(sourceDir).isDirectory()) {
         throw new Error('Pet pack folder does not exist')
       }
@@ -259,8 +299,10 @@ const createPetPackService = ({
       pendingSelection = {
         id: selectionId,
         sourceDir,
-        inspectedAt: Date.now(),
-        packId: pack.manifest.id
+        inspectedAt: nowMs(),
+        packId: pack.manifest.id,
+        sourceType: 'directory',
+        cleanupPath: ''
       }
     } catch (error) {
       result.errors.push(error.message || 'Pet pack inspection failed')
@@ -270,19 +312,81 @@ const createPetPackService = ({
     return result
   }
 
+  const cleanupPendingSelection = () => {
+    if (pendingSelection?.cleanupPath) {
+      fs.rmSync(pendingSelection.cleanupPath, { recursive: true, force: true })
+    }
+    pendingSelection = null
+  }
+
+  const inspectPackSource = (sourcePath) => {
+    const selectionId = createSelectionId()
+    const result = {
+      selectionId,
+      folderName: path.basename(sourcePath || ''),
+      valid: false,
+      errors: [],
+      pack: null
+    }
+    let cleanupPath = ''
+    try {
+      cleanupPendingSelection()
+      if (!sourcePath || !fs.existsSync(sourcePath)) {
+        throw new Error('Pet pack source does not exist')
+      }
+      let sourceDir = sourcePath
+      let sourceType = 'directory'
+      if (!fs.statSync(sourcePath).isDirectory()) {
+        if (!fs.statSync(sourcePath).isFile() || !/\.zip$/i.test(sourcePath)) {
+          throw new Error('Pet pack source must be a directory or zip package')
+        }
+        sourceDir = extractZipToTemp(sourcePath)
+        cleanupPath = sourceDir
+        sourceType = 'zip'
+      }
+      const petPackRoot = findPetPackRoot(sourceDir)
+      assertNoSymlinks(petPackRoot)
+      const packageHash = getDirectoryPackageHash(petPackRoot)
+      const sourcePackageHash = sourceType === 'zip' ? getFileHash(sourcePath) : ''
+      const pack = loadPetPackFromDirectory(petPackRoot)
+      if (!isSafePackId(pack.manifest.id)) throw new Error('Pet pack id is invalid')
+      if (pack.manifest.id === BUILT_IN_PACK_ID) throw new Error('Pet pack id is reserved for the built-in pack')
+      const blockStatus = assertPackAllowed({ id: pack.manifest.id, sha256: packageHash, sourceSha256: sourcePackageHash })
+      validatePackFiles(pack)
+      result.valid = true
+      result.rootPath = petPackRoot
+      result.pack = { ...createPackSummary({ ...pack, metadata: { packageHash, sourcePackageHash } }), packageHash, sourcePackageHash, blockStatus }
+      cleanupPendingSelection()
+      pendingSelection = {
+        id: selectionId,
+        sourceDir: petPackRoot,
+        inspectedAt: nowMs(),
+        packId: pack.manifest.id,
+        sourceType,
+        cleanupPath,
+        sourcePackageHash
+      }
+    } catch (error) {
+      if (cleanupPath) fs.rmSync(cleanupPath, { recursive: true, force: true })
+      result.errors.push(error.message || 'Pet pack inspection failed')
+      pendingSelection = null
+    }
+    return result
+  }
+
   const getPendingSelection = (selectionId) => {
     if (!pendingSelection || pendingSelection.id !== selectionId) {
       throw new Error('Selected pet pack folder is no longer available')
     }
-    if (Date.now() - pendingSelection.inspectedAt > PET_PACK_SELECTION_TTL_MS) {
-      pendingSelection = null
+    if (nowMs() - pendingSelection.inspectedAt > PET_PACK_SELECTION_TTL_MS) {
+      cleanupPendingSelection()
       throw new Error('Selected pet pack folder expired')
     }
     return pendingSelection
   }
 
   const clearPendingSelection = (selectionId) => {
-    if (!selectionId || pendingSelection?.id === selectionId) pendingSelection = null
+    if (!selectionId || pendingSelection?.id === selectionId) cleanupPendingSelection()
     return { ok: true }
   }
 
@@ -295,7 +399,7 @@ const createPetPackService = ({
     if (!isSafePackId(packId)) throw new Error('Pet pack id is invalid')
     if (packId === BUILT_IN_PACK_ID) throw new Error('Pet pack id is reserved for the built-in pack')
     const contentPackageHash = packageHash || getDirectoryPackageHash(selection.sourceDir)
-    const downloadedPackageHash = sourcePackageHash || ''
+    const downloadedPackageHash = sourcePackageHash || selection.sourcePackageHash || ''
     assertPackAllowed({ id: packId, packageHash: contentPackageHash, sourceSha256: downloadedPackageHash })
     ensureDirectory(userPacksDir)
     const targetDir = path.join(userPacksDir, packId)
@@ -327,7 +431,7 @@ const createPetPackService = ({
         }
       }
     })
-    pendingSelection = null
+    cleanupPendingSelection()
     return { pack: createPackSummary({ ...installedPack, source: { type: 'user-installed', path: targetDir } }), petPacks: nextSettings }
   }
 
@@ -358,6 +462,7 @@ const createPetPackService = ({
     getActivePetPack,
     listPacks,
     inspectPackDirectory,
+    inspectPackSource,
     clearPendingSelection,
     importPack,
     setActivePack,

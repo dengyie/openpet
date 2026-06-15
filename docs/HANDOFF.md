@@ -1,7 +1,7 @@
 # OpenPet 项目交接文档
 
 > 最后更新：2026-06-16 | 分支：`main`
-> 当前状态：v1.0 产品化基线已完成；v1.0.1-rc.1 完成 OpenPet 改名、GitHub 仓库迁移与升级兼容；Control Center Playwright UI 回归基线已扩展至 Phase 16；Phase 17 已补主进程插件包 IPC + 真实 zip fixture 烟测；Phase 18 已补 macOS / Windows packaged app 原生文件选择器烟测证据工具链；Phase 19 已把项目文档设计完善为可执行的阶段闭环、生命周期、完成标准和决策记录；Phase 20 已补 Focus Timer 示例插件、插件开发文档与真实本地插件服务测试；Phase 21 已补 Weather Status 示例插件、network allowlist 开发者路径与真实本地插件服务测试；Phase 22 已补 RSS Reader 示例插件、公开 feed 开发者路径与真实本地插件服务测试；Phase 23 已补插件提交前校验 CLI；Phase 24 已补插件提交审核包生成 CLI；Phase 25 已补插件提交 PR 模板与 PR packet CLI；Phase 26 已补插件提交工作流包 CLI；Phase 27 已补插件提交工作流包验证 CLI；Phase 28 已补插件提交工作流演练手册；Phase 29 已补 RC 升级兼容 smoke 证据工具；Phase 30 已补 Codex pet 原生导入；macOS 分发基线已完成，Windows 打包/CI/签名策略/冒烟证据、报告、runbook 与 collector/证据包校验/summary/archive-manifest、packaged native picker smoke evidence 工具基线已落地但尚未 release-ready
+> 当前状态：v1.0 产品化基线已完成；v1.0.1-rc.1 完成 OpenPet 改名、GitHub 仓库迁移与升级兼容；Control Center Playwright UI 回归基线已扩展至 Phase 16；Phase 17 已补主进程插件包 IPC + 真实 zip fixture 烟测；Phase 18 已补 macOS / Windows packaged app 原生文件选择器烟测证据工具链；Phase 19 已把项目文档设计完善为可执行的阶段闭环、生命周期、完成标准和决策记录；Phase 20 已补 Focus Timer 示例插件、插件开发文档与真实本地插件服务测试；Phase 21 已补 Weather Status 示例插件、network allowlist 开发者路径与真实本地插件服务测试；Phase 22 已补 RSS Reader 示例插件、公开 feed 开发者路径与真实本地插件服务测试；Phase 23 已补插件提交前校验 CLI；Phase 24 已补插件提交审核包生成 CLI；Phase 25 已补插件提交 PR 模板与 PR packet CLI；Phase 26 已补插件提交工作流包 CLI；Phase 27 已补插件提交工作流包验证 CLI；Phase 28 已补插件提交工作流演练手册；Phase 29 已补 RC 升级兼容 smoke 证据工具；Phase 30 已补 Codex pet 原生导入；Phase 31 已补 Codex pet zip 原生导入；macOS 分发基线已完成，Windows 打包/CI/签名策略/冒烟证据、报告、runbook 与 collector/证据包校验/summary/archive-manifest、packaged native picker smoke evidence 工具基线已落地但尚未 release-ready
 > **项目评估：95/100 分，建议发布 v1.0.1 RC 后提升正式版**（详见 [project-status-review.md](./project-status-review.md)）
 
 ---
@@ -34,9 +34,9 @@
 
 1. [`project-documentation-design.md`](./project-documentation-design.md)：项目目标锚点、文档分层、支持声明规则和阶段治理。
 2. 本文件：当前事实状态、文件地图、待办和开发命令。
-3. [`development-summary.md`](./development-summary.md)：截至 Phase 30 的阶段开发小结、质量基线和下一步建议。
+3. [`development-summary.md`](./development-summary.md)：截至 Phase 31 的阶段开发小结、质量基线和下一步建议。
 4. [`desktop-release-design.md`](./desktop-release-design.md) 与 [`release-checklist.md`](./release-checklist.md)：macOS + Windows 桌面发布边界、签名、冒烟证据和验收门槛。
-5. 最新的 `docs/phases/phase-*.md` 与 `docs/reviews/phase-*-review.md`：具体阶段的实现记录、review、验证和残留风险。当前最新阶段为 [`phase-30-codex-pet-import.md`](./phases/phase-30-codex-pet-import.md) 与 [`phase-30-codex-pet-import-review.md`](./reviews/phase-30-codex-pet-import-review.md)。
+5. 最新的 `docs/phases/phase-*.md` 与 `docs/reviews/phase-*-review.md`：具体阶段的实现记录、review、验证和残留风险。当前最新阶段为 [`phase-31-codex-pet-zip-import.md`](./phases/phase-31-codex-pet-zip-import.md) 与 [`phase-31-codex-pet-zip-import-review.md`](./reviews/phase-31-codex-pet-zip-import-review.md)。
 
 当前支持口径必须保持为：macOS release baseline complete；Windows desktop build/CI/signing-policy/smoke-evidence/reporting/runbook/collector/bundle-validation/summary/archive-manifest and packaged native picker smoke evidence tooling baselines implemented but not release-ready；移动端不在当前范围。
 
@@ -47,7 +47,7 @@
 | 指标 | 结果 | 说明 |
 |------|------|------|
 | **功能完整性** | 95% | 所有承诺功能已实现 |
-| **测试覆盖** | 305 Node + 9 UI ✅ | service / release / 主进程 IPC / 示例插件 / 插件提交校验、审核包、PR packet、workflow bundle 与 workflow bundle validation / RC upgrade smoke evidence / Codex pet import / desktop picker smoke evidence 门禁覆盖；Control Center Playwright UI 回归基线 |
+| **测试覆盖** | 311 Node + 9 UI ✅ | service / release / 主进程 IPC / 示例插件 / 插件提交校验、审核包、PR packet、workflow bundle 与 workflow bundle validation / RC upgrade smoke evidence / Codex pet import / desktop picker smoke evidence 门禁覆盖；Control Center Playwright UI 回归基线 |
 | **架构质量** | ⭐⭐⭐⭐⭐ | 分层清晰、安全可靠 |
 | **代码质量** | ⭐⭐⭐⭐⭐ | 模块化彻底、职责单一 |
 | **文档完整性** | ⭐⭐⭐⭐⭐ | 双语 README、技术文档、版本记录与发布清单完整 |
@@ -58,7 +58,7 @@
 ## 测试与验收
 
 ```bash
-npm test                  # 305 Node tests, all pass
+npm test                  # 311 Node tests, all pass
 npm run test:control-center # 9 Control Center Playwright UI tests, all pass
 npm run build:control-center  # Vite build pass
 npm run generate-sprites  # CLI works
@@ -236,7 +236,7 @@ scripts/create-desktop-picker-smoke-runbook.js # 从 report 生成 packaged nati
 tests/release/desktop-picker-smoke-report.test.js # desktop picker report / signature / artifact 选择测试
 tests/release/desktop-picker-smoke-runbook-update.test.js # desktop picker runbook / update tool 测试
 docs/project-documentation-design.md       # 项目目标、文档生命周期、阶段闭环、完成标准与支持声明规则
-docs/development-summary.md                # 截至 Phase 30 的阶段开发小结、质量基线与下一步建议
+docs/development-summary.md                # 截至 Phase 31 的阶段开发小结、质量基线与下一步建议
 src/main/pet-pack/codex-pet.js             # Codex-compatible pet manifest adapter 与 WebP atlas 尺寸校验
 src/main/pet-pack/loader.js                # 自动识别 OpenPet manifest 或 Codex pet manifest
 renderer.js                                # 桌宠窗口支持 atlas row/column 与逐帧 duration 播放
@@ -267,6 +267,8 @@ docs/phases/phase-29-rc-upgrade-smoke-evidence.md # Phase 29 RC 升级兼容 smo
 docs/reviews/phase-29-rc-upgrade-smoke-evidence-review.md # Phase 29 review 与验证记录
 docs/phases/phase-30-codex-pet-import.md # Phase 30 Codex pet 原生导入记录
 docs/reviews/phase-30-codex-pet-import-review.md # Phase 30 review 与验证记录
+docs/phases/phase-31-codex-pet-zip-import.md # Phase 31 Codex pet zip 原生导入记录
+docs/reviews/phase-31-codex-pet-zip-import-review.md # Phase 31 review 与验证记录
 examples/plugins/focus-timer/              # 已纳入测试的 Focus Timer 本地插件示例
 tests/examples/focus-timer-plugin.test.js  # 示例插件 inspect/install/run service 覆盖
 examples/plugins/weather-status/           # 已纳入测试的 Weather Status 本地插件示例，覆盖 network allowlist
@@ -364,7 +366,7 @@ npm start                    # 构建 Control Center + 启动 Electron
 npm run dev:control-center   # http://127.0.0.1:5173
 
 # 测试
-npm test                     # 305 Node tests
+npm test                     # 311 Node tests
 npm run test:control-center  # 9 Control Center Playwright UI tests
 
 # 精灵图生成

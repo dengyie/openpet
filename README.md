@@ -4,7 +4,7 @@
 
 **An extensible, distributable, and operable Electron desktop pet platform**
 
-[![Tests](https://img.shields.io/badge/tests-305%20node%20%2B%209%20ui-success)](./tests)
+[![Tests](https://img.shields.io/badge/tests-311%20node%20%2B%209%20ui-success)](./tests)
 [![Build](https://img.shields.io/badge/build-passing-success)](./package.json)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Version](https://img.shields.io/badge/version-1.0.1--rc.1-blue.svg)](./package.json)
@@ -126,7 +126,7 @@ npm start
 ```bash
 npm start                    # Build Control Center + launch Electron
 npm run dev:control-center   # Control Center hot reload (http://127.0.0.1:5173)
-npm test                     # Run Node tests (305 tests)
+npm test                     # Run Node tests (311 tests)
 npm run test:control-center  # Run Control Center Playwright UI regression tests
 npm run check:syntax         # JS syntax validation
 npm run generate-sprites     # Regenerate sprite sheets from cat_anime/flames/
@@ -188,6 +188,7 @@ npm run dist                 # Generate current-host installer (macOS validated:
 - [Phase 28 - Plugin Submission Workflow Playbook](./docs/phases/phase-28-plugin-submission-workflow-playbook.md)
 - [Phase 29 - RC Upgrade Smoke Evidence](./docs/phases/phase-29-rc-upgrade-smoke-evidence.md)
 - [Phase 30 - Codex Pet Import](./docs/phases/phase-30-codex-pet-import.md)
+- [Phase 31 - Codex Pet Zip Import](./docs/phases/phase-31-codex-pet-zip-import.md)
 
 ---
 
@@ -332,7 +333,7 @@ For more details, see [plugin-development.md](./docs/plugin-development.md), [pl
 
 ## 🧪 Testing
 
-The project uses **Node native test runner** for service/release/IPC/example-plugin coverage with **305 tests all passing**, plus a **Playwright Control Center UI regression baseline** with 9 UI tests.
+The project uses **Node native test runner** for service/release/IPC/example-plugin coverage with **311 tests all passing**, plus a **Playwright Control Center UI regression baseline** with 9 UI tests.
 
 ```bash
 npm test                     # Run Node tests

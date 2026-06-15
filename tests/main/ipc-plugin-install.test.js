@@ -84,6 +84,7 @@ const createRequiredServices = ({ pluginInstallService, pluginService, dialogSer
   petPackService: {
     listPacks: () => [],
     inspectPackDirectory: () => ({}),
+    inspectPackSource: () => ({}),
     clearPendingSelection: () => ({ ok: true }),
     importPack: () => ({ ok: true }),
     setActivePack: () => ({ ok: true }),
@@ -136,6 +137,57 @@ const createRequiredServices = ({ pluginInstallService, pluginService, dialogSer
   getMovementState: () => null,
   createSettingsWindow: () => {},
   dialogService
+})
+
+test('pet-packs:inspect-directory opens native folder or zip picker and delegates selected source', async () => {
+  const ipcMain = createIpcMainStub()
+  const dialogCalls = []
+  const inspectedPaths = []
+  const selectedPath = path.join(os.tmpdir(), 'clawd.codex-pet.zip')
+
+  registerIpcHandlers({
+    ...createRequiredServices({
+      pluginInstallService: {
+        inspectPluginPackage: () => ({}),
+        clearPendingSelection: () => ({ ok: true }),
+        installPlugin: () => ({ ok: true }),
+        updatePlugin: () => ({ ok: true }),
+        uninstallPlugin: () => ({ ok: true })
+      },
+      pluginService: { listPlugins: () => [] },
+      dialogService: {
+        showOpenDialog: async (options) => {
+          dialogCalls.push(options)
+          return { canceled: false, filePaths: [selectedPath] }
+        }
+      }
+    }),
+    petPackService: {
+      listPacks: () => [],
+      inspectPackDirectory: () => {
+        throw new Error('directory-only inspect should not be called')
+      },
+      inspectPackSource: (sourcePath) => {
+        inspectedPaths.push(sourcePath)
+        return { selectionId: 'sel-1', valid: true, pack: { id: 'clawd' } }
+      },
+      clearPendingSelection: () => ({ ok: true }),
+      importPack: () => ({ ok: true }),
+      setActivePack: () => ({ ok: true }),
+      removePack: () => ({ ok: true })
+    },
+    ipcMainService: ipcMain
+  })
+
+  const result = await ipcMain.handlers.get(IPC.PET_PACKS_INSPECT_DIRECTORY)()
+
+  assert.equal(result.canceled, false)
+  assert.equal(result.selectionId, 'sel-1')
+  assert.deepEqual(inspectedPaths, [selectedPath])
+  assert.equal(dialogCalls.length, 1)
+  assert.equal(dialogCalls[0].title, '选择 Pet Pack 文件夹或 Codex Pet 包')
+  assert.deepEqual(dialogCalls[0].properties, ['openFile', 'openDirectory'])
+  assert.deepEqual(dialogCalls[0].filters[0], { name: 'Pet Pack Package', extensions: ['zip'] })
 })
 
 test('plugins:inspect-package opens native package picker options and returns canceled without inspecting', async () => {
