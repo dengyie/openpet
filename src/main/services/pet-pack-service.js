@@ -255,7 +255,7 @@ const createPetPackService = ({
       const blockStatus = assertPackAllowed({ id: pack.manifest.id, sha256: packageHash })
       validatePackFiles(pack)
       result.valid = true
-      result.pack = { ...createPackSummary({ ...pack, source: { type: 'directory', path: sourceDir } }), packageHash, blockStatus }
+      result.pack = { ...createPackSummary(pack), packageHash, blockStatus }
       pendingSelection = {
         id: selectionId,
         sourceDir,

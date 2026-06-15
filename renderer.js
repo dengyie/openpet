@@ -66,7 +66,10 @@ const say = (text, duration = state.bubbleDuration) => {
 // ═══════════════════════════════════════════
 
 // 动画引擎内部状态，外部模块不感知
-let frameStep = 0   // 每帧的 background-position-x 偏移量（px）
+let frameStepX = 0  // 每帧的 background-position-x 偏移量（px）
+let frameStepY = 0  // 每帧的 background-position-y 偏移量（px）
+let frameColumn = 0 // 当前动作在 atlas 内的起始列
+let frameRow = 0    // 当前动作在 atlas 内的行
 let frameCount = 0  // 当前动作总帧数
 
 /**
@@ -88,7 +91,24 @@ const tickFrame = () => {
     const a = state.animations[state.action]
     if (a?.loop) { state.frameIndex = 0 } else { setAction(state.defaultAction); return }
   }
-  catEl.style.backgroundPositionX = -(state.frameIndex * frameStep) + 'px'
+  renderCurrentFrame()
+  scheduleFrameTick()
+}
+
+const getFrameDuration = (animation, frameIndex) => {
+  const durations = Array.isArray(animation?.frameDurations) ? animation.frameDurations : []
+  return durations[frameIndex] || animation?.frameMs || 100
+}
+
+const renderCurrentFrame = () => {
+  catEl.style.backgroundPositionX = -((frameColumn + state.frameIndex) * frameStepX) + 'px'
+  catEl.style.backgroundPositionY = -(frameRow * frameStepY) + 'px'
+}
+
+const scheduleFrameTick = () => {
+  const a = state.animations[state.action]
+  window.clearTimeout(state.frameTimer)
+  state.frameTimer = window.setTimeout(tickFrame, getFrameDuration(a, state.frameIndex))
 }
 
 /**
@@ -108,13 +128,17 @@ const setAction = (action) => {
   catEl.style.width = dims.width + 'px'
   catEl.style.height = dims.height + 'px'
   catEl.style.backgroundImage = 'url(' + a.sprite + ')'
-  catEl.style.backgroundPositionX = '0px'
-
-  frameStep = Math.round(a.frameWidth * dims.fitScale)
+  frameStepX = Math.round(a.frameWidth * dims.fitScale)
+  frameStepY = Math.round(a.frameHeight * dims.fitScale)
+  frameColumn = a.frameColumn || 0
+  frameRow = a.frameRow || 0
   frameCount = a.frameCount
+  const atlasColumns = a.atlas?.columns || a.frameCount
+  const atlasRows = a.atlas?.rows || 1
+  catEl.style.backgroundSize = `${Math.round(atlasColumns * frameStepX)}px ${Math.round(atlasRows * frameStepY)}px`
+  renderCurrentFrame()
 
-  window.clearInterval(state.frameTimer)
-  state.frameTimer = window.setInterval(tickFrame, a.frameMs)
+  scheduleFrameTick()
 
   // 点击触发的非待机动作 → 停步 + 显示动作名
   if (action === state.clickAction && action !== state.defaultAction) {

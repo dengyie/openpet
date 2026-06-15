@@ -54,18 +54,44 @@ const toPositiveInteger = (value, fieldName, { min = 1, max = Number.MAX_SAFE_IN
 const normalizeAction = (action) => {
   assertSafeId(action?.id, 'action.id')
   const sprite = assertSafeRelativePath(action?.sprite, `action(${action.id}).sprite`)
-
-  return {
+  const frameCount = toPositiveInteger(action.frameCount, `action(${action.id}).frameCount`)
+  const frameMs = toPositiveInteger(action.frameMs, `action(${action.id}).frameMs`, { min: MIN_FRAME_MS, max: MAX_FRAME_MS })
+  const normalized = {
     id: action.id,
     label: action.label || action.id,
     kind: action.kind || inferActionKind(action.id),
     loop: Boolean(action.loop),
-    frameCount: toPositiveInteger(action.frameCount, `action(${action.id}).frameCount`),
-    frameMs: toPositiveInteger(action.frameMs, `action(${action.id}).frameMs`, { min: MIN_FRAME_MS, max: MAX_FRAME_MS }),
+    frameCount,
+    frameMs,
     frameWidth: toPositiveInteger(action.frameWidth, `action(${action.id}).frameWidth`),
     frameHeight: toPositiveInteger(action.frameHeight, `action(${action.id}).frameHeight`),
     sprite
   }
+
+  if (action.frameRow != null) {
+    normalized.frameRow = toPositiveInteger(action.frameRow, `action(${action.id}).frameRow`, { min: 0 })
+  }
+  if (action.frameColumn != null) {
+    normalized.frameColumn = toPositiveInteger(action.frameColumn, `action(${action.id}).frameColumn`, { min: 0 })
+  }
+  if (Array.isArray(action.frameDurations)) {
+    if (action.frameDurations.length !== frameCount) {
+      throw new Error(`pet pack action(${action.id}).frameDurations must match frameCount`)
+    }
+    normalized.frameDurations = action.frameDurations.map((duration, index) => (
+      toPositiveInteger(duration, `action(${action.id}).frameDurations[${index}]`, { min: MIN_FRAME_MS, max: MAX_FRAME_MS })
+    ))
+  }
+  if (action.atlas && typeof action.atlas === 'object' && !Array.isArray(action.atlas)) {
+    normalized.atlas = {
+      columns: toPositiveInteger(action.atlas.columns, `action(${action.id}).atlas.columns`),
+      rows: toPositiveInteger(action.atlas.rows, `action(${action.id}).atlas.rows`),
+      width: toPositiveInteger(action.atlas.width, `action(${action.id}).atlas.width`),
+      height: toPositiveInteger(action.atlas.height, `action(${action.id}).atlas.height`)
+    }
+  }
+
+  return normalized
 }
 
 const normalizePetPackManifest = (manifest) => {

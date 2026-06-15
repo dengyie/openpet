@@ -1,5 +1,6 @@
 const fs = require('fs')
 const path = require('path')
+const { isCodexPetManifest, normalizeCodexPetManifest } = require('./codex-pet')
 const { normalizePetPackManifest } = require('./schema')
 
 const PET_MANIFEST_FILE = 'pet.json'
@@ -18,12 +19,16 @@ const withLegacyActionDefaults = (action = {}) => ({
 
 const loadPetPackFromDirectory = (rootPath) => {
   const manifestPath = path.join(rootPath, PET_MANIFEST_FILE)
-  const manifest = normalizePetPackManifest(JSON.parse(fs.readFileSync(manifestPath, 'utf-8')))
+  const rawManifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
+  const isCodexPet = isCodexPetManifest(rawManifest)
+  const manifest = isCodexPet
+    ? normalizeCodexPetManifest(rawManifest, { rootPath })
+    : normalizePetPackManifest(rawManifest)
   return {
     rootPath,
     manifest,
     source: {
-      type: 'directory',
+      type: isCodexPet ? 'codex-pet' : 'directory',
       path: rootPath
     }
   }

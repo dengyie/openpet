@@ -42,6 +42,42 @@ test('normalizes a minimal pet pack manifest with defaults', () => {
   })
 })
 
+test('normalizes atlas metadata and per-frame durations for shared spritesheets', () => {
+  const manifest = normalizePetPackManifest({
+    id: 'codex-cat',
+    actions: [
+      {
+        id: 'idle',
+        sprite: 'spritesheet.webp',
+        frameCount: 6,
+        frameMs: 280,
+        frameWidth: 192,
+        frameHeight: 208,
+        frameRow: 0,
+        frameColumn: 0,
+        frameDurations: [280, 110, 110, 140, 140, 320],
+        atlas: { columns: 8, rows: 9, width: 1536, height: 1872 }
+      }
+    ]
+  })
+
+  assert.deepEqual(manifest.actions[0], {
+    id: 'idle',
+    label: 'idle',
+    kind: 'idle',
+    loop: false,
+    frameCount: 6,
+    frameMs: 280,
+    frameWidth: 192,
+    frameHeight: 208,
+    frameRow: 0,
+    frameColumn: 0,
+    frameDurations: [280, 110, 110, 140, 140, 320],
+    atlas: { columns: 8, rows: 9, width: 1536, height: 1872 },
+    sprite: 'spritesheet.webp'
+  })
+})
+
 test('rejects manifests without actions', () => {
   assert.throws(
     () => normalizePetPackManifest({ id: 'cat', actions: [] }),

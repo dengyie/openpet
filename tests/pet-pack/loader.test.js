@@ -6,6 +6,20 @@ const path = require('node:path')
 
 const { getLegacyPetAnimations, loadPetPackFromDirectory, loadLegacyPetPack } = require('../../src/main/pet-pack/loader')
 
+const createMinimalWebp = ({ width, height }) => {
+  const riffSize = 22
+  const buffer = Buffer.alloc(30)
+  buffer.write('RIFF', 0, 'ascii')
+  buffer.writeUInt32LE(riffSize, 4)
+  buffer.write('WEBP', 8, 'ascii')
+  buffer.write('VP8X', 12, 'ascii')
+  buffer.writeUInt32LE(10, 16)
+  buffer.writeUInt8(0, 20)
+  buffer.writeUIntLE(width - 1, 24, 3)
+  buffer.writeUIntLE(height - 1, 27, 3)
+  return buffer
+}
+
 test('loads and normalizes a pet pack manifest from a directory', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-pet-pack-'))
   fs.mkdirSync(path.join(root, 'sprites'))
@@ -25,6 +39,81 @@ test('loads and normalizes a pet pack manifest from a directory', () => {
   assert.equal(pack.manifest.id, 'cat')
   assert.equal(pack.manifest.defaultAction, 'idle')
   assert.equal(pack.manifest.actions[0].sprite, 'sprites/idle.png')
+})
+
+test('loads a Codex-compatible pet manifest from a directory', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-codex-pet-'))
+  fs.writeFileSync(path.join(root, 'spritesheet.webp'), createMinimalWebp({ width: 1536, height: 1872 }))
+  fs.writeFileSync(path.join(root, 'pet.json'), JSON.stringify({
+    id: 'codex-cat',
+    displayName: 'Codex Cat',
+    description: 'A generated Codex pet.',
+    spritesheetPath: 'spritesheet.webp'
+  }))
+
+  const pack = loadPetPackFromDirectory(root)
+
+  assert.equal(pack.rootPath, root)
+  assert.equal(pack.source.type, 'codex-pet')
+  assert.equal(pack.manifest.id, 'codex-cat')
+  assert.equal(pack.manifest.displayName, 'Codex Cat')
+  assert.equal(pack.manifest.defaultAction, 'idle')
+  assert.equal(pack.manifest.clickAction, 'waving')
+  assert.deepEqual(pack.manifest.actions.map((action) => action.id), [
+    'idle',
+    'running-right',
+    'running-left',
+    'waving',
+    'jumping',
+    'failed',
+    'waiting',
+    'running',
+    'review'
+  ])
+  assert.deepEqual(pack.manifest.actions[0], {
+    id: 'idle',
+    label: 'Idle',
+    kind: 'idle',
+    loop: true,
+    frameCount: 6,
+    frameMs: 280,
+    frameWidth: 192,
+    frameHeight: 208,
+    frameRow: 0,
+    frameColumn: 0,
+    frameDurations: [280, 110, 110, 140, 140, 320],
+    atlas: { columns: 8, rows: 9, width: 1536, height: 1872 },
+    sprite: 'spritesheet.webp'
+  })
+})
+
+test('rejects Codex pet manifests with unsafe spritesheet paths', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-codex-pet-unsafe-'))
+  fs.writeFileSync(path.join(root, 'pet.json'), JSON.stringify({
+    id: 'codex-cat',
+    displayName: 'Codex Cat',
+    spritesheetPath: '../spritesheet.webp'
+  }))
+
+  assert.throws(
+    () => loadPetPackFromDirectory(root),
+    /spritesheetPath must be a safe relative path/
+  )
+})
+
+test('rejects Codex pet atlases with unexpected dimensions', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-codex-pet-size-'))
+  fs.writeFileSync(path.join(root, 'spritesheet.webp'), createMinimalWebp({ width: 384, height: 416 }))
+  fs.writeFileSync(path.join(root, 'pet.json'), JSON.stringify({
+    id: 'codex-cat',
+    displayName: 'Codex Cat',
+    spritesheetPath: 'spritesheet.webp'
+  }))
+
+  assert.throws(
+    () => loadPetPackFromDirectory(root),
+    /Codex pet atlas must be 1536x1872/
+  )
 })
 
 test('fills legacy animation defaults before strict manifest normalization', () => {

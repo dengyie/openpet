@@ -533,6 +533,7 @@ button {
 
 .pet-pack-preview img,
 .pet-pack-identity img,
+.sprite-frame,
 .pet-pack-thumb {
   width: 52px;
   height: 52px;
@@ -540,6 +541,10 @@ button {
   object-fit: contain;
   border: 1px solid #dde2e8;
   background: #fff;
+}
+
+.sprite-frame {
+  background-repeat: no-repeat;
 }
 
 .pet-pack-preview div,

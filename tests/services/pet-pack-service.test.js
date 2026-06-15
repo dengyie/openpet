@@ -46,6 +46,29 @@ const createPetPackDirectory = (root, manifest = {}) => {
   }))
 }
 
+const createMinimalWebp = ({ width, height }) => {
+  const buffer = Buffer.alloc(30)
+  buffer.write('RIFF', 0, 'ascii')
+  buffer.writeUInt32LE(22, 4)
+  buffer.write('WEBP', 8, 'ascii')
+  buffer.write('VP8X', 12, 'ascii')
+  buffer.writeUInt32LE(10, 16)
+  buffer.writeUInt8(0, 20)
+  buffer.writeUIntLE(width - 1, 24, 3)
+  buffer.writeUIntLE(height - 1, 27, 3)
+  return buffer
+}
+
+const createCodexPetDirectory = (root, manifest = {}) => {
+  fs.writeFileSync(path.join(root, manifest.spritesheetPath || 'spritesheet.webp'), createMinimalWebp({ width: 1536, height: 1872 }))
+  fs.writeFileSync(path.join(root, 'pet.json'), JSON.stringify({
+    id: manifest.id || 'codex-cat',
+    displayName: manifest.displayName || 'Codex Cat',
+    description: manifest.description || 'A Codex-compatible pet.',
+    spritesheetPath: manifest.spritesheetPath || 'spritesheet.webp'
+  }))
+}
+
 const createService = (settingsService = createSettingsService()) => createPetPackService({
   settingsService,
   userPacksDir: createTempDir('pet-packs'),
@@ -89,6 +112,26 @@ test('pet pack service inspects and imports a valid pack directory', () => {
   assert.equal(imported.pack.id, 'pack-cat')
   assert.equal(settingsService.get().petPacks.installed['pack-cat'].version, '1.0.0')
   assert.equal(listed.packs.some((pack) => pack.id === 'pack-cat'), true)
+})
+
+test('pet pack service inspects and imports a Codex-compatible pet directory', () => {
+  const sourceDir = createTempDir('codex-pet-source')
+  createCodexPetDirectory(sourceDir)
+  const settingsService = createSettingsService()
+  const service = createService(settingsService)
+
+  const inspection = service.inspectPackDirectory(sourceDir)
+  const imported = service.importPack(inspection.selectionId)
+  const listed = service.listPacks()
+
+  assert.equal(inspection.valid, true)
+  assert.equal(inspection.pack.id, 'codex-cat')
+  assert.equal(inspection.pack.source, 'codex-pet')
+  assert.equal(inspection.pack.actionCount, 9)
+  assert.equal(inspection.pack.previewAction.frameWidth, 192)
+  assert.equal(imported.pack.id, 'codex-cat')
+  assert.equal(settingsService.get().petPacks.installed['codex-cat'].displayName, 'Codex Cat')
+  assert.equal(listed.packs.some((pack) => pack.id === 'codex-cat'), true)
 })
 
 test('action service loads the active installed pet pack and uses its root for previews', () => {

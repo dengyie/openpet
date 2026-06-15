@@ -6,10 +6,18 @@ function ActionPreview({ action }) {
   useEffect(() => {
     setFrameIndex(0)
     if (!action || action.frameCount <= 1) return undefined
-    const timer = window.setInterval(() => {
-      setFrameIndex((current) => (current + 1) % action.frameCount)
-    }, action.frameMs || 100)
-    return () => window.clearInterval(timer)
+    let timeoutId = 0
+    const tick = () => {
+      setFrameIndex((current) => {
+        const next = (current + 1) % action.frameCount
+        const durations = Array.isArray(action.frameDurations) ? action.frameDurations : []
+        timeoutId = window.setTimeout(tick, durations[next] || action.frameMs || 100)
+        return next
+      })
+    }
+    const durations = Array.isArray(action.frameDurations) ? action.frameDurations : []
+    timeoutId = window.setTimeout(tick, durations[0] || action.frameMs || 100)
+    return () => window.clearTimeout(timeoutId)
   }, [action])
 
   if (!action) {
@@ -24,6 +32,10 @@ function ActionPreview({ action }) {
   const displayWidth = Math.max(1, Math.round(frameWidth * fitScale))
   const displayHeight = Math.max(1, Math.round(frameHeight * fitScale))
   const sprite = action.previewSprite || action.sprite
+  const frameColumn = Number(action.frameColumn || 0)
+  const frameRow = Number(action.frameRow || 0)
+  const atlasColumns = Number(action.atlas?.columns || action.frameCount || 1)
+  const atlasRows = Number(action.atlas?.rows || 1)
 
   return (
     <div className="action-preview">
@@ -35,7 +47,9 @@ function ActionPreview({ action }) {
               width: `${displayWidth}px`,
               height: `${displayHeight}px`,
               backgroundImage: `url(${sprite})`,
-              backgroundPositionX: `${-(frameIndex * displayWidth)}px`
+              backgroundPositionX: `${-((frameColumn + frameIndex) * displayWidth)}px`,
+              backgroundPositionY: `${-(frameRow * displayHeight)}px`,
+              backgroundSize: `${atlasColumns * displayWidth}px ${atlasRows * displayHeight}px`
             }}
           />
         ) : <div className="empty-chat">无预览图片</div>}
@@ -45,6 +59,30 @@ function ActionPreview({ action }) {
         <span>{action.frameCount || 0} frames · {action.frameMs || 100}ms</span>
       </div>
     </div>
+  )
+}
+
+function SpriteFrame({ sprite, action, className = 'sprite-frame' }) {
+  if (!sprite || !action) return <div className="pet-pack-thumb" />
+  const frameWidth = Number(action.frameWidth || 0)
+  const frameHeight = Number(action.frameHeight || 0)
+  if (!frameWidth || !frameHeight) return <div className="pet-pack-thumb" />
+
+  const frameColumn = Number(action.frameColumn || 0)
+  const frameRow = Number(action.frameRow || 0)
+  const atlasColumns = Number(action.atlas?.columns || action.frameCount || 1)
+  const atlasRows = Number(action.atlas?.rows || 1)
+
+  return (
+    <div
+      className={className}
+      style={{
+        backgroundImage: `url(${sprite})`,
+        backgroundPositionX: `${-(frameColumn * 52)}px`,
+        backgroundPositionY: `${-(frameRow * 52)}px`,
+        backgroundSize: `${atlasColumns * 52}px ${atlasRows * 52}px`
+      }}
+    />
   )
 }
 
@@ -105,7 +143,7 @@ function PetPackInspectionReport({ report }) {
       </div>
       {pack?.previewSprite ? (
         <div className="pet-pack-preview">
-          <img src={pack.previewSprite} alt="" />
+          <SpriteFrame sprite={pack.previewSprite} action={pack.previewAction} />
           <div>
             <strong>{pack.displayName}</strong>
             <span>{pack.id}</span>
@@ -311,7 +349,7 @@ export function ActionsPane({
           ) : petPacks.packs.map((pack) => (
             <div className={pack.active ? 'pet-pack-row active' : 'pet-pack-row'} key={pack.id}>
               <div className="pet-pack-identity">
-                {pack.previewSprite ? <img src={pack.previewSprite} alt="" /> : <div className="pet-pack-thumb" />}
+                <SpriteFrame sprite={pack.previewSprite} action={pack.previewAction} />
                 <div>
                   <strong>{pack.displayName}</strong>
                   <span>{pack.id} · {pack.version}</span>
