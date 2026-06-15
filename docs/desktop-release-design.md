@@ -4,7 +4,7 @@
 
 ## 1. Current Baseline
 
-OpenPet is already an Electron desktop pet runtime platform with a macOS release baseline, a Windows packaging/CI/signing-policy/smoke-evidence/reporting/runbook/collector/bundle-validation/summary/archive-manifest baseline, and a packaged desktop native picker smoke evidence toolchain:
+OpenPet is already an Electron desktop pet runtime platform with a macOS release baseline, a Windows packaging/CI/signing-policy/smoke-evidence/reporting/runbook/collector/bundle-validation/summary/archive-manifest baseline, packaged desktop native picker and runtime smoke evidence toolchains, and a release-level evidence archive manifest:
 
 - `npm start` builds the Control Center and launches Electron for development.
 - `npm run pack` creates a local directory package with the current electron-builder config.
@@ -16,10 +16,12 @@ OpenPet is already an Electron desktop pet runtime platform with a macOS release
 - Windows release policy is enforced in CI: stable Windows tags require signing secrets, while unsigned prerelease assets are explicitly labeled before upload.
 - `npm run create-windows-smoke-report` creates a pending Windows smoke report from release artifacts on the Windows runner, `npm run create-windows-smoke-runbook` generates the matching operator runbook, `npm run create-windows-smoke-collector` generates a PowerShell evidence collector, `npm run validate-windows-smoke-evidence-bundle` checks collector output, `npm run create-windows-smoke-evidence-summary` archives reviewed collector/report metadata, `npm run create-windows-smoke-archive-manifest` hashes and validates a reviewed smoke archive, `npm run update-windows-smoke-report` fills evidence during real validation, and `npm run validate-windows-smoke-report` validates structured Windows smoke evidence reports.
 - `npm run create-desktop-picker-smoke-report` creates a pending packaged macOS or Windows native picker smoke report, `npm run create-desktop-picker-smoke-runbook` generates the matching operator guide, `npm run update-desktop-picker-smoke-report` fills picker evidence, and `npm run validate-desktop-picker-smoke-report` validates smoke readiness or signed official readiness.
+- `npm run create-packaged-runtime-smoke-report` creates a pending packaged runtime smoke report, `npm run create-packaged-runtime-smoke-runbook` generates the matching operator guide, `npm run update-packaged-runtime-smoke-report` fills runtime evidence, and `npm run validate-packaged-runtime-smoke-report` validates smoke readiness or signed official readiness.
+- `npm run create-release-evidence-archive-manifest` hashes and validates a release-level archive containing macOS signing/notarization/Gatekeeper evidence plus Windows smoke, desktop picker, and packaged runtime reports. The manifest separates archive validity from `releaseReady`.
 - The pending template lives at `docs/release-evidence/windows-smoke-report.template.json`.
 - `docs/release-checklist.md` documents macOS signing, notarization, update checks, and upgrade compatibility.
 
-Windows is an Electron-compatible target with build configuration, CI release jobs, update asset filtering, signing policy, smoke evidence schema, pending report/runbook/collector artifact generation, evidence bundle validation, evidence summary/archive-manifest tooling, report filling tooling, and desktop picker smoke evidence tooling in place, but it is not release-ready yet. The remaining gates are signed artifact evidence, SmartScreen/reputation expectations, GitHub Actions run evidence, filled packaged picker evidence, and a real Windows smoke-test matrix.
+Windows is an Electron-compatible target with build configuration, CI release jobs, update asset filtering, signing policy, smoke evidence schema, pending report/runbook/collector artifact generation, evidence bundle validation, evidence summary/archive-manifest tooling, report filling tooling, desktop picker/runtime smoke evidence tooling, and release-level evidence archive tooling in place, but it is not release-ready yet. The remaining gates are signed artifact evidence, SmartScreen/reputation expectations, GitHub Actions run evidence, filled packaged picker/runtime evidence, and a real Windows smoke-test matrix.
 
 ## 2. Platform Support Statement
 
@@ -102,6 +104,15 @@ npm run validate-desktop-picker-smoke-report -- release/desktop-picker-smoke-rep
 ```
 
 The first command proves picker smoke readiness. The second is required before an official signed desktop release claim. Do not treat the pending report or runbook as proof of native picker success.
+
+Release evidence archives are tracked with one manifest that points at the already reviewed evidence files. A pending or unsigned archive can be valid for review while still reporting `releaseReady: false`:
+
+```bash
+npm run create-release-evidence-archive-manifest -- --archive-dir docs/release-evidence/<release-archive>
+npm run create-release-evidence-archive-manifest -- --archive-dir docs/release-evidence/<release-archive> --require-signed
+```
+
+The signed command is required before an official desktop release claim. It expects successful macOS codesign, notarization, and Gatekeeper evidence files plus signed-ready Windows smoke, desktop picker, and packaged runtime reports.
 
 ## 6. Desktop Verification Matrix
 

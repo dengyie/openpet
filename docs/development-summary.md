@@ -5,7 +5,7 @@
 > Current release track: `v1.0.1-rc.2`
 
 This is the short engineering summary for the current repository state. For long phase history, read `docs/phases/` and `docs/reviews/`. For support claims and documentation rules, read `docs/project-documentation-design.md`.
-For the next execution-oriented productization sequence, read `docs/productization-next-steps-design.md`. For the implementation-oriented TODO breakdown, read `docs/productization-todo-design.md`.
+For the next execution-oriented productization sequence, read `docs/productization-v1.1-todo-design.md`, then use `docs/productization-next-steps-design.md` and `docs/productization-todo-design.md` for older planning context.
 
 ## Current State
 
@@ -27,12 +27,14 @@ OpenPet is now a desktop pet platform with:
 - Bundled pet renderer fix so packaged sprite URLs resolve correctly.
 - TypeScript migration scaffold with `tsconfig.json`, `npm run typecheck`, shared IPC contracts, and typed Control Center view defaults.
 - Productization TODO design that turns the remaining review items into prioritized implementation phases.
+- v1.1 TODO design that turns the Phase 37+ open work into phase-ready release evidence, plugin, pet pack, AI debugging, TypeScript, and documentation tracks.
 - Packaged runtime smoke evidence tooling for pet window, transparency, sprite visibility, built-in pet pack switching, and linked picker evidence.
+- Release evidence archive manifest tooling that hashes and validates macOS signing evidence plus Windows smoke, desktop picker, and packaged runtime reports without claiming readiness for pending evidence.
 
 ## Validation Baseline
 
 ```bash
-npm test                     # 342/342 Node tests
+npm test                     # 352/352 Node tests
 npm run test:control-center  # 9/9 Playwright UI tests
 npm run typecheck            # TypeScript no-emit checks
 npm run check:syntax         # Node syntax + typecheck + Control Center build
@@ -41,13 +43,13 @@ npm run check:syntax         # Node syntax + typecheck + Control Center build
 ## What Still Needs Care
 
 - Windows is still not release-ready until real signed installer evidence and smoke reports are archived.
-- Packaged native picker and packaged runtime smoke evidence still need real archived runs.
+- Packaged native picker, packaged runtime, and signed release archive evidence still need real archived runs.
 - The plugin ecosystem has submission tooling and example assets, but wider community onboarding is still future work.
 - The next prioritized work is filling real packaged runtime/picker evidence, release evidence hardening, and continuing TypeScript contract migration.
 
 ## Next Migration Steps
 
-1. Use `docs/productization-next-steps-design.md` and `docs/productization-todo-design.md` to drive the next productization phases.
+1. Use `docs/productization-v1.1-todo-design.md` to drive the next productization phases.
 2. Expand TypeScript from shared IPC and Control Center view contracts into the Control Center API facade, hooks, and main-process service boundaries.
 3. Keep `npm start` functional during each migration step.
 4. Keep new user-facing configuration in Control Center, not in hidden JSON files.

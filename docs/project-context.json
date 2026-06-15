@@ -18,17 +18,20 @@
     "Codex pet directory and zip import are supported",
     "Bundled pets include doro, duodong, and chispa",
     "TypeScript migration baseline covers shared IPC and Control Center view contracts",
-    "Packaged runtime smoke evidence tooling is available but real archived runtime evidence is still pending"
+    "Packaged runtime smoke evidence tooling is available but real archived runtime evidence is still pending",
+    "Release evidence archive manifest tooling is available but real signed release evidence is still pending",
+    "The Phase 38+ TODO design lives in docs/productization-v1.1-todo-design.md"
   ],
   "validation": {
-    "nodeTests": 342,
+    "nodeTests": 352,
     "uiTests": 9,
     "commands": [
       "npm test",
       "npm run test:control-center",
       "npm run typecheck",
       "npm run check:syntax",
-      "npm run validate-packaged-runtime-smoke-report"
+      "npm run validate-packaged-runtime-smoke-report",
+      "npm run create-release-evidence-archive-manifest"
     ]
   },
   "releaseNotes": {

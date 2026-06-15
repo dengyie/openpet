@@ -2,12 +2,12 @@
 
 > Purpose: keep local test builds, signed releases, and public artifacts reproducible without exposing signing credentials.
 
-Current desktop scope: macOS and Windows. macOS has a validated release baseline; Windows has packaging/CI/update-asset/signing-policy/smoke-evidence/reporting/runbook/collector/bundle-validation/summary/archive-manifest baselines, and both desktop platforms have packaged native picker smoke evidence tooling. Windows must not be called release-ready until signed release evidence and real smoke tests are complete.
+Current desktop scope: macOS and Windows. macOS has a validated release baseline; Windows has packaging/CI/update-asset/signing-policy/smoke-evidence/reporting/runbook/collector/bundle-validation/summary/archive-manifest baselines, both desktop platforms have packaged native picker/runtime smoke evidence tooling, and release-level evidence archives have a manifest gate. Windows must not be called release-ready until signed release evidence and real smoke tests are complete.
 
 | Platform | Status | Public Claim |
 |----------|--------|--------------|
 | macOS | Baseline implemented | Release candidate path exists; official artifacts should be signed/notarized |
-| Windows | Packaging/CI/signing-policy/smoke-evidence/reporting/runbook/collector/bundle-validation/summary/archive-manifest and desktop picker smoke evidence tooling baselines implemented | Do not publish as supported until the Windows checklist passes |
+| Windows | Packaging/CI/signing-policy/smoke-evidence/reporting/runbook/collector/bundle-validation/summary/archive-manifest and desktop picker/runtime smoke evidence tooling baselines implemented | Do not publish as supported until the Windows checklist passes |
 | Linux | Deferred | Out of current release scope |
 | Mobile | Out of scope | Not part of this desktop release track |
 
@@ -44,6 +44,12 @@ npm run create-windows-smoke-collector -- release/windows-smoke-report.json --ou
 
 ```bash
 npm run update-windows-smoke-report -- --list-checks
+```
+
+- Confirm the release evidence archive manifest tool can parse its options:
+
+```bash
+npm run create-release-evidence-archive-manifest -- --help
 ```
 
 - Confirm `npm run pack` creates an unsigned directory package.
@@ -221,6 +227,24 @@ npm run validate-desktop-picker-smoke-report -- release/desktop-picker-smoke-rep
 ```
 
 The pending report and runbook are operator aids only. The report proves picker smoke success only after all required checks pass with evidence; the signed command is required before an official Windows support claim.
+
+For a release-level archive, assemble a reviewed directory with:
+
+- `windows-smoke-report.json`
+- `desktop-picker-smoke-report.json`
+- `packaged-runtime-smoke-report.json`
+- `macos-codesign.txt`
+- `macos-notarization.txt`
+- `macos-gatekeeper.txt`
+
+Then generate the archive manifest:
+
+```bash
+npm run create-release-evidence-archive-manifest -- --archive-dir docs/release-evidence/<release-archive>
+npm run create-release-evidence-archive-manifest -- --archive-dir docs/release-evidence/<release-archive> --require-signed
+```
+
+The first command can archive pending review material. The second command is required before an official desktop release claim and must produce `releaseReady: true`.
 
 Windows smoke checks:
 
