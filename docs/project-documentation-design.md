@@ -47,10 +47,35 @@ Use these principles before creating, moving, or rewriting documentation:
 - **Public docs stay conservative**: README files can mention capability and direction, but release readiness, security claims, and platform support must come from evidence-backed docs.
 - **Current state beats roadmap**: if a roadmap and HANDOFF disagree, update the roadmap or mark it historical; do not let future intent override current truth.
 - **Phase docs are audit records**: phase and review files describe what was true when the phase landed. They should not be continuously rewritten just because test totals or later tooling changed.
+- **Phase packages are indivisible**: implementation, phase notes, review notes, verification, and an independent commit close one phase before the next phase starts.
 - **Bilingual entry, focused depth**: README should remain readable in English and Chinese; deep operating details can stay in the most relevant technical or release document.
 - **No hidden configuration**: docs must keep repeating the product rule that new user-facing configuration belongs in Control Center, not in secret manual JSON edits.
 - **Security boundaries are first-class**: plugin permissions, API-key isolation, local HTTP/MCP defaults, and release signing evidence deserve explicit documentation whenever touched.
 - **Evidence names the claim**: every platform-support sentence should make clear whether it is about build configuration, CI artifacts, signed release evidence, or runtime smoke validation.
+
+### 3.1 Documentation Operating Model
+
+OpenPet documentation works as a project memory system, not as a separate writing task. The operating loop is:
+
+1. Start from the project goal anchor and the active macOS + Windows desktop scope.
+2. Implement one narrow phase against the service, UI, release, or ecosystem layer that owns the change.
+3. Record what changed in `docs/phases/` while the details are fresh.
+4. Review the phase in `docs/reviews/`, with findings and residual risks first.
+5. Update live documents only for facts that changed now: support wording, current status, file maps, commands, test totals, or reader paths.
+6. Verify the phase with commands appropriate to the blast radius.
+7. Commit that phase independently before opening the next one.
+
+Document lifecycles are intentionally different:
+
+| Lifecycle | Examples | Update Pattern |
+|-----------|----------|----------------|
+| Live status | README, HANDOFF, status review, release checklist | Keep current; update whenever the claim changes. |
+| Normative rules | This document, AGENTS | Update only when project rules, scope, or invariants change. |
+| Technical reference | Architecture docs, MCP docs, catalog docs | Update when the subsystem contract changes. |
+| Evidence | Release reports, smoke reports, generated manifests | Append or regenerate from tooling; do not hand-wave the result. |
+| Historical audit | Phase docs and review docs | Append during the phase; avoid later rewriting except explicit corrections. |
+
+This loop is the guardrail for the user's original request: OpenPet should keep moving as an extensible, distributable, operable desktop platform, and the documentation should make that continuity obvious to the next contributor.
 
 ## 4. Documentation Layers
 
@@ -74,6 +99,28 @@ When documents disagree, prefer the narrowest factual source for the topic:
 - Original goal, documentation governance, and support wording: this document.
 - Implementation history: phase docs and review docs.
 - Contributor constraints: `AGENTS.md`.
+
+### 4.1 Repository Documentation Topology
+
+The persistent documentation layout should stay close to this shape:
+
+```text
+README.md / README.zh-CN.md        # public entry and conservative support wording
+AGENTS.md                          # local contributor constraints
+docs/HANDOFF.md                    # current project state and next work
+docs/project-documentation-design.md # goal anchor and documentation operating model
+docs/jishuwendang.md               # Chinese technical architecture reference
+docs/productization-roadmap.md     # productization sequence and long-running risks
+docs/project-status-review.md      # milestone-level project assessment
+docs/desktop-release-design.md     # macOS + Windows release architecture
+docs/release-checklist.md          # release operator checklist
+docs/release-evidence/             # structured release and smoke evidence
+docs/phases/                       # phase implementation records
+docs/reviews/                      # paired phase reviews
+docs/*-usage.md / *-compatibility.md / *-evaluation.md # subsystem references
+```
+
+New folders should earn their place by having a distinct lifecycle. For example, release evidence deserves its own folder because it is structured and generated; phase records deserve their own folder because they are append-only audit history. A single conceptual note usually belongs inside the existing owner document instead.
 
 ## 5. Documentation Map
 
@@ -220,9 +267,27 @@ Phase 17 is an Electron plugin package IPC smoke phase. It keeps production IPC 
 
 Phase 18 is a desktop native picker smoke evidence phase. It adds macOS / Windows packaged-app picker smoke report generation, update tooling, runbook generation, and readiness validation. It records the remaining boundary explicitly: generated pending reports and runbooks do not prove picker success until a real packaged app run fills evidence and validates without `--allow-pending`.
 
+Phase 19 is a project documentation design completion phase. It keeps runtime and release truth unchanged, expands this document with the documentation operating model, lifecycle categories, repository topology, phase completion contract, documentation done criteria, anti-patterns, and decision records, and records the documentation-only work with a paired review.
+
 Do not skip the review document. If a phase changes release claims, security boundaries, plugin permissions, or API-key handling, the review must explicitly state whether those boundaries still hold.
 
-### 9.1 Phase Document Minimum Template
+### 9.1 Phase Completion Contract
+
+A phase is complete only when all of these are true:
+
+| Requirement | Evidence |
+|-------------|----------|
+| Scope is narrow and named | Phase document states the goal and non-goals. |
+| Implementation is present or the phase is explicitly documentation-only | Changed files are listed in the phase document. |
+| Tests or checks match the risk | Verification commands and outcomes are recorded. |
+| Review happened after implementation | Paired review document leads with findings or explicitly says none were found. |
+| Live docs reflect changed facts | README, HANDOFF, roadmap, release docs, or status review are updated only when their facts changed. |
+| Repository is left handoff-ready | Residual risks and next work are documented. |
+| Commit boundary is clean | The phase is committed before unrelated next-phase work begins. |
+
+This contract matters more than phase size. A small documentation phase still needs a review and verification record; a large implementation phase still needs to stay narrow enough that the next contributor can understand exactly what changed.
+
+### 9.2 Phase Document Minimum Template
 
 Each new phase document should include these sections unless the phase is explicitly exploratory:
 
@@ -243,7 +308,7 @@ Each new phase document should include these sections unless the phase is explic
 
 The phase document should name the exact files changed, the commands run, and the remaining risk in plain language. It should not claim a broader platform, security, or release status than the implementation proves.
 
-### 9.2 Review Document Minimum Template
+### 9.3 Review Document Minimum Template
 
 Each paired review should lead with findings:
 
@@ -260,6 +325,17 @@ Each paired review should lead with findings:
 ```
 
 If there are findings, order them by severity and include file references. If there are no findings, explicitly say so and still record test gaps or release/security residual risk.
+
+### 9.4 Phase Numbering And Naming
+
+Use the next integer `Phase N` for ordinary productization work. Use decimal labels only when a phase is a clear continuation of one release track, as the Windows Phase 8 substeps did. File names should be descriptive and stable:
+
+```text
+docs/phases/phase-N-short-topic.md
+docs/reviews/phase-N-short-topic-review.md
+```
+
+Prefer topic names that describe the deliverable, not the implementation detail. For example, `example-plugin-developer-asset` is better than `add-files-to-examples` because it explains why the phase exists.
 
 ## 10. Cross-Platform Scope
 
@@ -484,9 +560,51 @@ Every live document should satisfy these checks:
 
 Before committing documentation-only work, run at least a link/path sanity check with `rg` plus `npm run check:syntax` when package scripts, code snippets, or release scripts are touched. If only Markdown prose changed, `git diff --check` is the minimum whitespace check.
 
-## 16. Current Documentation Status
+### 15.1 Documentation Done Criteria
 
-The repository now has a coherent phase history through Phase 18:
+Use this checklist before closing any documentation-affecting phase:
+
+| Check | Pass Condition |
+|-------|----------------|
+| Goal preserved | The original goal still reads as an extensible, distributable, operable Electron desktop pet platform. |
+| Scope preserved | macOS + Windows desktop remains the active scope; mobile remains out of scope. |
+| Windows wording conservative | Windows is not called release-ready unless signed artifact evidence and real smoke validation exist. |
+| Ownership respected | Detailed procedures live in the owner document and secondary docs link or summarize. |
+| Phase package complete | Phase doc, review doc, verification, and commit boundary are present. |
+| Commands truthful | Any command shown to users exists in `package.json` or is standard platform tooling. |
+| Counts current | Live test totals and badge counts match the last verified run. |
+| Historical docs stable | Old phase records are not rewritten just to refresh counts or modern wording. |
+
+If a phase changes only documentation rules, do not update product capability claims. If a phase changes only product capability, do not invent new documentation governance unless the existing rules are insufficient.
+
+### 15.2 Documentation Anti-Patterns
+
+Avoid these patterns because they are how drift usually starts:
+
+- Copying the full release checklist into README instead of linking to `docs/release-checklist.md`.
+- Updating the roadmap as if planned work has landed.
+- Calling generated pending evidence a passed smoke test.
+- Adding a new top-level document for a paragraph that belongs in the ownership matrix.
+- Letting phase docs omit verification because the change was "only docs".
+- Updating test counts in current docs without running or reading the relevant verification output.
+- Treating Windows build tooling as Windows public support.
+- Mentioning mobile as a current product path without a separate architecture decision.
+
+## 16. Documentation Decision Records
+
+Durable documentation decisions should be recorded here when they affect future work. Keep them short and append-only.
+
+| Decision | Status | Rationale |
+|----------|--------|-----------|
+| The project goal anchor lives in this document. | Active | It prevents the original platform intent from being scattered across README, roadmap, and handoff notes. |
+| Phase work requires a paired review document. | Active | The review record makes residual risk visible before the next phase starts. |
+| Live support wording separates macOS baseline from Windows evidence baseline. | Active | Windows tooling exists, but signed artifacts and real Windows smoke validation are still missing. |
+| Mobile remains out of scope for the current track. | Active | The Electron desktop structure does not provide mobile runtime, UI, packaging, or asset-pipeline support. |
+| Documentation-only governance changes can be their own phase. | Active | Governance affects every later contributor and deserves the same audit trail as code. |
+
+## 17. Current Documentation Status
+
+The repository now has a coherent phase history through Phase 19:
 
 - Phase 1-7 document the platform productization arc from Control Center modularization through ecosystem operations.
 - Phase 8 documents the macOS + Windows desktop release extension.
@@ -500,11 +618,12 @@ The repository now has a coherent phase history through Phase 18:
 - Phase 16 expands the Control Center Playwright baseline to manual plugin package install review flows in demo API mode.
 - Phase 17 expands Node regression coverage to the main-process plugin package IPC inspect/install path with a real zip fixture.
 - Phase 18 adds packaged macOS / Windows native picker smoke evidence tooling: pending report generation, report updates, runbook generation, signed-readiness validation, and release-document alignment.
+- Phase 19 expands the documentation design into a fuller operating model: documentation lifecycles, repository topology, phase completion contract, done criteria, anti-patterns, and decision records.
 - macOS release baseline is complete.
 - Windows package targets, icon generation, CI/release jobs, platform-aware About/update asset filtering, signing policy enforcement, smoke evidence validation, CI pending report, runbook, collector generation, evidence bundle validation, evidence summary/archive generation, archive manifest generation, and report filling tooling are implemented.
 - Signed Windows artifact evidence, filled packaged native picker evidence, and real Windows smoke validation remain open release gates.
 
-## 17. Next Documentation Priorities
+## 18. Next Documentation Priorities
 
 The next documentation work should follow the implementation track rather than inventing a parallel roadmap:
 

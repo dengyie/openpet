@@ -1,7 +1,7 @@
 # OpenPet 项目交接文档
 
 > 最后更新：2026-06-15 | 分支：`main`
-> 当前状态：v1.0 产品化基线已完成；v1.0.1-rc.1 完成 OpenPet 改名、GitHub 仓库迁移与升级兼容；Control Center Playwright UI 回归基线已扩展至 Phase 16；Phase 17 已补主进程插件包 IPC + 真实 zip fixture 烟测；Phase 18 已补 macOS / Windows packaged app 原生文件选择器烟测证据工具链；项目文档设计已完成 Phase 15 收口；macOS 分发基线已完成，Windows 打包/CI/签名策略/冒烟证据、报告、runbook 与 collector/证据包校验/summary/archive-manifest、packaged native picker smoke evidence 工具基线已落地但尚未 release-ready
+> 当前状态：v1.0 产品化基线已完成；v1.0.1-rc.1 完成 OpenPet 改名、GitHub 仓库迁移与升级兼容；Control Center Playwright UI 回归基线已扩展至 Phase 16；Phase 17 已补主进程插件包 IPC + 真实 zip fixture 烟测；Phase 18 已补 macOS / Windows packaged app 原生文件选择器烟测证据工具链；Phase 19 已把项目文档设计完善为可执行的阶段闭环、生命周期、完成标准和决策记录；macOS 分发基线已完成，Windows 打包/CI/签名策略/冒烟证据、报告、runbook 与 collector/证据包校验/summary/archive-manifest、packaged native picker smoke evidence 工具基线已落地但尚未 release-ready
 > **项目评估：95/100 分，建议发布 v1.0.1 RC 后提升正式版**（详见 [project-status-review.md](./project-status-review.md)）
 
 ---
@@ -33,7 +33,7 @@
 1. [`project-documentation-design.md`](./project-documentation-design.md)：项目目标锚点、文档分层、支持声明规则和阶段治理。
 2. 本文件：当前事实状态、文件地图、待办和开发命令。
 3. [`desktop-release-design.md`](./desktop-release-design.md) 与 [`release-checklist.md`](./release-checklist.md)：macOS + Windows 桌面发布边界、签名、冒烟证据和验收门槛。
-4. 最新的 `docs/phases/phase-*.md` 与 `docs/reviews/phase-*-review.md`：具体阶段的实现记录、review、验证和残留风险。当前最新阶段为 [`phase-18-desktop-native-picker-smoke-evidence.md`](./phases/phase-18-desktop-native-picker-smoke-evidence.md) 与 [`phase-18-desktop-native-picker-smoke-evidence-review.md`](./reviews/phase-18-desktop-native-picker-smoke-evidence-review.md)。
+4. 最新的 `docs/phases/phase-*.md` 与 `docs/reviews/phase-*-review.md`：具体阶段的实现记录、review、验证和残留风险。当前最新阶段为 [`phase-19-project-documentation-design-completion.md`](./phases/phase-19-project-documentation-design-completion.md) 与 [`phase-19-project-documentation-design-completion-review.md`](./reviews/phase-19-project-documentation-design-completion-review.md)。
 
 当前支持口径必须保持为：macOS release baseline complete；Windows desktop build/CI/signing-policy/smoke-evidence/reporting/runbook/collector/bundle-validation/summary/archive-manifest and packaged native picker smoke evidence tooling baselines implemented but not release-ready；移动端不在当前范围。
 
@@ -232,6 +232,9 @@ scripts/validate-desktop-picker-smoke-report.js # 校验 desktop picker smoke re
 scripts/create-desktop-picker-smoke-runbook.js # 从 report 生成 packaged native picker smoke runbook
 tests/release/desktop-picker-smoke-report.test.js # desktop picker report / signature / artifact 选择测试
 tests/release/desktop-picker-smoke-runbook-update.test.js # desktop picker runbook / update tool 测试
+docs/project-documentation-design.md       # 项目目标、文档生命周期、阶段闭环、完成标准与支持声明规则
+docs/phases/phase-19-project-documentation-design-completion.md # Phase 19 文档设计完善记录
+docs/reviews/phase-19-project-documentation-design-completion-review.md # Phase 19 review 与验证记录
 src/control-center/src/api/control-center-api.js # demo API 手动插件包 review fixture 与插件日志持久化
 tests/control-center/control-center-smoke.spec.js # Control Center Playwright UI 回归，含手动插件包 review
 docs/phases/phase-18-desktop-native-picker-smoke-evidence.md # Phase 18 开发记录

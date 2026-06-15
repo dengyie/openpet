@@ -3,13 +3,13 @@
 > 评估时间：2026-06-15
 > 分支：`main`
 > 评估人：项目全面审视
-> 状态：**Phase 1-7 产品化完成；v1.0.1-rc.1 完成 OpenPet 改名与升级兼容；Phase 8 已补 Windows 打包/CI/签名策略/冒烟证据、报告、runbook 与 collector/证据包校验/summary/archive-manifest 基线；Phase 9-10 完成项目文档治理与设计层；Phase 11-16 建立并扩展 Control Center Playwright UI 回归基线；Phase 17 已补主进程插件包 IPC + 真实 zip fixture 烟测；Phase 18 已补 desktop 原生文件选择器烟测证据工具链；Phase 15 完成项目文档设计收口**
+> 状态：**Phase 1-7 产品化完成；v1.0.1-rc.1 完成 OpenPet 改名与升级兼容；Phase 8 已补 Windows 打包/CI/签名策略/冒烟证据、报告、runbook 与 collector/证据包校验/summary/archive-manifest 基线；Phase 9-10 完成项目文档治理与设计层；Phase 11-16 建立并扩展 Control Center Playwright UI 回归基线；Phase 17 已补主进程插件包 IPC + 真实 zip fixture 烟测；Phase 18 已补 desktop 原生文件选择器烟测证据工具链；Phase 19 已完成项目文档设计操作模型、阶段完成契约、完成标准和决策记录完善**
 
 ---
 
 ## 执行摘要
 
-OpenPet 项目已完成从单体桌宠到可扩展平台的完整重构，核心产品化 Phase 1-7 已闭环，并通过 Phase 8-18 补齐 Windows 分发基线、文档治理、Control Center UI 自动化、主进程插件包 IPC 烟测、desktop 原生文件选择器烟测证据工具链与文档设计收口。**核心愿景实现度：95%**，所有关键承诺已兑现，剩余 5% 为发布验证和增强项。
+OpenPet 项目已完成从单体桌宠到可扩展平台的完整重构，核心产品化 Phase 1-7 已闭环，并通过 Phase 8-19 补齐 Windows 分发基线、文档治理、Control Center UI 自动化、主进程插件包 IPC 烟测、desktop 原生文件选择器烟测证据工具链与文档设计操作模型。**核心愿景实现度：95%**，所有关键承诺已兑现，剩余 5% 为发布验证和增强项。
 
 **建议：发布 v1.0.1 RC 验证 OpenPet 改名升级路径，确认无回归后提升为 v1.0.1 正式版。**
 
@@ -341,6 +341,7 @@ docs/desktop-release-design.md    # macOS + Windows 桌面分发设计
 | Phase 16 | Control Center 手动插件安装自动化 | 本阶段提交 | ✅ | ✅ | 完成 |
 | Phase 17 | Electron 插件包 IPC 安装烟测 | 本阶段提交 | ✅ | ✅ | 完成 |
 | Phase 18 | Desktop 原生文件选择器烟测证据工具链 | 本阶段提交 | ✅ | ✅ | 完成 |
+| Phase 19 | 项目文档设计完善 | 本阶段提交 | ✅ | ✅ | 完成 |
 
 **验证命令全部通过**：
 ```bash

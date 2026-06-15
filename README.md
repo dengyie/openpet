@@ -171,6 +171,7 @@ npm run dist                 # Generate current-host installer (macOS validated:
 - [Phase 16 - Control Center Manual Plugin Install Automation](./docs/phases/phase-16-control-center-manual-plugin-install-automation.md)
 - [Phase 17 - Electron Plugin Package IPC Smoke](./docs/phases/phase-17-electron-plugin-package-ipc-smoke.md)
 - [Phase 18 - Desktop Native Picker Smoke Evidence](./docs/phases/phase-18-desktop-native-picker-smoke-evidence.md)
+- [Phase 19 - Project Documentation Design Completion](./docs/phases/phase-19-project-documentation-design-completion.md)
 
 ---
 
