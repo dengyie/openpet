@@ -262,6 +262,14 @@ The bundle writes:
 
 Use the bundle summary to confirm whether the package is ready for human review, then paste or attach the Markdown files in the plugin submission PR. The bundle still does not approve publication, establish signing trust, install the plugin, enable the plugin, or run plugin code.
 
+Validate the bundle before review:
+
+```bash
+npm run validate-plugin-submission-bundle -- plugin-submission-bundle --require-ready
+```
+
+The validator checks the required bundle files, summary JSON, ready/decision state, package hash, and consistency between the summary and Markdown artifacts. `--require-ready` fails if the bundle is only a blocked preflight artifact. Validation still does not approve publication, establish signing trust, install the plugin, enable the plugin, or run plugin code.
+
 ## Packaging
 
 To create a local distributable archive, zip the contents of the plugin directory so `plugin.json` is at the archive root, then name it with `.openpet-plugin.zip`.
@@ -288,6 +296,7 @@ Before submitting a plugin-related change, run:
 ```bash
 npm run validate:plugin -- <plugin-dir-or-zip>
 npm run create-plugin-submission-bundle -- <plugin-dir-or-zip> --output-dir plugin-submission-bundle
+npm run validate-plugin-submission-bundle -- plugin-submission-bundle --require-ready
 npm run create-plugin-submission-report -- <plugin-dir-or-zip> --output plugin-submission-report.md
 npm run create-plugin-submission-pr -- <plugin-dir-or-zip> --output plugin-submission-pr.md
 npm test
