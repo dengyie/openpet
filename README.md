@@ -4,7 +4,7 @@
 
 **An extensible, distributable, and operable Electron desktop pet platform**
 
-[![Tests](https://img.shields.io/badge/tests-264%20node%20%2B%209%20ui-success)](./tests)
+[![Tests](https://img.shields.io/badge/tests-266%20node%20%2B%209%20ui-success)](./tests)
 [![Build](https://img.shields.io/badge/build-passing-success)](./package.json)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Version](https://img.shields.io/badge/version-1.0.1--rc.1-blue.svg)](./package.json)
@@ -122,7 +122,7 @@ npm start
 ```bash
 npm start                    # Build Control Center + launch Electron
 npm run dev:control-center   # Control Center hot reload (http://127.0.0.1:5173)
-npm test                     # Run Node tests (264 tests)
+npm test                     # Run Node tests (266 tests)
 npm run test:control-center  # Run Control Center Playwright UI regression tests
 npm run check:syntax         # JS syntax validation
 npm run generate-sprites     # Regenerate sprite sheets from cat_anime/flames/
@@ -174,12 +174,13 @@ npm run dist                 # Generate current-host installer (macOS validated:
 - [Phase 19 - Project Documentation Design Completion](./docs/phases/phase-19-project-documentation-design-completion.md)
 - [Phase 20 - Example Plugin Developer Asset](./docs/phases/phase-20-example-plugin-developer-asset.md)
 - [Phase 21 - Weather Example Plugin Developer Asset](./docs/phases/phase-21-weather-example-plugin-developer-asset.md)
+- [Phase 22 - RSS Example Plugin Developer Asset](./docs/phases/phase-22-rss-example-plugin-developer-asset.md)
 
 ---
 
 ## 🧩 Plugin Development
 
-Start with the tested [Focus Timer example plugin](./examples/plugins/focus-timer/) for storage and pet speech, or the tested [Weather Status example plugin](./examples/plugins/weather-status/) for network allowlist usage. Then read the full [plugin development guide](./docs/plugin-development.md).
+Start with the tested [Focus Timer example plugin](./examples/plugins/focus-timer/) for storage and pet speech, the tested [Weather Status example plugin](./examples/plugins/weather-status/) for JSON network allowlist usage, or the tested [RSS Reader example plugin](./examples/plugins/rss-reader/) for public feed fetching and cached announcements. Then read the full [plugin development guide](./docs/plugin-development.md).
 
 ### Plugin Structure
 
@@ -312,7 +313,7 @@ For more details, see [plugin-development.md](./docs/plugin-development.md) and 
 
 ## 🧪 Testing
 
-The project uses **Node native test runner** for service/release/IPC/example-plugin coverage with **264 tests all passing**, plus a **Playwright Control Center UI regression baseline** with 9 UI tests.
+The project uses **Node native test runner** for service/release/IPC/example-plugin coverage with **266 tests all passing**, plus a **Playwright Control Center UI regression baseline** with 9 UI tests.
 
 ```bash
 npm test                     # Run Node tests
@@ -322,10 +323,10 @@ npm run build:control-center # Control Center build verification
 ```
 
 Test Coverage:
-- ✅ Full service/release/IPC/example coverage (36 test files)
+- ✅ Full service/release/IPC/example coverage (38 test files)
 - ✅ Control Center shell / tab / Pet / About smoke coverage, Pet / AI / Service saved configuration flows, Catalog install/update flows, Service MCP session management, and manual plugin package install review (9 Playwright tests)
 - ✅ Main-process plugin package IPC smoke coverage with a real `.openpet-plugin.zip` fixture
-- ✅ Focus Timer and Weather Status example plugin install/run coverage through the real local plugin services
+- ✅ Focus Timer, Weather Status, and RSS Reader example plugin install/run coverage through the real local plugin services
 - ✅ Desktop native picker smoke evidence tooling for packaged macOS / Windows validation reports and runbooks
 - ✅ Pet pack schema / loader / importer
 - ✅ Plugin manifest / runner / SDK
@@ -387,7 +388,7 @@ Contributions of code, plugins, pet packs, or documentation are welcome!
 
 - ⚡ Windows signed-artifact verification and smoke testing
 - ⚡ Fill and archive real packaged-app native picker smoke evidence for macOS / Windows
-- ⚡ Additional example plugins beyond Focus Timer and Weather Status (RSS)
+- ✅ RSS Reader example plugin for public feed fetching and cached pet announcements
 - ⚡ Plugin development tutorial videos
 - ⚡ User feedback collection & iteration
 

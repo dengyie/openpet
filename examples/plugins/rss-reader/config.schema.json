@@ -1,0 +1,26 @@
+{
+  "title": "RSS Reader Settings",
+  "description": "Configurable defaults for the RSS Reader example plugin.",
+  "type": "object",
+  "properties": {
+    "feedPath": {
+      "type": "string",
+      "title": "Feed path",
+      "description": "Path requested from the allowlisted feed host.",
+      "default": "/openpet.xml"
+    },
+    "maxItems": {
+      "type": "number",
+      "title": "Items to cache",
+      "description": "Maximum number of feed items stored after refresh.",
+      "default": 3,
+      "enum": [1, 3, 5]
+    },
+    "announce": {
+      "type": "boolean",
+      "title": "Announce latest item",
+      "description": "Ask the pet to say the newest feed item after refresh.",
+      "default": true
+    }
+  }
+}

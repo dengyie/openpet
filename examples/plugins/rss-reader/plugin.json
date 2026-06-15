@@ -1,0 +1,22 @@
+{
+  "id": "openpet.example.rss-reader",
+  "name": "RSS Reader",
+  "version": "1.0.0",
+  "description": "Example local plugin that fetches an allowlisted RSS feed, caches the latest items, and asks the pet to announce updates.",
+  "main": "index.js",
+  "configSchema": "config.schema.json",
+  "permissions": ["network", "pet:say", "storage"],
+  "network": {
+    "allowlist": ["feeds.example.com"]
+  },
+  "commands": [
+    {
+      "id": "refresh",
+      "title": "Refresh feed"
+    },
+    {
+      "id": "latest",
+      "title": "Announce latest"
+    }
+  ]
+}

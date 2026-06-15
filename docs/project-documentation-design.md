@@ -273,6 +273,8 @@ Phase 20 is an example plugin developer asset phase. It keeps runtime security b
 
 Phase 21 is a Weather example plugin developer asset phase. It keeps runtime security boundaries and release readiness unchanged, adds a tested local plugin example for `network` permission and HTTPS allowlist usage, updates plugin development docs with a concrete network example, and records that the example uses injected test fetch instead of live network or API keys.
 
+Phase 22 is an RSS example plugin developer asset phase. It keeps runtime security boundaries and release readiness unchanged, adds a tested local plugin example for public RSS/Atom feed fetching, lightweight XML normalization, storage caching, and pet speech, and records that the example uses injected test fetch instead of live network or API keys.
+
 Do not skip the review document. If a phase changes release claims, security boundaries, plugin permissions, or API-key handling, the review must explicitly state whether those boundaries still hold.
 
 ### 9.1 Phase Completion Contract
@@ -608,7 +610,7 @@ Durable documentation decisions should be recorded here when they affect future 
 
 ## 17. Current Documentation Status
 
-The repository now has a coherent phase history through Phase 21:
+The repository now has a coherent phase history through Phase 22:
 
 - Phase 1-7 document the platform productization arc from Control Center modularization through ecosystem operations.
 - Phase 8 documents the macOS + Windows desktop release extension.
@@ -625,6 +627,7 @@ The repository now has a coherent phase history through Phase 21:
 - Phase 19 expands the documentation design into a fuller operating model: documentation lifecycles, repository topology, phase completion contract, done criteria, anti-patterns, and decision records.
 - Phase 20 adds the first tested local example plugin developer asset: Focus Timer, `docs/plugin-development.md`, and real install/run service coverage.
 - Phase 21 adds the second tested local example plugin developer asset: Weather Status, network allowlist guidance, and real install/run service coverage with injected fetch.
+- Phase 22 adds the third tested local example plugin developer asset: RSS Reader, public feed guidance, lightweight XML normalization, cached announcements, and real install/run service coverage with injected fetch.
 - macOS release baseline is complete.
 - Windows package targets, icon generation, CI/release jobs, platform-aware About/update asset filtering, signing policy enforcement, smoke evidence validation, CI pending report, runbook, collector generation, evidence bundle validation, evidence summary/archive generation, archive manifest generation, and report filling tooling are implemented.
 - Signed Windows artifact evidence, filled packaged native picker evidence, and real Windows smoke validation remain open release gates.

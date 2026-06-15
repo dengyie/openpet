@@ -2,7 +2,7 @@
 
 OpenPet plugins are local JavaScript packages installed through the Control Center. They run in a short-lived isolated Node runner and can only reach the app through a permission-gated SDK.
 
-For complete tested packages, start with [`examples/plugins/focus-timer`](../examples/plugins/focus-timer/) for storage and pet speech, or [`examples/plugins/weather-status`](../examples/plugins/weather-status/) for network allowlist usage.
+For complete tested packages, start with [`examples/plugins/focus-timer`](../examples/plugins/focus-timer/) for storage and pet speech, [`examples/plugins/weather-status`](../examples/plugins/weather-status/) for JSON network allowlist usage, or [`examples/plugins/rss-reader`](../examples/plugins/rss-reader/) for public feed fetching and cached announcements.
 
 ## Package Layout
 
@@ -154,6 +154,29 @@ const response = await ctx.network.fetch('https://api.weather.example.com/v1/cur
 
 The runtime rejects non-HTTPS URLs, hosts outside the allowlist, unsupported methods, sensitive headers such as `authorization` or `cookie`, oversized request bodies, oversized responses, and redirects to non-allowlisted hosts. See [`examples/plugins/weather-status`](../examples/plugins/weather-status/) for a complete package.
 
+### RSS/Feed Example
+
+For public XML feeds, keep the host fixed in `network.allowlist`, request only feed content, and cache normalized items in private storage:
+
+```json
+{
+  "permissions": ["network", "pet:say", "storage"],
+  "network": {
+    "allowlist": ["feeds.example.com"]
+  }
+}
+```
+
+```js
+const response = await ctx.network.fetch('https://feeds.example.com/openpet.xml', {
+  headers: {
+    accept: 'application/rss+xml, application/xml, text/xml'
+  }
+})
+```
+
+See [`examples/plugins/rss-reader`](../examples/plugins/rss-reader/) for a complete package that fetches RSS/Atom XML, stores the latest feed snapshot, and announces the newest item without live network dependency in tests.
+
 ## Install And Review Flow
 
 Third-party plugins should be installed through Control Center -> Plugins -> Install plugin package.
@@ -185,6 +208,7 @@ Use the service tests as the source of truth for current runtime behavior:
 
 - `tests/examples/focus-timer-plugin.test.js` covers the storage-oriented example plugin install and run path.
 - `tests/examples/weather-status-plugin.test.js` covers the network allowlist example plugin install and run path with an injected fake fetch implementation.
+- `tests/examples/rss-reader-plugin.test.js` covers the public feed example plugin install and run path with an injected fake fetch implementation.
 - `tests/services/plugin-install-service.test.js` covers package review, install, update, uninstall, signatures, zip safety, and symlink rejection.
 - `tests/services/plugin-service.test.js` covers runner isolation, SDK permissions, config, storage, AI, network, and logs.
 
