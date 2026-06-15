@@ -19,7 +19,7 @@ The project has evolved from a single-window pet app into a multi-layer platform
 - Use `npm start` to build the Control Center and launch Electron
 - Use `npm run dev:control-center` for Control Center hot-reload at http://127.0.0.1:5173
 - Use `npm test` to run all Node tests — currently 236 tests using Node native test runner
-- Use `npm run test:control-center` to run the Control Center Playwright smoke baseline
+- Use `npm run test:control-center` to run the Control Center Playwright UI regression baseline
 - Use `npm run generate-sprites` to regenerate sprite sheets from `cat_anime/flames/`
 - Use `npm run check:syntax` for JS syntax validation
 - Do not commit `node_modules/`, `dist/`, build output, or temporary OS files
@@ -40,7 +40,7 @@ Each action folder should contain an ordered image sequence with alpha channels,
 - Use Node native test runner: `const { test } = require('node:test')`
 - Use `const assert = require('node:assert')` for assertions
 - Place test files under `tests/` mirroring the source structure
-- Use Playwright specs under `tests/control-center/` for Control Center UI smoke coverage
+- Use Playwright specs under `tests/control-center/` for Control Center UI regression coverage
 - Run `npm test` to verify
 
 ## Key constraints

@@ -13,7 +13,7 @@
 | React + Vite | ^19.2 / ^8.0 | Control Center UI |
 | sharp | ^0.34.5 | 精灵图合成（开发时） |
 | Node 原生 test runner | — | Service / release 测试框架（236 个测试） |
-| Playwright | ^1.60 | Control Center 冒烟测试（2 个测试） |
+| Playwright | ^1.60 | Control Center UI 回归测试（5 个测试） |
 | HTML / CSS / JS | — | 宠物窗口渲染层 UI 与动画 |
 
 ### 核心能力总览
@@ -21,7 +21,7 @@
 **平台特性**：
 - ✅ Service 层架构：19 个 service，职责清晰，EventBus 协调
 - ✅ Pet pack 运行时：manifest schema + loader + importer + catalog
-- ✅ Control Center：Vite + React，7 个 Tab（从 1364 行重构为 62 行），并有 Playwright 冒烟基线
+- ✅ Control Center：Vite + React，7 个 Tab（从 1364 行重构为 62 行），并有 Playwright UI 回归基线
 - ✅ AI 集成：OpenAI-compatible，API Key 隔离，结构化行为编排
 - ✅ 插件系统：权限白名单 + 隔离 runner + SDK + catalog + blocklist
 - ✅ HTTP API + MCP：loopback only，token-gated，默认关闭
@@ -29,7 +29,7 @@
 
 **质量指标**：
 - ✅ 236/236 Node 测试通过（service / release 门禁覆盖）
-- ✅ 2/2 Control Center Playwright 冒烟测试通过（shell / tab / Pet / About 基础交互）
+- ✅ 5/5 Control Center Playwright UI 测试通过（shell / tab / Pet / About 基础交互，Pet / AI / Service 保存配置流程）
 - ✅ 32 个测试文件（恶意输入与 release 证据门禁/报告生成/填写/runbook、collector、证据包校验、summary 与 archive-manifest 工具测试完整）
 - ✅ 架构质量：依赖注入 + 事件驱动 + 不可变状态 + 安全默认
 
@@ -380,7 +380,7 @@ npm run build:control-center  # 仅构建 Control Center
 npm run pack                  # electron-builder macOS 目录打包验证
 npm run generate-sprites      # 重新生成精灵图
 npm test                      # 运行 Node 测试（236 个测试）
-npm run test:control-center   # 运行 Control Center Playwright 冒烟测试（2 个测试）
+npm run test:control-center   # 运行 Control Center Playwright UI 回归测试（5 个测试）
 npm run check:node            # 逐个 node --check 主进程 / service / test JS 文件
 npm run check:syntax          # check:node + Vite 构建校验 Control Center JSX
 ```

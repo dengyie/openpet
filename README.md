@@ -123,7 +123,7 @@ npm start
 npm start                    # Build Control Center + launch Electron
 npm run dev:control-center   # Control Center hot reload (http://127.0.0.1:5173)
 npm test                     # Run Node tests (236 tests)
-npm run test:control-center  # Run Control Center Playwright smoke tests
+npm run test:control-center  # Run Control Center Playwright UI regression tests
 npm run check:syntax         # JS syntax validation
 npm run generate-sprites     # Regenerate sprite sheets from cat_anime/flames/
 npm run pack                 # electron-builder directory package
@@ -164,6 +164,7 @@ npm run dist                 # Generate current-host installer (macOS validated:
 - [Phase 9 - Project Documentation Governance](./docs/phases/phase-9-project-documentation-governance.md)
 - [Phase 10 - Project Documentation Design Hardening](./docs/phases/phase-10-project-documentation-design-hardening.md)
 - [Phase 11 - Control Center Frontend Automation](./docs/phases/phase-11-control-center-frontend-automation.md)
+- [Phase 12 - Control Center Saved Configuration Automation](./docs/phases/phase-12-control-center-saved-configuration-automation.md)
 
 ---
 
@@ -303,18 +304,18 @@ For more details, see [plugin-sandbox-evaluation.md](./docs/plugin-sandbox-evalu
 
 ## 🧪 Testing
 
-The project uses **Node native test runner** for service/release coverage with **236 tests all passing**, plus a **Playwright Control Center smoke baseline** with 2 UI tests.
+The project uses **Node native test runner** for service/release coverage with **236 tests all passing**, plus a **Playwright Control Center UI regression baseline** with 5 UI tests.
 
 ```bash
 npm test                     # Run Node tests
-npm run test:control-center  # Run Control Center smoke tests
+npm run test:control-center  # Run Control Center UI regression tests
 npm run check:syntax         # Syntax check
 npm run build:control-center # Control Center build verification
 ```
 
 Test Coverage:
 - ✅ Full service/release coverage (32 test files)
-- ✅ Control Center shell / tab / Pet / About smoke coverage (2 Playwright tests)
+- ✅ Control Center shell / tab / Pet / About smoke coverage and Pet / AI / Service saved configuration flows (5 Playwright tests)
 - ✅ Pet pack schema / loader / importer
 - ✅ Plugin manifest / runner / SDK
 - ✅ AI service / behavior orchestrator
@@ -359,7 +360,7 @@ Contributions of code, plugins, pet packs, or documentation are welcome!
 - ✅ Legacy `appData/ibot` user data compatibility
 - ✅ OpenPet MCP/API/plugin naming with legacy aliases
 - ✅ RC validation and release notes
-- ✅ Control Center Playwright smoke baseline
+- ✅ Control Center Playwright UI regression baseline
 
 ### v1.0 ✅
 
@@ -374,7 +375,7 @@ Contributions of code, plugins, pet packs, or documentation are welcome!
 ### v1.1 (Planned)
 
 - ⚡ Windows signed-artifact verification and smoke testing
-- ⚡ Broader Control Center automation for plugin install review and saved configuration flows
+- ⚡ Broader Control Center automation for plugin install review, Catalog install/update, and AI/MCP session management
 - ⚡ More example plugins (weather, pomodoro, RSS)
 - ⚡ Plugin development tutorial videos
 - ⚡ User feedback collection & iteration

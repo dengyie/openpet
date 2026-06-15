@@ -183,6 +183,8 @@ Phase 10 is a documentation-design hardening phase. It keeps the same release tr
 
 Phase 11 is a Control Center frontend automation phase. It adds a project-owned Playwright smoke baseline for the React + Vite Control Center in demo API mode, updates developer commands and live documentation, and records the remaining UI automation gaps with a paired review.
 
+Phase 12 is a Control Center saved-configuration automation phase. It expands the Playwright baseline to cover Pet, AI, and Service configuration saves in demo API mode, keeps API-key plaintext out of demo state, updates current-state documentation, and records the remaining UI automation gaps with a paired review.
+
 Do not skip the review document. If a phase changes release claims, security boundaries, plugin permissions, or API-key handling, the review must explicitly state whether those boundaries still hold.
 
 ## 10. Cross-Platform Scope
@@ -369,13 +371,14 @@ Before committing documentation-only work, run at least a link/path sanity check
 
 ## 16. Current Documentation Status
 
-The repository now has a coherent phase history through Phase 11:
+The repository now has a coherent phase history through Phase 12:
 
 - Phase 1-7 document the platform productization arc from Control Center modularization through ecosystem operations.
 - Phase 8 documents the macOS + Windows desktop release extension.
 - Phase 9 documents the project documentation-governance layer itself, including reader paths, support-claim rules, phase completion playbooks, and live-status drift checks.
 - Phase 10 hardens this document into a fuller documentation design, including fact ownership, macOS/Windows structure fitness, support-claim lifecycle, new-document rules, and drift audits.
 - Phase 11 introduces a Playwright Control Center smoke baseline and documents it as a verification layer.
+- Phase 12 expands the Control Center Playwright baseline to saved configuration flows for Pet, AI, and Service.
 - macOS release baseline is complete.
 - Windows package targets, icon generation, CI/release jobs, platform-aware About/update asset filtering, signing policy enforcement, smoke evidence validation, CI pending report, runbook, collector generation, evidence bundle validation, evidence summary/archive generation, archive manifest generation, and report filling tooling are implemented.
 - Signed Windows artifact evidence and real Windows smoke validation remain open release gates.
@@ -387,4 +390,4 @@ The next documentation work should follow the implementation track rather than i
 - Add a filled Windows smoke report only after real Windows validation exists.
 - Update release status only after signed artifact evidence and real smoke evidence pass the checklist.
 - Keep mobile out of scope until a separate product decision introduces it.
-- Expand Control Center frontend automation beyond the smoke baseline when deeper UI flows change, especially plugin install review, saved configuration flows, Catalog install/update, and AI/MCP session management.
+- Expand Control Center frontend automation beyond the current UI regression baseline when deeper UI flows change, especially plugin install review, Catalog install/update, and AI/MCP session management.
