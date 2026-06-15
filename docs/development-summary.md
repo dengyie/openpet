@@ -27,11 +27,12 @@ OpenPet is now a desktop pet platform with:
 - Bundled pet renderer fix so packaged sprite URLs resolve correctly.
 - TypeScript migration scaffold with `tsconfig.json`, `npm run typecheck`, shared IPC contracts, and typed Control Center view defaults.
 - Productization TODO design that turns the remaining review items into prioritized implementation phases.
+- Packaged runtime smoke evidence tooling for pet window, transparency, sprite visibility, built-in pet pack switching, and linked picker evidence.
 
 ## Validation Baseline
 
 ```bash
-npm test                     # 319/319 Node tests
+npm test                     # 342/342 Node tests
 npm run test:control-center  # 9/9 Playwright UI tests
 npm run typecheck            # TypeScript no-emit checks
 npm run check:syntax         # Node syntax + typecheck + Control Center build
@@ -40,9 +41,9 @@ npm run check:syntax         # Node syntax + typecheck + Control Center build
 ## What Still Needs Care
 
 - Windows is still not release-ready until real signed installer evidence and smoke reports are archived.
-- Packaged native picker evidence still needs real archived runs.
+- Packaged native picker and packaged runtime smoke evidence still need real archived runs.
 - The plugin ecosystem has submission tooling and example assets, but wider community onboarding is still future work.
-- The next prioritized work is packaged app runtime smoke, release evidence hardening, and TypeScript contract migration.
+- The next prioritized work is filling real packaged runtime/picker evidence, release evidence hardening, and continuing TypeScript contract migration.
 
 ## Next Migration Steps
 

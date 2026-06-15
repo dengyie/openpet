@@ -17,16 +17,18 @@
     "Local HTTP and MCP are loopback-only and disabled by default",
     "Codex pet directory and zip import are supported",
     "Bundled pets include doro, duodong, and chispa",
-    "TypeScript migration baseline covers shared IPC and Control Center view contracts"
+    "TypeScript migration baseline covers shared IPC and Control Center view contracts",
+    "Packaged runtime smoke evidence tooling is available but real archived runtime evidence is still pending"
   ],
   "validation": {
-    "nodeTests": 319,
+    "nodeTests": 342,
     "uiTests": 9,
     "commands": [
       "npm test",
       "npm run test:control-center",
       "npm run typecheck",
-      "npm run check:syntax"
+      "npm run check:syntax",
+      "npm run validate-packaged-runtime-smoke-report"
     ]
   },
   "releaseNotes": {

@@ -43,6 +43,9 @@ npm test
 npm run test:control-center
 npm run typecheck
 npm run check:syntax
+npm run create-packaged-runtime-smoke-report
+npm run create-packaged-runtime-smoke-runbook
+npm run validate-packaged-runtime-smoke-report
 ```
 
 ## Where To Look For Detail
@@ -52,10 +55,11 @@ npm run check:syntax
 - `docs/project-status-review.md` for longer evaluation.
 - `docs/productization-todo-design.md` for the prioritized TODO implementation design.
 - `docs/desktop-release-design.md` for desktop release evidence.
+- `scripts/create-packaged-runtime-smoke-report.js` and `scripts/validate-packaged-runtime-smoke-report.js` for packaged app runtime evidence.
 - `docs/plugin-submission-workflow-playbook.md` for plugin onboarding.
 
 ## Next Steps
 
 1. Use `docs/productization-next-steps-design.md` and `docs/productization-todo-design.md` as the near-term execution entry for the next productization phases.
-2. Continue TypeScript migration from shared IPC and Control Center view contracts into the API facade, hooks, and main-process boundaries.
-3. Fill real Windows and packaged picker evidence before claiming release readiness there.
+2. Fill real packaged runtime and picker evidence before claiming packaged runtime readiness.
+3. Continue TypeScript migration from shared IPC and Control Center view contracts into the API facade, hooks, and main-process boundaries.
