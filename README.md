@@ -4,7 +4,7 @@
 
 **An extensible, distributable, and operable Electron desktop pet platform**
 
-[![Tests](https://img.shields.io/badge/tests-311%20node%20%2B%209%20ui-success)](./tests)
+[![Tests](https://img.shields.io/badge/tests-317%20node%20%2B%209%20ui-success)](./tests)
 [![Build](https://img.shields.io/badge/build-passing-success)](./package.json)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Version](https://img.shields.io/badge/version-1.0.1--rc.1-blue.svg)](./package.json)
@@ -30,6 +30,7 @@
 - 🧩 **Plugin Ecosystem** - Permission-isolated plugin SDK for third-party extensions
 - 📦 **Pet Pack Management** - Multi-pet pack support with one-click installation
 - 🐾 **Codex Pet Import** - Native support for hatch-pet `pet.json` + `spritesheet.webp`
+- 🎁 **Bundled Codex Pets** - Curated built-in packs for `doro`, `duodong`, and `chispa`
 - 🌐 **HTTP API + MCP** - Local API for external agent integration
 - 🎛️ **Control Center** - React + Vite control panel with full UI configuration
 - 🚀 **Desktop Release Track** - macOS release baseline; Windows packaging/CI/signing-policy/smoke-evidence/reporting/runbook/collector/bundle-validation/summary/archive-manifest tooling baseline; packaged native picker smoke evidence tooling; RC upgrade smoke evidence tooling, with release-readiness gates still open until real signed evidence is archived
@@ -126,7 +127,7 @@ npm start
 ```bash
 npm start                    # Build Control Center + launch Electron
 npm run dev:control-center   # Control Center hot reload (http://127.0.0.1:5173)
-npm test                     # Run Node tests (311 tests)
+npm test                     # Run Node tests (317 tests)
 npm run test:control-center  # Run Control Center Playwright UI regression tests
 npm run check:syntax         # JS syntax validation
 npm run generate-sprites     # Regenerate sprite sheets from cat_anime/flames/
@@ -189,6 +190,7 @@ npm run dist                 # Generate current-host installer (macOS validated:
 - [Phase 29 - RC Upgrade Smoke Evidence](./docs/phases/phase-29-rc-upgrade-smoke-evidence.md)
 - [Phase 30 - Codex Pet Import](./docs/phases/phase-30-codex-pet-import.md)
 - [Phase 31 - Codex Pet Zip Import](./docs/phases/phase-31-codex-pet-zip-import.md)
+- [Phase 32 - Bundled Codex Pets](./docs/phases/phase-32-bundled-codex-pets.md)
 
 ---
 
@@ -333,7 +335,7 @@ For more details, see [plugin-development.md](./docs/plugin-development.md), [pl
 
 ## 🧪 Testing
 
-The project uses **Node native test runner** for service/release/IPC/example-plugin coverage with **311 tests all passing**, plus a **Playwright Control Center UI regression baseline** with 9 UI tests.
+The project uses **Node native test runner** for service/release/IPC/example-plugin coverage with **317 tests all passing**, plus a **Playwright Control Center UI regression baseline** with 9 UI tests.
 
 ```bash
 npm test                     # Run Node tests

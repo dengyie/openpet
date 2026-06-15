@@ -47,6 +47,7 @@
       "preload.js",
       "control-center-preload.js",
       "cat_anime/**/*",
+      "assets/pet-packs/**/*",
       "catalog/**/*",
       "dist/control-center/**/*",
       "src/main/**/*",

@@ -105,17 +105,103 @@ const createService = (settingsService = createSettingsService()) => createPetPa
   now: () => new Date('2026-06-12T00:00:00.000Z')
 })
 
-test('pet pack service lists the built-in legacy pack', () => {
+const createServiceWithBundledPacks = ({ settingsService = createSettingsService(), bundledPacksDir, getPetPackBlockStatus }) => createPetPackService({
+  settingsService,
+  userPacksDir: createTempDir('pet-packs'),
+  projectRoot: '/app/openpet',
+  bundledPacksDir,
+  loadLegacyAnimations: () => ({
+    defaultAction: 'bai_no_bg',
+    clickAction: 'eat_no_bg',
+    actions: [
+      { id: 'bai_no_bg', label: '待机', loop: true, frameCount: 16, frameMs: 95, frameWidth: 191, frameHeight: 453, sprite: 'cat_anime/sprites/bai_no_bg.png' },
+      { id: 'eat_no_bg', label: '喂食', loop: false, frameCount: 16, frameMs: 85, frameWidth: 381, frameHeight: 253, sprite: 'cat_anime/sprites/eat_no_bg.png' }
+    ]
+  }),
+  now: () => new Date('2026-06-12T00:00:00.000Z'),
+  getPetPackBlockStatus
+})
+
+test('pet pack service lists the built-in legacy pack and bundled choices', () => {
   const service = createService()
 
   const result = service.listPacks()
+  const packs = new Map(result.packs.map((pack) => [pack.id, pack]))
 
   assert.equal(result.activePackId, BUILT_IN_PACK_ID)
-  assert.equal(result.packs.length, 1)
-  assert.equal(result.packs[0].id, BUILT_IN_PACK_ID)
-  assert.equal(result.packs[0].source, 'built-in')
-  assert.equal(result.packs[0].active, true)
-  assert.equal(result.packs[0].actionCount, 2)
+  assert.equal(result.packs.length, 4)
+  assert.equal(packs.get(BUILT_IN_PACK_ID).source, 'built-in')
+  assert.equal(packs.get(BUILT_IN_PACK_ID).active, true)
+  assert.equal(packs.get(BUILT_IN_PACK_ID).actionCount, 2)
+  assert.equal(packs.get('doro').source, 'built-in')
+  assert.equal(packs.get('duodong').source, 'built-in')
+  assert.equal(packs.get('chispa').source, 'built-in')
+  assert.equal(packs.get('doro').previewAction.atlas.columns, 8)
+})
+
+test('pet pack service lists bundled pet packs as built-in choices', () => {
+  const bundledPacksDir = createTempDir('bundled-pet-packs')
+  const doroDir = path.join(bundledPacksDir, 'doro')
+  const duodongDir = path.join(bundledPacksDir, 'duodong')
+  fs.mkdirSync(doroDir)
+  fs.mkdirSync(duodongDir)
+  createCodexPetDirectory(doroDir, { id: 'doro', displayName: 'Doro' })
+  createCodexPetDirectory(duodongDir, { id: 'duodong', displayName: '多栋' })
+  const service = createServiceWithBundledPacks({ bundledPacksDir })
+
+  const result = service.listPacks()
+  const packs = new Map(result.packs.map((pack) => [pack.id, pack]))
+
+  assert.equal(result.activePackId, BUILT_IN_PACK_ID)
+  assert.equal(packs.get(BUILT_IN_PACK_ID).source, 'built-in')
+  assert.equal(packs.get('doro').source, 'built-in')
+  assert.equal(packs.get('duodong').source, 'built-in')
+  assert.equal(packs.get('doro').actionCount, 9)
+  assert.match(packs.get('doro').previewSprite, /doro\/spritesheet\.webp$/)
+})
+
+test('pet pack service activates bundled pet packs without installing them', () => {
+  const bundledPacksDir = createTempDir('bundled-pet-pack-active')
+  const doroDir = path.join(bundledPacksDir, 'doro')
+  fs.mkdirSync(doroDir)
+  createCodexPetDirectory(doroDir, { id: 'doro', displayName: 'Doro' })
+  const settingsService = createSettingsService()
+  const service = createServiceWithBundledPacks({ settingsService, bundledPacksDir })
+  const actionService = createActionService({ petPackService: service })
+
+  const result = service.setActivePack('doro')
+  actionService.reload()
+
+  assert.equal(result.activePackId, 'doro')
+  assert.equal(settingsService.get().petPacks.activePackId, 'doro')
+  assert.equal(settingsService.get().petPacks.installed.doro, undefined)
+  assert.equal(actionService.getPetPack().manifest.id, 'doro')
+  assert.equal(actionService.getConfig().actions.length, 9)
+})
+
+test('pet pack service blocks bundled pet packs denied by content hash policy', () => {
+  const bundledPacksDir = createTempDir('bundled-pet-pack-policy')
+  const doroDir = path.join(bundledPacksDir, 'doro')
+  fs.mkdirSync(doroDir)
+  createCodexPetDirectory(doroDir, { id: 'doro', displayName: 'Doro' })
+  const service = createServiceWithBundledPacks({
+    bundledPacksDir,
+    getPetPackBlockStatus: ({ packageHash }) => packageHash
+      ? { blocked: true, reasons: ['sha256:bundled-doro'] }
+      : { blocked: false, reasons: [] }
+  })
+
+  assert.throws(() => service.setActivePack('doro'), /blocked/)
+})
+
+test('pet pack service protects bundled pet packs from removal', () => {
+  const bundledPacksDir = createTempDir('bundled-pet-pack-remove')
+  const chispaDir = path.join(bundledPacksDir, 'chispa')
+  fs.mkdirSync(chispaDir)
+  createCodexPetDirectory(chispaDir, { id: 'chispa', displayName: 'Chispa' })
+  const service = createServiceWithBundledPacks({ bundledPacksDir })
+
+  assert.throws(() => service.removePack('chispa'), /built-in/)
 })
 
 test('pet pack service inspects and imports a valid pack directory', () => {

@@ -7,6 +7,7 @@ const { pathToFileURL } = require('url')
 const { getLegacyPetAnimations, loadLegacyPetPack, loadPetPackFromDirectory } = require('../pet-pack/loader')
 
 const BUILT_IN_PACK_ID = 'legacy-cat'
+const DEFAULT_BUNDLED_PACKS_DIR = path.join(__dirname, '..', '..', '..', 'assets', 'pet-packs')
 const PET_PACK_SELECTION_TTL_MS = 10 * 60 * 1000
 const SAFE_ZIP_ENTRY_PATTERN = /^[^/\\\0][^\\\0]*$/
 
@@ -92,6 +93,15 @@ const createBuiltInPack = ({ projectRoot, loadLegacyAnimations }) => {
   }
 }
 
+const listBundledPackRoots = (bundledPacksDir) => {
+  if (!bundledPacksDir || !fs.existsSync(bundledPacksDir)) return []
+  return fs.readdirSync(bundledPacksDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => path.join(bundledPacksDir, entry.name))
+    .filter((entryPath) => fs.existsSync(path.join(entryPath, 'pet.json')))
+    .sort()
+}
+
 const assertInsideDirectory = (rootPath, targetPath, fieldName) => {
   const rootRealPath = fs.realpathSync(rootPath)
   const targetRealPath = fs.realpathSync(targetPath)
@@ -152,14 +162,17 @@ const createPackSummary = (pack, { active = false, installedAt = '', updatedAt =
     previewSprite: previewAction?.sprite
       ? pathToFileURL(path.join(pack.rootPath, previewAction.sprite)).toString()
       : '',
-    sourcePackageHash: pack.metadata?.sourcePackageHash || '',
     previewAction: previewAction ? {
       id: previewAction.id,
       label: previewAction.label || previewAction.id,
       frameCount: previewAction.frameCount,
       frameWidth: previewAction.frameWidth,
       frameHeight: previewAction.frameHeight,
-      frameMs: previewAction.frameMs
+      frameMs: previewAction.frameMs,
+      frameRow: previewAction.frameRow,
+      frameColumn: previewAction.frameColumn,
+      atlas: previewAction.atlas,
+      frameDurations: previewAction.frameDurations
     } : null
   }
 }
@@ -174,6 +187,7 @@ const createPetPackService = ({
   settingsService,
   userPacksDir,
   projectRoot = path.join(__dirname, '..', '..', '..'),
+  bundledPacksDir = DEFAULT_BUNDLED_PACKS_DIR,
   loadLegacyAnimations = getLegacyPetAnimations,
   now = () => new Date(),
   nowMs = () => Date.now(),
@@ -193,6 +207,24 @@ const createPetPackService = ({
   }
 
   const getBuiltInPack = () => createBuiltInPack({ projectRoot, loadLegacyAnimations })
+
+  const listBundledPacks = () => listBundledPackRoots(bundledPacksDir).map((packRoot) => {
+    const pack = loadPetPackFromDirectory(packRoot)
+    validatePackFiles(pack)
+    return {
+      ...pack,
+      source: { type: 'built-in', path: packRoot }
+    }
+  })
+
+  const getBundledPack = (packId) => listBundledPacks().find((pack) => pack.manifest.id === packId) || null
+
+  const getBundledPackPolicyInput = (packId) => {
+    const pack = getBundledPack(packId)
+    return pack ? { id: packId, packageHash: getDirectoryPackageHash(pack.rootPath) } : null
+  }
+
+  const isBuiltInPackId = (packId) => packId === BUILT_IN_PACK_ID || Boolean(getBundledPack(packId))
 
   const getPolicyStatus = ({ id, sha256, sourceSha256, packageHash } = {}) => getPetPackBlockStatus({ id, sha256, sourceSha256, packageHash }) || { blocked: false, reasons: [] }
 
@@ -217,6 +249,12 @@ const createPetPackService = ({
 
   const getActivePetPack = () => {
     const petPackSettings = getSettings()
+    const activeBundledPack = petPackSettings.activePackId === BUILT_IN_PACK_ID ? null : getBundledPack(petPackSettings.activePackId)
+    if (activeBundledPack) {
+      assertPackAllowed({ id: activeBundledPack.manifest.id, packageHash: getDirectoryPackageHash(activeBundledPack.rootPath) })
+      return activeBundledPack
+    }
+
     if (petPackSettings.activePackId && petPackSettings.activePackId !== BUILT_IN_PACK_ID) {
       try {
         const metadata = petPackSettings.installed[petPackSettings.activePackId]
@@ -236,6 +274,13 @@ const createPetPackService = ({
       ...createPackSummary(builtInPack, { active: petPackSettings.activePackId === BUILT_IN_PACK_ID }),
       blockStatus: getPolicyStatus({ id: BUILT_IN_PACK_ID })
     }]
+
+    for (const bundledPack of listBundledPacks()) {
+      packs.push({
+        ...createPackSummary(bundledPack, { active: petPackSettings.activePackId === bundledPack.manifest.id }),
+        blockStatus: getPolicyStatus({ id: bundledPack.manifest.id, packageHash: getDirectoryPackageHash(bundledPack.rootPath) })
+      })
+    }
 
     for (const [packId, metadata] of Object.entries(petPackSettings.installed)) {
       try {
@@ -438,8 +483,9 @@ const createPetPackService = ({
   const setActivePack = (packId) => {
     if (!isSafePackId(packId)) throw new Error('Pet pack id is invalid')
     const metadata = getSettings().installed[packId]
-    assertPackAllowed({ id: packId, packageHash: metadata?.packageHash || '', sourceSha256: metadata?.sourcePackageHash || '' })
-    if (packId !== BUILT_IN_PACK_ID) loadInstalledPack(packId)
+    const bundledPolicyInput = getBundledPackPolicyInput(packId)
+    assertPackAllowed(bundledPolicyInput || { id: packId, packageHash: metadata?.packageHash || '', sourceSha256: metadata?.sourcePackageHash || '' })
+    if (!isBuiltInPackId(packId)) loadInstalledPack(packId)
     const current = getSettings()
     const nextSettings = savePetPackSettings({ ...current, activePackId: packId })
     return { activePackId: nextSettings.activePackId, pack: createPackSummary(getActivePetPack(), { active: true }) }
@@ -447,7 +493,7 @@ const createPetPackService = ({
 
   const removePack = (packId) => {
     if (!isSafePackId(packId)) throw new Error('Pet pack id is invalid')
-    if (packId === BUILT_IN_PACK_ID) throw new Error('Cannot remove the built-in pet pack')
+    if (isBuiltInPackId(packId)) throw new Error('Cannot remove the built-in pet pack')
     const current = getSettings()
     if (current.activePackId === packId) throw new Error('Cannot remove the active pet pack')
     if (!current.installed[packId]) throw new Error(`Pet pack is not installed: ${packId}`)
