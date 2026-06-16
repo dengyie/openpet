@@ -115,13 +115,13 @@ const createRequiredServices = ({ pluginInstallService, pluginService, dialogSer
     removeBlocklistEntry: () => []
   },
   localHttpService: {
-    getStatus: () => ({ running: false }),
+    getStatus: () => ({ enabled: false, host: '127.0.0.1', port: 0, mcp: { activeSessions: 0, sessionTtlMs: 0 } }),
     getLogs: () => [],
     exportLogs: () => ({ ok: true }),
     clearLogs: () => ({ ok: true }),
-    start: async (config) => ({ running: true, config }),
-    stop: async () => ({ running: false }),
-    revokeMcpSessions: () => ({ revoked: 0 })
+    start: async (config) => ({ enabled: true, host: config.host || '127.0.0.1', port: config.port || 0, mcp: { activeSessions: 0, sessionTtlMs: 0 } }),
+    stop: async () => ({ enabled: false, host: '127.0.0.1', port: 0, mcp: { activeSessions: 0, sessionTtlMs: 0 } }),
+    revokeMcpSessions: () => ({ activeSessions: 0, sessionTtlMs: 0 })
   },
   aboutService: {
     getInfo: () => ({}),
@@ -138,6 +138,123 @@ const createRequiredServices = ({ pluginInstallService, pluginService, dialogSer
   getMovementState: () => null,
   createSettingsWindow: () => {},
   dialogService
+})
+
+test('service:get-status returns Control Center service status shape', async () => {
+  const ipcMain = createIpcMainStub()
+
+  registerIpcHandlers({
+    ...createRequiredServices({
+      pluginInstallService: {
+        inspectPluginPackage: () => ({}),
+        clearPendingSelection: () => ({ ok: true }),
+        installPlugin: () => ({ ok: true }),
+        updatePlugin: () => ({ ok: true }),
+        uninstallPlugin: () => ({ ok: true })
+      },
+      pluginService: { listPlugins: () => [] },
+      dialogService: {
+        showOpenDialog: async () => ({ canceled: true, filePaths: [] })
+      }
+    }),
+    petService: {
+      ...createRequiredServices({
+        pluginInstallService: {},
+        pluginService: { listPlugins: () => [] },
+        dialogService: {}
+      }).petService,
+      getSettings: () => ({
+        localHttp: {
+          enabled: true,
+          port: '4317',
+          token: 'demo-token'
+        }
+      })
+    },
+    localHttpService: {
+      getStatus: () => ({ enabled: true, host: 'localhost', port: '4317', mcp: { activeSessions: '1', sessionTtlMs: '5000' } }),
+      getLogs: () => [],
+      exportLogs: () => '',
+      clearLogs: () => [],
+      start: async () => ({}),
+      stop: async () => ({}),
+      revokeMcpSessions: () => ({ activeSessions: 0, sessionTtlMs: 5000 })
+    },
+    ipcMainService: ipcMain
+  })
+
+  const result = await ipcMain.handlers.get(IPC.SERVICE_GET_STATUS)()
+
+  assert.deepEqual(result, {
+    config: {
+      enabled: true,
+      host: '127.0.0.1',
+      port: 4317,
+      token: 'demo-token',
+      logs: []
+    },
+    runtime: {
+      enabled: true,
+      host: 'localhost',
+      port: 4317,
+      mcp: { activeSessions: 1, sessionTtlMs: 5000 }
+    }
+  })
+})
+
+test('catalog blocklist handlers return catalog plus updated blocklist view result', async () => {
+  const ipcMain = createIpcMainStub()
+  const catalog = {
+    schemaVersion: 1,
+    updatedAt: '2026-06-17T00:00:00.000Z',
+    feedbackUrl: '',
+    localBlocklist: { pluginIds: ['blocked-plugin'], packIds: [], sha256: [] },
+    catalogBlocklist: { pluginIds: [], packIds: [], sha256: [] },
+    blocklist: { pluginIds: ['blocked-plugin'], packIds: [], sha256: [] },
+    plugins: [],
+    petPacks: []
+  }
+  const blocklist = { pluginIds: ['blocked-plugin'], packIds: [], sha256: [] }
+  const calls = []
+
+  registerIpcHandlers({
+    ...createRequiredServices({
+      pluginInstallService: {
+        inspectPluginPackage: () => ({}),
+        clearPendingSelection: () => ({ ok: true }),
+        installPlugin: () => ({ ok: true }),
+        updatePlugin: () => ({ ok: true }),
+        uninstallPlugin: () => ({ ok: true })
+      },
+      pluginService: { listPlugins: () => [] },
+      dialogService: {
+        showOpenDialog: async () => ({ canceled: true, filePaths: [] })
+      }
+    }),
+    catalogService: {
+      listCatalog: () => catalog,
+      prepareInstall: () => ({ ok: true }),
+      installSelection: () => ({ ok: true }),
+      clearSelection: () => ({ ok: true }),
+      addBlocklistEntry: (payload) => {
+        calls.push(['add', payload])
+        return blocklist
+      },
+      removeBlocklistEntry: (payload) => {
+        calls.push(['remove', payload])
+        return blocklist
+      }
+    },
+    ipcMainService: ipcMain
+  })
+
+  const payload = { type: 'pluginId', value: 'blocked-plugin' }
+  const addResult = await ipcMain.handlers.get(IPC.CATALOG_ADD_BLOCKLIST)(null, payload)
+  const removeResult = await ipcMain.handlers.get(IPC.CATALOG_REMOVE_BLOCKLIST)(null, payload)
+
+  assert.deepEqual(addResult, { catalog, blocklist })
+  assert.deepEqual(removeResult, { catalog, blocklist })
+  assert.deepEqual(calls, [['add', payload], ['remove', payload]])
 })
 
 test('pet-packs:inspect-directory opens native folder or zip picker and delegates selected source', async () => {

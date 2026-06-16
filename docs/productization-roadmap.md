@@ -603,7 +603,7 @@ Phase 1-7 已完成并合入 `main`。每个阶段均有开发文档与 Producti
 **所有质量门槛已通过**：
 
 ```bash
-npm test                      # ✅ 394/394 Node tests pass
+npm test                      # ✅ 399/399 Node tests pass
 npm run test:control-center   # ✅ 10/10 Control Center Playwright UI tests pass
 npm run check:syntax          # ✅ all JS syntax pass
 npm run build:control-center  # ✅ Vite build pass
@@ -656,7 +656,7 @@ npm run pack                  # ✅ electron-builder pass
 
 **项目评估结果**：
 - 功能完整性：95%（所有承诺功能已实现）
-- 测试覆盖：394/394 Node 测试通过；10/10 Control Center Playwright UI 测试通过
+- 测试覆盖：399/399 Node 测试通过；10/10 Control Center Playwright UI 测试通过
 - 架构质量：⭐⭐⭐⭐⭐（分层清晰、安全可靠）
 - 代码质量：⭐⭐⭐⭐⭐（模块化彻底、职责单一）
 - 文档完整性：⭐⭐⭐⭐⭐（双语 README、技术文档、版本记录与发布清单完整）

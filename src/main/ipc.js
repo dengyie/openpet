@@ -8,6 +8,7 @@
  */
 const { ipcMain, BrowserWindow, app, dialog } = require('electron')
 const { IPC } = require('../shared/ipc-channels')
+const { createCatalogBlocklistResult, createServiceStatusView } = require('./control-center-adapters')
 const { findSemanticAction } = require('./services/ai-action-orchestrator')
 const { createLocalHttpToken } = require('./services/local-http-service')
 
@@ -360,10 +361,12 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
 
   ipcMainService.handle(IPC.PLUGINS_CLEAR_STORAGE, (_event, payload) => pluginService.clearStorage(payload.pluginId))
 
-  ipcMainService.handle(IPC.SERVICE_GET_STATUS, () => ({
-    config: petService.getSettings().localHttp,
-    runtime: localHttpService.getStatus()
-  }))
+  const getServiceStatusView = () => createServiceStatusView(
+    petService.getSettings().localHttp,
+    localHttpService.getStatus()
+  )
+
+  ipcMainService.handle(IPC.SERVICE_GET_STATUS, getServiceStatusView)
 
   ipcMainService.handle(IPC.SERVICE_GET_LOGS, (_event, filters) => localHttpService.getLogs(filters))
 
@@ -381,15 +384,12 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
       ? await localHttpService.start(nextConfig)
       : localHttpService.getStatus()
     const savedSettings = petService.saveSettings({ ...currentSettings, localHttp: nextConfig })
-    return { config: savedSettings.localHttp, runtime: localHttpService.getStatus() || runtime }
+    return createServiceStatusView(savedSettings.localHttp, localHttpService.getStatus() || runtime)
   })
 
   ipcMainService.handle(IPC.SERVICE_REVOKE_MCP_SESSIONS, () => {
     const mcp = localHttpService.revokeMcpSessions()
-    return {
-      config: petService.getSettings().localHttp,
-      runtime: { ...localHttpService.getStatus(), mcp }
-    }
+    return createServiceStatusView(petService.getSettings().localHttp, { ...localHttpService.getStatus(), mcp })
   })
 
   ipcMainService.handle(IPC.SERVICE_SAVE_CONFIG, async (_event, config) => {
@@ -399,7 +399,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
       ? await localHttpService.start(nextConfig)
       : await localHttpService.stop()
     const savedSettings = petService.saveSettings({ ...currentSettings, localHttp: nextConfig })
-    return { config: savedSettings.localHttp, runtime: localHttpService.getStatus() || runtime }
+    return createServiceStatusView(savedSettings.localHttp, localHttpService.getStatus() || runtime)
   })
 
   ipcMainService.handle(IPC.ABOUT_GET_INFO, () => aboutService.getInfo())
@@ -421,15 +421,15 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
 
   ipcMainService.handle(IPC.CATALOG_CLEAR_SELECTION, (_event, payload) => catalogService.clearSelection(payload?.selectionId))
 
-  ipcMainService.handle(IPC.CATALOG_ADD_BLOCKLIST, (_event, payload) => ({
-    blocklist: catalogService.addBlocklistEntry(payload),
-    catalog: catalogService.listCatalog()
-  }))
+  ipcMainService.handle(IPC.CATALOG_ADD_BLOCKLIST, (_event, payload) => {
+    const blocklist = catalogService.addBlocklistEntry(payload)
+    return createCatalogBlocklistResult(catalogService.listCatalog(), blocklist)
+  })
 
-  ipcMainService.handle(IPC.CATALOG_REMOVE_BLOCKLIST, (_event, payload) => ({
-    blocklist: catalogService.removeBlocklistEntry(payload),
-    catalog: catalogService.listCatalog()
-  }))
+  ipcMainService.handle(IPC.CATALOG_REMOVE_BLOCKLIST, (_event, payload) => {
+    const blocklist = catalogService.removeBlocklistEntry(payload)
+    return createCatalogBlocklistResult(catalogService.listCatalog(), blocklist)
+  })
 
   // 设置面板拖动滑块：实时预览缩放（不持久化）
   ipcMainService.on(IPC.SETTINGS_PREVIEW_SCALE, (_event, scale) => {
