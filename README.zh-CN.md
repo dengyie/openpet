@@ -146,8 +146,8 @@ npm run validate-plugin-submission-bundle -- plugin-submission-bundle --require-
 当前本地基线：
 
 ```bash
-npm test                     # 364/364 Node tests
-npm run test:control-center  # 9/9 Playwright tests
+npm test                     # 371/371 Node tests
+npm run test:control-center  # 10/10 Playwright tests
 npm run typecheck            # TypeScript no-emit checks
 npm run check:syntax         # syntax + typecheck + Control Center build
 ```

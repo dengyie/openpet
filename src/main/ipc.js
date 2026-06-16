@@ -295,6 +295,17 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     })
   })
 
+  ipcMainService.handle(IPC.AI_BEHAVIOR_REPLAY_DECISION, (_event, payload) => {
+    return behaviorOrchestratorService.replayDecision({
+      decisionId: payload?.decisionId,
+      actions: petService.getAnimations()?.actions || []
+    })
+  })
+
+  ipcMainService.handle(IPC.AI_BEHAVIOR_EXPORT_DIAGNOSTICS, () => behaviorOrchestratorService.exportDiagnostics())
+
+  ipcMainService.handle(IPC.AI_BEHAVIOR_CLEAR_DECISIONS, () => behaviorOrchestratorService.clearDecisions())
+
   ipcMainService.handle(IPC.PLUGINS_LIST, () => pluginService.listPlugins())
 
   ipcMainService.handle(IPC.PLUGINS_SET_ENABLED, (_event, payload) => {

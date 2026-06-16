@@ -1,7 +1,7 @@
 # OpenPet v1.1 TODO Design
 
 > Date: 2026-06-16
-> Baseline: Phase 39 development state
+> Baseline: Phase 41 development state
 > Scope: Convert the remaining productization TODO into a phase-ready design for v1.1 work. This document does not upgrade platform support claims. Windows remains not release-ready until signed runtime smoke evidence passes.
 
 ## 1. Goal
@@ -39,7 +39,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 - Plugin secrets policy is not finalized.
 - Plugin scaffolding is not yet a one-command authoring path.
 - Plugin sandbox strategy has been evaluated against SES and Electron `utilityProcess`; current recommendation is to keep the existing runner for v1.1 while documenting limits.
-- AI behavior orchestration lacks a user-facing decision viewer and replay/dry-run tool.
+- AI behavior orchestration has a Control Center decision viewer, replay, redacted diagnostics export, and clear-history controls.
 - Documentation still needs another consolidation pass after the v1.1 execution track stabilizes.
 
 ## 3. Non-Goals
@@ -194,6 +194,8 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 - Rule edits can be dry-run before saving.
 - Log export is useful for debugging and covered by redaction tests.
 
+**Status**: completed in Phase 41. Control Center AI now shows behavior decisions, supports replay by decision id, exports redacted diagnostics, and clears decision history.
+
 ### Phase 42: Real Packaged Runtime Evidence Capture
 
 **Goal**: convert packaged runtime smoke tooling into real release evidence.
@@ -265,7 +267,36 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 - Windows remains explicitly not release-ready if any signed Windows smoke evidence is missing or failing.
 - If Windows passes, docs are updated in one controlled phase with evidence links and support wording review.
 
-### Phase 44: TypeScript Boundary Expansion
+### Phase 44: Plugin Author Experience Rehearsal
+
+**Goal**: turn plugin authoring from "tools exist" into a documented, repeatable third-party-style workflow.
+
+**Scope**:
+
+- Keep the current child-process + Node permission-model + VM runner and conservative security language.
+- Exercise scaffolded minimal, network, storage, and AI-assisted plugin paths.
+- Generate README, validation command, package command, and submission checklist from the author path.
+- Run one third-party-style submission rehearsal through validation, review packet, PR packet, and workflow bundle tooling.
+- Keep secret-like config fields rejected unless a future main-process-only secret capability is explicitly designed.
+
+**Likely files**:
+
+- `scripts/create-openpet-plugin.js`
+- `examples/plugins/`
+- `docs/plugin-development.md`
+- `docs/plugin-submission-workflow-playbook.md`
+- `docs/plugin-ecosystem-rules.md`
+- `tests/scripts/create-openpet-plugin.test.js`
+- `tests/scripts/validate-plugin-package.test.js`
+
+**Acceptance**:
+
+- A new plugin author can scaffold, run, validate, package, and create a submission bundle from documented commands.
+- Example coverage spans the main permission classes without exposing secrets.
+- Submission rehearsal produces reviewable Markdown and JSON artifacts.
+- No user-facing docs claim unrestricted plugin safety.
+
+### Phase 45: TypeScript Boundary Expansion
 
 **Goal**: continue TypeScript migration where it gives the highest defect-reduction value.
 
@@ -296,7 +327,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 - `npm run typecheck` is meaningful for real product data, not only scaffold files.
 - `npm start`, `npm test`, `npm run test:control-center`, and `npm run check:syntax` remain passing.
 
-### Phase 45: Documentation Consolidation
+### Phase 46: Documentation Consolidation
 
 **Goal**: reduce repeated historical prose and keep current facts easy to find.
 
@@ -330,23 +361,23 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 |----------|------|--------|
 | P0 | Phase 42 real packaged runtime evidence | Directly proves the desktop pet actually renders after packaging. |
 | P0 | Phase 43 signed release evidence closure | Controls release/support claims and user trust. |
-| P1 | Phase 38 plugin secrets and scaffolding | Required before plugin ecosystem expansion. |
 | P1 | Phase 40 pet pack export and provenance | Completed; keep provenance and conflict review as constraints for future catalog work. |
-| P1 | Phase 44 TypeScript boundary expansion | Prevents cross-process and UI data drift during v1.1 work. |
-| P2 | Phase 41 AI behavior replay | Improves debuggability and user control. |
+| P1 | Phase 44 plugin author experience rehearsal | Makes third-party contribution paths repeatable and reviewable. |
+| P1 | Phase 45 TypeScript boundary expansion | Prevents cross-process and UI data drift during v1.1 work. |
+| P2 | Phase 41 AI behavior replay | Completed; preserve redacted diagnostics and replay semantics while future AI tooling evolves. |
 | P2 | Phase 39 plugin sandbox evaluation | Completed; keep current runner for v1.1 and revisit on high-risk plugin capability changes. |
-| P2 | Phase 45 documentation consolidation | Should happen after the v1.1 evidence and lifecycle work settles. |
+| P2 | Phase 46 documentation consolidation | Should happen after the v1.1 evidence and lifecycle work settles. |
 
 ## 7. Recommended Execution Sequence
 
-1. Finish and commit the current Phase 37 release evidence archive work.
-2. Execute Phase 42 to turn existing smoke tooling into real packaged runtime evidence.
-3. Execute Phase 43 to close signed release evidence or explicitly preserve not-ready platform claims.
-4. Phase 38 and Phase 39 are complete; keep their plugin secrets and sandbox boundaries as constraints for future plugin work.
-5. Phase 40 is complete; preserve pet pack export/provenance behavior while catalog work evolves.
-6. Execute Phase 41 to expose AI behavior replay and diagnostics.
-7. Execute Phase 44 in parallel only when a touched boundary already has active product work.
-8. Execute Phase 45 after the live docs stabilize.
+1. Execute Phase 42 to turn existing smoke tooling into real packaged runtime evidence.
+2. Execute Phase 43 to close signed release evidence or explicitly preserve not-ready platform claims.
+3. Phase 38 and Phase 39 are complete; keep their plugin secrets and sandbox boundaries as constraints for future plugin work.
+4. Phase 40 is complete; preserve pet pack export/provenance behavior while catalog work evolves.
+5. Phase 41 is complete; use AI behavior replay and diagnostics as the baseline for future behavior tooling.
+6. Execute Phase 44 to rehearse the plugin author path end to end before expanding community claims.
+7. Execute Phase 45 in parallel only when a touched boundary already has active product work.
+8. Execute Phase 46 after the live docs stabilize.
 
 ## 8. Verification Contract
 

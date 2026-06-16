@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { controlCenterAPI as api } from '../api/control-center-api.js'
 import { cloneAiBehavior, cloneAiConfig, cloneChatMessages, defaultAiConfig } from '../lib/defaults'
+import { downloadTextFile } from '../lib/download.js'
 
 export function useAiPane() {
   const [loading, setLoading] = useState(true)
@@ -15,6 +16,8 @@ export function useAiPane() {
   const [behaviorRulesText, setBehaviorRulesText] = useState('[]')
   const [dryRunText, setDryRunText] = useState('')
   const [dryRunResult, setDryRunResult] = useState(null)
+  const [replayDraft, setReplayDraft] = useState('')
+  const [replayResult, setReplayResult] = useState(null)
 
   useEffect(() => {
     let mounted = true
@@ -83,6 +86,50 @@ export function useAiPane() {
     }
   }
 
+  const onReplayBehaviorDecision = async () => {
+    const decisionId = Number(replayDraft.trim())
+    if (!Number.isFinite(decisionId) || decisionId <= 0) {
+      setStatus('请输入有效的决策 ID')
+      return
+    }
+    setStatus('')
+    try {
+      const result = await api.replayAiBehaviorDecision(decisionId)
+      setReplayResult(result)
+      setStatus(result.matched ? `Replay 命中：${result.reason}` : `Replay 未命中：${result.reason}`)
+    } catch (error) {
+      setReplayResult(null)
+      setStatus(error.message || 'Replay 失败')
+    }
+  }
+
+  const onExportBehaviorDiagnostics = async () => {
+    setStatus('')
+    try {
+      const content = await api.exportAiBehaviorDiagnostics()
+      downloadTextFile('openpet-ai-behavior-diagnostics.json', content, 'application/json;charset=utf-8')
+      setStatus('Behavior 诊断已导出')
+    } catch (error) {
+      setStatus(error.message || 'Behavior 诊断导出失败')
+    }
+  }
+
+  const onClearBehaviorDecisions = async () => {
+    if (!window.confirm('清空 AI 行为决策记录？')) return
+    setStatus('')
+    try {
+      await api.clearAiBehaviorDecisions()
+      const nextBehavior = cloneAiBehavior(await api.getAiBehavior())
+      setBehavior(nextBehavior)
+      setConfig({ ...config, behavior: nextBehavior })
+      setReplayResult(null)
+      setDryRunResult(null)
+      setStatus('Behavior 决策已清空')
+    } catch (error) {
+      setStatus(error.message || '清空失败')
+    }
+  }
+
   const onSaveApiKey = async () => {
     setSaving(true)
     setStatus('')
@@ -129,6 +176,9 @@ export function useAiPane() {
           ? `动作触发失败：${result.action.error}`
           : `已触发动作：${result.action.label || result.action.actionId}`)
       }
+      const nextBehavior = cloneAiBehavior(await api.getAiBehavior())
+      setBehavior(nextBehavior)
+      setConfig((current) => ({ ...current, behavior: nextBehavior }))
     } catch (error) {
       setStatus(error.message || '发送失败')
     } finally {
@@ -152,7 +202,10 @@ export function useAiPane() {
       behaviorRulesText,
       dryRunText,
       dryRunResult,
+      replayDraft,
+      replayResult,
       setDryRunText,
+      setReplayDraft,
       setBehaviorRulesText,
       onChangeBehavior: (partial) => setBehavior({ ...behavior, ...partial }),
       onChange: (partial) => setConfig({ ...config, ...partial }),
@@ -161,6 +214,9 @@ export function useAiPane() {
       onSaveApiKey,
       onTest,
       onDryRunBehavior,
+      onReplayBehaviorDecision,
+      onExportBehaviorDiagnostics,
+      onClearBehaviorDecisions,
       onSendChat
     }
   }

@@ -33,12 +33,13 @@ OpenPet is now a desktop pet platform with:
 - Plugin secrets decision and scaffolding: plugin config remains public settings, secret-like fields are rejected, and `create-openpet-plugin` generates minimal/network/storage starter templates.
 - Plugin sandbox evaluation: current child-process + Node permission-model + VM runner remains the v1.1 recommendation, with documented limits and re-evaluation triggers.
 - Pet pack export and provenance: installed user packs can be exported as `.openpet-pet.zip`, imported provenance is retained, and built-in packs remain read-only.
+- AI behavior decision viewer: Control Center shows recent behavior decisions, supports replay, exports redacted diagnostics, and clears decision history.
 
 ## Validation Baseline
 
 ```bash
-npm test                     # 370/370 Node tests
-npm run test:control-center  # 9/9 Playwright UI tests
+npm test                     # 371/371 Node tests
+npm run test:control-center  # 10/10 Playwright UI tests
 npm run typecheck            # TypeScript no-emit checks
 npm run check:syntax         # Node syntax + typecheck + Control Center build
 ```
@@ -48,7 +49,7 @@ npm run check:syntax         # Node syntax + typecheck + Control Center build
 - Windows is still not release-ready until real signed installer evidence and smoke reports are archived.
 - Packaged native picker, packaged runtime, and signed release archive evidence still need real archived runs.
 - The plugin ecosystem has submission tooling, examples, scaffolding, and a documented sandbox decision; wider community onboarding is still future work.
-- The next prioritized work is Phase 41 AI behavior replay, filling real packaged runtime/picker evidence, release evidence hardening, and continuing TypeScript contract migration.
+- The next prioritized work is filling real packaged runtime/picker evidence, release evidence hardening, improving plugin author rehearsals, and continuing TypeScript contract migration.
 
 ## Next Migration Steps
 

@@ -1,384 +1,208 @@
-# OpenPet Project Review TODO Design
+# OpenPet Review TODO 设计文档
 
-> Date: 2026-06-16
-> Baseline: Phase 40 completed; pet pack export, provenance, and conflict summaries are implemented locally
-> Scope: Convert the whole-project review TODO into a product and engineering design. This document defines what should be changed next and why; it does not change release-readiness claims.
+> 日期：2026-06-16
+> 基线：Phase 41 开发状态
+> 范围：把全项目 review 后的 TODO 收敛成可执行设计。本文只定义后续怎么补齐短板，不升级平台发布承诺。
 
-## 1. Purpose
+## 1. 当前目标定位
 
-OpenPet has already reached the original platform direction: an Electron desktop pet runtime with Control Center, pet packs, Codex pet import, bundled pets, plugin runtime, AI behavior orchestration, local HTTP/MCP integration, release tooling, and a TypeScript migration baseline.
-
-The remaining work is no longer about proving that the platform can exist. It is about turning the current implementation into a trustworthy desktop product and a maintainable extension ecosystem.
-
-This design turns the latest review TODO into execution tracks:
-
-- preserve the completed pet-pack lifecycle guarantees,
-- make AI behavior explainable,
-- prove packaged runtime behavior with real evidence,
-- close signed release evidence,
-- continue TypeScript migration at high-drift boundaries,
-- improve plugin author experience without weakening the sandbox,
-- keep documentation short, current, and evidence-based.
-
-## 2. Product Target
-
-OpenPet should present as a local-first desktop pet platform:
-
-- users can see and control a visible transparent desktop pet,
-- users can import, switch, audit, and export pet packs,
-- users can configure AI behavior from the Control Center without exposing API keys,
-- plugin authors can build limited-capability extensions through a repeatable workflow,
-- release claims are backed by signed artifacts and smoke evidence,
-- developers can continue the project from documented phase records and current-state docs.
+OpenPet 已经从单体桌宠演进为本地优先的 Electron 桌宠平台：主进程托管服务层，`PetService` 作为宠物状态唯一事实源，Control Center 承载配置和审查入口，pet pack、插件、AI 行为、Local HTTP/MCP、发布证据工具和 TypeScript 迁移框架都已经成形。
 
-The product should not drift into a remote marketplace, mobile runtime, or general automation platform until the desktop runtime and ecosystem lifecycle are evidence-complete.
+后续目标不是继续堆功能，而是完成产品化闭环：
 
-## 3. Current Gap Summary
+- 证明打包后的桌宠窗口、透明渲染、动作播放和原生选择器真实可用。
+- 让 macOS / Windows 发布口径只跟签名和烟测证据绑定。
+- 让 pet pack 和插件生态具备可审查、可复现、可回滚的生命周期。
+- 让 AI 行为能从产品界面解释、复放和导出诊断。
+- 让 TypeScript 覆盖跨进程、manifest、settings、catalog、evidence 这些高漂移边界。
+- 让 README、HANDOFF、project context 和路线图不再互相重复或冲突。
 
-| Area | Current State | Gap |
-|------|---------------|-----|
-| Pet packs | Import, Codex pet directory/zip import, bundled packs, user-pack export, provenance, deterministic conflict summaries | Packaged-runtime smoke evidence for exported/re-imported packs |
-| AI behavior | Rule-based orchestration, cooldowns, recent decisions in service logic | User-facing decision viewer, replay, export with redaction |
-| Packaged runtime | Tooling exists for reports and validators | Real packaged app evidence still needs capture |
-| Release readiness | macOS baseline, Windows tooling and policy | Signed macOS evidence closure and real signed Windows smoke evidence |
-| Plugins | Permission-limited runner, scaffolding, review workflow, sandbox evaluation | Stronger author onboarding, real third-party submission rehearsal |
-| TypeScript | Shared IPC and Control Center view contracts | API facade, hook, manifest, pet-pack, evidence, and settings boundaries |
-| Documentation | Broad phase history and live docs | Consolidated current entry points and reduced duplicated status prose |
-
-## 4. Design Principles
-
-1. **Evidence before claims**
-   README, About, release notes, and release checklist must only say what current artifacts prove.
-
-2. **Control Center first**
-   New user-facing controls, review text, exports, and diagnostics should be operable from Control Center, not hidden in manual files.
-
-3. **Contracts before rewrites**
-   TypeScript migration should harden shared data shapes before changing the Electron main process module system.
-
-4. **Lifecycle over one-off import**
-   Pet packs and plugins need inspect, install, update, export, review, and audit paths.
-
-5. **Security language stays precise**
-   Plugins are permission-limited and isolated. They are not described as absolutely safe.
-
-6. **Legacy assets remain stable**
-   Existing `cat_anime/` structure stays compatible. New pet-pack work layers around it.
-
-## 5. Workstream A: Pet Pack Lifecycle
-
-Status: completed in Phase 40. Keep this section as the product contract and regression checklist for future pet-pack changes.
-
-### Problem
+## 2. 差距表
 
-Pet packs need to remain portable, auditable assets. Reinstall and version conflict behavior must stay deterministic and visible.
-
-### Design
-
-- Keep `.openpet-pet.zip` export for installed user packs.
-- Refuse export for built-in packs unless a future release explicitly defines built-in redistribution rules.
-- Keep provenance metadata:
-  - `sourceUrl`,
-  - `assetAuthor`,
-  - `license`,
-  - `licenseUrl`,
-  - `importedAt`,
-  - `originalFormat`.
-- Keep deterministic conflict decisions:
-  - new install,
-  - same-version reinstall,
-  - upgrade,
-  - downgrade,
-  - duplicate ID,
-  - built-in pack conflict.
-- Surface provenance and conflict review in Control Center before install/overwrite.
-- Add packaged smoke evidence that exported packs can be re-imported and rendered.
-
-### Files
-
-- `src/main/pet-pack/schema.js`
-- `src/main/pet-pack/codex-pet.js`
-- `src/main/services/pet-pack-service.js`
-- `src/main/ipc.js`
-- `control-center-preload.js`
-- `src/control-center/src/panes/ActionsPane.jsx`
-- `src/control-center/src/hooks/useActionsPane.js`
-- `src/control-center/src/api/control-center-api.js`
-- `src/shared/openpet-contracts.ts`
-- `scripts/update-packaged-runtime-smoke-report.js`
-- `scripts/validate-packaged-runtime-smoke-report.js`
-- `tests/pet-pack/*.test.js`
-- `tests/services/pet-pack-service.test.js`
-- `tests/control-center/control-center-smoke.spec.js`
-
-### Acceptance
-
-- An installed user pack exports to a re-importable `.openpet-pet.zip`.
-- Built-in pack export returns a clear user-facing refusal.
-- Same-version, upgrade, downgrade, and duplicate conflicts are stable and tested.
-- Control Center shows provenance and conflict decisions.
-- Packaged runtime smoke proves at least one exported user pack can be re-imported and rendered.
-- `cat_anime/` is unchanged.
-
-## 6. Workstream B: AI Behavior Decision Viewer
-
-### Problem
-
-The behavior orchestrator can trigger actions, but users cannot easily explain why a reply triggered an action, failed cooldown, fell back, or was blocked.
-
-### Design
-
-- Add an AI behavior diagnostics section in Control Center.
-- Show recent decisions with:
-  - input summary,
-  - matched rule,
-  - selected `actionId`,
-  - cooldown result,
-  - fallback path,
-  - blocked or disabled reason,
-  - timestamp.
-- Add replay/dry-run input for AI reply text or behavior intent.
-- Add log export and clear actions.
-- Redact API keys and sensitive prompt content from exported diagnostics.
-
-### Files
-
-- `src/main/services/behavior-orchestrator-service.js`
-- `src/main/services/ai-service.js`
-- `src/main/services/settings-service.js`
-- `src/main/ipc.js`
-- `control-center-preload.js`
-- `src/control-center/src/panes/AiPane.jsx`
-- `src/control-center/src/hooks/useAiSettings.js`
-- `src/shared/openpet-contracts.ts`
-- `tests/services/behavior-orchestrator-service.test.js`
-- `tests/services/ai-action-orchestrator.test.js`
-- `tests/control-center/control-center-smoke.spec.js`
-
-### Acceptance
-
-- A user can explain one AI-triggered action from Control Center.
-- Rule edits can be dry-run before saving.
-- Exported diagnostics are useful and do not leak API keys.
-- Cooldown, fallback, disabled, and blocked paths have test coverage.
-
-## 7. Workstream C: Packaged Runtime Evidence
-
-### Problem
-
-The desktop pet promise depends on the packaged app showing visible transparent sprites. Dev-mode tests do not fully prove that packaged rendering, asset resolution, and native pickers work.
-
-### Design
-
-- Run packaged smoke against a built macOS app bundle.
-- Capture evidence for:
-  - pet window creation,
-  - transparent background,
-  - visible sprite pixels,
-  - speech bubble visibility,
-  - action playback,
-  - bundled pack switching,
-  - plugin zip picker,
-  - pet zip picker,
-  - cancel picker path,
-  - invalid package path.
-- Feed reports into existing validators and release archive manifests.
-- Keep reports explicit about pending, pass, and fail states.
-
-### Files
-
-- `scripts/update-packaged-runtime-smoke-report.js`
-- `scripts/validate-packaged-runtime-smoke-report.js`
-- `scripts/update-desktop-picker-smoke-report.js`
-- `scripts/validate-desktop-picker-smoke-report.js`
-- `scripts/create-release-evidence-archive-manifest.js`
-- `docs/release-evidence/`
-- `docs/desktop-release-design.md`
-- `docs/release-checklist.md`
-
-### Acceptance
-
-- Each bundled pack has packaged rendering evidence.
-- The transparent-model regression is represented by a required smoke check.
-- Picker evidence distinguishes real packaged runs from placeholder templates.
-- Archive manifest validation fails if required evidence is missing.
-
-## 8. Workstream D: Signed Release Evidence Closure
-
-### Problem
-
-Release readiness is currently stronger in tooling than in captured signed-artifact evidence, especially for Windows.
-
-### Design
-
-- For macOS, archive:
-  - `codesign --verify --deep --strict`,
-  - notarization accepted status,
-  - Gatekeeper assessment,
-  - first launch from downloaded artifact,
-  - update-check behavior.
-- For Windows, archive:
-  - Authenticode status for installer and packaged contents,
-  - clean-machine install,
-  - launch smoke,
-  - transparent pet window smoke,
-  - native picker smoke,
-  - plugin runner smoke,
-  - uninstall,
-  - SmartScreen/reputation observation without overstating trust.
-- Keep Windows public wording as not release-ready until evidence passes.
-
-### Files
-
-- `.github/workflows/release.yml`
-- `build/notarize.js`
-- `docs/desktop-release-design.md`
-- `docs/release-checklist.md`
-- `docs/release-evidence/`
-- `scripts/create-release-evidence-archive-manifest.js`
-- `tests/release/release-evidence-archive-manifest.test.js`
-
-### Acceptance
-
-- macOS claims link to signed, notarized, Gatekeeper, and launch evidence.
-- Windows remains gated until real signed Windows smoke evidence passes.
-- Release archive manifests hash every required evidence file.
-- README and About do not imply unsupported platform readiness.
-
-## 9. Workstream E: Plugin Author Experience
-
-### Problem
-
-The plugin runtime is capable, but third-party authors still need a cleaner path from idea to validated submission. The sandbox decision should remain conservative while onboarding improves.
-
-### Design
-
-- Keep the current child-process + Node permission-model + VM runner for v1.1.
-- Add clearer examples for:
-  - pet command plugin,
-  - network allowlist plugin,
-  - private storage plugin,
-  - AI-assisted plugin.
-- Improve scaffold output with generated README, validation command, and submission checklist.
-- Run at least one third-party-style submission rehearsal using the existing workflow bundle tooling.
-- Keep secret-like config fields rejected unless a future plugin-secret capability is explicitly designed.
-
-### Files
-
-- `scripts/create-openpet-plugin.js`
-- `examples/plugins/`
-- `docs/plugin-development.md`
-- `docs/plugin-submission-workflow-playbook.md`
-- `docs/plugin-sandbox-evaluation.md`
-- `scripts/validate-plugin-package.js`
-- `scripts/create-plugin-submission-bundle.js`
-- `tests/scripts/create-openpet-plugin.test.js`
-- `tests/scripts/validate-plugin-package.test.js`
-
-### Acceptance
-
-- A new author can scaffold, run, validate, package, and create a submission bundle from documented commands.
-- Example plugins cover the main permission classes.
-- Submission rehearsal produces reviewable Markdown and JSON artifacts.
-- No docs claim unrestricted plugin safety.
-
-## 10. Workstream F: TypeScript Boundary Expansion
-
-### Problem
-
-TypeScript exists, but the highest-risk drift points are still cross-process payloads, manifests, settings, and Control Center facades.
-
-### Design
-
-- Extend shared contracts for:
-  - pet-pack manifest, provenance, and conflict summaries,
-  - plugin manifest and review summaries,
-  - catalog entries,
-  - AI behavior settings and decision logs,
-  - local service state,
-  - packaged runtime evidence summaries,
-  - release archive summaries.
-- Consume contracts from:
-  - Control Center API facade,
-  - hooks,
-  - defaults,
-  - demo fixtures,
-  - tests.
-- Keep main process CommonJS stable. Use shared `.ts` contracts and JSDoc where it reduces drift without increasing boot risk.
-
-### Files
-
-- `src/shared/openpet-contracts.ts`
-- `src/control-center/src/api/control-center-api.js`
-- `src/control-center/src/hooks/*.js`
-- `src/control-center/src/lib/defaults.ts`
-- `src/main/services/*`
-- `tests/shared/*.test.js`
-- `tests/control-center/*.spec.js`
-
-### Acceptance
-
-- `npm run typecheck` validates migrated Control Center data paths.
-- IPC payload changes require contract updates.
-- Demo API fixtures match production payload shapes.
-- `npm start`, `npm test`, `npm run test:control-center`, and `npm run check:syntax` remain passing.
-
-## 11. Workstream G: Documentation Consolidation
-
-### Problem
-
-The project has useful documentation, but long phase history and repeated status summaries can make the current truth harder to find.
-
-### Design
-
-- Keep README user-facing and conservative.
-- Keep `docs/HANDOFF.md` as the current continuation entry.
-- Keep `docs/project-context.json` compact and machine-readable.
-- Keep phase and review docs as historical audit records.
-- Reduce duplicate status prose in older roadmap/status documents when live docs already own the fact.
-- Add links from live docs to this TODO design as the current review-derived backlog.
-
-### Files
-
-- `README.md`
-- `README.zh-CN.md`
-- `docs/HANDOFF.md`
-- `docs/development-summary.md`
-- `docs/project-context.json`
-- `docs/productization-roadmap.md`
-- `docs/project-documentation-design.md`
-- `docs/project-review-todo-design.md`
-
-### Acceptance
-
-- A contributor can find current state from README -> HANDOFF -> project context -> relevant design doc.
-- Test totals, release readiness, platform support, and next-step guidance do not contradict across live docs.
-- Human-facing docs read as maintained product documentation, not generated phase transcripts.
-
-## 12. Execution Order
-
-### P0: Close runtime and release proof
-
-1. Use Phase 40 pet-pack export/provenance as the baseline contract.
-2. Capture packaged runtime evidence on macOS.
-3. Close macOS signed release evidence.
-4. Keep Windows explicitly gated until signed Windows smoke evidence exists.
-
-### P1: Improve ecosystem maintainability
-
-5. Add AI behavior decision viewer and replay.
-6. Improve plugin author experience and run a third-party-style submission rehearsal.
-7. Expand TypeScript contracts across pet-pack, plugin, AI, and evidence boundaries.
-
-### P2: Reduce long-term drift
-
-8. Consolidate docs after the above behavior changes land.
-9. Revisit plugin sandbox only if new plugin capabilities increase trust requirements.
-10. Consider remote marketplace only after local submission, audit, provenance, and signed release evidence are solid.
-
-## 13. Verification Baseline
-
-Every implementation phase that touches code should end with:
+| 领域 | 当前状态 | 需要补齐 |
+|------|----------|----------|
+| Pet Pack | 已支持 legacy 资产、OpenPet pack、Codex pet 目录/zip 导入、内置 packs、用户 pack 导出、来源和冲突摘要 | 用真实 packaged app 证明导入、导出、重装、切换和渲染路径 |
+| AI 行为解释 | 已有行为编排、冷却、fallback、近期 decision 存储；Phase 41 增加 viewer/replay/export/clear | 完成 review、提交并保持导出诊断的隐私边界 |
+| 打包运行证据 | 已有 packaged runtime / desktop picker 报告和校验工具 | 填入真实 macOS app bundle 运行证据，覆盖透明模型回归 |
+| 签名发布证据 | 已有 release checklist、archive manifest 和 Windows 策略 | 归档 macOS 签名/公证/Gatekeeper 证据；Windows 继续等待真实签名烟测 |
+| 插件作者体验 | 已有权限模型、隔离 runner、示例插件、校验、审核包、PR/workflow 工具 | 一命令脚手架、第三方提交演练、教程入口和 secret 策略一致性 |
+| TypeScript 边界 | 已有 IPC 常量、共享 contracts、Control Center view contracts 和 `typecheck` | 扩展到 plugin/pet pack/catalog/AI/local service/evidence/release summary |
+| 文档收敛 | 阶段文档、review 文档和活文档完整 | 压缩重复状态文档，让当前事实只有少数入口维护 |
+
+## 3. 设计原则
+
+1. **证据先于声明**：README、About、release notes、checklist 只能写已有证据能支撑的内容。
+2. **Control Center 优先**：用户可见配置、审查、导出、清理和诊断入口优先放进 Control Center。
+3. **契约先于重写**：TypeScript 优先约束数据边界，不做一次性主进程 TS/ESM 大迁移。
+4. **生命周期优先于一次性导入**：pet pack 和插件都要有 inspect、install、update、export、review、audit 路径。
+5. **安全措辞保持保守**：插件只能称为权限限制和隔离执行，不能称为绝对安全。
+6. **遗留资产稳定**：不改变 `cat_anime/` 结构；新能力在 pet-pack runtime 上叠加。
+7. **活文档短而准**：README 面向用户，HANDOFF 面向继续开发，project context 面向机器读取，phase/review 文档作为历史审计。
+
+## 4. 七个工作流
+
+### 4.1 Pet Pack
+
+目标是把 pet pack 从“能导入”推进到“能审查、导出、重装和证明可运行”。
+
+设计要点：
+
+- 保持 `.openpet-pet.zip` 用户 pack 导出能力。
+- 保持 provenance 字段：`sourceUrl`、`assetAuthor`、`license`、`licenseUrl`、`importedAt`、`originalFormat`。
+- 保持版本冲突语义：新安装、同版本重装、升级、降级、重复 ID、内置 pack 冲突。
+- Control Center 必须在破坏性覆盖前展示来源、版本和冲突摘要。
+- packaged runtime smoke 要覆盖导出后重导入并渲染的路径。
+
+验收标准：
+
+- 用户 pack 可以导出为可重导入的 `.openpet-pet.zip`。
+- 内置 pack 导出有清晰拒绝原因或后续重新定义分发规则。
+- 冲突判断稳定并有测试覆盖。
+- 至少一个导出 pack 在 packaged app 中完成重导入和渲染证据。
+
+### 4.2 AI 行为解释
+
+目标是让用户和维护者能解释一次 AI 回复为什么触发动作、未触发动作、进入冷却、fallback 或被阻止。
+
+设计要点：
+
+- Control Center AI 页展示近期 behavior decisions。
+- 每条 decision 展示输入摘要、匹配规则、动作、冷却、fallback、blocked/disabled 原因和时间。
+- 支持按 decision id replay，也支持后续扩展为 dry-run 输入。
+- 支持导出 redacted diagnostics 和清空历史。
+- 导出内容不能包含 API key、完整 prompt 或敏感原文。
+
+验收标准：
+
+- 用户能从 Control Center 解释一条 AI 行为决策。
+- replay 输出能说明 action / fallback / blocked 结果。
+- 导出诊断通过 redaction 测试。
+- clear history 不破坏 AI 配置。
+
+### 4.3 打包运行证据
+
+目标是证明真实打包产物里的桌宠体验有效，而不是只证明 dev 模式有效。
+
+设计要点：
+
+- 使用 `npm run pack` 后的 app bundle 运行 smoke。
+- 证据覆盖 pet window 创建、透明背景、可见 sprite pixels、speech bubble、动作播放、内置 pack 切换。
+- 原生选择器覆盖 plugin zip、pet zip、cancel、invalid package。
+- 报告进入 release evidence archive，并由 validator 校验。
+
+验收标准：
+
+- 每个内置 pack 至少有一条 packaged rendering evidence。
+- 透明模型回归变成必测项。
+- picker 报告区分真实 pass/fail 和 pending placeholder。
+- archive manifest 在证据缺失时失败。
+
+### 4.4 签名发布证据
+
+目标是让发布就绪声明和平台支持声明绑定到真实签名证据。
+
+设计要点：
+
+- macOS 归档 `codesign --verify --deep --strict`、notarization accepted、Gatekeeper assessment、下载后首次启动、About 更新检查。
+- Windows 归档 Authenticode、clean-machine install、launch、透明 pet window、native picker、plugin runner、uninstall、SmartScreen/reputation 观察。
+- Windows 在签名烟测证据通过前继续明确写为 not release-ready。
+- release archive manifest 对证据文件做 hash 和分类。
+
+验收标准：
+
+- macOS 对外发布声明有签名、公证、Gatekeeper 和启动证据链接。
+- Windows 任一关键证据缺失或失败时，README / release docs 不得升级支持口径。
+- release archive manifest 能校验必需证据集。
+
+### 4.5 插件作者体验
+
+目标是在不放宽沙箱和权限模型的前提下，让第三方作者能按固定路径完成创建、验证、打包和提交。
+
+设计要点：
+
+- 保持当前 child process + Node permission model + VM runner 作为 v1.1 基线。
+- 增强脚手架：pet command、network allowlist、private storage、AI-assisted 示例。
+- 脚手架输出 README、验证命令、打包命令和提交 checklist。
+- 至少跑一次第三方风格 submission rehearsal。
+- secret-like plugin config 继续拒绝，除非后续显式设计 main-process-only secret capability。
+
+验收标准：
+
+- 新作者不读内部源码也能 scaffold、run、validate、package、create submission bundle。
+- 示例覆盖主要权限类型。
+- submission rehearsal 产出 Markdown 和 JSON 审核材料。
+- 文档不宣称插件拥有无限制能力或绝对安全。
+
+### 4.6 TypeScript 边界
+
+目标是把 TS 用在最容易漂移的数据边界上，而不是为了迁移而迁移。
+
+设计要点：
+
+- 扩展 shared contracts：pet pack manifest/provenance/conflict、plugin manifest/review summary、catalog entry、AI behavior setting/decision、local service state、packaged runtime evidence、release archive summary。
+- Control Center API facade、hooks、defaults、demo fixtures 和测试消费这些 contracts。
+- 主进程继续保持 CommonJS 稳定；必要处用 JSDoc 或小型 typed helper 降低风险。
+
+验收标准：
+
+- `npm run typecheck` 覆盖真实产品数据路径。
+- IPC payload 变化需要同步 contract。
+- demo API fixture 与生产 payload shape 一致。
+- `npm start`、`npm test`、`npm run test:control-center`、`npm run check:syntax` 保持通过。
+
+### 4.7 文档收敛
+
+目标是保留审计记录，但减少活文档漂移。
+
+设计要点：
+
+- README 保持用户视角和保守平台声明。
+- `docs/HANDOFF.md` 只保留当前状态、下一步、验证命令和工作区风险。
+- `docs/project-context.json` 作为机器可读事实源。
+- `docs/phases/` 和 `docs/reviews/` 作为历史记录，不反复改写。
+- 长篇 status / roadmap 中重复的测试数量、支持口径和下一步说明要收敛到 live docs。
+
+验收标准：
+
+- 新贡献者能从 README -> HANDOFF -> project context -> 设计文档在 5 分钟内定位当前状态。
+- 测试数量、平台支持、release readiness、下一阶段目标不冲突。
+- 人读文档像维护中的工程文档，不像阶段转录稿。
+
+## 5. 执行优先级
+
+| 优先级 | 工作 | 原因 |
+|--------|------|------|
+| P0 | 打包运行证据 | 直接证明桌宠核心体验在真实产物中可用。 |
+| P0 | 签名发布证据 | 决定 macOS / Windows 对外支持口径和用户信任。 |
+| P1 | 插件作者体验 | 生态扩展前必须让作者路径可复现、可审查。 |
+| P1 | TypeScript 边界 | 降低 IPC、manifest、settings、UI fixture 漂移风险。 |
+| P1 | Pet Pack | Phase 40 已完成核心能力，后续作为 catalog 和 release smoke 的约束。 |
+| P2 | AI 行为解释 | Phase 41 已实现主要能力，后续重点是 review、提交和隐私边界维护。 |
+| P2 | 文档收敛 | 应在证据、插件和 TS 事实稳定后做最终压缩。 |
+
+## 6. 阶段安排与验收
+
+| 阶段 | 主题 | 优先级 | 状态 | 验收标准 |
+|------|------|--------|------|----------|
+| Phase 40 | Pet Pack Export and Provenance | P1 | 已完成 | 用户 pack 可导出重导入；provenance 与冲突摘要稳定；Control Center 可审查；测试覆盖服务和 IPC。 |
+| Phase 41 | AI Behavior Decision Viewer | P2 | 已完成 | Control Center 可查看、replay、导出 redacted diagnostics、清空 decisions；redaction 和 UI smoke 测试通过；production review 已完成。 |
+| Phase 42 | Real Packaged Runtime Evidence | P0 | 待执行 | 打包 app 证据覆盖透明窗口、sprite、speech bubble、动作播放、pack 切换和 picker 流程；validator 通过；证据归档。 |
+| Phase 43 | Signed Release Evidence Closure | P0 | 待执行 | macOS 签名/公证/Gatekeeper/启动证据归档；Windows 签名烟测未齐时继续 not release-ready；release manifest 校验通过。 |
+| Phase 44 | Plugin Author Experience | P1 | 待执行 | 一命令 scaffold；示例覆盖 pet/network/storage/AI；submission rehearsal 产出审核包；secret 策略一致。 |
+| Phase 45 | TypeScript Boundary Expansion | P1 | 待执行 | contracts 覆盖 pet/plugin/catalog/AI/service/evidence/release；Control Center facade/hooks/fixtures 消费；typecheck 和回归测试通过。 |
+| Phase 46 | Documentation Consolidation | P2 | 待执行 | README、HANDOFF、project-context、roadmap/status 事实一致；重复状态说明压缩；平台支持和测试数量无冲突。 |
+
+## 7. 每阶段通用完成标准
+
+每个开发阶段都必须满足：
+
+- 有 `docs/phases/phase-xx-*.md` 开发文档。
+- 有 `docs/reviews/phase-xx-*-review.md` production review 文档。
+- 只更新事实发生变化的 live docs。
+- 新行为有针对性测试。
+- 不混入无关重构、格式化或历史文件改写。
+
+通用验证：
 
 ```bash
 npm test
@@ -388,30 +212,25 @@ npm run check:syntax
 git diff --check
 ```
 
-Release/evidence phases should additionally run the relevant script validators, such as:
+按范围追加验证：
 
 ```bash
-npm run validate-packaged-runtime-smoke-report
-npm run validate-desktop-picker-smoke-report
-npm run create-release-evidence-archive-manifest
-```
-
-Plugin ecosystem phases should additionally run:
-
-```bash
+npm run pack
+npm run validate-packaged-runtime-smoke-report -- <report>
+npm run validate-desktop-picker-smoke-report -- <report>
+npm run create-release-evidence-archive-manifest -- <archive-dir>
 npm run validate:plugin -- <plugin-dir-or-zip>
 npm run create-plugin-submission-bundle -- <plugin-dir-or-zip>
-npm run validate-plugin-submission-bundle -- <bundle-dir>
 ```
 
-## 14. Done Criteria
+## 8. 总体验收
 
-This TODO design is complete when:
+这条 TODO 线完成时，OpenPet 应满足：
 
-- pet packs have import, export, provenance, and conflict review,
-- AI behavior can be explained and replayed from Control Center,
-- packaged runtime evidence proves visible transparent pet rendering,
-- macOS release evidence is archived and Windows claims remain gated,
-- plugin authors can complete a documented local submission rehearsal,
-- TypeScript covers the highest-risk shared data boundaries,
-- live docs agree on current status and release readiness.
+- 打包后的透明桌宠、动作播放、speech bubble、pack 切换和 picker 流程都有真实证据。
+- macOS 发布声明有签名和公证证据；Windows 声明不超过真实签名烟测结果。
+- pet pack 具备导入、导出、来源、冲突审查和运行证据。
+- AI 行为能从 Control Center 解释、replay、导出 redacted diagnostics。
+- 插件作者能完成 scaffold -> validate -> package -> submission bundle 的完整路径。
+- TypeScript 覆盖最容易漂移的共享数据边界。
+- 活文档短、准、一致，历史阶段文档只承担审计作用。

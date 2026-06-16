@@ -22,12 +22,35 @@ export interface AiBehaviorRule {
   confidence?: number
 }
 
+export interface AiBehaviorDecision {
+  id: number
+  timestamp: string
+  matched: boolean
+  type?: string
+  ruleId?: string
+  reason: string
+  actionId?: string
+  label?: string
+  kind?: string
+  event?: string
+  intent?: string
+  inputSummary?: string
+  cooldown?: boolean
+  fallback?: boolean
+  blockedReason?: string
+  replay?: {
+    reply?: string
+    behaviorIntent?: AiBehaviorRule | null
+  }
+  replayRedacted?: boolean
+}
+
 export interface AiBehaviorConfig {
   enabled: boolean
   useTools: boolean
   cooldownMs: number
   rules: AiBehaviorRule[]
-  decisions: AiBehaviorRule[]
+  decisions: AiBehaviorDecision[]
 }
 
 export interface AiConfigViewState {

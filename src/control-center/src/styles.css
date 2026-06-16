@@ -364,6 +364,12 @@ button {
   min-width: 0;
 }
 
+.behavior-diagnostics {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
 .behavior-result {
   display: flex;
   flex-wrap: wrap;
@@ -375,6 +381,39 @@ button {
 
 .behavior-result strong {
   color: #1f2937;
+}
+
+.behavior-decision-list {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.behavior-decision-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  padding: 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 12px;
+}
+
+.behavior-decision-row div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.behavior-decision-row span {
+  color: #6b7280;
+  overflow-wrap: anywhere;
+}
+
+.behavior-decision-meta {
+  justify-items: end;
 }
 
 .actions-workspace {

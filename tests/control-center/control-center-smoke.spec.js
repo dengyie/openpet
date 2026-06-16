@@ -96,6 +96,36 @@ test.describe('Control Center smoke', () => {
     await expect(page.locator('.field-row', { hasText: 'API Key' })).toContainText('已保存')
   })
 
+  test('shows AI behavior decisions and supports replay and clearing diagnostics', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: 'AI' }).click()
+
+    const decisionsPanel = page.locator('.field-row', { hasText: 'Decisions' })
+    await expect(decisionsPanel).toContainText('1 条')
+    await expect(decisionsPanel.locator('.behavior-decision-row')).toContainText('#1 matched')
+    await expect(decisionsPanel.locator('.behavior-decision-row')).toContainText('matched rule demo-rule')
+
+    await decisionsPanel.getByPlaceholder('Decision ID').fill('1')
+    await decisionsPanel.getByRole('button', { name: 'Replay' }).click()
+    await expect(page.locator('.status-line')).toContainText('Replay 命中')
+    await expect(decisionsPanel.locator('.behavior-result')).toContainText('demo replay matched')
+
+    await decisionsPanel.getByRole('button', { name: '导出' }).click()
+    await expect(page.locator('.status-line')).toContainText('Behavior 诊断已导出')
+
+    page.once('dialog', (dialog) => dialog.accept())
+    await decisionsPanel.getByRole('button', { name: '清空' }).click()
+    await expect(page.locator('.status-line')).toContainText('Behavior 决策已清空')
+    await expect(decisionsPanel).toContainText('0 条')
+    await expect(decisionsPanel.locator('.empty-chat')).toContainText('暂无决策记录')
+
+    await page.getByPlaceholder('说点什么').fill('hello decision viewer')
+    await page.getByRole('button', { name: '发送' }).click()
+    await expect(page.locator('.status-line')).toContainText('已触发动作：Wave')
+    await expect(decisionsPanel).toContainText('1 条')
+    await expect(decisionsPanel.locator('.behavior-decision-row')).toContainText('matched rule demo-chat')
+  })
+
   test('persists Service config and exposes the updated loopback endpoint', async ({ page }) => {
     await page.goto('/')
     await page.getByRole('button', { name: 'Service' }).click()

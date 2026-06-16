@@ -24,8 +24,16 @@ export function AiPane({
   dryRunText,
   setDryRunText,
   dryRunResult,
-  onDryRunBehavior
+  onDryRunBehavior,
+  replayDraft,
+  setReplayDraft,
+  replayResult,
+  onReplayBehaviorDecision,
+  onExportBehaviorDiagnostics,
+  onClearBehaviorDecisions
 }) {
+  const decisions = Array.isArray(behavior.decisions) ? behavior.decisions : []
+
   return (
     <section className="pane">
       <header className="pane-header">
@@ -171,6 +179,60 @@ export function AiPane({
                 {dryRunResult.ruleId ? <span>{dryRunResult.ruleId}</span> : null}
               </div>
             ) : null}
+          </div>
+        </div>
+
+        <div className="field-row tall">
+          <div>
+            <div className="field-label">Decisions</div>
+            <div className="field-note">{decisions.length} 条</div>
+          </div>
+          <div className="behavior-diagnostics">
+            <div className="inline-action">
+              <input
+                className="text-input"
+                value={replayDraft}
+                placeholder="Decision ID"
+                onChange={(event) => setReplayDraft(event.target.value)}
+              />
+              <button type="button" className="ghost" onClick={onReplayBehaviorDecision} disabled={!replayDraft.trim()}>
+                Replay
+              </button>
+              <button type="button" className="ghost" onClick={onExportBehaviorDiagnostics} disabled={decisions.length === 0}>
+                导出
+              </button>
+              <button type="button" className="danger-text" onClick={onClearBehaviorDecisions} disabled={decisions.length === 0}>
+                清空
+              </button>
+            </div>
+
+            {replayResult ? (
+              <div className="behavior-result">
+                <strong>{replayResult.matched ? 'Replay matched' : 'Replay no match'}</strong>
+                <span>{replayResult.reason}</span>
+                {replayResult.actionId ? <span>{replayResult.actionId}</span> : null}
+              </div>
+            ) : null}
+
+            <div className="behavior-decision-list">
+              {decisions.length === 0 ? (
+                <div className="empty-chat">暂无决策记录</div>
+              ) : decisions.slice(0, 8).map((decision) => (
+                <div className="behavior-decision-row" key={decision.id}>
+                  <div>
+                    <strong>#{decision.id} {decision.matched ? 'matched' : 'blocked'}</strong>
+                    <span>{decision.reason || decision.blockedReason || 'no reason'}</span>
+                    {decision.inputSummary ? <span>{decision.inputSummary}</span> : null}
+                  </div>
+                  <div className="behavior-decision-meta">
+                    {decision.ruleId ? <span>{decision.ruleId}</span> : null}
+                    {decision.actionId ? <span>{decision.actionId}</span> : null}
+                    {decision.cooldown ? <span>cooldown</span> : null}
+                    {decision.fallback ? <span>fallback</span> : null}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>

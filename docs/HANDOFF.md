@@ -11,6 +11,7 @@ OpenPet is a desktop pet platform with:
 - pet pack runtime with Codex pet import and zip import,
 - bundled built-in packs `doro`, `duodong`, and `chispa`,
 - AI chat with secret storage in the main process,
+- AI behavior decisions with Control Center replay and redacted diagnostics,
 - permission-limited plugins,
 - loopback-only local HTTP / MCP,
 - and a TypeScript migration baseline covering shared IPC and Control Center view contracts.
@@ -71,5 +72,5 @@ npm run create-release-evidence-archive-manifest
 ## Next Steps
 
 1. Use `docs/project-review-todo-design.md` as the current whole-project TODO design, `docs/productization-next-steps-design.md` as the near-term productization design, and `docs/productization-v1.1-todo-design.md` as the phase execution entry.
-2. Continue with Phase 41 AI behavior replay/decision viewer while preserving the Phase 38/39 plugin secrets and sandbox boundaries and Phase 40 pet pack provenance rules.
+2. Use Phase 41 AI behavior replay/decision viewer as the current diagnostics baseline.
 3. Fill real packaged runtime, picker, and signed archive evidence before claiming packaged runtime or release readiness.

@@ -173,3 +173,34 @@ test('behavior orchestrator preserves conversations while saving config', () => 
     control: [{ role: 'user', content: 'hi' }]
   })
 })
+
+test('behavior orchestrator records replayable decisions and exports redacted diagnostics', () => {
+  const service = createBehaviorOrchestratorService({
+    settingsService: createSettingsService({
+      rules: [
+        { id: 'success', priority: 10, when: { contains: ['done'] }, then: { type: 'playAction', actionId: 'done' } }
+      ]
+    })
+  })
+
+  const decision = service.evaluate({
+    reply: 'done with sensitive prompt text',
+    behaviorIntent: { intent: 'success', actionId: 'done', confidence: 0.9 },
+    actions
+  })
+  const config = service.getConfig()
+  const stored = config.decisions[0]
+  const exported = JSON.parse(service.exportDiagnostics())
+
+  assert.equal(decision.actionId, 'done')
+  assert.equal(stored.reason, 'matched rule success')
+  assert.equal(stored.inputSummary, 'reply:31 chars · intent:success · actionId:done · confidence:0.9')
+  assert.equal(stored.replay.reply, 'done with sensitive prompt text')
+  assert.equal(service.replayDecision({ decisionId: stored.id, actions }).actionId, 'done')
+  assert.equal(exported.decisions[0].replay, undefined)
+  assert.equal(exported.decisions[0].replayRedacted, true)
+  assert.equal(JSON.stringify(exported).includes('sensitive prompt text'), false)
+
+  assert.deepEqual(service.clearDecisions(), [])
+  assert.deepEqual(service.getConfig().decisions, [])
+})

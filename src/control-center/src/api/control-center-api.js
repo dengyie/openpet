@@ -229,7 +229,26 @@ const createDemoServiceStatus = () => cloneServiceStatus({
 
 const createDefaultDemoState = () => ({
   settings: cloneSettings(defaultSettings),
-  aiConfig: cloneAiConfig(defaultAiConfig),
+  aiConfig: cloneAiConfig({
+    ...defaultAiConfig,
+    behavior: {
+      ...defaultAiConfig.behavior,
+      decisions: [
+        {
+          id: 1,
+          timestamp: '2026-06-16T00:00:00.000Z',
+          matched: true,
+          type: 'playAction',
+          ruleId: 'demo-rule',
+          reason: 'matched rule demo-rule',
+          actionId: 'wave',
+          intent: 'greeting',
+          inputSummary: 'reply:12 chars · intent:greeting',
+          replay: { reply: 'hello there', behaviorIntent: { intent: 'greeting', actionId: 'wave', confidence: 0.9 } }
+        }
+      ]
+    }
+  }),
   serviceStatus: createDemoServiceStatus(),
   catalog: createDemoCatalog(),
   plugins: [],
@@ -338,14 +357,62 @@ const demoApi = {
   },
   testAiConnection: async () => ({ ok: true, reply: 'ok' }),
   getAiConversation: async () => [],
-  chat: async ({ message }) => ({ reply: `Echo: ${message}` }),
+  chat: async ({ message }) => {
+    const decisions = Array.isArray(demoState.aiConfig.behavior?.decisions)
+      ? demoState.aiConfig.behavior.decisions
+      : []
+    const nextId = decisions.reduce((max, decision) => Math.max(max, Number(decision.id) || 0), 0) + 1
+    demoState.aiConfig = cloneAiConfig({
+      ...demoState.aiConfig,
+      behavior: {
+        ...demoState.aiConfig.behavior,
+        decisions: [
+          {
+            id: nextId,
+            timestamp: new Date().toISOString(),
+            matched: true,
+            type: 'playAction',
+            ruleId: 'demo-chat',
+            reason: 'matched rule demo-chat',
+            actionId: 'wave',
+            intent: 'greeting',
+            inputSummary: `reply:${String(message || '').length} chars · intent:greeting`,
+            replay: { reply: `Echo: ${message}`, behaviorIntent: { intent: 'greeting', actionId: 'wave', confidence: 0.8 } }
+          },
+          ...decisions
+        ].slice(0, 50)
+      }
+    })
+    writeDemoState()
+    return { reply: `Echo: ${message}`, behavior: { matched: true, type: 'playAction', actionId: 'wave' }, action: { actionId: 'wave', label: 'Wave' } }
+  },
   getAiBehavior: async () => cloneAiConfig(demoState.aiConfig).behavior,
   saveAiBehavior: async (config) => {
     demoState.aiConfig = cloneAiConfig({ ...demoState.aiConfig, behavior: config })
     writeDemoState()
     return demoState.aiConfig.behavior
   },
-  dryRunAiBehavior: async () => ({ matched: false, reason: 'demo' }),
+  dryRunAiBehavior: async ({ reply }) => ({ matched: Boolean(reply), reason: reply ? 'demo dry-run matched' : 'demo dry-run empty', actionId: reply ? 'wave' : '' }),
+  replayAiBehaviorDecision: async (decisionId) => ({ replayOf: decisionId, matched: true, reason: 'demo replay matched', actionId: 'wave' }),
+  exportAiBehaviorDiagnostics: async () => JSON.stringify({
+    schemaVersion: 1,
+    exportedAt: new Date().toISOString(),
+    decisions: cloneAiConfig(demoState.aiConfig).behavior.decisions.map(({ replay: _replay, ...decision }) => ({
+      ...decision,
+      replayRedacted: true
+    }))
+  }, null, 2),
+  clearAiBehaviorDecisions: async () => {
+    demoState.aiConfig = cloneAiConfig({
+      ...demoState.aiConfig,
+      behavior: {
+        ...demoState.aiConfig.behavior,
+        decisions: []
+      }
+    })
+    writeDemoState()
+    return []
+  },
   getPlugins: async () => cloneDemoPlugins(),
   setPluginEnabled: async (pluginId, enabled) => {
     demoState.plugins = demoState.plugins.map((plugin) => (

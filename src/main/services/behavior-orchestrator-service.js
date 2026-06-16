@@ -3,6 +3,7 @@ const { findSemanticAction } = require('./ai-action-orchestrator')
 const MAX_BEHAVIOR_RULES = 50
 const MAX_DECISIONS = 50
 const MAX_RULE_TEXT_CHARS = 500
+const MAX_REPLAY_REPLY_CHARS = 2000
 const DEFAULT_BEHAVIOR_CONFIG = {
   enabled: false,
   useTools: true,
@@ -21,6 +22,24 @@ const normalizeStringList = (value) => {
 }
 
 const normalizeActionId = (value) => String(value || '').trim()
+
+const summarizeInput = ({ reply = '', behaviorIntent = null } = {}) => {
+  const parts = [`reply:${String(reply || '').length} chars`]
+  if (behaviorIntent?.intent) parts.push(`intent:${String(behaviorIntent.intent).slice(0, 80)}`)
+  if (behaviorIntent?.actionId) parts.push(`actionId:${String(behaviorIntent.actionId).slice(0, 80)}`)
+  if (behaviorIntent?.confidence != null) parts.push(`confidence:${Number(behaviorIntent.confidence) || 0}`)
+  return parts.join(' · ')
+}
+
+const normalizeReplayInput = (replay = {}) => ({
+  reply: String(replay.reply || '').slice(0, MAX_REPLAY_REPLY_CHARS),
+  behaviorIntent: isPlainObject(replay.behaviorIntent) ? {
+    intent: String(replay.behaviorIntent.intent || '').slice(0, 120),
+    actionId: String(replay.behaviorIntent.actionId || '').slice(0, 120),
+    bubbleText: String(replay.behaviorIntent.bubbleText || '').slice(0, MAX_RULE_TEXT_CHARS),
+    confidence: Number(replay.behaviorIntent.confidence || 0)
+  } : null
+})
 
 const normalizeRule = (rule = {}, index = 0) => ({
   id: normalizeActionId(rule.id) || `rule-${index + 1}`,
@@ -49,11 +68,43 @@ const normalizeDecision = (decision = {}, index = 0) => ({
   id: Number.isFinite(Number(decision.id)) ? Number(decision.id) : index + 1,
   timestamp: decision.timestamp || new Date().toISOString(),
   matched: Boolean(decision.matched),
+  type: String(decision.type || ''),
   ruleId: String(decision.ruleId || ''),
   reason: String(decision.reason || ''),
   actionId: String(decision.actionId || ''),
-  intent: String(decision.intent || '')
+  label: String(decision.label || ''),
+  kind: String(decision.kind || ''),
+  event: String(decision.event || ''),
+  intent: String(decision.intent || ''),
+  inputSummary: String(decision.inputSummary || ''),
+  cooldown: Boolean(decision.cooldown),
+  fallback: Boolean(decision.fallback),
+  blockedReason: String(decision.blockedReason || ''),
+  replay: normalizeReplayInput(decision.replay)
 })
+
+const createStoredDecision = (payload, decision) => {
+  const reason = String(decision.reason || '')
+  return normalizeDecision({
+    ...decision,
+    inputSummary: summarizeInput(payload),
+    cooldown: Boolean(decision.cooldown),
+    fallback: reason.startsWith('fallback matched'),
+    blockedReason: decision.matched ? '' : reason,
+    replay: {
+      reply: payload.reply || '',
+      behaviorIntent: payload.behaviorIntent || null
+    }
+  })
+}
+
+const redactDecisionForExport = (decision) => {
+  const { replay: _replay, ...safeDecision } = normalizeDecision(decision)
+  return {
+    ...safeDecision,
+    replayRedacted: true
+  }
+}
 
 const normalizeBehaviorConfig = (behavior = {}) => ({
   ...DEFAULT_BEHAVIOR_CONFIG,
@@ -215,13 +266,32 @@ const createBehaviorOrchestratorService = ({ settingsService }) => {
     const decision = decide(payload)
     const cooldownDecision = checkCooldown(decision, config.cooldownMs)
     const finalDecision = cooldownDecision || decision
-    appendDecision(finalDecision)
+    appendDecision(createStoredDecision(payload, finalDecision))
     return finalDecision
   }
 
   const dryRun = (payload = {}) => decide({ ...payload, dryRun: true })
+  const replayDecision = ({ decisionId, actions = [], behavior = null } = {}) => {
+    const decision = getConfig().decisions.find((entry) => entry.id === Number(decisionId))
+    if (!decision) throw new Error('Behavior decision not found')
+    return {
+      replayOf: decision.id,
+      ...dryRun({
+        reply: decision.replay?.reply || '',
+        behaviorIntent: decision.replay?.behaviorIntent || null,
+        actions,
+        behavior
+      })
+    }
+  }
+  const clearDecisions = () => saveConfig({ decisions: [] }).decisions
+  const exportDiagnostics = () => JSON.stringify({
+    schemaVersion: 1,
+    exportedAt: new Date().toISOString(),
+    decisions: getConfig().decisions.map(redactDecisionForExport)
+  }, null, 2)
 
-  return { getConfig, saveConfig, evaluate, dryRun }
+  return { getConfig, saveConfig, evaluate, dryRun, replayDecision, clearDecisions, exportDiagnostics }
 }
 
 module.exports = {
