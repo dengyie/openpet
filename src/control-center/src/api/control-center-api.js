@@ -322,6 +322,7 @@ const demoApi = {
   inspectPetPackDirectory: async () => ({ canceled: true }),
   clearPetPackSelection: async () => ({ ok: true }),
   importPetPack: async () => ({ petPacks: defaultPetPacks }),
+  exportPetPack: async (packId) => ({ ok: true, packId, fileName: `${packId}.openpet-pet.zip` }),
   setActivePetPack: async () => ({ petPacks: defaultPetPacks, animations: defaultActionsConfig }),
   removePetPack: async () => ({ petPacks: defaultPetPacks }),
   getAiConfig: async () => cloneAiConfig(demoState.aiConfig),

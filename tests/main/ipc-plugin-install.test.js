@@ -87,6 +87,7 @@ const createRequiredServices = ({ pluginInstallService, pluginService, dialogSer
     inspectPackSource: () => ({}),
     clearPendingSelection: () => ({ ok: true }),
     importPack: () => ({ ok: true }),
+    exportPack: () => ({ ok: true }),
     setActivePack: () => ({ ok: true }),
     removePack: () => ({ ok: true })
   },
@@ -188,6 +189,99 @@ test('pet-packs:inspect-directory opens native folder or zip picker and delegate
   assert.equal(dialogCalls[0].title, '选择 Pet Pack 文件夹或 Codex Pet 包')
   assert.deepEqual(dialogCalls[0].properties, ['openFile', 'openDirectory'])
   assert.deepEqual(dialogCalls[0].filters[0], { name: 'Pet Pack Package', extensions: ['zip'] })
+})
+
+test('pet-packs:export opens native output folder picker and delegates selected pack id', async () => {
+  const ipcMain = createIpcMainStub()
+  const dialogCalls = []
+  const exportCalls = []
+  const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-ipc-pet-pack-export-'))
+
+  registerIpcHandlers({
+    ...createRequiredServices({
+      pluginInstallService: {
+        inspectPluginPackage: () => ({}),
+        clearPendingSelection: () => ({ ok: true }),
+        installPlugin: () => ({ ok: true }),
+        updatePlugin: () => ({ ok: true }),
+        uninstallPlugin: () => ({ ok: true })
+      },
+      pluginService: { listPlugins: () => [] },
+      dialogService: {
+        showOpenDialog: async (options) => {
+          dialogCalls.push(options)
+          return { canceled: false, filePaths: [outputDir] }
+        }
+      }
+    }),
+    petPackService: {
+      listPacks: () => [],
+      inspectPackDirectory: () => ({}),
+      inspectPackSource: () => ({}),
+      clearPendingSelection: () => ({ ok: true }),
+      importPack: () => ({ ok: true }),
+      exportPack: (packId, selectedOutputDir) => {
+        exportCalls.push({ packId, selectedOutputDir })
+        return {
+          packId,
+          fileName: `${packId}-1.0.0.openpet-pet.zip`,
+          outputPath: path.join(selectedOutputDir, `${packId}-1.0.0.openpet-pet.zip`),
+          sha256: 'abc123',
+          byteSize: 42
+        }
+      },
+      setActivePack: () => ({ ok: true }),
+      removePack: () => ({ ok: true })
+    },
+    ipcMainService: ipcMain
+  })
+
+  const result = await ipcMain.handlers.get(IPC.PET_PACKS_EXPORT)(null, { packId: 'exportable-cat' })
+
+  assert.equal(result.canceled, false)
+  assert.equal(result.packId, 'exportable-cat')
+  assert.equal(result.fileName, 'exportable-cat-1.0.0.openpet-pet.zip')
+  assert.deepEqual(exportCalls, [{ packId: 'exportable-cat', selectedOutputDir: outputDir }])
+  assert.equal(dialogCalls.length, 1)
+  assert.equal(dialogCalls[0].title, '选择 Pet Pack 导出目录')
+  assert.deepEqual(dialogCalls[0].properties, ['openDirectory', 'createDirectory'])
+})
+
+test('pet-packs:export returns canceled without exporting when output picker is canceled', async () => {
+  const ipcMain = createIpcMainStub()
+
+  registerIpcHandlers({
+    ...createRequiredServices({
+      pluginInstallService: {
+        inspectPluginPackage: () => ({}),
+        clearPendingSelection: () => ({ ok: true }),
+        installPlugin: () => ({ ok: true }),
+        updatePlugin: () => ({ ok: true }),
+        uninstallPlugin: () => ({ ok: true })
+      },
+      pluginService: { listPlugins: () => [] },
+      dialogService: {
+        showOpenDialog: async () => ({ canceled: true, filePaths: [] })
+      }
+    }),
+    petPackService: {
+      listPacks: () => [],
+      inspectPackDirectory: () => ({}),
+      inspectPackSource: () => ({}),
+      clearPendingSelection: () => ({ ok: true }),
+      importPack: () => ({ ok: true }),
+      exportPack: () => {
+        throw new Error('export should not run after cancel')
+      },
+      setActivePack: () => ({ ok: true }),
+      removePack: () => ({ ok: true })
+    },
+    ipcMainService: ipcMain
+  })
+
+  const result = await ipcMain.handlers.get(IPC.PET_PACKS_EXPORT)(null, { packId: 'exportable-cat' })
+
+  assert.deepEqual(result, { canceled: true })
 })
 
 test('plugins:inspect-package opens native package picker options and returns canceled without inspecting', async () => {

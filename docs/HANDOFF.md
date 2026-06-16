@@ -24,7 +24,8 @@ OpenPet is a desktop pet platform with:
 5. [`docs/release-checklist.md`](./release-checklist.md)
 6. [`docs/productization-next-steps-design.md`](./productization-next-steps-design.md)
 7. [`docs/productization-v1.1-todo-design.md`](./productization-v1.1-todo-design.md)
-8. [`docs/productization-todo-design.md`](./productization-todo-design.md)
+8. [`docs/project-review-todo-design.md`](./project-review-todo-design.md)
+9. [`docs/productization-todo-design.md`](./productization-todo-design.md)
 
 ## Facts To Preserve
 
@@ -58,6 +59,7 @@ npm run create-release-evidence-archive-manifest
 - `docs/project-status-review.md` for longer evaluation.
 - `docs/productization-next-steps-design.md` for the latest review-derived TODO design.
 - `docs/productization-v1.1-todo-design.md` for the Phase 38+ execution design.
+- `docs/project-review-todo-design.md` for the consolidated whole-project review TODO design.
 - `docs/productization-todo-design.md` for the prioritized TODO implementation design.
 - `docs/desktop-release-design.md` for desktop release evidence.
 - `docs/plugin-sandbox-evaluation.md` for current plugin runner guarantees, limits, and v1.1 recommendation.
@@ -68,6 +70,6 @@ npm run create-release-evidence-archive-manifest
 
 ## Next Steps
 
-1. Use `docs/productization-next-steps-design.md` as the current TODO design and `docs/productization-v1.1-todo-design.md` as the phase execution entry.
-2. Continue with Phase 40 pet pack export/provenance while preserving the Phase 38/39 plugin secrets and sandbox boundaries.
+1. Use `docs/project-review-todo-design.md` as the current whole-project TODO design, `docs/productization-next-steps-design.md` as the near-term productization design, and `docs/productization-v1.1-todo-design.md` as the phase execution entry.
+2. Continue with Phase 41 AI behavior replay/decision viewer while preserving the Phase 38/39 plugin secrets and sandbox boundaries and Phase 40 pet pack provenance rules.
 3. Fill real packaged runtime, picker, and signed archive evidence before claiming packaged runtime or release readiness.

@@ -34,10 +34,63 @@ const listFiles = (rootPath) => {
   return files.sort()
 }
 
+const readJsonFile = (filePath) => JSON.parse(fs.readFileSync(filePath, 'utf-8'))
+
+const writeJsonFile = (filePath, value) => {
+  fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`)
+}
+
 const getDirectoryPackageHash = (rootPath) => hashBuffer(Buffer.from(listFiles(rootPath).map((relativePath) => {
   const fileHash = hashBuffer(fs.readFileSync(path.join(rootPath, relativePath)))
   return `${relativePath}:${fileHash}`
 }).join('\n'), 'utf-8'))
+
+const compareVersions = (left = '', right = '') => {
+  const parse = (value) => String(value || '')
+    .split(/[.-]/)
+    .map((part) => (/^\d+$/.test(part) ? Number(part) : part))
+
+  const leftParts = parse(left)
+  const rightParts = parse(right)
+  const length = Math.max(leftParts.length, rightParts.length, 3)
+  for (let index = 0; index < length; index += 1) {
+    const a = leftParts[index] ?? 0
+    const b = rightParts[index] ?? 0
+    if (typeof a === 'number' && typeof b === 'number') {
+      if (a !== b) return a > b ? 1 : -1
+    } else {
+      const result = String(a).localeCompare(String(b))
+      if (result !== 0) return result > 0 ? 1 : -1
+    }
+  }
+  return 0
+}
+
+const createVersionConflict = (manifest, installed = {}) => {
+  if (!installed.id) {
+    return {
+      installed: false,
+      decision: 'new-install',
+      requiresReview: false,
+      installedVersion: '',
+      incomingVersion: manifest.version
+    }
+  }
+
+  const comparison = compareVersions(manifest.version, installed.version)
+  const decision = comparison > 0
+    ? 'upgrade'
+    : comparison < 0
+      ? 'downgrade'
+      : 'same-version'
+  return {
+    installed: true,
+    decision,
+    requiresReview: true,
+    installedVersion: installed.version || '',
+    incomingVersion: manifest.version
+  }
+}
 
 const assertSafeZipEntry = (entryName) => {
   if (
@@ -145,6 +198,10 @@ const pickPreviewAction = (actions = []) => {
 
 const createPackSummary = (pack, { active = false, installedAt = '', updatedAt = '' } = {}) => {
   const previewAction = pickPreviewAction(pack.manifest.actions)
+  const provenance = {
+    ...(pack.manifest.provenance || {}),
+    ...(pack.metadata?.provenance || {})
+  }
   return {
     id: pack.manifest.id,
     displayName: pack.manifest.displayName,
@@ -156,6 +213,7 @@ const createPackSummary = (pack, { active = false, installedAt = '', updatedAt =
     updatedAt,
     packageHash: pack.metadata?.packageHash || '',
     sourcePackageHash: pack.metadata?.sourcePackageHash || '',
+    provenance,
     actionCount: pack.manifest.actions.length,
     defaultAction: pack.manifest.defaultAction,
     clickAction: pack.manifest.clickAction,
@@ -181,6 +239,23 @@ const copyDirectory = (sourceDir, targetDir) => {
   fs.rmSync(targetDir, { recursive: true, force: true })
   ensureDirectory(targetDir)
   fs.cpSync(sourceDir, targetDir, { recursive: true })
+}
+
+const writePackManifest = (rootPath, pack) => {
+  const manifestPath = path.join(rootPath, 'pet.json')
+  const manifest = {
+    ...readJsonFile(manifestPath),
+    provenance: {
+      ...(pack.manifest.provenance || {}),
+      ...(pack.metadata?.provenance || {})
+    }
+  }
+  writeJsonFile(manifestPath, manifest)
+}
+
+const writeZipFromDirectory = (sourceDir, outputPath) => {
+  fs.rmSync(outputPath, { force: true })
+  execFileSync('zip', ['-qr', outputPath, '.'], { cwd: sourceDir })
 }
 
 const createPetPackService = ({
@@ -340,7 +415,18 @@ const createPetPackService = ({
       const blockStatus = assertPackAllowed({ id: pack.manifest.id, sha256: packageHash })
       validatePackFiles(pack)
       result.valid = true
-      result.pack = { ...createPackSummary(pack), packageHash, blockStatus }
+      result.pack = {
+        ...createPackSummary({
+          ...pack,
+          metadata: {
+            packageHash,
+            provenance: { originalFormat: pack.source?.type || 'directory' }
+          }
+        }),
+        packageHash,
+        blockStatus,
+        conflict: createVersionConflict(pack.manifest, getSettings().installed[pack.manifest.id])
+      }
       pendingSelection = {
         id: selectionId,
         sourceDir,
@@ -400,7 +486,20 @@ const createPetPackService = ({
       validatePackFiles(pack)
       result.valid = true
       result.rootPath = petPackRoot
-      result.pack = { ...createPackSummary({ ...pack, metadata: { packageHash, sourcePackageHash } }), packageHash, sourcePackageHash, blockStatus }
+      result.pack = {
+        ...createPackSummary({
+          ...pack,
+          metadata: {
+            packageHash,
+            sourcePackageHash,
+            provenance: { originalFormat: sourceType === 'zip' ? 'openpet-pet-zip' : pack.source?.type || 'directory' }
+          }
+        }),
+        packageHash,
+        sourcePackageHash,
+        blockStatus,
+        conflict: createVersionConflict(pack.manifest, getSettings().installed[pack.manifest.id])
+      }
       cleanupPendingSelection()
       pendingSelection = {
         id: selectionId,
@@ -461,6 +560,11 @@ const createPetPackService = ({
     const current = getSettings()
     const previousMetadata = current.installed[packId] || {}
     const timestamp = now().toISOString()
+    const provenance = {
+      ...(installedPack.manifest.provenance || {}),
+      originalFormat: selection.sourceType === 'zip' ? 'openpet-pet-zip' : installedPack.source?.type || 'directory',
+      importedAt: previousMetadata.provenance?.importedAt || previousMetadata.importedAt || timestamp
+    }
     const nextSettings = savePetPackSettings({
       ...current,
       installed: {
@@ -471,13 +575,46 @@ const createPetPackService = ({
           version: installedPack.manifest.version,
           packageHash: contentPackageHash,
           sourcePackageHash: downloadedPackageHash,
+          provenance,
           installedAt: previousMetadata.installedAt || timestamp,
           updatedAt: timestamp
         }
       }
     })
     cleanupPendingSelection()
-    return { pack: createPackSummary({ ...installedPack, source: { type: 'user-installed', path: targetDir } }), petPacks: nextSettings }
+    return {
+      pack: createPackSummary({
+        ...installedPack,
+        source: { type: 'user-installed', path: targetDir },
+        metadata: { packageHash: contentPackageHash, sourcePackageHash: downloadedPackageHash, provenance }
+      }),
+      petPacks: nextSettings
+    }
+  }
+
+  const exportPack = (packId, outputDir) => {
+    if (!isSafePackId(packId)) throw new Error('Pet pack id is invalid')
+    if (isBuiltInPackId(packId)) throw new Error('Cannot export the built-in pet pack')
+    if (!outputDir) throw new Error('Pet pack export output directory is required')
+    const pack = loadInstalledPack(packId)
+    ensureDirectory(outputDir)
+    const fileName = `${pack.manifest.id}-${pack.manifest.version}.openpet-pet.zip`
+    const outputPath = path.join(outputDir, fileName)
+    const exportRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-pet-pack-export-'))
+    try {
+      copyDirectory(pack.rootPath, exportRoot)
+      writePackManifest(exportRoot, pack)
+      writeZipFromDirectory(exportRoot, outputPath)
+    } finally {
+      fs.rmSync(exportRoot, { recursive: true, force: true })
+    }
+    return {
+      packId,
+      fileName,
+      outputPath,
+      sha256: getFileHash(outputPath),
+      byteSize: fs.statSync(outputPath).size
+    }
   }
 
   const setActivePack = (packId) => {
@@ -511,6 +648,7 @@ const createPetPackService = ({
     inspectPackSource,
     clearPendingSelection,
     importPack,
+    exportPack,
     setActivePack,
     removePack
   }

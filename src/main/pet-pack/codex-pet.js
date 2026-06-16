@@ -106,6 +106,10 @@ const normalizeCodexPetManifest = (manifest, { rootPath }) => {
     id: manifest.id,
     displayName: manifest.displayName || manifest.id,
     version: manifest.version || '1.0.0',
+    sourceUrl: manifest.sourceUrl,
+    assetAuthor: manifest.assetAuthor,
+    license: manifest.license,
+    licenseUrl: manifest.licenseUrl,
     defaultAction: 'idle',
     clickAction: 'waving',
     actions: CODEX_ROWS.map((row) => ({

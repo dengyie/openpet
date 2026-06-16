@@ -226,6 +226,15 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     return { ...result, petPacks: petPackService.listPacks() }
   })
 
+  ipcMainService.handle(IPC.PET_PACKS_EXPORT, async (_event, payload) => {
+    const selected = await dialogService.showOpenDialog({
+      title: '选择 Pet Pack 导出目录',
+      properties: ['openDirectory', 'createDirectory']
+    })
+    if (selected.canceled || !selected.filePaths[0]) return { canceled: true }
+    return { canceled: false, ...petPackService.exportPack(payload.packId, selected.filePaths[0]) }
+  })
+
   ipcMainService.handle(IPC.PET_PACKS_SET_ACTIVE, (_event, payload) => {
     const result = petPackService.setActivePack(payload.packId)
     reloadAndSendAnimations(getPetWindow, petService)

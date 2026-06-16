@@ -12,7 +12,7 @@
 | Electron | ^42.4.0 | 桌面窗口框架 |
 | React + Vite | ^19.2 / ^8.0 | Control Center UI |
 | sharp | ^0.34.5 | 精灵图合成（开发时） |
-| Node 原生 test runner | — | Service / release / IPC / example plugin / plugin submission / sandbox evaluation / RC upgrade smoke / Codex pet import / Codex pet zip import / bundled Codex pets / TypeScript migration gate / desktop picker evidence 测试框架（364 个测试） |
+| Node 原生 test runner | — | Service / release / IPC / example plugin / plugin submission / sandbox evaluation / RC upgrade smoke / Codex pet import / Codex pet zip import / bundled Codex pets / pet pack export / TypeScript migration gate / desktop picker evidence 测试框架（370 个测试） |
 | Playwright | ^1.60 | Control Center UI 回归测试（9 个测试） |
 | HTML / CSS / JS | — | 宠物窗口渲染层 UI 与动画 |
 
@@ -28,9 +28,9 @@
 - ✅ macOS 分发流程：electron-builder + GitHub Actions + 更新检查；Windows 打包/CI/平台化更新资产/签名策略护栏/冒烟证据门禁、pending 报告/runbook/collector 产物、证据包校验、summary/archive-manifest、报告填写工具和 desktop picker smoke evidence 工具链已完成，真实签名产物验证、packaged picker 真实证据与 Windows 冒烟待补齐
 
 **质量指标**：
-- ✅ 364/364 Node 测试通过（service / release / 示例插件 / 插件提交校验、审核包、PR packet、workflow bundle 与 bundle validation、plugin sandbox evaluation、RC upgrade smoke、Codex pet import、Codex pet zip import、bundled Codex pets、TypeScript migration gate 门禁覆盖）
+- ✅ 370/370 Node 测试通过（service / release / 示例插件 / 插件提交校验、审核包、PR packet、workflow bundle 与 bundle validation、plugin sandbox evaluation、RC upgrade smoke、Codex pet import、Codex pet zip import、bundled Codex pets、pet pack export、TypeScript migration gate 门禁覆盖）
 - ✅ 9/9 Control Center Playwright UI 测试通过（shell / tab / Pet / About 基础交互，Pet / AI / Service 保存配置流程，Catalog 安装/更新流程，Service MCP session 管理，手动插件包安装 review）
-- ✅ 44 个测试文件（恶意输入、示例插件、插件提交校验、审核包、PR packet、workflow bundle 与 bundle validation、RC upgrade smoke、主进程 IPC 与 release 证据门禁/报告生成/填写/runbook、collector、证据包校验、summary、archive-manifest 与 desktop picker smoke evidence 工具测试完整）
+- ✅ 51 个测试文件（恶意输入、示例插件、插件提交校验、审核包、PR packet、workflow bundle 与 bundle validation、RC upgrade smoke、主进程 IPC、pet pack export、release 证据门禁/报告生成/填写/runbook、collector、证据包校验、summary、archive-manifest 与 desktop picker smoke evidence 工具测试完整）
 - ✅ 架构质量：依赖注入 + 事件驱动 + 不可变状态 + 安全默认
 
 详见 [project-status-review.md](./project-status-review.md) 全面评估报告。

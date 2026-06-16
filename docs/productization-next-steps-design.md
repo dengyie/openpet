@@ -39,7 +39,6 @@ The remaining TODO is not a broad feature expansion. It is a productization clos
 - Packaged pet-window rendering evidence is still pending for transparency, visible sprites, speech bubbles, action playback, and bundled pack switching.
 - Native picker smoke evidence still needs real packaged-app runs for plugin zip, pet zip, cancel, and invalid-package paths.
 - Plugin sandbox strategy needs a documented comparison of current child-process runner, SES, and Electron `utilityProcess`.
-- Pet packs still need export, deterministic version conflict behavior, and provenance/license metadata.
 - AI behavior orchestration lacks a user-facing decision viewer and replay/dry-run tool.
 - TypeScript migration should expand from scaffold contracts into high-drift product boundaries.
 - Live docs still need periodic consolidation so README, handoff, project context, and roadmap do not disagree.
@@ -272,7 +271,7 @@ The project has strong documentation, but repeated historical summaries create d
 | P0 | Packaged Runtime Evidence | Directly proves the desktop pet experience works after packaging. |
 | P0 | Signed Release Evidence | Controls release/support claims and user trust. |
 | P1 | Plugin Sandbox Evaluation | Required before expanding third-party trust. |
-| P1 | Pet Pack Lifecycle | Required for sustainable asset distribution. |
+| P1 | Pet Pack Lifecycle | Completed for export/provenance; keep as a constraint for future catalog work. |
 | P1 | TypeScript Boundary Expansion | Reduces future IPC, manifest, and UI data drift. |
 | P2 | AI Behavior Debugging | Improves user control and maintainer diagnostics. |
 | P2 | Documentation Consolidation | Reduces handoff and release-claim drift. |
@@ -282,7 +281,7 @@ The project has strong documentation, but repeated historical summaries create d
 1. Preserve the completed plugin sandbox decision before adding new plugin capabilities.
 2. Fill real packaged runtime and native picker evidence for the current packaged app.
 3. Close macOS signed/notarized evidence and keep Windows claims gated by signed smoke evidence.
-4. Implement pet pack export, conflict policy, and provenance metadata.
+4. Preserve the completed pet pack export, conflict policy, and provenance metadata while catalog work evolves.
 5. Expand TypeScript contracts on the boundaries touched by active product work.
 6. Add AI behavior viewer and replay once the runtime and evidence tracks are stable.
 7. Consolidate live docs after evidence, plugin, and pet-pack facts settle.

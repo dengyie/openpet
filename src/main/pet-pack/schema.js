@@ -43,6 +43,22 @@ const assertSafeRelativePath = (value, fieldName) => {
   return normalized
 }
 
+const optionalString = (value) => (typeof value === 'string' ? value.trim() : '')
+
+const normalizeProvenance = (manifest = {}) => {
+  const nested = manifest.provenance && typeof manifest.provenance === 'object' && !Array.isArray(manifest.provenance)
+    ? manifest.provenance
+    : {}
+  return {
+    sourceUrl: optionalString(manifest.sourceUrl ?? nested.sourceUrl),
+    assetAuthor: optionalString(manifest.assetAuthor ?? nested.assetAuthor),
+    license: optionalString(manifest.license ?? nested.license),
+    licenseUrl: optionalString(manifest.licenseUrl ?? nested.licenseUrl),
+    importedAt: optionalString(manifest.importedAt ?? nested.importedAt),
+    originalFormat: optionalString(manifest.originalFormat ?? nested.originalFormat)
+  }
+}
+
 const toPositiveInteger = (value, fieldName, { min = 1, max = Number.MAX_SAFE_INTEGER } = {}) => {
   const number = Number(value)
   if (!Number.isInteger(number) || number < min || number > max) {
@@ -114,10 +130,11 @@ const normalizePetPackManifest = (manifest) => {
     id: manifest.id,
     displayName: manifest.displayName || manifest.id,
     version: manifest.version || DEFAULT_VERSION,
+    provenance: normalizeProvenance(manifest),
     defaultAction,
     clickAction,
     actions
   }
 }
 
-module.exports = { inferActionKind, normalizeAction, normalizePetPackManifest }
+module.exports = { inferActionKind, normalizeAction, normalizePetPackManifest, normalizeProvenance }

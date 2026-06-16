@@ -24,6 +24,14 @@ test('normalizes a minimal pet pack manifest with defaults', () => {
     id: 'cat',
     displayName: 'Cat',
     version: '1.0.0',
+    provenance: {
+      sourceUrl: '',
+      assetAuthor: '',
+      license: '',
+      licenseUrl: '',
+      importedAt: '',
+      originalFormat: ''
+    },
     defaultAction: 'idle',
     clickAction: 'idle',
     actions: [

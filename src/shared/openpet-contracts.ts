@@ -116,6 +116,23 @@ export interface PetPackPreviewAction {
   frameDurations?: number[]
 }
 
+export interface PetPackProvenance {
+  sourceUrl?: string
+  assetAuthor?: string
+  license?: string
+  licenseUrl?: string
+  importedAt?: string
+  originalFormat?: string
+}
+
+export interface PetPackVersionConflict {
+  installed: boolean
+  decision: 'new-install' | 'upgrade' | 'downgrade' | 'same-version'
+  requiresReview: boolean
+  installedVersion: string
+  incomingVersion: string
+}
+
 export interface PetPackSummary {
   id: string
   displayName: string
@@ -127,6 +144,7 @@ export interface PetPackSummary {
   updatedAt?: string
   packageHash?: string
   sourcePackageHash?: string
+  provenance?: PetPackProvenance
   actionCount?: number
   defaultAction?: string
   clickAction?: string
@@ -135,6 +153,7 @@ export interface PetPackSummary {
   valid?: boolean
   error?: string
   blockStatus?: { blocked: boolean; reasons: string[] }
+  conflict?: PetPackVersionConflict
 }
 
 export interface PetPacksViewState {

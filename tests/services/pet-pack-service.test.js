@@ -44,6 +44,10 @@ const createPetPackDirectory = (root, manifest = {}) => {
     id: manifest.id || 'pack-cat',
     displayName: manifest.displayName || 'Pack Cat',
     version: manifest.version || '1.0.0',
+    ...(manifest.sourceUrl ? { sourceUrl: manifest.sourceUrl } : {}),
+    ...(manifest.assetAuthor ? { assetAuthor: manifest.assetAuthor } : {}),
+    ...(manifest.license ? { license: manifest.license } : {}),
+    ...(manifest.licenseUrl ? { licenseUrl: manifest.licenseUrl } : {}),
     defaultAction: manifest.defaultAction || actions[0].id,
     clickAction: manifest.clickAction || actions[1]?.id || actions[0].id,
     actions
@@ -219,6 +223,99 @@ test('pet pack service inspects and imports a valid pack directory', () => {
   assert.equal(imported.pack.id, 'pack-cat')
   assert.equal(settingsService.get().petPacks.installed['pack-cat'].version, '1.0.0')
   assert.equal(listed.packs.some((pack) => pack.id === 'pack-cat'), true)
+})
+
+test('pet pack service stores provenance metadata when importing a pack', () => {
+  const sourceDir = createTempDir('pet-pack-provenance')
+  createPetPackDirectory(sourceDir, {
+    id: 'provenance-cat',
+    displayName: 'Provenance Cat',
+    version: '1.2.0',
+    sourceUrl: 'https://example.com/provenance-cat',
+    assetAuthor: 'OpenPet Test Assets',
+    license: 'CC-BY-4.0',
+    licenseUrl: 'https://example.com/license'
+  })
+  const settingsService = createSettingsService()
+  const service = createService(settingsService)
+
+  const inspection = service.inspectPackDirectory(sourceDir)
+  const imported = service.importPack(inspection.selectionId)
+  const listedPack = service.listPacks().packs.find((pack) => pack.id === 'provenance-cat')
+
+  assert.equal(imported.pack.provenance.sourceUrl, 'https://example.com/provenance-cat')
+  assert.equal(imported.pack.provenance.assetAuthor, 'OpenPet Test Assets')
+  assert.equal(imported.pack.provenance.license, 'CC-BY-4.0')
+  assert.equal(imported.pack.provenance.licenseUrl, 'https://example.com/license')
+  assert.equal(imported.pack.provenance.originalFormat, 'directory')
+  assert.equal(imported.pack.provenance.importedAt, '2026-06-12T00:00:00.000Z')
+  assert.equal(settingsService.get().petPacks.installed['provenance-cat'].provenance.sourceUrl, 'https://example.com/provenance-cat')
+  assert.equal(listedPack.provenance.assetAuthor, 'OpenPet Test Assets')
+})
+
+test('pet pack service reports deterministic version conflict decisions during inspection', () => {
+  const firstSource = createTempDir('pet-pack-version-first')
+  const nextSource = createTempDir('pet-pack-version-next')
+  createPetPackDirectory(firstSource, { id: 'versioned-cat', version: '1.2.0' })
+  createPetPackDirectory(nextSource, { id: 'versioned-cat', version: '1.1.0' })
+  const service = createService()
+
+  const firstInspection = service.inspectPackDirectory(firstSource)
+  service.importPack(firstInspection.selectionId)
+  const nextInspection = service.inspectPackDirectory(nextSource)
+
+  assert.equal(nextInspection.pack.conflict.installed, true)
+  assert.equal(nextInspection.pack.conflict.installedVersion, '1.2.0')
+  assert.equal(nextInspection.pack.conflict.incomingVersion, '1.1.0')
+  assert.equal(nextInspection.pack.conflict.decision, 'downgrade')
+  assert.equal(nextInspection.pack.conflict.requiresReview, true)
+})
+
+test('pet pack service exports installed user packs as re-importable zip packages', () => {
+  const sourceDir = createTempDir('pet-pack-export-source')
+  createPetPackDirectory(sourceDir, {
+    id: 'exportable-cat',
+    displayName: 'Exportable Cat',
+    sourceUrl: 'https://example.com/exportable-cat',
+    assetAuthor: 'OpenPet Test Assets',
+    license: 'CC-BY-4.0',
+    licenseUrl: 'https://example.com/license'
+  })
+  const outputDir = createTempDir('pet-pack-export-output')
+  const settingsService = createSettingsService()
+  const service = createService(settingsService)
+
+  const inspection = service.inspectPackDirectory(sourceDir)
+  service.importPack(inspection.selectionId)
+  const exported = service.exportPack('exportable-cat', outputDir)
+
+  assert.equal(exported.packId, 'exportable-cat')
+  assert.equal(exported.fileName, 'exportable-cat-1.0.0.openpet-pet.zip')
+  assert.equal(fs.existsSync(exported.outputPath), true)
+  assert.equal(exported.sha256, sha256(exported.outputPath))
+
+  service.removePack('exportable-cat')
+  const reinspection = service.inspectPackSource(exported.outputPath)
+  const reimported = service.importPack(reinspection.selectionId)
+  const exportedRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-pet-pack-export-check-'))
+  execFileSync('unzip', ['-qq', exported.outputPath, '-d', exportedRoot])
+  const exportedManifest = JSON.parse(fs.readFileSync(path.join(exportedRoot, 'pet.json'), 'utf-8'))
+
+  assert.equal(reinspection.valid, true)
+  assert.equal(reinspection.pack.id, 'exportable-cat')
+  assert.equal(reinspection.pack.provenance.originalFormat, 'openpet-pet-zip')
+  assert.equal(exportedManifest.provenance.sourceUrl, 'https://example.com/exportable-cat')
+  assert.equal(exportedManifest.provenance.assetAuthor, 'OpenPet Test Assets')
+  assert.equal(exportedManifest.provenance.license, 'CC-BY-4.0')
+  assert.equal(exportedManifest.provenance.licenseUrl, 'https://example.com/license')
+  assert.equal(exportedManifest.provenance.originalFormat, 'directory')
+  assert.equal(reimported.pack.id, 'exportable-cat')
+})
+
+test('pet pack service refuses to export built-in packs', () => {
+  const service = createService()
+
+  assert.throws(() => service.exportPack(BUILT_IN_PACK_ID, createTempDir('pet-pack-export-built-in')), /built-in/)
 })
 
 test('pet pack service inspects and imports a Codex-compatible pet directory', () => {

@@ -39,7 +39,6 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 - Plugin secrets policy is not finalized.
 - Plugin scaffolding is not yet a one-command authoring path.
 - Plugin sandbox strategy has been evaluated against SES and Electron `utilityProcess`; current recommendation is to keep the existing runner for v1.1 while documenting limits.
-- Pet pack export, version overwrite/upgrade rules, and provenance/license metadata are still incomplete.
 - AI behavior orchestration lacks a user-facing decision viewer and replay/dry-run tool.
 - Documentation still needs another consolidation pass after the v1.1 execution track stabilizes.
 
@@ -162,6 +161,8 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 - An installed pack can be exported and re-imported.
 - Version conflict behavior is deterministic and visible to the user.
 - Built-in and imported packs expose enough metadata for a release reviewer to audit source and license status.
+
+**Status**: completed in Phase 40. Export is available through service, IPC, preload, and Control Center Actions. Provenance and deterministic conflict summaries are covered by service and IPC tests.
 
 ### Phase 41: AI Behavior Replay and Decision Viewer
 
@@ -330,7 +331,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 | P0 | Phase 42 real packaged runtime evidence | Directly proves the desktop pet actually renders after packaging. |
 | P0 | Phase 43 signed release evidence closure | Controls release/support claims and user trust. |
 | P1 | Phase 38 plugin secrets and scaffolding | Required before plugin ecosystem expansion. |
-| P1 | Phase 40 pet pack export and provenance | Required for sustainable asset distribution. |
+| P1 | Phase 40 pet pack export and provenance | Completed; keep provenance and conflict review as constraints for future catalog work. |
 | P1 | Phase 44 TypeScript boundary expansion | Prevents cross-process and UI data drift during v1.1 work. |
 | P2 | Phase 41 AI behavior replay | Improves debuggability and user control. |
 | P2 | Phase 39 plugin sandbox evaluation | Completed; keep current runner for v1.1 and revisit on high-risk plugin capability changes. |
@@ -342,7 +343,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 2. Execute Phase 42 to turn existing smoke tooling into real packaged runtime evidence.
 3. Execute Phase 43 to close signed release evidence or explicitly preserve not-ready platform claims.
 4. Phase 38 and Phase 39 are complete; keep their plugin secrets and sandbox boundaries as constraints for future plugin work.
-5. Execute Phase 40 to make pet packs exportable and auditable.
+5. Phase 40 is complete; preserve pet pack export/provenance behavior while catalog work evolves.
 6. Execute Phase 41 to expose AI behavior replay and diagnostics.
 7. Execute Phase 44 in parallel only when a touched boundary already has active product work.
 8. Execute Phase 45 after the live docs stabilize.

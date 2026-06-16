@@ -134,6 +134,8 @@ function PetPackInspectionReport({ report }) {
   if (!report) return null
   const errors = Array.isArray(report.errors) ? report.errors : []
   const pack = report.pack
+  const provenance = pack?.provenance || {}
+  const conflict = pack?.conflict || {}
 
   return (
     <div className={report.valid ? 'inspection-report' : 'inspection-report invalid'}>
@@ -148,6 +150,11 @@ function PetPackInspectionReport({ report }) {
             <strong>{pack.displayName}</strong>
             <span>{pack.id}</span>
             <span>默认 {pack.defaultAction} · 点击 {pack.clickAction}</span>
+            {provenance.sourceUrl ? <span>来源 {provenance.sourceUrl}</span> : null}
+            {provenance.assetAuthor ? <span>作者 {provenance.assetAuthor}</span> : null}
+            {provenance.license ? <span>许可 {provenance.license}</span> : null}
+            {provenance.originalFormat ? <span>格式 {provenance.originalFormat}</span> : null}
+            {conflict.decision ? <span>冲突 {conflict.decision} · {conflict.installedVersion || 'none'} {'->'} {conflict.incomingVersion || 'none'}</span> : null}
           </div>
         </div>
       ) : null}
@@ -182,6 +189,7 @@ export function ActionsPane({
   onInspectPetPack,
   onClearPetPackInspection,
   onImportPetPack,
+  onExportPetPack,
   onSetActivePetPack,
   onRemovePetPack
 }) {
@@ -358,6 +366,9 @@ export function ActionsPane({
                 </div>
               </div>
               <div className="pet-pack-actions">
+                <button type="button" className="ghost" disabled={working || pack.source === 'built-in' || pack.valid === false} onClick={() => onExportPetPack(pack.id)}>
+                  导出
+                </button>
                 <button type="button" className="ghost" disabled={working || pack.active || pack.valid === false} onClick={() => onSetActivePetPack(pack.id)}>
                   {pack.active ? '使用中' : '启用'}
                 </button>

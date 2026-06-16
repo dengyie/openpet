@@ -193,6 +193,23 @@ export function useActionsPane() {
     }
   }
 
+  const onExportPetPack = async (packId) => {
+    setWorking(true)
+    setStatus('')
+    try {
+      const response = await api.exportPetPack(packId)
+      if (response.canceled) {
+        setStatus('已取消导出')
+      } else {
+        setStatus(`已导出 ${response.fileName || packId}`)
+      }
+    } catch (error) {
+      setStatus(error.message || 'Pet pack 导出失败')
+    } finally {
+      setWorking(false)
+    }
+  }
+
   const onSetActivePetPack = async (packId) => {
     setWorking(true)
     setStatus('')
@@ -246,6 +263,7 @@ export function useActionsPane() {
       onInspectPetPack,
       onClearPetPackInspection,
       onImportPetPack,
+      onExportPetPack,
       onSetActivePetPack,
       onRemovePetPack
     }

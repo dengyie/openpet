@@ -179,6 +179,14 @@ test('converts legacy animation config into a pet pack manifest', () => {
     id: 'legacy-cat',
     displayName: 'Legacy Cat',
     version: '1.0.0',
+    provenance: {
+      sourceUrl: '',
+      assetAuthor: '',
+      license: '',
+      licenseUrl: '',
+      importedAt: '',
+      originalFormat: ''
+    },
     defaultAction: 'bai_no_bg',
     clickAction: 'eat_no_bg',
     actions: [
