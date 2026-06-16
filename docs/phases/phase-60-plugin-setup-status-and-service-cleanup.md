@@ -48,9 +48,25 @@ Targeted verification during implementation:
 ```bash
 node --test tests/plugins/manifest.test.js tests/services/plugin-service.test.js
 # 75/75 pass
+```
 
-node --test tests/services/plugin-service.test.js
-# 60/60 pass
+Full verification before commit:
+
+```bash
+npm run check:syntax
+# pass
+
+npm test
+# 446/446 pass
+
+npm run test:control-center
+# 10/10 pass
+
+git diff --check
+# pass
+
+node -e "JSON.parse(require('node:fs').readFileSync('docs/project-context.json','utf8')); console.log('project-context ok')"
+# project-context ok
 ```
 
 New coverage:

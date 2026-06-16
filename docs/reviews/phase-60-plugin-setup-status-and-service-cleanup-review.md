@@ -45,7 +45,7 @@ No blocking missing scenario remains for this phase. A real OS-level descendant 
 
 ## Verification
 
-Targeted checks run during review:
+Checks run during review:
 
 ```bash
 node --test tests/plugins/manifest.test.js tests/services/plugin-service.test.js
@@ -56,8 +56,20 @@ npm run typecheck
 
 npm run test:control-center
 # 10/10 pass
+
+npm run check:syntax
+# pass
+
+npm test
+# 446/446 pass
+
+git diff --check
+# pass
+
+node -e "JSON.parse(require('node:fs').readFileSync('docs/project-context.json','utf8')); console.log('project-context ok')"
+# project-context ok
 ```
 
 ## Final Recommendation
 
-Safe to merge after full verification passes.
+Safe to merge.
