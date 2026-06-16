@@ -1,7 +1,7 @@
 # OpenPet TODO Design
 
-> Date: 2026-06-16
-> Baseline: Phase 41 completed locally
+> Date: 2026-06-17
+> Baseline: Phase 46 completed locally
 > Scope: Turn the latest whole-project review TODO into an execution-oriented design document. This document defines what should be built next; it does not change release readiness or platform support claims.
 
 ## 1. Design Goal
@@ -29,20 +29,20 @@ The remaining TODO is not a broad feature expansion. It is a productization clos
 - Plugin config is intentionally public settings; secret-like config fields are rejected.
 - AI provider configuration and API keys remain inside the main-process boundary.
 - Local HTTP/MCP is loopback-only, token-gated, logged, and disabled by default.
-- TypeScript scaffolding exists for shared IPC and Control Center view contracts.
+- TypeScript contracts cover shared IPC, Control Center view state, the Control Center API facade, and representative product payload fixtures.
 - Release evidence tooling exists for Windows smoke reports, desktop picker evidence, packaged runtime reports, and release archive manifests.
+- Automated macOS packaged runtime evidence exists for transparent window, visible sprites, speech bubbles, action playback, bundled pack switching, and state restoration.
 - AI behavior decisions are visible in Control Center with replay, redacted diagnostics export, and clear-history controls.
 
 ### Still Open
 
 - macOS signed/notarized release evidence has not been fully captured and archived.
 - Windows has tooling and policy, but no real signed Windows smoke evidence; it is not release-ready.
-- Packaged pet-window rendering evidence is still pending for transparency, visible sprites, speech bubbles, action playback, and bundled pack switching.
 - Native picker smoke evidence still needs real packaged-app runs for plugin zip, pet zip, cancel, and invalid-package paths.
 - Plugin sandbox strategy has a documented v1.1 recommendation to keep the current child-process runner while preserving conservative security claims.
 - AI behavior diagnostics now have a user-facing decision viewer; future work should preserve redaction and extend structured rule editing only if needed.
-- TypeScript migration should expand from scaffold contracts into high-drift product boundaries.
-- Live docs still need periodic consolidation so README, handoff, project context, and roadmap do not disagree.
+- TypeScript migration should continue from the typed API facade into hooks and high-drift service adapters.
+- Live docs should stay concise and link to phase/review history instead of repeating it.
 
 ## 3. Non-Goals
 

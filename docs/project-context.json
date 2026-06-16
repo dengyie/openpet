@@ -26,6 +26,7 @@
     "Plugin sandbox evaluation recommends keeping the current child-process Node permission-model VM runner for v1.1 while documenting that it is not an absolute sandbox",
     "Installed user pet packs can be exported as .openpet-pet.zip and re-imported with provenance metadata",
     "AI behavior decisions are visible in Control Center with replay, redacted diagnostics export, and clear-history controls",
+    "Live documentation has been consolidated so README, HANDOFF, project-status-review, project-context, and v1.1 TODO status share the same current facts",
     "The latest review-derived TODO design lives in docs/productization-next-steps-design.md",
     "The Phase 38+ execution design lives in docs/productization-v1.1-todo-design.md"
   ],

@@ -1,497 +1,70 @@
-# OpenPet 项目全面评估报告
+# OpenPet Project Status Review
 
-> 评估时间：2026-06-16
-> 分支：`main`
-> 评估人：项目全面审视
-> 状态：**Phase 1-7 产品化完成；v1.0.1-rc.2 完成当前发布轨道整理；Phase 8 已补 Windows 打包/CI/签名策略/冒烟证据、报告、runbook 与 collector/证据包校验/summary/archive-manifest 基线；Phase 9-10 完成项目文档治理与设计层；Phase 11-16 建立并扩展 Control Center Playwright UI 回归基线；Phase 17 已补主进程插件包 IPC + 真实 zip fixture 烟测；Phase 18 已补 desktop 原生文件选择器烟测证据工具链；Phase 19 已完成项目文档设计操作模型、阶段完成契约、完成标准和决策记录完善；Phase 20 已补 Focus Timer 示例插件、插件开发文档与真实本地插件服务测试；Phase 21 已补 Weather Status 示例插件、network allowlist 开发者路径与真实本地插件服务测试；Phase 22 已补 RSS Reader 示例插件、公开 feed 开发者路径与真实本地插件服务测试；Phase 23 已补插件提交前校验 CLI 与测试；Phase 24 已补插件提交审核包 CLI；Phase 25 已补插件提交 PR 模板与 PR packet CLI；Phase 26 已补插件提交工作流包；Phase 27 已补插件提交工作流包验证；Phase 28 已补插件提交工作流演练手册；Phase 29 已补 RC 升级兼容 smoke 证据工具；Phase 30 已补 Codex pet 原生导入；Phase 31 已补 Codex pet zip 原生导入；Phase 32 已补内置 Codex pets 基础资产；Phase 33 已补 TypeScript 迁移框架；Phase 39 已补插件沙箱评估；Phase 40 已补 Pet Pack Export and Provenance；Phase 41 已补 AI Behavior Decision Viewer；Phase 42 已补真实 macOS packaged runtime evidence；Phase 43 已补 signed release closure claim gate；Phase 44 已补 Plugin Author Experience Rehearsal**
+> Date: 2026-06-17
+> Branch: `main`
+> Release track: `v1.0.1-rc.2`
 
----
+This document is the current status snapshot. Detailed implementation history belongs in `docs/phases/`; detailed review findings belong in `docs/reviews/`.
 
-## 执行摘要
+## Executive Summary
 
-OpenPet 项目已完成从单体桌宠到可扩展平台的完整重构，核心产品化 Phase 1-7 已闭环，并通过 Phase 8-44 补齐 Windows 分发基线、文档治理、Control Center UI 自动化、主进程插件包 IPC 烟测、desktop 原生文件选择器烟测证据工具链、文档设计操作模型、三个互补的真实示例插件开发者资产、插件提交前校验入口、插件提交审核包、插件提交 PR 模板、插件提交工作流包、工作流包验证、工作流演练手册、RC 升级兼容 smoke 证据工具、Codex pet 原生导入、Codex pet zip 原生导入、内置 Codex pets 基础资产、pet pack export/provenance、AI behavior decision viewer、release closure gate 与插件作者体验演练。**核心愿景实现度：97%**，关键承诺已兑现，剩余项主要是发布验证和生态增强。
+OpenPet has reached the intended desktop platform shape: Electron pet runtime, React Control Center, pet packs, AI behavior, permission-limited plugins, local HTTP/MCP, release evidence tooling, and a TypeScript boundary baseline.
 
-**建议：发布 v1.0.1-rc.2 作为当前对外版本，并继续保留 Windows 真实签名与冒烟证据门禁。**
+The project is strongest on macOS. Windows build and evidence tooling exists, but Windows must stay **not release-ready** until signed artifacts and real Windows smoke reports are archived.
 
----
+## Current Product Shape
 
-## 一、最初期望 vs 当前实现对比
+| Area | Current State | Evidence |
+|------|---------------|----------|
+| Desktop pet runtime | Transparent Electron pet window with movement, actions, speech bubbles, and pet pack switching | `main.js`, `renderer.js`, `src/main/services/pet-service.js` |
+| Control Center | React + Vite app with Pet, Actions, AI, Plugins, Catalog, Service, and About tabs | `src/control-center/`, `tests/control-center/` |
+| Pet packs | Legacy cat, OpenPet packs, Codex pet directory/zip import, bundled read-only packs, export/provenance | `src/main/pet-pack/`, `src/main/services/pet-pack-service.js` |
+| AI | OpenAI-compatible chat, main-process secret storage, behavior decisions, replay, redacted diagnostics | `src/main/services/ai-service.js`, `src/main/services/behavior-orchestrator-service.js` |
+| Plugins | Permission review, isolated runner, SDK, storage, network allowlist, logs, catalog install, author tooling | `src/main/services/plugin-service.js`, `scripts/create-openpet-plugin.js` |
+| Local API | Loopback-only HTTP and MCP, token gated, logged, disabled by default | `src/main/services/local-http-service.js` |
+| Release evidence | Packaged runtime evidence tooling, signed release closure gate, Windows smoke/report tooling | `scripts/create-*-smoke-*`, `docs/release-evidence/` |
+| TypeScript | Shared contracts, typed Control Center view defaults, typed API facade, representative payload fixtures | `src/shared/openpet-contracts.ts`, `src/control-center/src/api/control-center-api.ts` |
 
-### 1. 可扩展的 Pet Runtime 平台 ✅ 完全实现
+## Validation Baseline
 
-**期望**：从单体桌宠重构为可扩展平台
+Current local baseline:
 
-**实现**：
-- ✅ Service 层架构完整（EventBus → Settings → Action → Pet）
-- ✅ Pet pack runtime 契约（schema / loader / importer / Codex pet adapter）
-- ✅ 插件系统（权限白名单 + 隔离 runner + SDK）
-- ✅ 可热插拔的能力模块（AI、MCP、HTTP API）
-
-**证据**：
-```
-src/main/services/        # 19 个 service，职责清晰
-src/main/pet-pack/        # Pet pack 运行时
-src/main/plugins/         # 插件系统
-tests/                    # Node 测试 394 个全过；Control Center Playwright UI 回归 10 个测试全过
-```
-
-### 当前增量状态
-
-- GitHub 仓库已迁移到 `dengyie/OpenPet`。
-- Electron `userData` 保持旧版 `appData/ibot`，避免改名后丢失用户设置、密钥、插件、Pet packs 与本地服务日志。
-- 新公开命名为 `openpet.*` MCP tools、`openpet_behavior`、`X-OpenPet-Token`、`.openpet-plugin.zip`。
-- 旧 `ibot.*` MCP tools、`ibot_behavior`、`X-ibot-token`、`ibotApiVersion`、`.ibot-plugin.zip` 保留兼容。
-- 当前验证：`npm test` 394/394，`npm run test:control-center` 10/10，`npm run check:syntax` 通过。
-
-### 2. UI 配置化 ✅ 完全实现
-
-**期望**：用户不需要手动编辑 JSON/配置文件
-
-**实现**：
-- ✅ Control Center（Vite + React）7 个 Tab 全覆盖，并新增 Playwright UI 回归基线
-- ✅ Pet / Actions / AI / Plugins / Catalog / Service / About
-- ✅ 所有配置通过 UI 操作
-- ✅ 从 1364 行单体组件重构为模块化结构（App.jsx 仅 62 行）
-
-**证据**：
-```
-src/control-center/src/
-├── App.jsx (62 lines)      # 主框架
-├── panes/ (6 个页面)       # Pet/Actions/AI/Plugins/Catalog/Service/About
-├── hooks/ (7 个 hook)      # 数据逻辑分离
-└── components/             # 共享 UI 组件
-```
-
-### 3. AI 聊天集成 ✅ 完全实现
-
-**期望**：AI 聊天、API Key 安全存储、持久会话
-
-**实现**：
-- ✅ Provider-agnostic 架构（OpenAI-compatible）
-- ✅ API Key 隔离存储（secrets.json，0600 权限）
-- ✅ 持久会话历史（有界限制）
-- ✅ 语义动作触发（关键词 → 宠物动作）
-- ✅ 结构化行为编排（tool-call + dry-run + cooldown + decision viewer + replay + redacted diagnostics）
-
-**证据**：
-```
-src/main/services/secret-service.js              # API Key 隔离
-src/main/services/ai-service.js                  # AI 聊天核心
-src/main/services/behavior-orchestrator-service.js # 行为编排
-tests/services/ai-service.test.js                # 66 个测试案例
-```
-
-### 4. 插件生态系统 ✅ 超额完成
-
-**期望**：官方模块 + 第三方插件
-
-**实现**：
-- ✅ 插件权限白名单（pet:say / ai:chat / network / storage）
-- ✅ 本地插件隔离 runner（Node permission model + VM 隔离）
-- ✅ 受限 SDK（不暴露 require/process/Electron）
-- ✅ 插件配置 schema 动态表单
-- ✅ 私有存储（64KB/插件 + 16KB/value 配额）
-- ✅ 插件安装/审查/更新流程
-- ✅ 运行日志持久化（最多 200 条）
-- ✅ **Phase 7 新增**：Catalog 目录 + Blocklist 治理
-
-**证据**：
-```
-src/main/services/plugin-service.js              # 29KB，最复杂的 service
-src/main/services/plugin-install-service.js      # 安装/更新/卸载
-src/main/services/catalog-service.js             # 生态目录
-src/main/services/ecosystem-policy.js            # Blocklist 策略
-tests/services/plugin-service.test.js            # 30+ 测试案例
-```
-
-### 5. Pet Pack 管理 ✅ 完全实现
-
-**期望**：多宠物包支持、动作导入
-
-**实现**：
-- ✅ Pet pack manifest schema（pet.json）
-- ✅ 整包检查/导入/启用/删除
-- ✅ Legacy 兼容（cat_anime/ 包装为 legacy-cat）
-- ✅ 用户自定义 pet pack 安装目录
-- ✅ Control Center Actions 页：导入帧文件夹 + pet pack 管理
-- ✅ **Phase 7 新增**：Catalog 目录浏览 + 一键安装
-
-**证据**：
-```
-src/main/pet-pack/                # schema / loader / importer
-src/main/services/pet-pack-service.js  # Pet pack 管理核心
-src/main/services/action-import-service.js # 动作导入
-tests/pet-pack/*.test.js          # Pet pack 测试覆盖
-```
-
-### 6. 本地 HTTP API + MCP ✅ 完全实现
-
-**期望**：外部 agent 集成
-
-**实现**：
-- ✅ Loopback-only HTTP API（127.0.0.1/localhost/::1）
-- ✅ Token-gated 认证（status/say/action/event）
-- ✅ MCP JSON-RPC bridge（POST /mcp）
-- ✅ Session 管理 + TTL
-- ✅ 访问日志持久化（不记录 token）
-- ✅ 默认关闭，UI 可启停
-
-**证据**：
-```
-src/main/services/local-http-service.js      # HTTP API
-src/main/services/mcp-transport-service.js   # MCP transport
-docs/mcp-usage.md                            # 使用文档
-docs/mcp-compatibility.md                    # 兼容矩阵
-```
-
-### 7. 分发与更新 ✅ macOS 基线完成，Windows 打包/CI/签名策略/冒烟证据、报告、runbook 与 collector/证据包校验/summary/archive-manifest、packaged native picker smoke evidence 工具基线已落地
-
-**期望**：可打包、可分发、可检查更新
-
-**实现**：
-- ✅ macOS electron-builder 配置完整
-- ✅ macOS app icon + entitlements
-- ✅ GitHub Actions release workflow
-- ✅ About 页面：版本信息 + 更新检查
-- ✅ notarize.js 公证脚本
-- ✅ `npm run pack` / `npm run dist` 可用于当前 macOS release path
-- ✅ Windows 桌面分发设计、`build.win` targets、`build/icon.ico`、Windows release job、签名策略护栏、冒烟证据门禁、pending smoke report/runbook/collector artifact、证据包校验、summary/archive-manifest 归档、报告填写工具与平台化 About/update asset 筛选已补齐
-- 📝 Windows 仍需真实签名产物证据、SmartScreen/reputation 验证和真实 Windows 冒烟验证
-
-**证据**：
-```
-.github/workflows/release.yml     # 自动化发布
-build/icon.icns + icon.png        # App 图标
-build/notarize.js                 # 公证流程
-build/icon.ico                    # Windows installer/taskbar 图标
-src/main/services/about-service.js # 版本 + 更新检查
-docs/release-checklist.md         # 发布清单
-docs/desktop-release-design.md    # macOS + Windows 桌面分发设计
-```
-
----
-
-## 二、超出预期的亮点 🌟
-
-### 1. 生态运营闭环（Phase 7）
-- Catalog 静态目录（插件 + pet pack）
-- 下载 hash 校验（sha256）
-- 本地 blocklist 治理（pluginId / packId / sha256）
-- 权限 diff 审查流程
-
-### 2. AI 行为编排升级（Phase 4）
-- 从简单关键词匹配 → 结构化 tool-call
-- 可配置行为规则（actionId 白名单）
-- Dry-run 模式 + cooldown
-- 最近决策日志
-
-### 3. 测试覆盖完整
-- **394 个 Node 测试全部通过，10 个 Control Center Playwright UI 测试全部通过**
-- 44 个 Node 测试文件覆盖所有核心 service、示例插件、插件提交校验、审核包、PR packet、workflow bundle 与 workflow bundle validation、RC upgrade smoke、主进程 IPC、发布资产脚本与 Windows 冒烟证据门禁/报告生成/填写/runbook、collector、证据包校验、summary、archive-manifest 与 desktop picker smoke evidence 工具
-- 恶意输入测试（路径穿越、超大 body、非法 schema）
-- Playwright UI 测试覆盖 Control Center shell、全部 tab、Pet / About 基础交互、Pet / AI / Service 保存配置流程、Catalog 安装/更新流程、Service MCP session 管理流程，以及手动插件包安装 review 流程
-
-### 4. Control Center 模块化（Phase 1）
-- 从 1364 行单体 → 62 行 App.jsx
-- 清晰的 panes / hooks / components / lib 分层
-- 易于扩展新功能页面
-
----
-
-## 三、待完成/待优化项 ⚠️
-
-### 高优先级（应补齐）
-
-#### 1. v1.0.1 RC 发布验证 ⚠️
-
-**现状**：
-- OpenPet 改名、仓库迁移与 legacy userData 兼容已经落地。
-- 本地 RC smoke test 已验证旧 `Library/Application Support/ibot` 数据可被 OpenPet 继续读取。
-
-**影响**：
-- 当前 RC 发布前仍需真实安装包和 GitHub Release 链路验证。
-- 外部 MCP 客户端需要确认 `openpet.*` 新名与 `ibot.*` alias 均可用。
-
-**建议**：
-- 发布 v1.0.1-rc.2。
-- 在真实用户数据副本上完成升级 smoke test。
-- 确认 About 更新检查、release asset 与远端仓库均指向 `dengyie/OpenPet`。
-
----
-
-### 中优先级（可后置）
-
-#### 2. 前端自动化测试 ⚡
-
-**现状**：
-- 已引入 Playwright Control Center UI 回归基线
-- 当前覆盖 app shell、全部 tab、Pet scale / walk speed 交互、About 更新检查状态、Pet / AI / Service 保存配置流程、Catalog 安装/更新流程、Service MCP session 管理流程，以及手动插件包安装 review 流程
-
-**影响**：
-- 基础 UI 回归、核心保存配置流程、Catalog 安装/更新、Service MCP session 管理与手动插件包 review 已有自动化入口
-- 主进程 `plugins:inspect-package` / `plugins:install` 已使用真实 `.openpet-plugin.zip` fixture 覆盖
-- Desktop picker smoke evidence 工具链已落地；Launched Electron / packaged app 下的原生 OS 文件选择器仍需真实烟测证据
-
-**建议**：
-- 使用 desktop picker smoke evidence 工具链扩展 launched Electron / packaged app smoke 覆盖关键路径：
-  - 原生 OS 文件选择器
-  - macOS / Windows packaged app 插件包选择与取消路径
-
-#### 3. 真实第三方插件生态 ⚡
-
-**现状**：
-- 技术基础完整（SDK + runner + catalog）
-- 已有 Focus Timer、Weather Status 和 RSS Reader 本地示例插件与 `docs/plugin-development.md`，并通过真实 install/run service 测试覆盖
-- 已有 `npm run validate:plugin -- <plugin-dir-or-zip>` 提交前校验入口，复用 `PluginInstallService` package review
-- 已有 `npm run create-plugin-submission-report -- <plugin-dir-or-zip>` 审核包入口，可生成 reviewer Markdown/JSON、checklist 和人工审核边界
-- 已有 `npm run create-plugin-submission-pr -- <plugin-dir-or-zip>` PR packet 入口和 `.github/PULL_REQUEST_TEMPLATE/plugin-submission.md`
-- 已有 `npm run create-plugin-submission-bundle -- <plugin-dir-or-zip>` 工作流包入口，可一次生成 report、PR body 和 summary JSON
-- 已有 `npm run validate-plugin-submission-bundle -- <bundle-dir>` 验证入口，可检查 bundle 文件齐备、summary 一致性和 ready 状态
-- 已有 `docs/plugin-submission-workflow-playbook.md`，把提交前校验、审核包、PR packet、workflow bundle 和 bundle validation 串成第三方作者可照着跑的 rehearsal
-- catalog 仍只有 1 个官方插件示例，真实第三方审核演练与社区运营尚未形成
-
-**影响**：
-- 生态冷启动已有三类示例入口、本地预检命令、reviewer 审核包、PR 模板、workflow bundle 和 bundle 验证，但真实社区提交路径仍少
-- 缺少实际社区提交验证第三方开发体验
-
-**建议**：
-- 录制或编写更完整的插件开发教程材料
-- 建立真实第三方插件提交/审核演练
-- 建立真实社区审核演练和教程材料
-
----
-
-### 低优先级（可选增强）
-
-#### 4. 更强的插件沙箱 ⚡
-
-**现状**：
-- Node permission model + VM 隔离 + 短生命周期
-- 已足够应对大部分风险
-
-**可选升级**：
-- SES (Secure ECMAScript)
-- Electron utilityProcess
-
-**影响**：
-- 当前沙箱已足够，但非绝对安全
-- 升级方案增加复杂度
-
-#### 5. 远端 Marketplace 后端 ⚡
-
-**现状**：
-- 静态 catalog JSON
-- 功能完整，可用
-
-**可选升级**：
-- 完整 marketplace API
-- 用户评分/评论
-- 插件统计数据
-
-**影响**：
-- 当前版本已可用
-- 后端可后置
-
----
-
-## 四、质量指标 📊
-
-### 代码质量 ✅
-
-| 指标 | 结果 |
-|------|------|
-| 测试通过率 | **394/394 Node + 10/10 UI (100%)** |
-| 语法检查 | ✅ 通过 |
-| Control Center 构建 | ✅ 通过 |
-| Git 工作区状态 | ✅ 阶段提交后应保持干净 |
-| 文档完整性 | ✅ 44 个阶段开发文档 + 44 个 review 文档 + 交接文档 |
-
-### 架构质量 ✅
-
-- ✅ Service 层职责清晰（19 个 service，每个职责单一）
-- ✅ 依赖注入模式（main.js 组装）
-- ✅ 事件驱动（EventBus 协调）
-- ✅ 不可变状态（runtime-state）
-- ✅ 安全默认（API Key 隔离、权限白名单、loopback only）
-
-### 可维护性 ✅
-
-| 改进项 | 改进前 | 改进后 |
-|--------|--------|--------|
-| Control Center 主文件 | 1364 行 | 62 行 (App.jsx) |
-| 模块化 | 单体组件 | panes / hooks / services 分层 |
-| 测试覆盖 | 部分 | service/release 层覆盖 + Control Center UI 回归基线 |
-| 文档 | 零散 | 系统化 (88 个阶段开发/review 文档) |
-
----
-
-## 五、产品化阶段完成情况 ✅
-
-| Phase | 主题 | Commit | 文档 | Review | 状态 |
-|-------|------|--------|------|--------|------|
-| Phase 1 | Control Center 模块化 | `5f8b938` | ✅ | ✅ | 完成 |
-| Phase 2 | Pet pack 管理 | `04b8055` | ✅ | ✅ | 完成 |
-| Phase 3 | 插件安装与权限 | `ef3ad40` | ✅ | ✅ | 完成 |
-| Phase 4 | AI 行为编排 | `6beb3d2` | ✅ | ✅ | 完成 |
-| Phase 5 | MCP transport 产品化 | `1db6f17` | ✅ | ✅ | 完成 |
-| Phase 6 | 分发与 release pipeline | `cb4895a` | ✅ | ✅ | 完成 |
-| Phase 7 | 生态 catalog 运营闭环 | `edd1307` | ✅ | ✅ | 完成 |
-| Phase 8 | Windows 桌面分发基线 | 多阶段提交 | ✅ | ✅ | 基线完成，未 release-ready |
-| Phase 9 | 项目文档治理完善 | 本阶段提交 | ✅ | ✅ | 完成 |
-| Phase 10 | 项目文档设计加固 | `97ac2c4` | ✅ | ✅ | 完成 |
-| Phase 11 | Control Center 前端自动化基线 | 本阶段提交 | ✅ | ✅ | 完成 |
-| Phase 12 | Control Center 保存配置自动化 | 本阶段提交 | ✅ | ✅ | 完成 |
-| Phase 13 | Control Center Catalog 自动化 | 本阶段提交 | ✅ | ✅ | 完成 |
-| Phase 14 | Control Center MCP Session 自动化 | 本阶段提交 | ✅ | ✅ | 完成 |
-| Phase 15 | 项目文档设计收口 | 本阶段提交 | ✅ | ✅ | 完成 |
-| Phase 16 | Control Center 手动插件安装自动化 | 本阶段提交 | ✅ | ✅ | 完成 |
-| Phase 17 | Electron 插件包 IPC 安装烟测 | 本阶段提交 | ✅ | ✅ | 完成 |
-| Phase 18 | Desktop 原生文件选择器烟测证据工具链 | 本阶段提交 | ✅ | ✅ | 完成 |
-| Phase 19 | 项目文档设计完善 | 本阶段提交 | ✅ | ✅ | 完成 |
-| Phase 20 | 示例插件开发者资产 | 本阶段提交 | ✅ | ✅ | 完成 |
-| Phase 21 | Weather 示例插件开发者资产 | 本阶段提交 | ✅ | ✅ | 完成 |
-| Phase 22 | RSS 示例插件开发者资产 | 本阶段提交 | ✅ | ✅ | 完成 |
-| Phase 23 | 插件提交校验入口 | 本阶段提交 | ✅ | ✅ | 完成 |
-| Phase 24 | 插件提交审核包 | 本阶段提交 | ✅ | ✅ | 完成 |
-| Phase 25 | 插件提交 PR 模板 | 本阶段提交 | ✅ | ✅ | 完成 |
-| Phase 26 | 插件提交工作流包 | 本阶段提交 | ✅ | ✅ | 完成 |
-| Phase 27 | 插件提交工作流包验证 | 本阶段提交 | ✅ | ✅ | 完成 |
-| Phase 28 | 插件提交工作流演练手册 | 本阶段提交 | ✅ | ✅ | 完成 |
-| Phase 29 | RC 升级兼容 smoke 证据 | 本阶段提交 | ✅ | ✅ | 完成 |
-| Phase 30 | Codex Pet 原生导入 | 本阶段提交 | ✅ | ✅ | 完成 |
-| Phase 31 | Codex Pet Zip 原生导入 | 本阶段提交 | ✅ | ✅ | 完成 |
-| Phase 32 | 内置 Codex Pets 基础资产 | 本阶段提交 | ✅ | ✅ | 完成 |
-| Phase 33 | TypeScript 迁移框架 | 本阶段提交 | ✅ | ✅ | 完成 |
-| Phase 34 | Plugin Developer Experience | 本阶段提交 | ✅ | ✅ | 完成 |
-| Phase 35 | TypeScript Control Center 契约迁移 | 本阶段提交 | ✅ | ✅ | 完成 |
-| Phase 36 | Packaged Runtime Smoke Evidence | 本阶段提交 | ✅ | ✅ | 工具链完成，真实证据待归档 |
-| Phase 37 | Release Evidence Archive | 本阶段提交 | ✅ | ✅ | 工具链完成，真实 signed evidence 待归档 |
-| Phase 38 | Plugin Secrets Decision and Scaffolding | 本阶段提交 | ✅ | ✅ | 完成 |
-| Phase 39 | Plugin Sandbox Evaluation | 本阶段提交 | ✅ | ✅ | 完成 |
-| Phase 40 | Pet Pack Export and Provenance | 本阶段提交 | ✅ | ✅ | 完成 |
-| Phase 41 | AI Behavior Decision Viewer | 本阶段提交 | ✅ | ✅ | 完成 |
-
-**验证命令全部通过**：
 ```bash
-npm test                      # 394 Node tests pass
-npm run test:control-center   # 10 UI tests pass
-npm run check:syntax          # all JS syntax pass
-npm run build:control-center  # Vite build pass
-npm run pack                  # electron-builder pass
+npm test                     # 394/394 Node tests
+npm run test:control-center  # 10/10 Playwright UI tests
+npm run typecheck            # TypeScript no-emit checks
+npm run check:syntax         # Node syntax + typecheck + Control Center build
+npm run pack                 # electron-builder directory package
 ```
 
----
+## Release Truth
 
-## 六、风险评估 🛡️
+| Platform | Status | Public Claim |
+|----------|--------|--------------|
+| macOS | Validated local baseline and packaged runtime evidence exist; signed/notarized release evidence still needs official archive completion | macOS-first release track |
+| Windows | Build, signing policy, smoke report, collector, evidence summary, and archive tooling exist; signed artifact evidence and real smoke reports are missing | Do not claim release-ready |
+| Linux | Deferred | No support claim |
+| Mobile | Out of scope | No support claim |
 
-### 已缓解的风险
+## Remaining Work
 
-| 风险 | 缓解措施 | 状态 |
-|------|----------|------|
-| 插件沙箱被误认为绝对安全 | 明确威胁模型、默认 disabled、权限 review、短生命周期 runner | ✅ 已缓解 |
-| Pet pack 导入恶意路径或超大图片 | 安全相对路径、解压目录隔离、文件数量/大小上限 | ✅ 已缓解 |
-| AI tool-call 被模型误用 | actionId 白名单、规则 cooldown、dry-run、关闭开关 | ✅ 已缓解 |
-| MCP token 泄漏 | 默认关闭、token 轮换、session revoke、访问日志、loopback only | ✅ 已缓解 |
-| Control Center 继续膨胀 | Phase 1 强制拆分、文件体量阈值 | ✅ 已缓解 |
+The active product gaps are evidence and ecosystem maturity, not a rewrite of the platform:
 
-### 残留风险
+1. Archive official signed macOS release evidence.
+2. Produce signed Windows artifacts and real Windows smoke reports before changing Windows wording.
+3. Fill native picker smoke evidence from launched or packaged app runs.
+4. Continue third-party plugin author and maintainer rehearsal with real submissions.
+5. Continue TypeScript migration into hook state and high-drift service adapter boundaries.
 
-| 风险 | 影响 | 建议 |
-|------|------|------|
-| Electron 宿主 OS 文件选择器真实证据不足 | demo API 已覆盖手动插件包 review UI，主进程 IPC 已覆盖真实 zip inspect/install，desktop picker smoke evidence 工具链已落地；但 launched Electron / packaged app 的原生 OS 文件选择器仍需填写真实证据 | 中优先级：用 Phase 18 工具链补 packaged app smoke 原生文件选择器证据 |
-| 生态冷启动 | 已有 Focus Timer、Weather Status、RSS Reader 示例与提交前校验入口，真实社区提交流程仍不足 | 中优先级：补插件开发教程与真实第三方提交/审核演练 |
-| 真实升级样本不足 | 改名版本可能遗漏边界数据 | 高优先级：发布 RC 并扩大 smoke test |
+## Documentation Map
 
----
+- Public entry: `README.md`, `README.zh-CN.md`
+- Current handoff: `docs/HANDOFF.md`
+- Machine context: `docs/project-context.json`
+- Documentation rules: `docs/project-documentation-design.md`
+- Release gates: `docs/desktop-release-design.md`, `docs/release-checklist.md`
+- Phase audit trail: `docs/phases/`, `docs/reviews/`
 
-## 七、最终评价 ⭐⭐⭐⭐⭐
+## Current Assessment
 
-### 核心评分
-
-| 维度 | 得分 | 说明 |
-|------|------|------|
-| **功能完整性** | ⭐⭐⭐⭐⭐ | 所有承诺功能全部实现 |
-| **架构设计** | ⭐⭐⭐⭐⭐ | 分层清晰、可扩展性强 |
-| **代码质量** | ⭐⭐⭐⭐⭐ | 394 Node tests + 10 UI tests、模块化、安全考虑周全 |
-| **文档完整性** | ⭐⭐⭐⭐⭐ | 双语 README、技术文档、版本记录与发布清单完整 |
-| **可维护性** | ⭐⭐⭐⭐⭐ | 重构彻底、职责清晰 |
-| **生态基础** | ⭐⭐⭐⭐☆ | 技术完整，缺少真实案例 |
-
-**综合评分：95/100**
-
-### 优点
-
-1. ✅ **架构设计优秀**：分层清晰、依赖注入、事件驱动
-2. ✅ **安全考虑周全**：API Key 隔离、权限模型、沙箱、loopback only
-3. ✅ **测试覆盖完整**：394 个 Node 测试覆盖 service / release / 示例插件 / 插件提交校验、审核包、PR packet、workflow bundle 与 workflow bundle validation / RC upgrade smoke / 主进程 IPC / pet pack export / AI behavior diagnostics / desktop picker evidence 门禁，10 个 Playwright 测试覆盖 Control Center 冒烟、保存配置路径、AI behavior decision viewer、Catalog 安装/更新路径、Service MCP session 管理路径与手动插件包 review 路径
-4. ✅ **文档齐全**：88 个阶段开发/review 文档 + 交接文档 + 文档治理入口
-5. ✅ **增量迁移**：每阶段可运行，风险可控
-6. ✅ **生态基础完整**：catalog + blocklist + 安装流程
-
-### 改进空间
-
-1. ⚠️ 发布 RC 并验证升级路径（高优先级）
-2. ⚠️ 填写并归档 packaged app 原生 OS 文件选择器真实烟测证据（中优先级）
-3. ⚠️ 社区生态仍需更多示例和真实提交流程（中优先级）
-
----
-
-## 八、发布建议 🚀
-
-### 立即可做
-
-**✅ 建议发布 v1.0.1-rc.2**
-
-**理由**：
-1. 所有核心功能已完成并验证
-2. 测试覆盖完整（394/394 Node 测试通过，10/10 UI 测试通过）
-3. 架构稳定、代码质量高
-4. macOS 分发流程已就绪；Windows 打包/CI/签名策略/冒烟证据、报告、runbook 与 collector/证据包校验/summary/archive-manifest、packaged native picker smoke evidence 工具基线已落地但尚未 release-ready
-5. 剩余项为增强项，不阻塞发布
-
-### RC 验证建议
-
-1. **验证升级兼容**
-   - 使用旧版 `appData/ibot` 数据启动 OpenPet
-   - 确认 settings、secrets、plugins、pet packs 与 local HTTP logs 均保留
-
-2. **验证新旧集成命名**
-   - `openpet.*` MCP tools 正常工作
-   - 旧 `ibot.*` aliases 仍可调用
-
-3. **验证发布链路**
-   - GitHub Releases 和 About 更新检查均指向 `dengyie/OpenPet`
-   - macOS About 只展示 macOS 安装资产，Windows About 只展示 Windows 安装资产
-
-### v1.1 版本规划（可选）
-
-1. Packaged app 原生 OS 文件选择器真实烟测证据归档
-2. 插件开发教程与真实第三方提交/审核演练
-3. 插件开发教程视频
-4. Windows 签名产物验证与真实 Windows 冒烟验证
-5. 用户反馈收集与迭代
-
----
-
-## 九、结论 🎯
-
-**OpenPet 项目已成功完成从单体桌宠到可扩展平台的完整转型，核心产品化 Phase 1-7 与后续分发/文档/UI 自动化/IPC 加固/desktop picker evidence、文档操作模型、示例插件生态资产、提交前校验入口、审核包生成、PR 模板、工作流包、工作流包验证、工作流演练手册、RC 升级兼容 smoke 证据工具、Codex pet 原生导入、Codex pet zip 原生导入、内置 Codex pets 基础资产和 TypeScript 迁移框架均已交付。**
-
-**核心指标**：
-- ✅ 功能完整性：96%（关键承诺已实现，剩余主要为发布验证和生态增强）
-- ✅ 代码质量：394/394 Node 测试通过，10/10 UI 测试通过
-- ✅ 架构质量：优秀（分层清晰、安全可靠）
-- ✅ 可维护性：优秀（模块化彻底）
-- ✅ 文档完整性：双语 README、技术文档、版本记录与发布清单完整
-
-**最终建议**：
-
-1. **发布 v1.0.1-rc.2**（验证当前发布轨道与 bundled pet / TS 迁移增量）
-2. **继续保留 Windows 真实签名与冒烟证据门禁**
-3. **v1.1 迭代增强**（packaged smoke 证据、生态教程、用户反馈）
-
----
-
-**评估日期**：2026-06-15
-**分支状态**：`main`
-**下一步行动**：发布 v1.0.1-rc.2 → 继续补 Windows 真实证据 → 再评估正式版
+OpenPet is a mature local desktop platform with strong service separation, broad regression coverage, and conservative security/release wording. The correct next posture is to keep adding evidence and ecosystem proof while preserving the current architecture boundaries.

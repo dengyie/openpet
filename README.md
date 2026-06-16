@@ -26,7 +26,7 @@ The current release track is macOS-first. Windows build and validation tooling e
 - OpenAI-compatible chat with API keys kept in the main process secret store.
 - Plugin SDK with permission review, isolated execution, private storage, network allowlists, catalog install, and blocklist checks.
 - Optional loopback-only HTTP and MCP endpoints for local tools and agents.
-- Gradual TypeScript migration baseline with `npm run typecheck` included in syntax checks.
+- Gradual TypeScript migration baseline covering shared contracts and the Control Center API facade.
 
 ## Quick Start
 

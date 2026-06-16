@@ -33,11 +33,11 @@ OpenPet 的主体目标已经达成：它不再是单窗口桌宠，而是一个
 
 - Windows 只有工具链和证据模板，不能声明 release-ready。
 - macOS signed / notarized 证据还需要归档成可审计材料。
-- Packaged app 下宠物透明模型、内置 pack 切换、原生 picker 等真实路径还缺结构化 smoke evidence。
-- TypeScript 迁移仍在边界迁移阶段，主进程服务和 Control Center API facade 还未全面类型化。
-- 插件生态缺少明确 secrets 决策、脚手架和真实第三方 submission rehearsal。
-- Pet pack 缺少 export、overwrite / upgrade 策略、license / source provenance。
-- AI 行为编排已有执行能力，但缺少用户可见的 decision viewer 和 replay。
+- Packaged runtime 已有自动 macOS 证据；原生 picker、签名发布和 Windows signed smoke 仍缺真实结构化 evidence。
+- TypeScript 迁移已覆盖共享 contracts 与 Control Center API facade，后续应进入 hooks 和高漂移 service adapter。
+- 插件生态已有 secrets 决策、脚手架和 author rehearsal，后续需要真实社区提交与维护者审核演练。
+- Pet pack 已有 export、provenance 和冲突审查，后续重点是 release/runtime evidence 与 catalog 运营。
+- AI 行为已有 decision viewer、replay 和 redacted diagnostics，后续重点是保持隐私边界和规则编辑体验。
 
 ## 3. 设计原则
 

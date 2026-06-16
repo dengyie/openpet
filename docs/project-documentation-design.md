@@ -1,7 +1,7 @@
 # OpenPet Project Documentation Design
 
 > Scope: documentation architecture for the OpenPet desktop pet platform. The active product target is macOS + Windows desktop. Mobile is out of scope, and Linux is deferred until there is an explicit support decision.
-> Current release truth: macOS release baseline is complete; Windows desktop build/CI/signing-policy/smoke-evidence/reporting/runbook/collector/bundle-validation/summary/archive-manifest and packaged native picker smoke evidence tooling baselines are implemented but not release-ready.
+> Current release truth: macOS remains the primary validated release track; Windows desktop build/CI/signing-policy/smoke-evidence/reporting/runbook/collector/bundle-validation/summary/archive-manifest and packaged picker/runtime evidence tooling baselines are implemented, but Windows is not release-ready without signed artifacts and real smoke evidence.
 
 ## 1. Project Goal Anchor
 
@@ -399,7 +399,7 @@ Support language must match what the repository can actually prove:
 | Linux | Deferred | Any active release target |
 | Mobile | Out of scope | Any mobile app plan for the current release track |
 
-If a document needs one sentence, use: "macOS release baseline is complete; Windows desktop build/CI/signing-policy/smoke-evidence/reporting/runbook/collector/bundle-validation/summary/archive-manifest and packaged native picker smoke evidence tooling baselines are implemented but not release-ready; mobile is out of scope."
+If a document needs one sentence, use: "OpenPet is macOS-first on the current release track; Windows desktop build/CI/signing-policy/smoke-evidence/reporting/runbook/collector/bundle-validation/summary/archive-manifest and packaged picker/runtime evidence tooling baselines are implemented but Windows is not release-ready; mobile is out of scope."
 
 Avoid these phrases until evidence exists:
 
@@ -630,40 +630,23 @@ Durable documentation decisions should be recorded here when they affect future 
 
 ## 17. Current Documentation Status
 
-The repository now has a coherent phase history through Phase 29:
+The repository has a coherent audit trail through Phase 46:
 
-- Phase 1-7 document the platform productization arc from Control Center modularization through ecosystem operations.
-- Phase 8 documents the macOS + Windows desktop release extension.
-- Phase 9 documents the project documentation-governance layer itself, including reader paths, support-claim rules, phase completion playbooks, and live-status drift checks.
-- Phase 10 hardens this document into a fuller documentation design, including fact ownership, macOS/Windows structure fitness, support-claim lifecycle, new-document rules, and drift audits.
-- Phase 11 introduces a Playwright Control Center smoke baseline and documents it as a verification layer.
-- Phase 12 expands the Control Center Playwright baseline to saved configuration flows for Pet, AI, and Service.
-- Phase 13 expands the Control Center Playwright baseline to Catalog plugin install/update and pet-pack install flows.
-- Phase 14 expands the Control Center Playwright baseline to Service MCP session management flows.
-- Phase 15 consolidates the project documentation design, fixes live documentation drift, and adds durable structure/scope/update templates for future phases.
-- Phase 16 expands the Control Center Playwright baseline to manual plugin package install review flows in demo API mode.
-- Phase 17 expands Node regression coverage to the main-process plugin package IPC inspect/install path with a real zip fixture.
-- Phase 18 adds packaged macOS / Windows native picker smoke evidence tooling: pending report generation, report updates, runbook generation, signed-readiness validation, and release-document alignment.
-- Phase 19 expands the documentation design into a fuller operating model: documentation lifecycles, repository topology, phase completion contract, done criteria, anti-patterns, and decision records.
-- Phase 20 adds the first tested local example plugin developer asset: Focus Timer, `docs/plugin-development.md`, and real install/run service coverage.
-- Phase 21 adds the second tested local example plugin developer asset: Weather Status, network allowlist guidance, and real install/run service coverage with injected fetch.
-- Phase 22 adds the third tested local example plugin developer asset: RSS Reader, public feed guidance, lightweight XML normalization, cached announcements, and real install/run service coverage with injected fetch.
-- Phase 23 adds the plugin submission validation CLI, reusing `PluginInstallService` package review for local directory/zip preflight, signature metadata status, blocklist checks, and human-review warnings.
-- Phase 24 adds the plugin submission review packet CLI, turning validation results into reviewer Markdown/JSON, checklist evidence, and explicit non-approval/signing-trust boundaries.
-- Phase 25 adds the plugin submission PR template and PR packet CLI, turning the review packet into a GitHub-ready PR body, contributor checklist, reviewer checklist, and explicit human approval boundary.
-- Phase 26 adds the plugin submission workflow bundle CLI, packaging the reviewer report, PR body, and summary JSON into one local directory while keeping install/enable/run and signing-trust boundaries out of scope.
-- Phase 27 adds the plugin submission workflow bundle validation CLI, checking bundle file presence, summary consistency, and ready-for-human-review status while keeping install/enable/run and signing-trust boundaries out of scope.
-- Phase 28 adds the plugin submission workflow playbook, giving third-party plugin authors a single local rehearsal path from validation through bundle validation while keeping install/enable/run and signing-trust boundaries out of scope.
-- Phase 29 adds RC upgrade smoke evidence tooling, giving release verifiers a local report/validation path for legacy `ibot` userData compatibility while keeping signed release and real packaged RC validation out of scope.
-- macOS release baseline is complete.
-- Windows package targets, icon generation, CI/release jobs, platform-aware About/update asset filtering, signing policy enforcement, smoke evidence validation, CI pending report, runbook, collector generation, evidence bundle validation, evidence summary/archive generation, archive manifest generation, and report filling tooling are implemented.
-- Signed Windows artifact evidence, filled packaged native picker evidence, and real Windows smoke validation remain open release gates.
+- Phase 1-7 establish the platform productization arc.
+- Phase 8-19 establish desktop release evidence, UI automation, IPC smoke coverage, and documentation governance.
+- Phase 20-29 establish example plugins, submission tooling, workflow validation, playbooks, and RC upgrade smoke evidence.
+- Phase 30-35 establish Codex pet import, bundled pets, and the initial TypeScript migration baseline.
+- Phase 36-43 establish packaged runtime evidence, release archive tooling, plugin secrets policy, sandbox evaluation, pet pack provenance, AI behavior diagnostics, and signed release claim gates.
+- Phase 44-46 establish plugin author rehearsal, TypeScript boundary contracts, and live documentation consolidation.
+
+Live documents should now stay short and link-oriented. Historical detail belongs in `docs/phases/` and `docs/reviews/`; generated release proof belongs in `docs/release-evidence/`; machine-readable current facts belong in `docs/project-context.json`.
 
 ## 18. Next Documentation Priorities
 
-The next documentation work should follow the implementation track rather than inventing a parallel roadmap:
+The next documentation work should follow evidence changes, not phase nostalgia:
 
-- Add a filled Windows smoke report only after real Windows validation exists.
 - Update release status only after signed artifact evidence and real smoke evidence pass the checklist.
-- Keep mobile out of scope until a separate product decision introduces it.
-- Fill and archive real launched Electron / packaged-app smoke evidence for native OS file picker behavior using the Phase 18 toolchain.
+- Add filled Windows smoke reports only after real Windows validation exists.
+- Fill and archive launched Electron or packaged-app native picker evidence when those runs are performed.
+- Keep mobile out of scope until a separate product decision creates a real architecture track.
+- Keep README and HANDOFF concise; move long explanations to the owning technical or release document.

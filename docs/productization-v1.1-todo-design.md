@@ -1,7 +1,7 @@
 # OpenPet v1.1 TODO Design
 
 > Date: 2026-06-16
-> Baseline: Phase 41 development state
+> Baseline: Phase 46 completed locally
 > Scope: Convert the remaining productization TODO into a phase-ready design for v1.1 work. This document does not upgrade platform support claims. Windows remains not release-ready until signed runtime smoke evidence passes.
 
 ## 1. Goal
@@ -363,6 +363,8 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 - Test counts, platform support, release readiness, and next-phase guidance are not contradictory across live docs.
 - Human-facing docs read like product/engineering documentation, not a phase transcript.
 
+**Status**: completed as live-doc consolidation. `project-status-review.md` is now a concise current snapshot, `HANDOFF` and `development-summary` are shorter and link-oriented, roadmap/TODO facts reflect Phase 45 completion, and `project-context.json` remains the compact machine-readable state.
+
 ## 6. Priority Order
 
 | Priority | Work | Reason |
@@ -370,22 +372,22 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 | P0 | Phase 42 real packaged runtime evidence | Directly proves the desktop pet actually renders after packaging. |
 | P0 | Phase 43 signed release evidence closure | Controls release/support claims and user trust. |
 | P1 | Phase 40 pet pack export and provenance | Completed; keep provenance and conflict review as constraints for future catalog work. |
-| P1 | Phase 44 plugin author experience rehearsal | Makes third-party contribution paths repeatable and reviewable. |
+| P1 | Phase 44 plugin author experience rehearsal | Completed; use the archived rehearsal as the plugin author baseline. |
 | P1 | Phase 45 TypeScript boundary expansion | Completed; preserve shared contracts as the migration gate for future UI and IPC work. |
 | P2 | Phase 41 AI behavior replay | Completed; preserve redacted diagnostics and replay semantics while future AI tooling evolves. |
 | P2 | Phase 39 plugin sandbox evaluation | Completed; keep current runner for v1.1 and revisit on high-risk plugin capability changes. |
-| P2 | Phase 46 documentation consolidation | Should happen after the v1.1 evidence and lifecycle work settles. |
+| P2 | Phase 46 documentation consolidation | Completed; keep future live-doc updates fact-only and link-oriented. |
 
 ## 7. Recommended Execution Sequence
 
-1. Execute Phase 42 to turn existing smoke tooling into real packaged runtime evidence.
-2. Execute Phase 43 to close signed release evidence or explicitly preserve not-ready platform claims.
+1. Phase 42 is complete; use archived packaged runtime evidence as the automated macOS runtime baseline.
+2. Phase 43 is complete; use the signed release closure report to preserve not-ready platform claims until real signed evidence exists.
 3. Phase 38 and Phase 39 are complete; keep their plugin secrets and sandbox boundaries as constraints for future plugin work.
 4. Phase 40 is complete; preserve pet pack export/provenance behavior while catalog work evolves.
 5. Phase 41 is complete; use AI behavior replay and diagnostics as the baseline for future behavior tooling.
-6. Execute Phase 44 to rehearse the plugin author path end to end before expanding community claims.
+6. Phase 44 is complete; keep the archived author rehearsal as the plugin onboarding baseline.
 7. Phase 45 is complete; use the shared contracts and Control Center API facade as the next migration baseline.
-8. Execute Phase 46 after the live docs stabilize.
+8. Phase 46 is complete; start the next concrete phase from a fresh whole-project review or real evidence-producing work.
 
 ## 8. Verification Contract
 

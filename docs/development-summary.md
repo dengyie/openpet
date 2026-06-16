@@ -5,7 +5,7 @@
 > Current release track: `v1.0.1-rc.2`
 
 This is the short engineering summary for the current repository state. For long phase history, read `docs/phases/` and `docs/reviews/`. For support claims and documentation rules, read `docs/project-documentation-design.md`.
-For the latest review-derived TODO design, read `docs/productization-next-steps-design.md`. For the phase-ready v1.1 execution sequence, read `docs/productization-v1.1-todo-design.md`.
+For the latest phase execution design, read `docs/productization-v1.1-todo-design.md`. For current platform status, read `docs/project-status-review.md`.
 
 ## Current State
 
@@ -19,22 +19,13 @@ OpenPet is now a desktop pet platform with:
 - loopback-only local HTTP / MCP endpoints,
 - and a TypeScript migration baseline covering shared IPC, Control Center view contracts, the Control Center API facade, and representative product payload fixtures.
 
-## Latest Delivered Changes
+## Current Capability Summary
 
-- Native Codex pet import for `pet.json` + `spritesheet.webp` directories.
-- Native Codex pet zip import for `.codex-pet.zip` packages.
-- Bundled built-in pet packs: `doro`, `duodong`, `chispa`.
-- Bundled pet renderer fix so packaged sprite URLs resolve correctly.
-- TypeScript migration scaffold with `tsconfig.json`, `npm run typecheck`, shared IPC contracts, and typed Control Center view defaults.
-- Productization TODO design that turns the latest whole-project review items into workstreams, acceptance gates, and execution order.
-- v1.1 TODO design that turns the Phase 37+ open work into phase-ready release evidence, plugin, pet pack, AI debugging, TypeScript, and documentation tracks.
-- Packaged runtime smoke evidence tooling and runner for pet window, transparency, sprite visibility, speech bubble, action playback, built-in pet pack switching, and linked picker evidence.
-- Release evidence archive manifest tooling that hashes and validates macOS signing evidence plus Windows smoke, desktop picker, and packaged runtime reports without claiming readiness for pending evidence.
-- Plugin secrets decision and scaffolding: plugin config remains public settings, secret-like fields are rejected, and `create-openpet-plugin` generates minimal/network/storage starter templates.
-- Plugin sandbox evaluation: current child-process + Node permission-model + VM runner remains the v1.1 recommendation, with documented limits and re-evaluation triggers.
-- Pet pack export and provenance: installed user packs can be exported as `.openpet-pet.zip`, imported provenance is retained, and built-in packs remain read-only.
-- AI behavior decision viewer: Control Center shows recent behavior decisions, supports replay, exports redacted diagnostics, and clears decision history.
-- TypeScript boundary expansion: Control Center API facade is typed, `window.controlCenterAPI` satisfies `ControlCenterApi`, and shared contracts now cover actions, pet packs, plugins, catalog, AI, local service, release evidence, and signed release claim summaries.
+- Pet packs: Codex pet directory/zip import, bundled `doro`, `duodong`, `chispa`, export, provenance, and version-conflict review.
+- AI: OpenAI-compatible chat, main-process secret storage, behavior decisions, replay, redacted diagnostics export, and clear-history controls.
+- Plugins: permission-limited runtime, example plugins, validation, submission bundles, author rehearsal, and conservative public-config-only secret policy.
+- Release evidence: packaged runtime smoke runner, release archive manifest tooling, and signed release closure reporting without unsupported readiness claims.
+- TypeScript: shared IPC/view contracts, typed Control Center API facade, and representative payload fixtures in `npm run typecheck`.
 
 ## Validation Baseline
 
@@ -45,18 +36,18 @@ npm run typecheck            # TypeScript no-emit checks
 npm run check:syntax         # Node syntax + typecheck + Control Center build
 ```
 
-## What Still Needs Care
+## Open Work
 
 - Windows is still not release-ready until real signed installer evidence and smoke reports are archived.
 - Packaged native picker and signed release archive evidence still need real archived runs; automated macOS packaged runtime evidence is archived under `docs/release-evidence/packaged-runtime/2026-06-16T14-52-13-074Z-darwin-arm64/`.
 - Signed release closure evidence is archived under `docs/release-evidence/signed-release-closure/2026-06-16T15-00-00Z/` and currently records official desktop, macOS, and Windows claims as `not-ready`.
 - Plugin author rehearsal evidence is archived under `docs/release-evidence/plugin-author-rehearsal/2026-06-16T16-00-00Z/` with minimal, network, storage, and AI-assisted scaffolds plus a validated submission bundle.
 - The plugin ecosystem has submission tooling, examples, scaffolding, an author rehearsal, and a documented sandbox decision; wider community onboarding is still future work.
-- The next prioritized work is Phase 46 documentation consolidation, plus continuing native picker and signed release evidence work when real platform evidence is available.
+- After Phase 46, the next planning step is a fresh whole-project review or a concrete evidence-producing phase.
 
-## Next Migration Steps
+## Next Engineering Steps
 
-1. Use `docs/productization-v1.1-todo-design.md` to drive the next productization phases.
-2. Expand TypeScript from the typed Control Center API facade into hook state, main-process JSDoc adapters, and high-drift service boundaries.
-3. Keep `npm start` functional during each migration step.
-4. Keep new user-facing configuration in Control Center, not in hidden JSON files.
+1. Produce real signed release and Windows smoke evidence before changing platform wording.
+2. Fill native picker evidence from launched or packaged app runs.
+3. Expand TypeScript from the typed Control Center API facade into hook state, main-process JSDoc adapters, and high-drift service boundaries.
+4. Keep `npm start` functional and keep user-facing configuration in Control Center.

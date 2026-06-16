@@ -18,15 +18,11 @@ OpenPet is a desktop pet platform with:
 
 ## Read First
 
-1. [`docs/project-documentation-design.md`](./project-documentation-design.md)
-2. [`docs/development-summary.md`](./development-summary.md)
-3. [`docs/project-context.json`](./project-context.json)
-4. [`CHANGELOG.md`](./CHANGELOG.md)
-5. [`docs/release-checklist.md`](./release-checklist.md)
-6. [`docs/productization-next-steps-design.md`](./productization-next-steps-design.md)
-7. [`docs/productization-v1.1-todo-design.md`](./productization-v1.1-todo-design.md)
-8. [`docs/project-review-todo-design.md`](./project-review-todo-design.md)
-9. [`docs/productization-todo-design.md`](./productization-todo-design.md)
+1. [`docs/development-summary.md`](./development-summary.md)
+2. [`docs/project-context.json`](./project-context.json)
+3. [`docs/project-status-review.md`](./project-status-review.md)
+4. [`docs/productization-v1.1-todo-design.md`](./productization-v1.1-todo-design.md)
+5. [`docs/project-documentation-design.md`](./project-documentation-design.md)
 
 ## Facts To Preserve
 
@@ -61,7 +57,6 @@ npm run create-signed-release-closure-report
 - `docs/phases/` for phase records.
 - `docs/reviews/` for phase review notes.
 - `docs/project-status-review.md` for longer evaluation.
-- `docs/productization-next-steps-design.md` for the latest review-derived TODO design.
 - `docs/productization-v1.1-todo-design.md` for the Phase 38+ execution design.
 - `docs/project-review-todo-design.md` for the consolidated whole-project review TODO design.
 - `docs/productization-todo-design.md` for the prioritized TODO implementation design.
@@ -74,9 +69,7 @@ npm run create-signed-release-closure-report
 
 ## Next Steps
 
-1. Use `docs/project-review-todo-design.md` as the current whole-project TODO design, `docs/productization-next-steps-design.md` as the near-term productization design, and `docs/productization-v1.1-todo-design.md` as the phase execution entry.
-2. Use Phase 41 AI behavior replay/decision viewer as the current diagnostics baseline.
-3. Use the archived Phase 42 packaged runtime evidence as the automated macOS runtime baseline.
-4. Use the archived Phase 43 signed release closure report as the current release-claim gate: official desktop, macOS, and Windows release readiness remain `not-ready` until signed evidence and platform smoke reports are complete.
-5. Use the archived Phase 44 plugin author rehearsal as the current plugin onboarding baseline; the generated bundle is ready for human review but still not signing trust or catalog approval.
-6. Use Phase 45 shared contracts and the typed Control Center API facade as the current TypeScript migration baseline; Phase 46 should consolidate live docs next.
+1. Use the archived Phase 43 signed release closure report as the current release-claim gate: official desktop, macOS, and Windows release readiness remain `not-ready` until signed evidence and platform smoke reports are complete.
+2. Use the archived Phase 44 plugin author rehearsal as the current plugin onboarding baseline; the generated bundle is ready for human review but still not signing trust or catalog approval.
+3. Use Phase 45 shared contracts and the typed Control Center API facade as the current TypeScript migration baseline.
+4. After Phase 46, start the next concrete phase from a fresh review or from real evidence work: signed release evidence, Windows smoke evidence, native picker evidence, community plugin rehearsal, or the next TypeScript boundary.

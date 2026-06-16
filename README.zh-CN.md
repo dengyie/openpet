@@ -26,7 +26,7 @@ OpenPet 会把一只小宠物放在你的桌面上。它能走动、说话、播
 - OpenAI 兼容聊天，API Key 只保存在主进程 secret store。
 - 插件 SDK 支持权限审查、隔离运行、私有存储、网络 allowlist、catalog 安装和 blocklist。
 - 可选的本地 HTTP / MCP API，仅 loopback，默认关闭。
-- 渐进式 TypeScript 迁移基线，`npm run check:syntax` 已包含 `typecheck`。
+- 渐进式 TypeScript 迁移基线，已覆盖共享 contracts 和 Control Center API facade。
 
 ## 快速开始
 
@@ -129,7 +129,7 @@ npm run create-plugin-submission-bundle -- <plugin-dir-or-zip> --output-dir plug
 npm run validate-plugin-submission-bundle -- plugin-submission-bundle --require-ready
 ```
 
-完整流程见 [plugin-development.md](./docs/plugin-development.md) 和 [plugin-submission-workflow-playbook.md](./docs/plugin-submission-workflow-playbook.md)。
+完整流程见 [plugin-development.md](./docs/plugin-development.md)、[plugin-submission-workflow-playbook.md](./docs/plugin-submission-workflow-playbook.md) 和 [plugin-ecosystem-rules.md](./docs/plugin-ecosystem-rules.md)。
 
 ## 文档
 
