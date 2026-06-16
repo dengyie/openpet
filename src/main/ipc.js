@@ -8,7 +8,16 @@
  */
 const { ipcMain, BrowserWindow, app, dialog } = require('electron')
 const { IPC } = require('../shared/ipc-channels')
-const { createAboutInfoView, createCatalogBlocklistResult, createPetPackMutationResult, createPluginMutationResult, createServiceStatusView, createUpdateCheckView } = require('./control-center-adapters')
+const {
+  createActionFrameImportResult,
+  createActionsMutationResult,
+  createAboutInfoView,
+  createCatalogBlocklistResult,
+  createPetPackMutationResult,
+  createPluginMutationResult,
+  createServiceStatusView,
+  createUpdateCheckView
+} = require('./control-center-adapters')
 const { findSemanticAction } = require('./services/ai-action-orchestrator')
 const { createLocalHttpToken } = require('./services/local-http-service')
 
@@ -181,7 +190,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     const selection = getPendingActionFrameSelection(payload.selectionId)
     const inspectionResult = await inspectPendingActionFrameSelection({ selectionId: payload.selectionId, actionId: payload.actionId })
     if (!inspectionResult.inspection.valid) {
-      return { ok: false, inspectionResult }
+      return createActionFrameImportResult({ ok: false, inspectionResult })
     }
 
     const result = await actionImportService.importActionFrames({
@@ -191,19 +200,19 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     })
     pendingActionFrameSelection = null
     reloadAndSendAnimations(getPetWindow, petService)
-    return { ok: true, canceled: false, result, animations: petService.getPreviewAnimations() }
+    return createActionFrameImportResult({ ok: true, canceled: false, result }, petService.getPreviewAnimations())
   })
 
   ipcMainService.handle(IPC.ACTIONS_SAVE_CONFIG, async (_event, payload) => {
-    const result = await actionImportService.updateActionConfig(payload)
+    await actionImportService.updateActionConfig(payload)
     reloadAndSendAnimations(getPetWindow, petService)
-    return { result, animations: petService.getPreviewAnimations() }
+    return createActionsMutationResult(petService.getPreviewAnimations())
   })
 
   ipcMainService.handle(IPC.ACTIONS_DELETE, async (_event, payload) => {
-    const result = await actionImportService.deleteAction(payload.actionId)
+    await actionImportService.deleteAction(payload.actionId)
     reloadAndSendAnimations(getPetWindow, petService)
-    return { result, animations: petService.getPreviewAnimations() }
+    return createActionsMutationResult(petService.getPreviewAnimations())
   })
 
   ipcMainService.handle(IPC.PET_PACKS_LIST, () => petPackService.listPacks())

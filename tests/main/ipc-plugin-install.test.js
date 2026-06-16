@@ -269,6 +269,119 @@ test('about handlers return stable info and update check view shapes', async () 
   })
 })
 
+test('action mutation handlers return contract-shaped results and refreshed animations', async () => {
+  const ipcMain = createIpcMainStub()
+  const animations = {
+    defaultAction: 'idle',
+    clickAction: 'wave',
+    actions: [{ id: 'wave', label: 'Wave' }]
+  }
+  const sourceDir = path.join(os.tmpdir(), 'openpet-action-frames-wave')
+  const calls = []
+  const petWindowMessages = []
+  const services = createRequiredServices({
+    pluginInstallService: {
+      inspectPluginPackage: () => ({}),
+      clearPendingSelection: () => ({ ok: true }),
+      installPlugin: () => ({ ok: true }),
+      updatePlugin: () => ({ ok: true }),
+      uninstallPlugin: () => ({ ok: true })
+    },
+    pluginService: { listPlugins: () => [] },
+    dialogService: {
+      showOpenDialog: async () => ({ canceled: false, filePaths: [sourceDir] })
+    }
+  })
+
+  registerIpcHandlers({
+    ...services,
+    petService: {
+      ...services.petService,
+      getAnimations: () => animations,
+      getPreviewAnimations: () => animations,
+      reloadAnimations: () => animations
+    },
+    getPetWindow: () => ({
+      isDestroyed: () => false,
+      webContents: {
+        send: (...args) => petWindowMessages.push(args)
+      }
+    }),
+    actionImportService: {
+      inspectActionFrames: async ({ sourceDir: selectedSourceDir, actionId }) => {
+        calls.push(['inspect', selectedSourceDir, actionId])
+        return {
+          actionId,
+          folderName: path.basename(selectedSourceDir),
+          inspection: {
+            valid: actionId !== 'broken',
+            frameCount: actionId === 'broken' ? 0 : 8,
+            maxWidth: 32,
+            maxHeight: 32,
+            frames: [],
+            skippedFiles: [],
+            errors: actionId === 'broken' ? ['missing frames'] : [],
+            warnings: []
+          }
+        }
+      },
+      importActionFrames: async ({ sourceDir: selectedSourceDir, actionId, label }) => {
+        calls.push(['import', selectedSourceDir, actionId, label])
+        return { ...animations, importedAction: { id: actionId, label }, internal: 'service-only' }
+      },
+      updateActionConfig: async (payload) => {
+        calls.push(['save', payload])
+        return { ...animations, internal: 'service-only' }
+      },
+      deleteAction: async (actionId) => {
+        calls.push(['delete', actionId])
+        return { ...animations, deletedActionId: actionId }
+      }
+    },
+    ipcMainService: ipcMain
+  })
+
+  const inspection = await ipcMain.handlers.get(IPC.ACTIONS_INSPECT_FRAMES)(null, { actionId: 'wave' })
+  const importResult = await ipcMain.handlers.get(IPC.ACTIONS_IMPORT_FRAMES)(null, {
+    selectionId: inspection.selectionId,
+    actionId: 'wave',
+    label: 'Wave hello'
+  })
+  const brokenInspection = await ipcMain.handlers.get(IPC.ACTIONS_INSPECT_FRAMES)(null, { actionId: 'broken' })
+  const brokenImportResult = await ipcMain.handlers.get(IPC.ACTIONS_IMPORT_FRAMES)(null, {
+    selectionId: brokenInspection.selectionId,
+    actionId: 'broken',
+    label: 'Broken'
+  })
+  const saveResult = await ipcMain.handlers.get(IPC.ACTIONS_SAVE_CONFIG)(null, { defaultAction: 'idle', clickAction: 'wave' })
+  const deleteResult = await ipcMain.handlers.get(IPC.ACTIONS_DELETE)(null, { actionId: 'wave' })
+
+  assert.deepEqual(importResult, {
+    ok: true,
+    canceled: false,
+    result: { importedAction: { id: 'wave', label: 'Wave hello' } },
+    animations
+  })
+  assert.equal(brokenImportResult.ok, false)
+  assert.equal(brokenImportResult.inspectionResult.inspection.valid, false)
+  assert.deepEqual(saveResult, { animations })
+  assert.deepEqual(deleteResult, { animations })
+  assert.deepEqual(petWindowMessages.map((message) => message[0]), [
+    IPC.PET_ANIMATIONS_CHANGED,
+    IPC.PET_ANIMATIONS_CHANGED,
+    IPC.PET_ANIMATIONS_CHANGED
+  ])
+  assert.deepEqual(calls, [
+    ['inspect', sourceDir, 'wave'],
+    ['inspect', sourceDir, 'wave'],
+    ['import', sourceDir, 'wave', 'Wave hello'],
+    ['inspect', sourceDir, 'broken'],
+    ['inspect', sourceDir, 'broken'],
+    ['save', { defaultAction: 'idle', clickAction: 'wave' }],
+    ['delete', 'wave']
+  ])
+})
+
 test('catalog blocklist handlers return catalog plus updated blocklist view result', async () => {
   const ipcMain = createIpcMainStub()
   const catalog = {

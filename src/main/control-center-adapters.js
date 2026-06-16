@@ -10,6 +10,8 @@
  * @typedef {import('../shared/openpet-contracts').ServiceStatusViewState} ServiceStatusViewState
  * @typedef {import('../shared/openpet-contracts').PluginMutationResult} PluginMutationResult
  * @typedef {import('../shared/openpet-contracts').PluginViewState} PluginViewState
+ * @typedef {import('../shared/openpet-contracts').ActionFrameImportResult} ActionFrameImportResult
+ * @typedef {import('../shared/openpet-contracts').ActionsMutationResult} ActionsMutationResult
  * @typedef {import('../shared/openpet-contracts').ActionsConfigViewState} ActionsConfigViewState
  * @typedef {import('../shared/openpet-contracts').AboutInfoViewState} AboutInfoViewState
  * @typedef {import('../shared/openpet-contracts').AboutUpdateInfo} AboutUpdateInfo
@@ -103,6 +105,25 @@ const createPetPackMutationResult = (result, petPacks, animations) => ({
 })
 
 /**
+ * @param {Partial<ActionFrameImportResult>} result
+ * @param {ActionsConfigViewState | undefined} [animations]
+ * @returns {ActionFrameImportResult}
+ */
+const createActionFrameImportResult = (result, animations) => ({
+  ...(result.ok !== undefined ? { ok: Boolean(result.ok) } : {}),
+  ...(result.canceled !== undefined ? { canceled: Boolean(result.canceled) } : {}),
+  ...(result.result?.importedAction !== undefined ? { result: { importedAction: result.result.importedAction } } : {}),
+  ...(animations !== undefined ? { animations } : {}),
+  ...(result.inspectionResult !== undefined ? { inspectionResult: result.inspectionResult } : {})
+})
+
+/**
+ * @param {ActionsConfigViewState} animations
+ * @returns {ActionsMutationResult}
+ */
+const createActionsMutationResult = (animations) => ({ animations })
+
+/**
  * @param {Partial<AboutUpdateInfo> | undefined} update
  * @returns {AboutUpdateInfo}
  */
@@ -147,6 +168,8 @@ const createUpdateCheckView = (result = {}) => ({
 })
 
 module.exports = {
+  createActionFrameImportResult,
+  createActionsMutationResult,
   createAboutInfoView,
   createAboutUpdateInfo,
   createCatalogBlocklistResult,

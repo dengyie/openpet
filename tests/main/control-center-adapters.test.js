@@ -2,6 +2,8 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 
 const {
+  createActionFrameImportResult,
+  createActionsMutationResult,
   createAboutInfoView,
   createCatalogBlocklistResult,
   createLocalHttpConfigView,
@@ -136,6 +138,48 @@ test('createPetPackMutationResult packages pack metadata with refreshed packs an
   })
 
   assert.deepEqual(createPetPackMutationResult({}, petPacks), { petPacks })
+})
+
+test('action adapters package import and mutation results without leaking service internals', () => {
+  const animations = {
+    defaultAction: 'idle',
+    clickAction: 'wave',
+    actions: [{ id: 'wave', label: 'Wave', sprite: 'wave.png', frames: 8, fps: 12, loop: false }]
+  }
+  const importedAction = animations.actions[0]
+  const inspectionResult = {
+    canceled: false,
+    selectionId: 'selection-wave',
+    folderName: 'wave',
+    actionId: 'wave',
+    inspection: {
+      valid: false,
+      frameCount: 0,
+      maxWidth: 0,
+      maxHeight: 0,
+      frames: [],
+      skippedFiles: [],
+      errors: ['missing frames'],
+      warnings: []
+    }
+  }
+
+  assert.deepEqual(createActionFrameImportResult({
+    ok: true,
+    canceled: false,
+    result: { importedAction, extra: 'internal-service-field' }
+  }, animations), {
+    ok: true,
+    canceled: false,
+    result: { importedAction },
+    animations
+  })
+
+  assert.deepEqual(createActionFrameImportResult({ ok: false, inspectionResult }), {
+    ok: false,
+    inspectionResult
+  })
+  assert.deepEqual(createActionsMutationResult(animations), { animations })
 })
 
 test('about adapters provide stable defaults for partial info and update checks', () => {
