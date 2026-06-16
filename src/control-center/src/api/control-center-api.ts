@@ -337,10 +337,25 @@ const demoState = readDemoState()
 const demoCatalogSelections = new Map<string, CatalogInstallSelection>()
 let demoManualPluginSelection: string | null = null
 
+const clonePluginEntries = (entries: PluginViewState['entries']): PluginViewState['entries'] => ({
+  commands: Array.isArray(entries?.commands) ? entries.commands.map((command) => ({ ...command })) : [],
+  services: Array.isArray(entries?.services)
+    ? entries.services.map((service) => ({
+        ...service,
+        platforms: service.platforms
+          ? Object.fromEntries(Object.entries(service.platforms).map(([platform, override]) => [platform, { ...override }]))
+          : undefined,
+        health: service.health ? { ...service.health } : service.health
+      }))
+    : [],
+  dashboards: Array.isArray(entries?.dashboards) ? entries.dashboards.map((dashboard) => ({ ...dashboard })) : []
+})
+
 const cloneDemoPlugins = (): PluginViewState[] => demoState.plugins.map((plugin) => ({
   ...plugin,
   permissions: Array.isArray(plugin.permissions) ? [...plugin.permissions] : [],
   commands: Array.isArray(plugin.commands) ? plugin.commands.map((command) => ({ ...command })) : [],
+  entries: clonePluginEntries(plugin.entries),
   configSchema: {
     ...(plugin.configSchema || {}),
     properties: Array.isArray(plugin.configSchema?.properties) ? plugin.configSchema.properties : []
@@ -489,7 +504,11 @@ const demoApi: ControlCenterApi = {
     demoManualPluginSelection = demoManualPluginReview.selectionId
     return {
       ...demoManualPluginReview,
-      plugin: { ...demoManualPluginReview.plugin, commands: demoManualPluginReview.plugin.commands.map((command) => ({ ...command })) },
+      plugin: {
+        ...demoManualPluginReview.plugin,
+        commands: demoManualPluginReview.plugin.commands.map((command) => ({ ...command })),
+        entries: clonePluginEntries(demoManualPluginReview.plugin.entries)
+      },
       permissionDiff: {
         permissions: { ...demoManualPluginReview.permissionDiff.permissions },
         networkAllowlist: { ...demoManualPluginReview.permissionDiff.networkAllowlist }

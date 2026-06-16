@@ -25,6 +25,7 @@ Phase 56 将 Phase 55 的 extension 生态语言推进到第一块 runtime-backe
   - Manifest normalization、unsafe declaration rejection、legacy command precedence。
   - Install review 接受无 legacy `main` 的 declaration package，并拒绝缺失 asset。
   - PluginService 可通过现有 JavaScript compatibility runner 执行 `main` + `entries.commands` 包。
+  - PluginService 会展示 declaration-only extension entries，但保持 `runnable: false` 并拒绝执行其 command。
   - Shared type fixture 覆盖 entries view shape。
 
 ## 边界
@@ -47,6 +48,7 @@ Phase 56 将 Phase 55 的 extension 生态语言推进到第一块 runtime-backe
 - `entries.commands` 可在顶层 `commands` 缺失时成为可见 command list。
 - JavaScript compatibility 包如果声明 `main`，可用 `entries.commands` id 通过 `PluginService.runCommand()` 运行。
 - Service/dashboard entries 只作为可见声明，不会自动运行或打开。
+- Declaration-only extension 包可以被列出和审查，但没有 `main` 时不可运行。
 - Production Code Quality Review 完成并记录。
 - `npm run check:syntax`、`npm run test:control-center`、`npm test`、`git diff --check` 通过。
 
@@ -67,7 +69,7 @@ git diff --check
 - `npm run typecheck`: pass
 - `npm run check:syntax`: pass
 - `npm run test:control-center`: 10/10 pass
-- `npm test`: 417/417 pass
+- `npm test`: 418/418 pass
 - `git diff --check`: pass
 - `node -e "JSON.parse(...)"`: project-context ok
 

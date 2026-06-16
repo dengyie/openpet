@@ -31,7 +31,7 @@ Strongest coverage:
 
 - `tests/plugins/manifest.test.js` covers entry normalization, unsafe declarations, config/assets paths, and legacy command precedence.
 - `tests/services/plugin-install-service.test.js` covers declaration-only extension review and missing asset rejection.
-- `tests/services/plugin-service.test.js` proves `main` + `entries.commands` packages run command ids through the existing compatibility runner.
+- `tests/services/plugin-service.test.js` proves `main` + `entries.commands` packages run command ids through the existing compatibility runner, and declaration-only entries remain listed but non-runnable.
 - `tests/shared/openpet-contracts-type-fixture.ts` and `npm run typecheck` cover the new `entries` view contract.
 
 The most important intentionally missing scenario is service/dashboard lifecycle execution, which is out of scope for Phase 56 and documented as future work.
@@ -69,7 +69,7 @@ Current result:
 
 - `npm run check:syntax`: pass
 - `npm run test:control-center`: 10/10 pass
-- `npm test`: 417/417 pass
+- `npm test`: 418/418 pass
 - `git diff --check`: pass
 - `node -e "JSON.parse(...)"`: project-context ok
 

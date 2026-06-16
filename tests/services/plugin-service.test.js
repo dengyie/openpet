@@ -109,6 +109,23 @@ const createRunnablePluginDir = ({ manifest = {}, source, configSchema }) => {
   return root
 }
 
+const createDeclarationOnlyPluginDir = () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-declaration-plugin-'))
+  const pluginPath = path.join(root, 'weather-declaration')
+  fs.mkdirSync(pluginPath)
+  fs.writeFileSync(path.join(pluginPath, 'plugin.json'), JSON.stringify({
+    id: 'weather-declaration',
+    name: 'Weather Declaration',
+    version: '1.0.0',
+    entries: {
+      commands: [{ id: 'announce', title: 'Announce Weather', command: 'node ./commands/announce.js' }],
+      services: [{ id: 'companion', title: 'Companion Service', command: 'npm run service:start' }],
+      dashboards: [{ id: 'main', title: 'Dashboard', url: 'http://127.0.0.1:8787' }]
+    }
+  }))
+  return root
+}
+
 test('plugin service discovers official plugins and local manifests', () => {
   const service = createPluginService({
     settingsService: createSettingsService({
@@ -139,6 +156,31 @@ test('plugin service isolates invalid local manifests', () => {
   })
 
   assert.deepEqual(service.listPlugins().map((plugin) => plugin.id), ['focus-timer'])
+})
+
+test('plugin service lists declaration-only extension entries without making them runnable', async () => {
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir()]
+  })
+
+  const [plugin] = service.listPlugins()
+
+  assert.equal(plugin.id, 'weather-declaration')
+  assert.equal(plugin.enabled, true)
+  assert.equal(plugin.runnable, false)
+  assert.deepEqual(plugin.commands, [{ id: 'announce', title: 'Announce Weather' }])
+  assert.equal(plugin.entries.commands[0].command, 'node ./commands/announce.js')
+  assert.equal(plugin.entries.services[0].id, 'companion')
+  assert.equal(plugin.entries.dashboards[0].url, 'http://127.0.0.1:8787')
+  await assert.rejects(
+    () => service.runCommand('weather-declaration', 'announce'),
+    /Plugin is not runnable/
+  )
 })
 
 test('plugin service rejects local plugin main symlinks escaping the plugin directory', () => {

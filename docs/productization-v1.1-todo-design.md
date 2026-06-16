@@ -593,7 +593,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 - Release readiness remains evidence-based and conservative.
 - `npm run check:syntax`, `npm run test:control-center`, `npm test`, and `git diff --check` pass.
 
-**Status**: completed in Phase 54. Release evidence archive manifest and signed release closure report payloads now have complete shared contracts; type fixtures and generator tests were added; Node baseline is now 417 tests.
+**Status**: completed in Phase 54. Release evidence archive manifest and signed release closure report payloads now have complete shared contracts; type fixtures and generator tests were added; Node baseline is now 418 tests.
 
 ### Phase 55: Extension Ecosystem Documentation
 

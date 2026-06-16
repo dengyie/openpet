@@ -30,7 +30,7 @@ The project is strongest on macOS. Windows build and evidence tooling exists, bu
 Current local baseline:
 
 ```bash
-npm test                     # 417/417 Node tests
+npm test                     # 418/418 Node tests
 npm run test:control-center  # 10/10 Playwright UI tests
 npm run typecheck            # TypeScript no-emit checks
 npm run check:syntax         # Node syntax + typecheck + Control Center build
