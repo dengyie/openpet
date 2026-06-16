@@ -12,7 +12,7 @@ OpenPet is a desktop pet platform with:
 - bundled built-in packs `doro`, `duodong`, and `chispa`,
 - AI chat with secret storage in the main process,
 - AI behavior decisions with Control Center replay and redacted diagnostics,
-- permission-limited plugins,
+- developer-first local extension docs with legacy SDK runtime compatibility,
 - loopback-only local HTTP / MCP,
 - and a TypeScript migration baseline covering shared IPC, Control Center view contracts, the Control Center API facade, Control Center hook state boundaries, Control Center pane prop surfaces, main-process Control Center adapters for service/catalog/plugin/pet pack/About/update/actions payloads, full release evidence archive / signed closure report contracts, and representative payload fixtures.
 
@@ -28,8 +28,8 @@ OpenPet is a desktop pet platform with:
 
 - `PetService` remains the single source of truth for pet state.
 - New user-facing configuration belongs in Control Center.
-- API keys must stay out of the renderer and ordinary plugins.
-- Plugins keep permission review and isolation.
+- API keys must stay out of the renderer.
+- Extension docs must be honest: OpenPet manages lifecycle, declarations, logs, health, and uninstall flow, but does not claim complete sandboxing for arbitrary local processes.
 - `cat_anime/` structure is unchanged.
 - Windows is not release-ready yet.
 
@@ -64,12 +64,12 @@ npm run create-signed-release-closure-report
 - `docs/plugin-sandbox-evaluation.md` for current plugin runner guarantees, limits, and v1.1 recommendation.
 - `scripts/run-packaged-runtime-smoke.js`, `scripts/create-packaged-runtime-smoke-report.js`, and `scripts/validate-packaged-runtime-smoke-report.js` for packaged app runtime evidence.
 - `scripts/create-release-evidence-archive-manifest.js` and `scripts/create-signed-release-closure-report.js` for release-level evidence archive validation and release-claim closure.
-- `docs/plugin-submission-workflow-playbook.md` for plugin onboarding.
-- `scripts/create-openpet-plugin.js` and `scripts/create-plugin-author-rehearsal.js` for plugin starter templates and author-path rehearsal.
+- `docs/plugin-development.md`, `docs/plugin-ecosystem-rules.md`, and `docs/plugin-submission-workflow-playbook.md` for extension onboarding and legacy SDK compatibility.
+- `scripts/create-openpet-plugin.js` and `scripts/create-plugin-author-rehearsal.js` for current compatibility starter templates and author-path rehearsal.
 
 ## Next Steps
 
 1. Use the archived Phase 43 signed release closure report as the current release-claim gate: official desktop, macOS, and Windows release readiness remain `not-ready` until signed evidence and platform smoke reports are complete.
-2. Use the archived Phase 44 plugin author rehearsal as the current plugin onboarding baseline; the generated bundle is ready for human review but still not signing trust or catalog approval.
+2. Use Phase 55 extension ecosystem docs as the current third-party ecosystem language baseline; legacy SDK examples remain compatibility evidence, not the future ceiling.
 3. Use Phase 54 Release Evidence Contracts work as the current TypeScript migration baseline.
-4. After Phase 54, start the next concrete phase from real evidence work, community plugin rehearsal, or another high-drift service/report boundary.
+4. After Phase 55, start the next concrete phase from real evidence work, extension runtime implementation, community extension rehearsal, or another high-drift service/report boundary.

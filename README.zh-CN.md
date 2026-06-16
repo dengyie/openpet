@@ -4,7 +4,7 @@
 
 一个带 Control Center、AI 聊天、插件、宠物包和本地 Agent API 的 Electron 桌面宠物平台。
 
-[![Tests](https://img.shields.io/badge/tests-394%20node%20%2B%2010%20ui-success)](./tests)
+[![Tests](https://img.shields.io/badge/tests-409%20node%20%2B%2010%20ui-success)](./tests)
 [![Build](https://img.shields.io/badge/build-passing-success)](./package.json)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Version](https://img.shields.io/badge/version-1.0.1--rc.2-blue.svg)](./package.json)
@@ -13,7 +13,7 @@
 
 </div>
 
-OpenPet 会把一只小宠物放在你的桌面上。它能走动、说话、播放动作、切换宠物包，也可以通过 AI 回复触发行为，并通过受限插件系统继续扩展。
+OpenPet 会把一只小宠物放在你的桌面上。它能走动、说话、播放动作、切换宠物包，也可以通过 AI 回复触发行为，并通过面向开发者的本地扩展生态继续成长。
 
 当前发布轨道优先验证 macOS。Windows 的打包和证据工具已经在仓库里，但在真实签名安装包和冒烟报告归档前，不声明 Windows release-ready。
 
@@ -24,7 +24,7 @@ OpenPet 会把一只小宠物放在你的桌面上。它能走动、说话、播
 - Pet pack runtime，兼容 legacy cat、动作帧文件夹、`.codex-pet.zip`，以及 `pet.json` + `spritesheet.webp` 的 Codex pet atlas。
 - 内置 `doro`、`duodong`、`chispa` 三个只读宠物包。
 - OpenAI 兼容聊天，API Key 只保存在主进程 secret store。
-- 插件 SDK 支持权限审查、隔离运行、私有存储、网络 allowlist、catalog 安装和 blocklist。
+- 面向开发者的本地扩展模型，当前兼容 legacy SDK command-style 包、校验、日志、catalog 安装和卸载流程。
 - 可选的本地 HTTP / MCP API，仅 loopback，默认关闭。
 - 渐进式 TypeScript 迁移基线，已覆盖共享 contracts 和 Control Center API facade。
 
@@ -81,8 +81,8 @@ src/main/pet-pack/
 
 - `PetService` 是宠物状态唯一事实源。
 - 面向用户的新配置必须能在 Control Center 操作。
-- API Key 不暴露给 renderer 或普通插件。
-- 第三方插件不能获得无限制 Node / Electron 访问。
+- API Key 不暴露给 renderer。
+- 第三方扩展是本地软件：OpenPet 应展示扩展声明并管理生命周期、日志和卸载流程，但不应宣称能完整沙箱化任意本地进程。
 - 不改动既有 `cat_anime/` 素材结构。
 
 ## 宠物包
@@ -104,24 +104,29 @@ npm run generate-sprites
 
 日常使用建议直接从 Control Center -> Actions -> Pet Packs 导入。
 
-## 插件开发
+## 扩展开发
 
-建议先看已经纳入测试的示例：
+OpenPet 使用统一的第三方包模型：扩展。出于兼容性，包清单文件仍叫 `plugin.json`。目标生态围绕 command、长期 service、dashboard、setup 步骤、宠物行为、生成资产和扩展自管理数据设计；当前宿主运行时仍保留 legacy SDK 路径，用于已测试示例和校验工具。
+
+当前 legacy SDK 示例在宿主运行时追上新模型前仍然有参考价值：
 
 - [Focus Timer](./examples/plugins/focus-timer/)：storage 和宠物发言。
-- [Weather Status](./examples/plugins/weather-status/)：network allowlist。
+- [Weather Status](./examples/plugins/weather-status/)：legacy network allowlist。
 - [RSS Reader](./examples/plugins/rss-reader/)：公开 feed 拉取和缓存播报。
 
-最小插件结构：
+目标扩展结构：
 
 ```text
-my-plugin/
+my-extension/
   plugin.json
   config.schema.json   # 可选
-  index.js
+  commands/
+  service/
+  web/
+  assets/
 ```
 
-提交插件前：
+当前校验和提交工具仍沿用历史上的 `plugin` 命令名：
 
 ```bash
 npm run validate:plugin -- <plugin-dir-or-zip>
@@ -129,13 +134,14 @@ npm run create-plugin-submission-bundle -- <plugin-dir-or-zip> --output-dir plug
 npm run validate-plugin-submission-bundle -- plugin-submission-bundle --require-ready
 ```
 
-完整流程见 [plugin-development.md](./docs/plugin-development.md)、[plugin-submission-workflow-playbook.md](./docs/plugin-submission-workflow-playbook.md) 和 [plugin-ecosystem-rules.md](./docs/plugin-ecosystem-rules.md)。
+完整流程见 [plugin-development.md](./docs/plugin-development.md)、[plugin-submission-workflow-playbook.md](./docs/plugin-submission-workflow-playbook.md) 和 [plugin-ecosystem-rules.md](./docs/plugin-ecosystem-rules.md)。其中生态规则文档说明生命周期、透明声明、兼容策略和诚实的安全边界。
 
 ## 文档
 
 - [CHANGELOG.md](./CHANGELOG.md)：版本记录。
 - [docs/development-summary.md](./docs/development-summary.md)：当前开发摘要。
 - [docs/HANDOFF.md](./docs/HANDOFF.md)：维护交接文档。
+- [docs/plugin-ecosystem-rules.md](./docs/plugin-ecosystem-rules.md)：扩展生态边界、生命周期规则和三方作者指导。
 - [docs/project-context.json](./docs/project-context.json)：给程序/代理读取的紧凑项目上下文。
 - [docs/project-documentation-design.md](./docs/project-documentation-design.md)：文档规则和支持声明口径。
 - [docs/desktop-release-design.md](./docs/desktop-release-design.md) 与 [docs/release-checklist.md](./docs/release-checklist.md)：桌面发布证据门禁。

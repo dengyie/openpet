@@ -8,7 +8,7 @@ This document is the current status snapshot. Detailed implementation history be
 
 ## Executive Summary
 
-OpenPet has reached the intended desktop platform shape: Electron pet runtime, React Control Center, pet packs, AI behavior, permission-limited plugins, local HTTP/MCP, release evidence tooling, and a TypeScript boundary baseline.
+OpenPet has reached the intended desktop platform shape: Electron pet runtime, React Control Center, pet packs, AI behavior, local extension documentation with legacy SDK runtime compatibility, local HTTP/MCP, release evidence tooling, and a TypeScript boundary baseline.
 
 The project is strongest on macOS. Windows build and evidence tooling exists, but Windows must stay **not release-ready** until signed artifacts and real Windows smoke reports are archived.
 
@@ -20,7 +20,7 @@ The project is strongest on macOS. Windows build and evidence tooling exists, bu
 | Control Center | React + Vite app with Pet, Actions, AI, Plugins, Catalog, Service, and About tabs | `src/control-center/`, `tests/control-center/` |
 | Pet packs | Legacy cat, OpenPet packs, Codex pet directory/zip import, bundled read-only packs, export/provenance | `src/main/pet-pack/`, `src/main/services/pet-pack-service.js` |
 | AI | OpenAI-compatible chat, main-process secret storage, behavior decisions, replay, redacted diagnostics | `src/main/services/ai-service.js`, `src/main/services/behavior-orchestrator-service.js` |
-| Plugins | Permission review, isolated runner, SDK, storage, network allowlist, logs, catalog install, author tooling | `src/main/services/plugin-service.js`, `scripts/create-openpet-plugin.js` |
+| Extensions | Developer-first ecosystem docs, current legacy SDK compatibility, validation, submission tooling, logs, catalog install, author rehearsal; services/dashboards/setup/health remain future runtime work | `docs/plugin-development.md`, `docs/plugin-ecosystem-rules.md`, `src/main/services/plugin-service.js` |
 | Local API | Loopback-only HTTP and MCP, token gated, logged, disabled by default | `src/main/services/local-http-service.js` |
 | Release evidence | Packaged runtime evidence tooling, signed release closure gate, Windows smoke/report tooling | `scripts/create-*-smoke-*`, `docs/release-evidence/` |
 | TypeScript | Shared contracts, typed Control Center view defaults, typed API facade, typed Control Center hooks, typed pane prop surfaces, main-process Control Center adapters for service/catalog/plugin/pet pack/About/update/actions payloads, full release evidence archive / signed closure report contracts, representative payload fixtures | `src/shared/openpet-contracts.ts`, `src/control-center/src/api/control-center-api.ts`, `src/control-center/src/hooks/`, `src/control-center/src/panes/`, `src/main/control-center-adapters.js` |
@@ -53,7 +53,7 @@ The active product gaps are evidence and ecosystem maturity, not a rewrite of th
 1. Archive official signed macOS release evidence.
 2. Produce signed Windows artifacts and real Windows smoke reports before changing Windows wording.
 3. Fill native picker smoke evidence from launched or packaged app runs.
-4. Continue third-party plugin author and maintainer rehearsal with real submissions.
+4. Continue third-party extension author and maintainer rehearsal with real submissions, while keeping legacy SDK compatibility explicit.
 5. Continue TypeScript migration into other high-drift main-process adapter boundaries.
 
 ## Documentation Map

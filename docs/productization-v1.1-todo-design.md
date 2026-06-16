@@ -1,18 +1,18 @@
 # OpenPet v1.1 TODO Design
 
 > Date: 2026-06-16
-> Baseline: Phase 54 completed locally
+> Baseline: Phase 55 completed locally
 > Scope: Convert the remaining productization TODO into a phase-ready design for v1.1 work. This document does not upgrade platform support claims. Windows remains not release-ready until signed runtime smoke evidence passes.
 
 ## 1. Goal
 
-OpenPet has reached the intended platform shape: Electron desktop pet runtime, Control Center, pet packs, Codex pet import, bundled pets, plugins, AI behavior orchestration, local HTTP/MCP, desktop release tooling, and release evidence validators.
+OpenPet has reached the intended platform shape: Electron desktop pet runtime, Control Center, pet packs, Codex pet import, bundled pets, a local extension ecosystem with legacy SDK compatibility, AI behavior orchestration, local HTTP/MCP, desktop release tooling, and release evidence validators.
 
 The v1.1 TODO is no longer about proving the platform can exist. It is about making the platform trustworthy for real users and maintainable for third-party contributors:
 
 - signed release evidence is auditable,
 - packaged runtime behavior is validated against actual app bundles,
-- plugin authors have a safe and repeatable path,
+- extension authors have a transparent and repeatable path,
 - pet assets have lifecycle and provenance,
 - AI behavior is explainable and replayable,
 - TypeScript migration keeps tightening cross-boundary contracts without destabilizing Electron startup.
@@ -25,7 +25,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 - PetService remains the single source of truth for `say`, `action`, and event state.
 - Pet pack runtime supports legacy cat assets, OpenPet packs, Codex pet directory import, Codex pet zip import, and bundled packs.
 - Bundled pet assets are integrated without replacing the legacy `cat_anime/` structure.
-- Plugin runtime has manifest validation, permission review, isolated runner, storage limits, network allowlist, logs, catalog, blocklist, and submission tooling.
+- Extension ecosystem docs now use a developer-first local extension model while current runtime/tools keep legacy JavaScript SDK compatibility, manifest validation, logs, catalog, blocklist, and submission tooling.
 - AI provider configuration and API keys remain in the main process boundary.
 - Local HTTP/MCP is loopback-only, token-gated, logged, and off by default.
 - TypeScript scaffold, Control Center view contracts, API facade, hook state boundaries, pane prop surfaces, main-process Control Center adapters for service/catalog/plugin/pet pack/About/update/actions payloads, and full release evidence archive / signed closure report contracts exist.
@@ -36,8 +36,8 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 - macOS signed/notarized release evidence still needs real artifact capture and archive.
 - Windows signed installer/zip smoke evidence still needs real Windows execution.
 - Packaged runtime smoke reports still need real app evidence for pet window visibility, transparent rendering, bundled pack switching, and native picker flows.
-- Plugin secrets policy is not finalized.
-- Plugin scaffolding is not yet a one-command authoring path.
+- Extension runtime support for command/service/dashboard entries, setup status, health, dashboard opening, and optional bridge flows is still future work.
+- Legacy SDK plugin secrets policy remains conservative; target extension docs require honest disclosure for extension-managed secrets and data.
 - Plugin sandbox strategy has been evaluated against SES and Electron `utilityProcess`; current recommendation is to keep the existing runner for v1.1 while documenting limits.
 - AI behavior orchestration has a Control Center decision viewer, replay, redacted diagnostics export, and clear-history controls.
 - Documentation still needs another consolidation pass after the v1.1 execution track stabilizes.
@@ -56,7 +56,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 1. **Evidence before claims**: README, release notes, About text, and release checklist must only state what evidence supports.
 2. **Contracts before rewrites**: TypeScript work should prioritize IPC payloads, settings, manifests, catalog entries, release evidence summaries, and Control Center API boundaries.
 3. **Packaged app before dev-only proof**: pet rendering, pack switching, and native pickers must be proven against an installed or packaged app, not only Vite/demo paths.
-4. **Plugin expansion must be reviewable**: every new plugin capability must appear in manifest validation, Control Center review, logs, and submission tooling.
+4. **Extension expansion must be observable**: every new extension capability should appear in manifest declarations, lifecycle controls, logs, health, uninstall behavior, and submission tooling.
 5. **Asset lifecycle must be auditable**: built-in and imported pet packs need source, license, version, and export behavior.
 6. **Debuggability is a product feature**: AI behavior and plugin decisions should be explainable from Control Center without reading logs by hand.
 
@@ -595,6 +595,36 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 
 **Status**: completed in Phase 54. Release evidence archive manifest and signed release closure report payloads now have complete shared contracts; type fixtures and generator tests were added; Node baseline is now 409 tests.
 
+### Phase 55: Extension Ecosystem Documentation
+
+**Goal**: align current author-facing and ecosystem-facing docs with the developer-first local extension boundary.
+
+**Scope**:
+
+- Rewrite `docs/plugin-development.md` as the extension author entry point.
+- Rewrite `docs/plugin-ecosystem-rules.md` around lifecycle management, transparent declarations, structural package safety, honest product language, and broad third-party local automation.
+- Update README English/Chinese entry points from plugin-only language to extension development language.
+- Preserve historical phase documents and legacy SDK compatibility wording.
+- Do not change runtime behavior or claim a stronger sandbox.
+
+**Likely files**:
+
+- `README.md`
+- `README.zh-CN.md`
+- `docs/plugin-development.md`
+- `docs/plugin-ecosystem-rules.md`
+- `docs/superpowers/plans/2026-06-17-extension-ecosystem-docs.md`
+
+**Acceptance**:
+
+- New docs define extensions around `plugin.json`, `entries.commands`, `entries.services`, `entries.dashboards`, `manifest`, optional `config`, and `assets`.
+- Legacy short-lived JavaScript SDK examples and validation commands are marked as compatibility surfaces, not the future ecosystem ceiling.
+- README and ecosystem rules state that OpenPet does not fully sandbox arbitrary local processes or control every extension-managed secret.
+- `rg` stale-claim search leaves only intentional legacy compatibility or non-guarantee language.
+- `npm run check:syntax`, `npm run test:control-center`, `npm test`, and `git diff --check` pass.
+
+**Status**: completed in Phase 55. Author-facing and ecosystem-facing docs now use the developer-first local extension model while preserving legacy SDK compatibility and honest non-sandbox safety language.
+
 ## 6. Priority Order
 
 | Priority | Work | Reason |
@@ -612,6 +642,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 | P1 | Phase 52 About/update Control Center adapter | Completed; About info and update-check result shape now follows the production-side adapter baseline. |
 | P1 | Phase 53 Actions Control Center adapter | Completed; action import/save/delete result shape now follows the production-side adapter baseline. |
 | P1 | Phase 54 Release Evidence contracts | Completed; release archive manifest and signed closure report shapes now follow shared TypeScript contracts. |
+| P1 | Phase 55 Extension Ecosystem docs | Completed; author and ecosystem docs now follow the developer-first local extension boundary. |
 | P2 | Phase 41 AI behavior replay | Completed; preserve redacted diagnostics and replay semantics while future AI tooling evolves. |
 | P2 | Phase 39 plugin sandbox evaluation | Completed; keep current runner for v1.1 and revisit on high-risk plugin capability changes. |
 | P2 | Phase 46 documentation consolidation | Completed; keep future live-doc updates fact-only and link-oriented. |
@@ -633,7 +664,8 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 13. Phase 51 is complete; Pet pack mutation results now follow the same adapter contract.
 14. Phase 52 is complete; About/update results now follow the same adapter contract.
 15. Phase 53 is complete; action mutation results now follow the same adapter contract.
-16. Phase 54 is complete; release evidence archive and signed closure report payloads now have full shared contracts. Choose the next phase from real evidence work, community plugin rehearsal, or another high-drift service/report boundary.
+16. Phase 54 is complete; release evidence archive and signed closure report payloads now have full shared contracts.
+17. Phase 55 is complete; extension ecosystem docs now follow the developer-first local extension boundary. Choose the next phase from real evidence work, extension runtime implementation, community extension rehearsal, or another high-drift service/report boundary.
 
 ## 8. Verification Contract
 
