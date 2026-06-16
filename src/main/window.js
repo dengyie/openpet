@@ -1,8 +1,8 @@
 /**
  * 窗口管理模块 —— 宠物窗口和设置窗口的创建与缩放。
  */
-const { BrowserWindow, screen } = require('electron')
 const path = require('path')
+const electron = require('electron')
 
 const projectRoot = path.join(__dirname, '..', '..')
 const BASE_WIDTH = 300
@@ -27,7 +27,9 @@ const applyWindowScale = (petWindow, scale) => {
   })
 }
 
-const createWindow = () => {
+const loadPetWindow = (petWindow) => petWindow.loadFile(path.join(projectRoot, 'index.html'))
+
+const createWindow = ({ load = true, BrowserWindow = electron.BrowserWindow, screen = electron.screen } = {}) => {
   const petWindow = new BrowserWindow({
     width: BASE_WIDTH,
     height: BASE_HEIGHT,
@@ -51,12 +53,12 @@ const createWindow = () => {
     workArea.y + workArea.height - BASE_HEIGHT - 40
   )
   petWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
-  petWindow.loadFile('index.html')
+  if (load) loadPetWindow(petWindow)
 
   return petWindow
 }
 
-const createSettingsWindow = (petWindow) => {
+const createSettingsWindow = (petWindow, { BrowserWindow = electron.BrowserWindow, screen = electron.screen } = {}) => {
   if (petWindow.settingsWindow && !petWindow.settingsWindow.isDestroyed()) {
     petWindow.settingsWindow.focus()
     return
@@ -105,4 +107,4 @@ const createSettingsWindow = (petWindow) => {
   petWindow.settingsWindow = settingsWindow
 }
 
-module.exports = { BASE_WIDTH, BASE_HEIGHT, applyWindowScale, createWindow, createSettingsWindow }
+module.exports = { BASE_WIDTH, BASE_HEIGHT, applyWindowScale, createWindow, createSettingsWindow, loadPetWindow }

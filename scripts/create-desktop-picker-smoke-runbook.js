@@ -9,6 +9,7 @@ const CHECK_GUIDANCE = {
   'plugin-picker-cancel': 'From Plugins, open Install Plugin, cancel the native picker, and confirm no plugin selection or install state remains.',
   'plugin-picker-zip-review': 'From Plugins, choose a real .openpet-plugin.zip fixture and record the review panel showing package metadata, permissions, signature status, and install mode.',
   'plugin-install-disabled': 'Install the reviewed plugin and record that it is installed disabled by default and requires explicit enablement.',
+  'invalid-package-feedback': 'From Plugins or Actions, choose an invalid package fixture and record that the packaged app shows a visible, actionable error without changing installed state.',
   'action-frame-picker-cancel': 'From Actions, open the frame-folder import picker, cancel it, and confirm the action list and pending import state remain unchanged.',
   'pet-pack-picker-cancel': 'From Actions / Pet Packs, open the pet pack folder picker, cancel it, and confirm the pack list and active pack remain unchanged.',
   'state-after-picker-smoke': 'Restart or refresh the packaged app after picker checks and record that settings, plugin enablement, active pet pack, and local HTTP default-off state are consistent.'

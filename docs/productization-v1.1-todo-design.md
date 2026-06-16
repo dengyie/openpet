@@ -233,6 +233,8 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 - The earlier transparent-model regression is represented as a release smoke check.
 - Archive manifest validates and still keeps `releaseReady` false unless all required signed evidence is present.
 
+**Status**: completed for automated packaged runtime evidence. The archived macOS session `docs/release-evidence/packaged-runtime/2026-06-16T14-52-13-074Z-darwin-arm64/` proves launch, pet window, transparent background, visible sprite, speech bubble, action playback, built-in pack switching, and final state restore. Native picker checks still require a linked ready desktop picker smoke report before full runtime readiness can be claimed.
+
 ### Phase 43: Signed Release Evidence Closure
 
 **Goal**: decide whether v1.1 can make stronger release claims based on signed artifact evidence.

@@ -280,7 +280,7 @@ The project has strong documentation, but repeated historical summaries create d
 ## 7. Execution Sequence
 
 1. Preserve the completed plugin sandbox decision before adding new plugin capabilities.
-2. Fill real packaged runtime and native picker evidence for the current packaged app.
+2. Use the archived Phase 42 packaged runtime evidence as the automated runtime baseline, then fill native picker evidence for the current packaged app.
 3. Close macOS signed/notarized evidence and keep Windows claims gated by signed smoke evidence.
 4. Preserve the completed pet pack export, conflict policy, and provenance metadata while catalog work evolves.
 5. Expand TypeScript contracts on the boundaries touched by active product work.

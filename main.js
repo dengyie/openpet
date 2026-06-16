@@ -11,7 +11,7 @@ const { app, BrowserWindow } = require('electron')
 const path = require('path')
 const { IPC } = require('./src/shared/ipc-channels')
 const { clampToWorkArea, getMovementState } = require('./src/main/screen')
-const { applyWindowScale, createWindow, createSettingsWindow } = require('./src/main/window')
+const { applyWindowScale, createWindow, createSettingsWindow, loadPetWindow } = require('./src/main/window')
 const { createPetRendererSettings, normalizeLocalHttpConfig, registerIpcHandlers } = require('./src/main/ipc')
 const { configureUserDataPath } = require('./src/main/user-data-path')
 const { createEventBus } = require('./src/main/services/event-bus')
@@ -28,6 +28,7 @@ const { createLocalHttpService } = require('./src/main/services/local-http-servi
 const { createActionImportService } = require('./src/main/services/action-import-service')
 const { createAboutService } = require('./src/main/services/about-service')
 const { createCatalogService } = require('./src/main/services/catalog-service')
+const { maybeRunPackagedRuntimeSmoke } = require('./src/main/packaged-runtime-smoke-runner')
 const { createBasicBehaviorPlugin } = require('./src/main/plugins/official/basic-behavior')
 const packageJson = require('./package.json')
 
@@ -135,14 +136,16 @@ app.whenReady().then(() => {
     createSettingsWindow: () => createSettingsWindow(petWindow)
   })
 
-  petWindow = createWindow()
+  petWindow = createWindow({ load: false })
 
   // 页面加载完成后推送初始设置到渲染进程
   petWindow.webContents.on('did-finish-load', () => {
     const settings = petService.getSettings()
     applyWindowScale(petWindow, settings.scale)
     petWindow.webContents.send(IPC.SETTINGS_CHANGED, createPetRendererSettings(settings))
+    maybeRunPackagedRuntimeSmoke({ app, petWindow, petService, petPackService })
   })
+  loadPetWindow(petWindow)
 
   // macOS：Dock 图标点击时若窗口已关闭则重建
   app.on('activate', () => {

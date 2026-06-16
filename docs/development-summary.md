@@ -28,7 +28,7 @@ OpenPet is now a desktop pet platform with:
 - TypeScript migration scaffold with `tsconfig.json`, `npm run typecheck`, shared IPC contracts, and typed Control Center view defaults.
 - Productization TODO design that turns the latest whole-project review items into workstreams, acceptance gates, and execution order.
 - v1.1 TODO design that turns the Phase 37+ open work into phase-ready release evidence, plugin, pet pack, AI debugging, TypeScript, and documentation tracks.
-- Packaged runtime smoke evidence tooling for pet window, transparency, sprite visibility, built-in pet pack switching, and linked picker evidence.
+- Packaged runtime smoke evidence tooling and runner for pet window, transparency, sprite visibility, speech bubble, action playback, built-in pet pack switching, and linked picker evidence.
 - Release evidence archive manifest tooling that hashes and validates macOS signing evidence plus Windows smoke, desktop picker, and packaged runtime reports without claiming readiness for pending evidence.
 - Plugin secrets decision and scaffolding: plugin config remains public settings, secret-like fields are rejected, and `create-openpet-plugin` generates minimal/network/storage starter templates.
 - Plugin sandbox evaluation: current child-process + Node permission-model + VM runner remains the v1.1 recommendation, with documented limits and re-evaluation triggers.
@@ -38,7 +38,7 @@ OpenPet is now a desktop pet platform with:
 ## Validation Baseline
 
 ```bash
-npm test                     # 371/371 Node tests
+npm test                     # 382/382 Node tests
 npm run test:control-center  # 10/10 Playwright UI tests
 npm run typecheck            # TypeScript no-emit checks
 npm run check:syntax         # Node syntax + typecheck + Control Center build
@@ -47,9 +47,9 @@ npm run check:syntax         # Node syntax + typecheck + Control Center build
 ## What Still Needs Care
 
 - Windows is still not release-ready until real signed installer evidence and smoke reports are archived.
-- Packaged native picker, packaged runtime, and signed release archive evidence still need real archived runs.
+- Packaged native picker and signed release archive evidence still need real archived runs; automated macOS packaged runtime evidence is archived under `docs/release-evidence/packaged-runtime/2026-06-16T14-52-13-074Z-darwin-arm64/`.
 - The plugin ecosystem has submission tooling, examples, scaffolding, and a documented sandbox decision; wider community onboarding is still future work.
-- The next prioritized work is filling real packaged runtime/picker evidence, release evidence hardening, improving plugin author rehearsals, and continuing TypeScript contract migration.
+- The next prioritized work is filling native picker evidence, signed release evidence, plugin author rehearsals, and continuing TypeScript contract migration.
 
 ## Next Migration Steps
 

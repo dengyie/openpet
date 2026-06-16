@@ -18,7 +18,7 @@
     "Codex pet directory and zip import are supported",
     "Bundled pets include doro, duodong, and chispa",
     "TypeScript migration baseline covers shared IPC and Control Center view contracts",
-    "Packaged runtime smoke evidence tooling is available but real archived runtime evidence is still pending",
+    "Packaged runtime smoke runner has archived real macOS packaged runtime evidence for automated launch, transparency, sprite, speech bubble, action playback, and built-in pack switching checks; desktop picker reports now include invalid-package feedback evidence, and native picker evidence is still pending",
     "Release evidence archive manifest tooling is available but real signed release evidence is still pending",
     "Plugin config is public settings; secret-like plugin config fields are rejected",
     "Plugin scaffolding is available through npm run create-openpet-plugin",
@@ -29,7 +29,7 @@
     "The Phase 38+ execution design lives in docs/productization-v1.1-todo-design.md"
   ],
   "validation": {
-    "nodeTests": 371,
+    "nodeTests": 382,
     "uiTests": 10,
     "commands": [
       "npm test",

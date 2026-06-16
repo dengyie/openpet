@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "sessionId": "2026-06-16T14-52-13-074Z-darwin-arm64",
+  "generatedAt": "2026-06-16T14:52:15.961Z",
+  "appPath": "/Users/mango/project/codex/OpenPet/release/mac-arm64/OpenPet.app",
+  "state": {
+    "launch": {
+      "ok": true,
+      "pid": 52549
+    },
+    "window": {
+      "ok": true,
+      "visible": true,
+      "focused": true,
+      "bounds": {
+        "x": 1130,
+        "y": 539,
+        "width": 300,
+        "height": 300
+      },
+      "transparent": true,
+      "alwaysOnTop": true
+    },
+    "renderer": {
+      "ok": true,
+      "bodyBackground": "rgba(0, 0, 0, 0)",
+      "htmlBackground": "rgba(0, 0, 0, 0)",
+      "transparentBackground": true,
+      "sprite": {
+        "visible": true,
+        "width": 260,
+        "height": 173,
+        "backgroundImage": "url(\"file:///Users/mango/project/codex/OpenPet/release/mac-arm64/OpenPet.app/Contents/Resources/app.asar/cat_anime/sprites/eat_no_bg.png\")"
+      },
+      "bubble": {
+        "visible": true,
+        "text": "喂食"
+      },
+      "action": {
+        "current": "",
+        "firstPosition": "-780px",
+        "secondPosition": "-1560px",
+        "advanced": true,
+        "requested": "eat_no_bg"
+      }
+    },
+    "packs": [
+      {
+        "id": "legacy-cat",
+        "ok": true,
+        "actionCount": 2,
+        "defaultAction": "bai_no_bg",
+        "spriteVisible": true,
+        "spriteSize": {
+          "width": 110,
+          "height": 260
+        }
+      },
+      {
+        "id": "doro",
+        "ok": true,
+        "actionCount": 9,
+        "defaultAction": "idle",
+        "spriteVisible": true,
+        "spriteSize": {
+          "width": 192,
+          "height": 208
+        }
+      },
+      {
+        "id": "duodong",
+        "ok": true,
+        "actionCount": 9,
+        "defaultAction": "idle",
+        "spriteVisible": true,
+        "spriteSize": {
+          "width": 192,
+          "height": 208
+        }
+      },
+      {
+        "id": "chispa",
+        "ok": true,
+        "actionCount": 9,
+        "defaultAction": "idle",
+        "spriteVisible": true,
+        "spriteSize": {
+          "width": 192,
+          "height": 208
+        }
+      }
+    ],
+    "invalidPackage": {
+      "status": "blocked",
+      "notes": "Native picker invalid-package path requires a paired desktop picker smoke report."
+    },
+    "finalState": {
+      "ok": true,
+      "activePackId": "legacy-cat"
+    }
+  },
+  "screenshotPath": "/Users/mango/project/codex/OpenPet/docs/release-evidence/packaged-runtime/2026-06-16T14-52-13-074Z-darwin-arm64/screenshots/packaged-runtime.png"
+}

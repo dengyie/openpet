@@ -112,6 +112,20 @@ npm run validate-desktop-picker-smoke-report -- release/desktop-picker-smoke-rep
 
 The signed readiness command requires valid signing evidence. Do not use a generated pending picker report as proof of picker success.
 
+For packaged runtime validation, launch the packaged app through the smoke runner. Use `--allow-pending-picker` only when native picker evidence is intentionally linked later; that mode is archiveable but not full runtime readiness:
+
+```bash
+npm run run-packaged-runtime-smoke -- --app release/mac-arm64/OpenPet.app --output-dir docs/release-evidence/packaged-runtime --allow-pending-picker
+npm run validate-packaged-runtime-smoke-report -- docs/release-evidence/packaged-runtime/<session>/packaged-runtime-smoke-report.json --allow-pending
+```
+
+When a completed desktop picker report is available, link it and validate without `--allow-pending`:
+
+```bash
+npm run run-packaged-runtime-smoke -- --app release/mac-arm64/OpenPet.app --desktop-picker-report release/desktop-picker-smoke-report.json --output-dir docs/release-evidence/packaged-runtime
+npm run validate-packaged-runtime-smoke-report -- docs/release-evidence/packaged-runtime/<session>/packaged-runtime-smoke-report.json
+```
+
 ## 6. Windows Signing Inputs
 
 Official Windows releases use electron-builder's Authenticode signing path. Keep certificate material outside source control and provide it only through GitHub Actions secrets or a local release environment:

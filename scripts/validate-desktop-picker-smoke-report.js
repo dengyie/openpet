@@ -7,6 +7,7 @@ const REQUIRED_CHECKS = [
   { id: 'plugin-picker-cancel', label: 'Plugin package native picker cancel path is safe' },
   { id: 'plugin-picker-zip-review', label: 'Plugin package native picker reviews a real zip package' },
   { id: 'plugin-install-disabled', label: 'Plugin selected from the native picker installs disabled by default' },
+  { id: 'invalid-package-feedback', label: 'Invalid plugin or pet package shows a visible error from the packaged app' },
   { id: 'action-frame-picker-cancel', label: 'Action frame folder native picker cancel path is safe' },
   { id: 'pet-pack-picker-cancel', label: 'Pet pack folder native picker cancel path is safe' },
   { id: 'state-after-picker-smoke', label: 'Application state remains consistent after picker smoke checks' }

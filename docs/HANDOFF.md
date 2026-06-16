@@ -49,6 +49,7 @@ npm run check:syntax
 npm run create-openpet-plugin -- "My Plugin" --template minimal --output-dir scratch/plugins
 npm run create-packaged-runtime-smoke-report
 npm run create-packaged-runtime-smoke-runbook
+npm run run-packaged-runtime-smoke
 npm run validate-packaged-runtime-smoke-report
 npm run create-release-evidence-archive-manifest
 ```
@@ -64,7 +65,7 @@ npm run create-release-evidence-archive-manifest
 - `docs/productization-todo-design.md` for the prioritized TODO implementation design.
 - `docs/desktop-release-design.md` for desktop release evidence.
 - `docs/plugin-sandbox-evaluation.md` for current plugin runner guarantees, limits, and v1.1 recommendation.
-- `scripts/create-packaged-runtime-smoke-report.js` and `scripts/validate-packaged-runtime-smoke-report.js` for packaged app runtime evidence.
+- `scripts/run-packaged-runtime-smoke.js`, `scripts/create-packaged-runtime-smoke-report.js`, and `scripts/validate-packaged-runtime-smoke-report.js` for packaged app runtime evidence.
 - `scripts/create-release-evidence-archive-manifest.js` for release-level evidence archive validation.
 - `docs/plugin-submission-workflow-playbook.md` for plugin onboarding.
 - `scripts/create-openpet-plugin.js` for plugin starter templates.
@@ -73,4 +74,4 @@ npm run create-release-evidence-archive-manifest
 
 1. Use `docs/project-review-todo-design.md` as the current whole-project TODO design, `docs/productization-next-steps-design.md` as the near-term productization design, and `docs/productization-v1.1-todo-design.md` as the phase execution entry.
 2. Use Phase 41 AI behavior replay/decision viewer as the current diagnostics baseline.
-3. Fill real packaged runtime, picker, and signed archive evidence before claiming packaged runtime or release readiness.
+3. Use the archived Phase 42 packaged runtime evidence as the automated macOS runtime baseline; fill native picker and signed archive evidence before claiming full runtime or release readiness.

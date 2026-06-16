@@ -99,6 +99,7 @@ test('createDesktopPickerSmokeReport writes a pending macOS report that passes s
   assert.equal(report.artifact.signatureStatus, 'Valid')
   assert.equal(report.checks.length, REQUIRED_CHECKS.length)
   assert.equal(report.checks.every((check) => check.status === 'pending'), true)
+  assert.equal(report.checks.some((check) => check.id === 'invalid-package-feedback'), true)
 
   const validation = validateReport(report, { allowPending: true })
   assert.equal(validation.ok, true)

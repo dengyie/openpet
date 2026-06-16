@@ -1,8 +1,9 @@
 const fs = require('fs')
 const path = require('path')
-const { generateSpritesFromFrames, inspectFrameFolder } = require('./sprite-generator')
 
 const isSafeActionId = (actionId) => /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(actionId || '')
+
+const loadSpriteGenerator = () => require('./sprite-generator')
 
 const copyDirectory = (sourceDir, targetDir) => {
   fs.rmSync(targetDir, { recursive: true, force: true })
@@ -50,6 +51,7 @@ const createActionImportService = ({ framesRoot, spritesDir, configPath }) => {
     const validActionIds = []
     for (const actionId of getActionFolderIds()) {
       try {
+        const { inspectFrameFolder } = loadSpriteGenerator()
         const inspection = await inspectFrameFolder(path.join(framesRoot, actionId))
         if (inspection.valid) validActionIds.push(actionId)
       } catch (_) {}
@@ -59,6 +61,7 @@ const createActionImportService = ({ framesRoot, spritesDir, configPath }) => {
 
   const regenerate = async (overrides = {}) => {
     const currentConfig = readCurrentConfig()
+    const { generateSpritesFromFrames } = loadSpriteGenerator()
     return generateSpritesFromFrames({
       framesRoot,
       spritesDir,
@@ -80,6 +83,7 @@ const createActionImportService = ({ framesRoot, spritesDir, configPath }) => {
 
     const targetDir = path.join(framesRoot, actionId)
     copyDirectory(sourceDir, targetDir)
+    const { generateSpritesFromFrames } = loadSpriteGenerator()
     const config = await generateSpritesFromFrames({
       framesRoot,
       spritesDir,
@@ -94,6 +98,7 @@ const createActionImportService = ({ framesRoot, spritesDir, configPath }) => {
 
   const inspectActionFrames = async ({ sourceDir, actionId }) => {
     if (!isSafeActionId(actionId)) throw new Error('Invalid action id')
+    const { inspectFrameFolder } = loadSpriteGenerator()
     const inspection = await inspectFrameFolder(sourceDir)
     if (actionExists(actionId)) {
       inspection.errors = [...inspection.errors, `Action ID already exists: ${actionId}`]

@@ -1,0 +1,146 @@
+{
+  "platform": "darwin",
+  "arch": "arm64",
+  "generatedAt": "2026-06-16T14:52:13.073Z",
+  "source": "scripts/create-packaged-runtime-smoke-report.js",
+  "environment": {
+    "osRelease": "25.5.0",
+    "machine": "mangodeMacBook-Air.local",
+    "runner": "",
+    "evidence": ""
+  },
+  "artifact": {
+    "version": "1.0.1-rc.2",
+    "releaseDir": "/Users/mango/project/codex/OpenPet/release",
+    "appPath": "mac-arm64/OpenPet.app",
+    "installer": "OpenPet-1.0.1-rc.2-mac-arm64.dmg",
+    "zip": "OpenPet-1.0.1-rc.2-mac-arm64.zip",
+    "latestYml": "latest-mac.yml",
+    "files": [
+      {
+        "name": "mac-arm64/OpenPet.app",
+        "size": 96
+      },
+      {
+        "name": "OpenPet-1.0.1-rc.2-mac-arm64.dmg",
+        "size": 134799501
+      },
+      {
+        "name": "OpenPet-1.0.1-rc.2-mac-arm64.zip",
+        "size": 134273505
+      },
+      {
+        "name": "latest-mac.yml",
+        "size": 529
+      }
+    ],
+    "signed": false,
+    "signatureStatus": "Unknown",
+    "signatureEvidence": "/Users/mango/project/codex/OpenPet/release/mac-arm64/OpenPet.app: code has no resources but signature indicates they must be present"
+  },
+  "fixtures": {
+    "builtInPacks": {
+      "legacy-cat": "cat_anime/",
+      "doro": "assets/pet-packs/doro/",
+      "duodong": "assets/pet-packs/duodong/",
+      "chispa": "assets/pet-packs/chispa/"
+    },
+    "pluginPackage": "Use a valid .openpet-plugin.zip fixture.",
+    "petPackZip": "Use a valid .codex-pet.zip or .openpet-pet.zip fixture.",
+    "invalidPackage": "Use a deliberately invalid plugin or pet package fixture."
+  },
+  "linkedEvidence": {
+    "desktopPickerSmokeReport": "",
+    "desktopPickerSmokeRunbook": "",
+    "screenshots": [
+      "/Users/mango/project/codex/OpenPet/docs/release-evidence/packaged-runtime/2026-06-16T14-52-13-074Z-darwin-arm64/screenshots/packaged-runtime.png"
+    ],
+    "recordings": []
+  },
+  "checks": [
+    {
+      "id": "packaged-launch",
+      "status": "pass",
+      "evidence": "session 2026-06-16T14-52-13-074Z-darwin-arm64 for /Users/mango/project/codex/OpenPet/release/mac-arm64/OpenPet.app; launched with pid 52549",
+      "notes": "Packaged app launched under runtime smoke mode."
+    },
+    {
+      "id": "pet-window-created",
+      "status": "pass",
+      "evidence": "Pet BrowserWindow visible=true bounds={\"x\":1130,\"y\":539,\"width\":300,\"height\":300}",
+      "notes": "Main process observed the packaged pet window."
+    },
+    {
+      "id": "transparent-background",
+      "status": "pass",
+      "evidence": "Window configured transparent; renderer background body=rgba(0, 0, 0, 0), html=rgba(0, 0, 0, 0); screenshot=/Users/mango/project/codex/OpenPet/docs/release-evidence/packaged-runtime/2026-06-16T14-52-13-074Z-darwin-arm64/screenshots/packaged-runtime.png",
+      "notes": "Transparent window and renderer backgrounds were checked."
+    },
+    {
+      "id": "sprite-visible",
+      "status": "pass",
+      "evidence": "Sprite visible 260x173; background=url(\"file:///Users/mango/project/codex/OpenPet/release/mac-arm64/OpenPet.app/Contents/Resources/app.asar/cat_anime/sprites/eat_no_bg.png\"); screenshot=/Users/mango/project/codex/OpenPet/docs/release-evidence/packaged-runtime/2026-06-16T14-52-13-074Z-darwin-arm64/screenshots/packaged-runtime.png",
+      "notes": "Renderer reported a visible sprite with a non-empty background image."
+    },
+    {
+      "id": "speech-bubble-rendered",
+      "status": "pass",
+      "evidence": "Speech bubble visible with text=\"喂食\"; spriteVisible=true; screenshot=/Users/mango/project/codex/OpenPet/docs/release-evidence/packaged-runtime/2026-06-16T14-52-13-074Z-darwin-arm64/screenshots/packaged-runtime.png",
+      "notes": "Speech bubble was visible while the sprite remained visible."
+    },
+    {
+      "id": "default-action-playback",
+      "status": "pass",
+      "evidence": "Requested action=eat_no_bg; current=; frameAdvanced=true",
+      "notes": "Renderer frame position advanced during smoke run."
+    },
+    {
+      "id": "pack-switch-legacy-cat",
+      "status": "pass",
+      "evidence": "Pack legacy-cat activated with 2 actions; default=bai_no_bg; spriteVisible=true",
+      "notes": "Built-in pack legacy-cat rendered in the packaged app."
+    },
+    {
+      "id": "pack-switch-doro",
+      "status": "pass",
+      "evidence": "Pack doro activated with 9 actions; default=idle; spriteVisible=true",
+      "notes": "Built-in pack doro rendered in the packaged app."
+    },
+    {
+      "id": "pack-switch-duodong",
+      "status": "pass",
+      "evidence": "Pack duodong activated with 9 actions; default=idle; spriteVisible=true",
+      "notes": "Built-in pack duodong rendered in the packaged app."
+    },
+    {
+      "id": "pack-switch-chispa",
+      "status": "pass",
+      "evidence": "Pack chispa activated with 9 actions; default=idle; spriteVisible=true",
+      "notes": "Built-in pack chispa rendered in the packaged app."
+    },
+    {
+      "id": "plugin-picker-evidence-linked",
+      "status": "pending",
+      "evidence": "",
+      "notes": "Native plugin picker evidence must come from a paired desktop picker smoke report."
+    },
+    {
+      "id": "pet-picker-evidence-linked",
+      "status": "pending",
+      "evidence": "",
+      "notes": "Native pet pack picker evidence must come from a paired desktop picker smoke report."
+    },
+    {
+      "id": "invalid-package-feedback",
+      "status": "blocked",
+      "evidence": "",
+      "notes": "Native picker invalid-package path requires a paired desktop picker smoke report."
+    },
+    {
+      "id": "state-after-runtime-smoke",
+      "status": "pass",
+      "evidence": "Final state ok; activePackId=legacy-cat",
+      "notes": "Runtime smoke restored a stable active pet pack."
+    }
+  ]
+}
