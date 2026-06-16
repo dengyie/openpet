@@ -145,7 +145,12 @@ const createDemoPluginReview = (item: CatalogPluginEntry): PluginPackageReviewVi
     name: item.name,
     version: item.version,
     permissions: item.permissions || [],
-    commands: [{ id: 'demo', title: 'Demo command' }]
+    commands: [{ id: 'demo', title: 'Demo command' }],
+    entries: {
+      commands: [],
+      services: [],
+      dashboards: []
+    }
   },
   permissionDiff: {
     permissions: {
@@ -197,6 +202,11 @@ const demoManualPluginReview = {
     permissions: ['pet:say', 'storage'],
     network: { allowlist: [] },
     commands: [{ id: 'hello', title: 'Say hello' }],
+    entries: {
+      commands: [],
+      services: [],
+      dashboards: []
+    },
     main: 'index.js',
     configSchema: ''
   },
@@ -236,6 +246,7 @@ const createDemoManualPlugin = (): PluginViewState => ({
   runnable: true,
   permissions: demoManualPluginReview.plugin.permissions,
   commands: demoManualPluginReview.plugin.commands,
+  entries: demoManualPluginReview.plugin.entries,
   configSchema: { properties: [] },
   config: {},
   storage: { keyCount: 0, byteSize: 2, valid: true },

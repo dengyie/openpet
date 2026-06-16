@@ -368,6 +368,38 @@ export interface PluginCommandViewState {
   title: string
 }
 
+export interface PluginCommandEntryViewState extends PluginCommandViewState {
+  command: string
+  cwd: string
+}
+
+export interface PluginServiceEntryViewState {
+  id: string
+  title: string
+  command: string
+  cwd: string
+  platforms?: Record<string, {
+    command: string
+    cwd: string
+  }>
+  health?: {
+    type: string
+    url?: string
+  } | null
+}
+
+export interface PluginDashboardEntryViewState {
+  id: string
+  title: string
+  url: string
+}
+
+export interface PluginEntriesViewState {
+  commands: PluginCommandEntryViewState[]
+  services: PluginServiceEntryViewState[]
+  dashboards: PluginDashboardEntryViewState[]
+}
+
 export interface PluginManifestViewState {
   id: string
   name: string
@@ -378,8 +410,12 @@ export interface PluginManifestViewState {
     allowlist: string[]
   }
   commands: PluginCommandViewState[]
+  entries: PluginEntriesViewState
   main?: string
+  config?: string
   configSchema?: string
+  manifest?: JsonObject
+  assets?: string[]
 }
 
 export interface PluginSignatureViewState {
@@ -425,6 +461,7 @@ export interface PluginViewState {
   runnable: boolean
   permissions: string[]
   commands: PluginCommandViewState[]
+  entries: PluginEntriesViewState
   configSchema: {
     title?: string
     description?: string

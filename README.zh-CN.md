@@ -4,7 +4,7 @@
 
 一个带 Control Center、AI 聊天、插件、宠物包和本地 Agent API 的 Electron 桌面宠物平台。
 
-[![Tests](https://img.shields.io/badge/tests-409%20node%20%2B%2010%20ui-success)](./tests)
+[![Tests](https://img.shields.io/badge/tests-417%20node%20%2B%2010%20ui-success)](./tests)
 [![Build](https://img.shields.io/badge/build-passing-success)](./package.json)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Version](https://img.shields.io/badge/version-1.0.1--rc.2-blue.svg)](./package.json)
@@ -106,7 +106,7 @@ npm run generate-sprites
 
 ## 扩展开发
 
-OpenPet 使用统一的第三方包模型：扩展。出于兼容性，包清单文件仍叫 `plugin.json`。目标生态围绕 command、长期 service、dashboard、setup 步骤、宠物行为、生成资产和扩展自管理数据设计；当前宿主运行时仍保留 legacy SDK 路径，用于已测试示例和校验工具。
+OpenPet 使用统一的第三方包模型：扩展。出于兼容性，包清单文件仍叫 `plugin.json`。宿主现在可以规范化并审查 `entries.commands`、`entries.services`、`entries.dashboards`、`manifest`、`config` 和 `assets` 声明；JavaScript 兼容包可以通过现有 runner 暴露 `entries.commands`，长期 service 管理和 dashboard 打开仍属于后续 runtime 工作。
 
 当前 legacy SDK 示例在宿主运行时追上新模型前仍然有参考价值：
 
@@ -152,7 +152,7 @@ npm run validate-plugin-submission-bundle -- plugin-submission-bundle --require-
 当前本地基线：
 
 ```bash
-npm test                     # 409/409 Node tests
+npm test                     # 417/417 Node tests
 npm run test:control-center  # 10/10 Playwright tests
 npm run typecheck            # TypeScript no-emit checks
 npm run check:syntax         # syntax + typecheck + Control Center build

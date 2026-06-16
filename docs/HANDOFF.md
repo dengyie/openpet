@@ -12,9 +12,9 @@ OpenPet is a desktop pet platform with:
 - bundled built-in packs `doro`, `duodong`, and `chispa`,
 - AI chat with secret storage in the main process,
 - AI behavior decisions with Control Center replay and redacted diagnostics,
-- developer-first local extension docs with legacy SDK runtime compatibility,
+- developer-first local extension docs with `entries.commands` compatibility runtime support,
 - loopback-only local HTTP / MCP,
-- and a TypeScript migration baseline covering shared IPC, Control Center view contracts, the Control Center API facade, Control Center hook state boundaries, Control Center pane prop surfaces, main-process Control Center adapters for service/catalog/plugin/pet pack/About/update/actions payloads, full release evidence archive / signed closure report contracts, and representative payload fixtures.
+- and a TypeScript migration baseline covering shared IPC, Control Center view contracts, the Control Center API facade, Control Center hook state boundaries, Control Center pane prop surfaces, main-process Control Center adapters for service/catalog/plugin/pet pack/About/update/actions payloads, plugin extension entry contracts, full release evidence archive / signed closure report contracts, and representative payload fixtures.
 
 ## Read First
 
@@ -29,7 +29,7 @@ OpenPet is a desktop pet platform with:
 - `PetService` remains the single source of truth for pet state.
 - New user-facing configuration belongs in Control Center.
 - API keys must stay out of the renderer.
-- Extension docs must be honest: OpenPet manages lifecycle, declarations, logs, health, and uninstall flow, but does not claim complete sandboxing for arbitrary local processes.
+- Extension docs must be honest: OpenPet now parses declarations and can run `entries.commands` through the JavaScript compatibility runner when `main` exists, but service/dashboard/setup/health lifecycle support is not implemented yet and OpenPet does not claim complete sandboxing for arbitrary local processes.
 - `cat_anime/` structure is unchanged.
 - Windows is not release-ready yet.
 
@@ -38,7 +38,7 @@ OpenPet is a desktop pet platform with:
 ```bash
 npm start
 npm run dev:control-center
-npm test                     # 409/409 Node tests
+npm test                     # 417/417 Node tests
 npm run test:control-center
 npm run typecheck
 npm run check:syntax
@@ -70,6 +70,6 @@ npm run create-signed-release-closure-report
 ## Next Steps
 
 1. Use the archived Phase 43 signed release closure report as the current release-claim gate: official desktop, macOS, and Windows release readiness remain `not-ready` until signed evidence and platform smoke reports are complete.
-2. Use Phase 55 extension ecosystem docs as the current third-party ecosystem language baseline; legacy SDK examples remain compatibility evidence, not the future ceiling.
-3. Use Phase 54 Release Evidence Contracts work as the current TypeScript migration baseline.
-4. After Phase 55, start the next concrete phase from real evidence work, extension runtime implementation, community extension rehearsal, or another high-drift service/report boundary.
+2. Use Phase 56 extension command entries as the current runtime boundary: `entries.commands` can run only through the existing JavaScript compatibility path; service and dashboard entries are visible declarations only.
+3. Use Phase 54 Release Evidence Contracts plus Phase 56 plugin entry contracts as the current TypeScript migration baseline.
+4. After Phase 56, start the next concrete phase from service/dashboard lifecycle implementation, real evidence work, community extension rehearsal, or another high-drift service/report boundary.

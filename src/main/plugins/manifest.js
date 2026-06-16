@@ -92,11 +92,118 @@ const normalizeRelativeFilePath = (value = '', fieldName, extension) => {
   return normalized
 }
 
+const normalizeShellCommand = (value, fieldName) => {
+  if (typeof value !== 'string' || !value.trim()) throw new Error(`Plugin ${fieldName} command is required`)
+  return value.trim()
+}
+
+const normalizeCwd = (value = '', fieldName) => normalizeRelativeFilePath(value || '.', fieldName)
+
+const normalizePlatformOverrides = (platforms = {}) => {
+  if (!platforms || typeof platforms !== 'object' || Array.isArray(platforms)) return {}
+  return Object.fromEntries(Object.entries(platforms).map(([platform, override]) => {
+    if (!override || typeof override !== 'object' || Array.isArray(override)) {
+      throw new Error(`Plugin platform override must be an object: ${platform}`)
+    }
+    return [platform, {
+      command: normalizeShellCommand(override.command, `${platform} platform`),
+      cwd: override.cwd ? normalizeCwd(override.cwd, `${platform} platform cwd`) : ''
+    }]
+  }))
+}
+
+const normalizeHealth = (health) => {
+  if (!health) return null
+  if (typeof health !== 'object' || Array.isArray(health)) throw new Error('Plugin service health must be an object')
+  return {
+    type: String(health.type || '').trim() || 'none',
+    url: health.url ? String(health.url).trim() : ''
+  }
+}
+
+const normalizeEntryCommands = (commands = []) => {
+  if (!Array.isArray(commands)) throw new Error('Plugin entries.commands must be an array')
+  return commands.map((command) => {
+    if (!command?.id) throw new Error('Plugin command entry id is required')
+    assertSafeId(command.id, 'command entry id')
+    return {
+      id: command.id,
+      title: command.title || command.id,
+      command: normalizeShellCommand(command.command, 'command'),
+      cwd: normalizeCwd(command.cwd, 'command entry cwd')
+    }
+  })
+}
+
+const normalizeServiceEntries = (services = []) => {
+  if (!Array.isArray(services)) throw new Error('Plugin entries.services must be an array')
+  return services.map((service) => {
+    if (!service?.id) throw new Error('Plugin service id is required')
+    assertSafeId(service.id, 'service id')
+    return {
+      id: service.id,
+      title: service.title || service.name || service.id,
+      command: normalizeShellCommand(service.command, 'service'),
+      cwd: normalizeCwd(service.cwd, 'service entry cwd'),
+      platforms: normalizePlatformOverrides(service.platforms),
+      health: normalizeHealth(service.health)
+    }
+  })
+}
+
+const normalizeDashboardEntries = (dashboards = []) => {
+  if (!Array.isArray(dashboards)) throw new Error('Plugin entries.dashboards must be an array')
+  return dashboards.map((dashboard) => {
+    if (!dashboard?.id) throw new Error('Plugin dashboard id is required')
+    assertSafeId(dashboard.id, 'dashboard id')
+    if (typeof dashboard.url !== 'string' || !dashboard.url.trim()) throw new Error('Plugin dashboard url is required')
+    return {
+      id: dashboard.id,
+      title: dashboard.title || dashboard.id,
+      url: dashboard.url.trim()
+    }
+  })
+}
+
+const normalizeExtensionEntries = (entries) => {
+  if (!entries) {
+    return {
+      commands: [],
+      services: [],
+      dashboards: []
+    }
+  }
+  if (typeof entries !== 'object' || Array.isArray(entries)) throw new Error('Plugin entries must be an object')
+  return {
+    commands: normalizeEntryCommands(entries.commands || []),
+    services: normalizeServiceEntries(entries.services || []),
+    dashboards: normalizeDashboardEntries(entries.dashboards || [])
+  }
+}
+
+const normalizeManifestDeclaration = (declaration) => {
+  if (!declaration) return null
+  if (typeof declaration !== 'object' || Array.isArray(declaration)) throw new Error('Plugin manifest declaration must be an object')
+  return JSON.parse(JSON.stringify(declaration))
+}
+
+const normalizeAssets = (assets) => {
+  if (!assets) return null
+  if (!Array.isArray(assets)) throw new Error('Plugin assets must be an array')
+  return assets.map((asset) => normalizeRelativeFilePath(asset, 'asset path'))
+}
+
 const normalizePluginManifest = (manifest, { source = 'local', basePath = '' } = {}) => {
   if (!manifest?.id) throw new Error('Plugin id is required')
   assertSafeId(manifest.id, 'id')
   if (!manifest.name) throw new Error('Plugin name is required')
   if (!manifest.version) throw new Error('Plugin version is required')
+  if (manifest.config && manifest.configSchema && manifest.config !== manifest.configSchema) {
+    throw new Error('Plugin config and configSchema must point to the same file')
+  }
+
+  const configPath = manifest.config || manifest.configSchema || ''
+  const normalizedConfigPath = normalizeRelativeFilePath(configPath, manifest.config ? 'config' : 'configSchema', '.json')
 
   const permissions = manifest.permissions || []
   for (const permission of permissions) {
@@ -105,7 +212,13 @@ const normalizePluginManifest = (manifest, { source = 'local', basePath = '' } =
     }
   }
 
-  return {
+  const entries = normalizeExtensionEntries(manifest.entries)
+  const legacyCommands = normalizeCommands(manifest.commands)
+  const commands = legacyCommands.length
+    ? legacyCommands
+    : entries.commands.map(({ id, title }) => ({ id, title }))
+
+  const normalized = {
     id: manifest.id,
     name: manifest.name,
     version: manifest.version,
@@ -113,12 +226,19 @@ const normalizePluginManifest = (manifest, { source = 'local', basePath = '' } =
     source,
     basePath,
     main: normalizeRelativeFilePath(manifest.main, 'main', '.js'),
-    configSchema: normalizeRelativeFilePath(manifest.configSchema, 'configSchema', '.json'),
+    configSchema: normalizedConfigPath,
     permissions: [...permissions],
     network: normalizeNetwork(manifest.network),
     signature: normalizeSignature(manifest.signature),
-    commands: normalizeCommands(manifest.commands)
+    commands,
+    entries
   }
+  if (manifest.config) normalized.config = normalizedConfigPath
+  const declaration = normalizeManifestDeclaration(manifest.manifest)
+  if (declaration) normalized.manifest = declaration
+  const assets = normalizeAssets(manifest.assets)
+  if (assets) normalized.assets = assets
+  return normalized
 }
 
 module.exports = { KNOWN_PLUGIN_PERMISSIONS, normalizePluginManifest, normalizeSignature }

@@ -29,8 +29,176 @@ test('normalizes a plugin manifest with permissions and commands', () => {
     permissions: ['pet:say'],
     network: { allowlist: ['api.example.com', 'cdn.example.com:8443'] },
     signature: null,
-    commands: [{ id: 'start', title: 'Start focus' }]
+    commands: [{ id: 'start', title: 'Start focus' }],
+    entries: {
+      commands: [],
+      services: [],
+      dashboards: []
+    }
   })
+})
+
+test('normalizes extension entries and derives commands when legacy commands are absent', () => {
+  const manifest = normalizePluginManifest({
+    id: 'weather-morning',
+    name: 'Weather Morning',
+    version: '1.0.0',
+    main: 'index.js',
+    entries: {
+      commands: [
+        { id: 'announce', title: 'Announce Weather', command: 'node ./commands/announce.js', cwd: '.' }
+      ],
+      services: [
+        {
+          id: 'companion',
+          title: 'Companion Service',
+          command: 'npm run service:start',
+          cwd: '.',
+          health: { type: 'http', url: 'http://127.0.0.1:8787/health' }
+        }
+      ],
+      dashboards: [
+        { id: 'main', title: 'Dashboard', url: 'http://127.0.0.1:8787' }
+      ]
+    }
+  })
+
+  assert.deepEqual(manifest.commands, [{ id: 'announce', title: 'Announce Weather' }])
+  assert.deepEqual(manifest.entries.commands, [
+    { id: 'announce', title: 'Announce Weather', command: 'node ./commands/announce.js', cwd: '.' }
+  ])
+  assert.deepEqual(manifest.entries.services, [
+    {
+      id: 'companion',
+      title: 'Companion Service',
+      command: 'npm run service:start',
+      cwd: '.',
+      platforms: {},
+      health: { type: 'http', url: 'http://127.0.0.1:8787/health' }
+    }
+  ])
+  assert.deepEqual(manifest.entries.dashboards, [
+    { id: 'main', title: 'Dashboard', url: 'http://127.0.0.1:8787' }
+  ])
+})
+
+test('rejects unsafe extension entry declarations', () => {
+  assert.throws(() => normalizePluginManifest({
+    id: 'bad-entry',
+    name: 'Bad Entry',
+    version: '1.0.0',
+    entries: { commands: [{ id: '../run' }] }
+  }), /Plugin command entry id must be a safe id/)
+
+  assert.throws(() => normalizePluginManifest({
+    id: 'bad-entry',
+    name: 'Bad Entry',
+    version: '1.0.0',
+    entries: { services: [{ id: 'svc', command: 'npm run service:start', cwd: '../escape' }] }
+  }), /Plugin service entry cwd must be a safe relative path/)
+})
+
+test('keeps legacy commands as the executable command list when both command shapes exist', () => {
+  const manifest = normalizePluginManifest({
+    id: 'mixed-commands',
+    name: 'Mixed Commands',
+    version: '1.0.0',
+    commands: [{ id: 'legacy', title: 'Legacy Command' }],
+    entries: {
+      commands: [{ id: 'extension', title: 'Extension Command', command: 'node ./command.js' }]
+    }
+  })
+
+  assert.deepEqual(manifest.commands, [{ id: 'legacy', title: 'Legacy Command' }])
+  assert.deepEqual(manifest.entries.commands.map((command) => command.id), ['extension'])
+})
+
+test('normalizes extension manifest entries and declaration fields', () => {
+  const manifest = normalizePluginManifest({
+    id: 'weather-morning-report',
+    name: 'Weather Morning Report',
+    version: '1.0.0',
+    description: 'Weather reports, dashboard, and pet announcements.',
+    config: 'config.schema.json',
+    entries: {
+      commands: [
+        {
+          id: 'announce',
+          title: 'Announce Weather',
+          command: 'node ./commands/announce.js',
+          cwd: 'commands'
+        }
+      ],
+      services: [
+        {
+          id: 'companion',
+          name: 'Weather Companion',
+          command: 'npm run service:start',
+          cwd: '.',
+          platforms: {
+            darwin: { command: 'npm run service:start' }
+          },
+          health: {
+            type: 'http',
+            url: 'http://127.0.0.1:8787/health'
+          }
+        }
+      ],
+      dashboards: [
+        {
+          id: 'main',
+          title: 'Weather Dashboard',
+          url: 'http://127.0.0.1:8787'
+        }
+      ]
+    },
+    manifest: {
+      dataLocations: [
+        { path: 'OPENPET_DATA_DIR', description: 'Report history.' }
+      ]
+    },
+    assets: ['assets/email-template.html']
+  }, { source: 'local', basePath: '/plugins/weather-morning-report' })
+
+  assert.equal(manifest.main, '')
+  assert.equal(manifest.config, 'config.schema.json')
+  assert.equal(manifest.configSchema, 'config.schema.json')
+  assert.deepEqual(manifest.entries.commands, [
+    {
+      id: 'announce',
+      title: 'Announce Weather',
+      command: 'node ./commands/announce.js',
+      cwd: 'commands'
+    }
+  ])
+  assert.deepEqual(manifest.entries.services, [
+    {
+      id: 'companion',
+      title: 'Weather Companion',
+      command: 'npm run service:start',
+      cwd: '.',
+      platforms: {
+        darwin: { command: 'npm run service:start', cwd: '' }
+      },
+      health: {
+        type: 'http',
+        url: 'http://127.0.0.1:8787/health'
+      }
+    }
+  ])
+  assert.deepEqual(manifest.entries.dashboards, [
+    {
+      id: 'main',
+      title: 'Weather Dashboard',
+      url: 'http://127.0.0.1:8787'
+    }
+  ])
+  assert.deepEqual(manifest.manifest, {
+    dataLocations: [
+      { path: 'OPENPET_DATA_DIR', description: 'Report history.' }
+    ]
+  })
+  assert.deepEqual(manifest.assets, ['assets/email-template.html'])
 })
 
 test('normalizes optional plugin signature metadata', () => {
@@ -59,6 +227,38 @@ test('normalizes optional plugin signature metadata', () => {
     signer: '',
     value: 'sig-example'
   })
+})
+
+test('rejects unsafe extension declaration paths', () => {
+  assert.throws(() => normalizePluginManifest({
+    id: 'bad-extension',
+    name: 'Bad Extension',
+    version: '1.0.0',
+    config: '../config.schema.json'
+  }), /Plugin config must be a safe relative path/)
+
+  assert.throws(() => normalizePluginManifest({
+    id: 'bad-extension',
+    name: 'Bad Extension',
+    version: '1.0.0',
+    assets: ['../secrets.env']
+  }), /Plugin asset path must be a safe relative path/)
+
+  assert.throws(() => normalizePluginManifest({
+    id: 'bad-extension',
+    name: 'Bad Extension',
+    version: '1.0.0',
+    entries: {
+      commands: [
+        {
+          id: 'announce',
+          title: 'Announce',
+          command: 'node announce.js',
+          cwd: '../outside'
+        }
+      ]
+    }
+  }), /Plugin command entry cwd must be a safe relative path/)
 })
 
 test('rejects unsafe plugin network allowlist entries', () => {

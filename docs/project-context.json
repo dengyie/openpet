@@ -13,16 +13,16 @@
     "PetService is the single source of truth for pet state",
     "Control Center owns user-facing configuration",
     "API keys stay in the main-process secret store",
-    "Third-party ecosystem docs frame packages as local extensions with legacy SDK compatibility, lifecycle/log/health/uninstall management, and honest non-sandbox language",
+    "Third-party ecosystem docs frame packages as local extensions with legacy SDK compatibility, normalized entries declarations, entries.commands support through the existing JavaScript compatibility runner, and honest non-sandbox language",
     "Local HTTP and MCP are loopback-only and disabled by default",
     "Codex pet directory and zip import are supported",
     "Bundled pets include doro, duodong, and chispa",
-    "TypeScript migration baseline covers shared IPC, Control Center view contracts, the Control Center API facade, Control Center hook state boundaries, Control Center pane prop surfaces, main-process Control Center adapters for service/catalog/plugin/pet pack/About/update/actions payloads, full release evidence archive / signed closure report contracts, and representative product payload fixtures",
+    "TypeScript migration baseline covers shared IPC, Control Center view contracts, the Control Center API facade, Control Center hook state boundaries, Control Center pane prop surfaces, main-process Control Center adapters for service/catalog/plugin/pet pack/About/update/actions payloads, plugin extension entry contracts, full release evidence archive / signed closure report contracts, and representative product payload fixtures",
     "Packaged runtime smoke runner has archived real macOS packaged runtime evidence for automated launch, transparency, sprite, speech bubble, action playback, and built-in pack switching checks; desktop picker reports now include invalid-package feedback evidence, and native picker evidence is still pending",
     "Release evidence archive manifest tooling and signed release closure reporting are available; the current archived closure report records official desktop, macOS, and Windows claims as not-ready until real signed evidence is complete",
     "Current legacy plugin config is public settings; secret-like plugin config fields are rejected by the compatibility validator",
     "Legacy SDK scaffolding is available through npm run create-openpet-plugin, including minimal, network, storage, and AI-assisted templates",
-    "Extension author docs are centered on plugin.json entries for commands, services, dashboards, manifest declarations, optional config, and assets; current author rehearsal remains legacy-SDK compatibility evidence",
+    "Extension author docs are centered on plugin.json entries for commands, services, dashboards, manifest declarations, optional config, and assets; current runtime supports entries.commands only through JavaScript compatibility packages with main, while services and dashboards are visible declarations only",
     "Plugin sandbox evaluation recommends keeping the current child-process Node permission-model VM runner for v1.1 while documenting that it is not an absolute sandbox",
     "Installed user pet packs can be exported as .openpet-pet.zip and re-imported with provenance metadata",
     "AI behavior decisions are visible in Control Center with replay, redacted diagnostics export, and clear-history controls",
@@ -31,7 +31,7 @@
     "The Phase 38+ execution design lives in docs/productization-v1.1-todo-design.md"
   ],
   "validation": {
-    "nodeTests": 409,
+    "nodeTests": 417,
     "uiTests": 10,
     "commands": [
       "npm test",

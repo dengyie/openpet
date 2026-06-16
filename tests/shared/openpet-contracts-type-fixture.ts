@@ -16,7 +16,12 @@ const pluginReviewFixture = {
     name: 'Fixture Plugin',
     version: '1.0.0',
     permissions: ['pet:say'],
-    commands: [{ id: 'run', title: 'Run' }]
+    commands: [{ id: 'run', title: 'Run' }],
+    entries: {
+      commands: [{ id: 'run', title: 'Run', command: 'node ./index.js', cwd: '.' }],
+      services: [{ id: 'svc', title: 'Service', command: 'npm run service:start', cwd: '.' }],
+      dashboards: [{ id: 'main', title: 'Dashboard', url: 'http://127.0.0.1:8787' }]
+    }
   },
   permissionDiff: {
     permissions: {

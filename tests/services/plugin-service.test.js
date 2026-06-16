@@ -224,6 +224,51 @@ test('plugin service blocks enabled plugins from running when ecosystem policy d
   )
 })
 
+test('plugin service runs extension command entries through the compatibility runner', async () => {
+  const petEvents = []
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'extension-runner': true } }
+    }),
+    petService: {
+      say: async (payload) => petEvents.push(payload)
+    },
+    officialPlugins: [],
+    pluginDirs: [createRunnablePluginDir({
+      manifest: {
+        id: 'extension-runner',
+        permissions: ['pet:say'],
+        commands: undefined,
+        entries: {
+          commands: [{ id: 'announce', title: 'Announce', command: 'node ./commands/announce.js' }],
+          services: [{ id: 'svc', title: 'Service', command: 'npm run service:start' }],
+          dashboards: [{ id: 'main', title: 'Dashboard', url: 'http://127.0.0.1:8787' }]
+        }
+      },
+      source: `
+        module.exports = function activate(ctx) {
+          return {
+            announce: async () => {
+              await ctx.pet.say('Extension command ran')
+              return { ok: true }
+            }
+          }
+        }
+      `
+    })]
+  })
+
+  const [plugin] = service.listPlugins()
+  assert.equal(plugin.runnable, true)
+  assert.deepEqual(plugin.commands, [{ id: 'announce', title: 'Announce' }])
+  assert.equal(plugin.entries.commands[0].id, 'announce')
+  assert.equal(plugin.entries.services[0].id, 'svc')
+  assert.equal(plugin.entries.dashboards[0].id, 'main')
+
+  assert.deepEqual(await service.runCommand('extension-runner', 'announce'), { ok: true })
+  assert.deepEqual(petEvents, [{ text: 'Extension command ran', source: 'plugin:extension-runner' }])
+})
+
 test('plugin service runs local plugin commands inside the restricted sdk', async () => {
   const petEvents = []
   const service = createPluginService({
