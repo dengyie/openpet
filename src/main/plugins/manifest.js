@@ -135,6 +135,20 @@ const normalizeEntryCommands = (commands = []) => {
   })
 }
 
+const normalizeSetupEntries = (setupEntries = []) => {
+  if (!Array.isArray(setupEntries)) throw new Error('Plugin entries.setup must be an array')
+  return setupEntries.map((setup) => {
+    if (!setup?.id) throw new Error('Plugin setup entry id is required')
+    assertSafeId(setup.id, 'setup entry id')
+    return {
+      id: setup.id,
+      title: setup.title || setup.name || setup.id,
+      command: normalizeShellCommand(setup.command, 'setup'),
+      cwd: normalizeCwd(setup.cwd, 'setup entry cwd')
+    }
+  })
+}
+
 const normalizeServiceEntries = (services = []) => {
   if (!Array.isArray(services)) throw new Error('Plugin entries.services must be an array')
   return services.map((service) => {
@@ -168,6 +182,7 @@ const normalizeDashboardEntries = (dashboards = []) => {
 const normalizeExtensionEntries = (entries) => {
   if (!entries) {
     return {
+      setup: [],
       commands: [],
       services: [],
       dashboards: []
@@ -175,6 +190,7 @@ const normalizeExtensionEntries = (entries) => {
   }
   if (typeof entries !== 'object' || Array.isArray(entries)) throw new Error('Plugin entries must be an object')
   return {
+    setup: normalizeSetupEntries(entries.setup || []),
     commands: normalizeEntryCommands(entries.commands || []),
     services: normalizeServiceEntries(entries.services || []),
     dashboards: normalizeDashboardEntries(entries.dashboards || [])

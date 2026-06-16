@@ -31,6 +31,7 @@ test('normalizes a plugin manifest with permissions and commands', () => {
     signature: null,
     commands: [{ id: 'start', title: 'Start focus' }],
     entries: {
+      setup: [],
       commands: [],
       services: [],
       dashboards: []
@@ -129,6 +130,14 @@ test('normalizes extension manifest entries and declaration fields', () => {
           cwd: 'commands'
         }
       ],
+      setup: [
+        {
+          id: 'install-deps',
+          title: 'Install Dependencies',
+          command: 'npm install',
+          cwd: '.'
+        }
+      ],
       services: [
         {
           id: 'companion',
@@ -169,6 +178,14 @@ test('normalizes extension manifest entries and declaration fields', () => {
       title: 'Announce Weather',
       command: 'node ./commands/announce.js',
       cwd: 'commands'
+    }
+  ])
+  assert.deepEqual(manifest.entries.setup, [
+    {
+      id: 'install-deps',
+      title: 'Install Dependencies',
+      command: 'npm install',
+      cwd: '.'
     }
   ])
   assert.deepEqual(manifest.entries.services, [
@@ -259,6 +276,20 @@ test('rejects unsafe extension declaration paths', () => {
       ]
     }
   }), /Plugin command entry cwd must be a safe relative path/)
+
+  assert.throws(() => normalizePluginManifest({
+    id: 'bad-entry',
+    name: 'Bad Entry',
+    version: '1.0.0',
+    entries: { setup: [{ id: '../setup', command: 'npm install' }] }
+  }), /Plugin setup entry id must be a safe id/)
+
+  assert.throws(() => normalizePluginManifest({
+    id: 'bad-entry',
+    name: 'Bad Entry',
+    version: '1.0.0',
+    entries: { setup: [{ id: 'setup', command: 'npm install', cwd: '../escape' }] }
+  }), /Plugin setup entry cwd must be a safe relative path/)
 })
 
 test('rejects unsafe plugin network allowlist entries', () => {

@@ -1,7 +1,7 @@
 # OpenPet v1.1 TODO Design
 
 > Date: 2026-06-16
-> Baseline: Phase 59 completed locally
+> Baseline: Phase 60 completed locally
 > Scope: Convert the remaining productization TODO into a phase-ready design for v1.1 work. This document does not upgrade platform support claims. Windows remains not release-ready until signed runtime smoke evidence passes.
 
 ## 1. Goal
@@ -36,7 +36,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 - macOS signed/notarized release evidence still needs real artifact capture and archive.
 - Windows signed installer/zip smoke evidence still needs real Windows execution.
 - Packaged runtime smoke reports still need real app evidence for pet window visibility, transparent rendering, bundled pack switching, and native picker flows.
-- Extension runtime support for explicit service start/stop and manual loopback service health checks now exists. Generic shell command execution, setup status, optional bridge flows, background health polling, and stronger process-tree cleanup are still future work. Dashboard entries can now be opened explicitly as external HTTP/HTTPS URLs from Control Center.
+- Extension runtime support for visible setup status, explicit service start/stop, manual loopback service health checks, and best-effort process-group cleanup now exists. Generic shell command execution, setup execution, optional bridge flows, background health polling, and hard process-tree cleanup guarantees are still future work. Dashboard entries can now be opened explicitly as external HTTP/HTTPS URLs from Control Center.
 - Legacy SDK plugin secrets policy remains conservative; target extension docs require honest disclosure for extension-managed secrets and data.
 - Plugin sandbox strategy has been evaluated against SES and Electron `utilityProcess`; current recommendation is to keep the existing runner for v1.1 while documenting limits.
 - AI behavior orchestration has a Control Center decision viewer, replay, redacted diagnostics export, and clear-history controls.
@@ -717,6 +717,29 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 
 **Status**: completed in Phase 59. Enabled local plugins can manually check declared loopback service health endpoints from Control Center, with runtime health state and logs. Health checks are explicit user actions only and do not background poll.
 
+### Phase 60: Plugin setup status and service cleanup
+
+**Goal**: make setup declarations visible and service stop cleanup stronger without expanding the plugin execution surface.
+
+**Scope**:
+
+- Normalize `entries.setup` declarations and carry them through shared contracts, demo/review payloads, and Control Center entry details.
+- Show setup entries with read-only `not-run` status; do not execute setup commands or mix them into runnable plugin commands.
+- Start declared service entries as detached process-group roots where Node and the host OS support it.
+- On explicit Stop, plugin disable, and app quit, attempt process-group `SIGTERM` before falling back to direct child-process kill.
+- Preserve existing service runtime state, logs, health state, and Control Center behavior.
+- Keep cleanup wording honest: this is best-effort process-group cleanup, not a complete process-tree sandbox or hard descendant termination guarantee.
+- Do not auto-start services, poll health in the background, run setup, inject bridge tokens, or execute generic shell commands.
+
+**Acceptance**:
+
+- Manifest, contract, service, and UI smoke tests cover setup declarations and visible `not-run` status.
+- Plugin service tests cover detached spawn options, process-group stop, and child-kill fallback.
+- Existing lifecycle tests still prove disable/app-quit cleanup paths.
+- Docs move setup status and process-tree cleanup out of the totally-missing bucket while keeping setup execution and hard cleanup guarantees out of public claims.
+
+**Status**: completed in Phase 60. Setup entries are visible with read-only `not-run` status, and service stop now attempts best-effort process-group cleanup before falling back to the previous child kill path when group signalling is unsupported or fails.
+
 ## 6. Priority Order
 
 | Priority | Work | Reason |
@@ -739,6 +762,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 | P1 | Phase 57 Plugin dashboard opening | Completed; dashboard entries can be opened explicitly as external HTTP/HTTPS URLs. |
 | P1 | Phase 58 Plugin service lifecycle | Completed; service entries can be explicitly started/stopped with runtime state and logs while auto-start, shell expansion, setup, health, and bridge remain out of scope. |
 | P1 | Phase 59 Plugin service health checks | Completed; service entries can be manually health-checked against declared loopback endpoints while background polling, setup, bridge, and process-tree cleanup remain out of scope. |
+| P1 | Phase 60 Plugin setup status and service cleanup | Completed; setup entries are visible but not executed, and service stops attempt best-effort process-group cleanup while setup execution, bridge, generic shell execution, background health polling, and hard cleanup guarantees remain out of scope. |
 | P2 | Phase 41 AI behavior replay | Completed; preserve redacted diagnostics and replay semantics while future AI tooling evolves. |
 | P2 | Phase 39 plugin sandbox evaluation | Completed; keep current runner for v1.1 and revisit on high-risk plugin capability changes. |
 | P2 | Phase 46 documentation consolidation | Completed; keep future live-doc updates fact-only and link-oriented. |
@@ -765,7 +789,8 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 18. Phase 56 is complete; `entries.commands` now feeds the JavaScript compatibility runner.
 19. Phase 57 is complete; dashboard entries can be opened explicitly as external HTTP/HTTPS URLs.
 20. Phase 58 is complete; service entries can be explicitly started/stopped with runtime state and logs, without auto-start or shell expansion.
-21. Phase 59 is complete; service health checks are manual, loopback-only, timeout-protected, and visible in Control Center. Choose the next phase from setup support, process-tree cleanup, bridge integration, real evidence work, community extension rehearsal, or another high-drift service/report boundary.
+21. Phase 59 is complete; service health checks are manual, loopback-only, timeout-protected, and visible in Control Center.
+22. Phase 60 is complete; setup entries are visible with read-only `not-run` status, and service stops attempt best-effort process-group cleanup with child-kill fallback. Choose the next phase from setup execution, bridge integration, real evidence work, community extension rehearsal, hard cleanup guarantees, or another high-drift service/report boundary.
 
 ## 8. Verification Contract
 

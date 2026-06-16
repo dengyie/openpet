@@ -426,7 +426,7 @@ const readLocalPluginManifests = (pluginDirs = []) => {
   return plugins
 }
 
-const createPluginService = ({ settingsService, petService, aiService, fetchImpl = globalThis.fetch, serviceHealthTimeoutMs, healthCheckTimeoutMs = serviceHealthTimeoutMs ?? PLUGIN_SERVICE_HEALTH_TIMEOUT_MS, openExternal = async () => { throw new Error('Dashboard opener is not available') }, spawnServiceProcess = spawn, pluginDirs = [], officialPlugins = [], getPluginBlockStatus = () => ({ blocked: false, reasons: [] }) }) => {
+const createPluginService = ({ settingsService, petService, aiService, fetchImpl = globalThis.fetch, serviceHealthTimeoutMs, healthCheckTimeoutMs = serviceHealthTimeoutMs ?? PLUGIN_SERVICE_HEALTH_TIMEOUT_MS, openExternal = async () => { throw new Error('Dashboard opener is not available') }, spawnServiceProcess = spawn, killServiceProcess = process.kill, pluginDirs = [], officialPlugins = [], getPluginBlockStatus = () => ({ blocked: false, reasons: [] }) }) => {
   if (!settingsService) throw new Error('settingsService is required')
   if (!petService) throw new Error('petService is required')
   const serviceRuntimes = new Map()
@@ -618,8 +618,19 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
     }
   }
 
+  const createSetupRuntimeView = (runtime = {}) => ({
+    status: runtime.status || 'not-run',
+    lastRunAt: runtime.lastRunAt || '',
+    exitCode: Number.isFinite(runtime.exitCode) ? runtime.exitCode : null,
+    error: runtime.error || ''
+  })
+
   const decorateEntriesWithRuntime = (manifest) => ({
     ...manifest.entries,
+    setup: (manifest.entries?.setup || []).map((setupEntry) => ({
+      ...setupEntry,
+      runtime: createSetupRuntimeView()
+    })),
     services: (manifest.entries?.services || []).map((serviceEntry) => ({
       ...serviceEntry,
       runtime: createRuntimeView(serviceRuntimes.get(createPluginServiceKey(manifest.id, serviceEntry.id)), serviceEntry)
@@ -723,12 +734,23 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
     })
   }
 
+  const stopServiceProcess = (runtime, signal = 'SIGTERM') => {
+    const pid = Number(runtime?.pid) || 0
+    if (pid > 0) {
+      try {
+        killServiceProcess(-pid, signal)
+        return
+      } catch (_) {}
+    }
+    runtime.child?.kill?.(signal)
+  }
+
   const stopPluginServiceRuntime = (pluginId, serviceId, runtime, { log = true } = {}) => {
     if (!runtime || runtime.status !== 'running') return runtime
     runtime.status = 'stopping'
     runtime.stoppedAt = new Date().toISOString()
     try {
-      runtime.child?.kill?.('SIGTERM')
+      stopServiceProcess(runtime, 'SIGTERM')
     } catch (error) {
       runtime.error = error.message || 'Plugin service stop failed'
       runtime.status = 'failed'
@@ -957,6 +979,7 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
       const cwd = resolveServiceCwd(plugin.manifest, declaration.cwd)
       const child = spawnServiceProcess(file, args, {
         cwd,
+        detached: true,
         env: createServiceProcessEnv(),
         shell: false,
         stdio: ['ignore', 'pipe', 'pipe'],

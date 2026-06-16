@@ -373,6 +373,23 @@ export interface PluginCommandEntryViewState extends PluginCommandViewState {
   cwd: string
 }
 
+export type PluginSetupRuntimeStatus = 'not-run' | 'running' | 'succeeded' | 'failed'
+
+export interface PluginSetupRuntimeViewState {
+  status: PluginSetupRuntimeStatus
+  lastRunAt?: string
+  exitCode?: number | null
+  error?: string
+}
+
+export interface PluginSetupEntryViewState {
+  id: string
+  title: string
+  command: string
+  cwd: string
+  runtime?: PluginSetupRuntimeViewState
+}
+
 export interface PluginServiceEntryViewState {
   id: string
   title: string
@@ -396,6 +413,7 @@ export interface PluginDashboardEntryViewState {
 }
 
 export interface PluginEntriesViewState {
+  setup: PluginSetupEntryViewState[]
   commands: PluginCommandEntryViewState[]
   services: PluginServiceEntryViewState[]
   dashboards: PluginDashboardEntryViewState[]

@@ -149,6 +149,7 @@ const createDemoPluginReview = (item: CatalogPluginEntry): PluginPackageReviewVi
     permissions: item.permissions || [],
     commands: [{ id: 'demo', title: 'Demo command' }],
     entries: {
+      setup: [{ id: 'install-deps', title: 'Install Dependencies', command: 'npm install', cwd: '.' }],
       commands: [{ id: 'weather-report', title: 'Weather Report', command: 'node ./commands/weather-report.js', cwd: '.' }],
       services: [{
         id: 'weather-companion',
@@ -217,6 +218,7 @@ const demoManualPluginReview = {
     network: { allowlist: [] },
     commands: [{ id: 'hello', title: 'Say hello' }],
     entries: {
+      setup: [{ id: 'install-deps', title: 'Install Dependencies', command: 'npm install', cwd: '.' }],
       commands: [{ id: 'hello', title: 'Say hello', command: 'node ./index.js', cwd: '.' }],
       services: [{
         id: 'manual-companion',
@@ -271,7 +273,13 @@ const createDemoManualPlugin = (): PluginViewState => ({
   runnable: true,
   permissions: demoManualPluginReview.plugin.permissions,
   commands: demoManualPluginReview.plugin.commands,
-  entries: demoManualPluginReview.plugin.entries,
+  entries: {
+    ...demoManualPluginReview.plugin.entries,
+    setup: demoManualPluginReview.plugin.entries.setup.map((setup) => ({
+      ...setup,
+      runtime: { status: 'not-run' }
+    }))
+  },
   configSchema: { properties: [] },
   config: {},
   storage: { keyCount: 0, byteSize: 2, valid: true },
@@ -363,6 +371,12 @@ const demoCatalogSelections = new Map<string, CatalogInstallSelection>()
 let demoManualPluginSelection: string | null = null
 
 const clonePluginEntries = (entries: PluginViewState['entries']): PluginViewState['entries'] => ({
+  setup: Array.isArray(entries?.setup)
+    ? entries.setup.map((setup) => ({
+        ...setup,
+        runtime: setup.runtime ? { ...setup.runtime } : setup.runtime
+      }))
+    : [],
   commands: Array.isArray(entries?.commands) ? entries.commands.map((command) => ({ ...command })) : [],
   services: Array.isArray(entries?.services)
     ? entries.services.map((service) => ({

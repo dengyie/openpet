@@ -9,6 +9,7 @@ interface PluginEntryDetailsSource {
 }
 
 const hasEntries = (entries?: PluginEntriesViewState) => Boolean(
+  entries?.setup?.length ||
   entries?.commands?.length ||
   entries?.services?.length ||
   entries?.dashboards?.length
@@ -34,6 +35,16 @@ export function PluginEntryDetails({ source, compact = false }: { source?: Plugi
   return (
     <div className={compact ? 'plugin-entry-details compact' : 'plugin-entry-details'}>
       <strong>Entry declarations</strong>
+      {entries?.setup?.length ? (
+        <div className="plugin-entry-section">
+          <span>Setup entries</span>
+          {entries.setup.map((setup) => (
+            <code key={setup.id}>
+              {setup.id}{setup.command ? ` · ${setup.command}` : ''}{setup.runtime?.status ? ` · ${setup.runtime.status}` : ''}
+            </code>
+          ))}
+        </div>
+      ) : null}
       {entries?.commands?.length ? (
         <div className="plugin-entry-section">
           <span>Command entries</span>
@@ -76,7 +87,7 @@ export function PluginEntryDetails({ source, compact = false }: { source?: Plugi
           <pre>{manifestText}</pre>
         </div>
       ) : null}
-      <small>These declarations are shown for review. Services start only through explicit Control Center actions; dashboards open only through explicit Control Center actions.</small>
+      <small>These declarations are shown for review. Setup entries are not executed; services start only through explicit Control Center actions; dashboards open only through explicit Control Center actions.</small>
     </div>
   )
 }

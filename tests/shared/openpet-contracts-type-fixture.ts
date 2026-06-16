@@ -18,6 +18,7 @@ const pluginReviewFixture = {
     permissions: ['pet:say'],
     commands: [{ id: 'run', title: 'Run' }],
     entries: {
+      setup: [{ id: 'install-deps', title: 'Install Dependencies', command: 'npm install', cwd: '.', runtime: { status: 'not-run' } }],
       commands: [{ id: 'run', title: 'Run', command: 'node ./index.js', cwd: '.' }],
       services: [{ id: 'svc', title: 'Service', command: 'npm run service:start', cwd: '.' }],
       dashboards: [{ id: 'main', title: 'Dashboard', url: 'http://127.0.0.1:8787' }]

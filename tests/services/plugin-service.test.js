@@ -111,7 +111,7 @@ const createRunnablePluginDir = ({ manifest = {}, source, configSchema }) => {
   return root
 }
 
-const createDeclarationOnlyPluginDir = ({ dashboardUrl = 'http://127.0.0.1:8787', serviceCommand = 'npm run service:start', serviceCwd = '.', serviceHealth } = {}) => {
+const createDeclarationOnlyPluginDir = ({ dashboardUrl = 'http://127.0.0.1:8787', serviceCommand = 'npm run service:start', serviceCwd = '.', serviceHealth, setupEntries = [] } = {}) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-declaration-plugin-'))
   const pluginPath = path.join(root, 'weather-declaration')
   fs.mkdirSync(pluginPath)
@@ -120,6 +120,7 @@ const createDeclarationOnlyPluginDir = ({ dashboardUrl = 'http://127.0.0.1:8787'
     name: 'Weather Declaration',
     version: '1.0.0',
     entries: {
+      setup: setupEntries,
       commands: [{ id: 'announce', title: 'Announce Weather', command: 'node ./commands/announce.js' }],
       services: [{
         id: 'companion',
@@ -212,6 +213,33 @@ test('plugin service lists declaration-only extension entries without making the
     () => service.runCommand('weather-declaration', 'announce'),
     /Plugin is not runnable/
   )
+})
+
+test('plugin service lists setup entries with not-run runtime status', () => {
+  const service = createPluginService({
+    settingsService: createSettingsService(),
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir({
+      setupEntries: [{
+        id: 'install-deps',
+        title: 'Install Dependencies',
+        command: 'npm install',
+        cwd: '.'
+      }]
+    })]
+  })
+
+  const [plugin] = service.listPlugins()
+
+  assert.deepEqual(plugin.entries.setup, [{
+    id: 'install-deps',
+    title: 'Install Dependencies',
+    command: 'npm install',
+    cwd: '.',
+    runtime: { status: 'not-run', lastRunAt: '', exitCode: null, error: '' }
+  }])
+  assert.equal(plugin.commands.some((command) => command.id === 'install-deps'), false)
 })
 
 test('plugin service opens enabled declaration dashboard entries through the injected opener', async () => {
@@ -355,6 +383,7 @@ test('plugin service starts and stops enabled declaration service entries', () =
   assert.equal(spawned[0].file, 'npm')
   assert.deepEqual(spawned[0].args, ['run', 'service:start'])
   assert.equal(path.basename(spawned[0].options.cwd), 'weather-declaration')
+  assert.equal(spawned[0].options.detached, true)
   assert.equal(spawned[0].options.shell, false)
   assert.deepEqual(Object.keys(spawned[0].options.env).sort(), ['PATH'].filter((key) => process.env[key]).sort())
   assert.equal(service.listPlugins()[0].entries.services[0].runtime.status, 'running')
@@ -366,6 +395,51 @@ test('plugin service starts and stops enabled declaration service entries', () =
   assert.deepEqual(children[0].killCalls, ['SIGTERM'])
   assert.equal(service.listPlugins()[0].entries.services[0].runtime.status, 'stopped')
   assert.equal(settingsService.get().plugins.logs[0].message, 'Service stopped')
+})
+
+test('plugin service stops service process groups before falling back to child kill', () => {
+  const child = createSlowStoppingServiceProcess({ pid: 4321 })
+  const killedProcesses = []
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir()],
+    spawnServiceProcess: () => child,
+    killServiceProcess: (pid, signal) => {
+      killedProcesses.push({ pid, signal })
+      return true
+    }
+  })
+
+  service.startService('weather-declaration', 'companion')
+  service.stopService('weather-declaration', 'companion')
+
+  assert.deepEqual(killedProcesses, [{ pid: -4321, signal: 'SIGTERM' }])
+  assert.deepEqual(child.killCalls, [])
+})
+
+test('plugin service falls back to child kill when process group stop fails', () => {
+  const child = createSlowStoppingServiceProcess({ pid: 4321 })
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir()],
+    spawnServiceProcess: () => child,
+    killServiceProcess: () => {
+      throw new Error('process group missing')
+    }
+  })
+
+  service.startService('weather-declaration', 'companion')
+  service.stopService('weather-declaration', 'companion')
+
+  assert.deepEqual(child.killCalls, ['SIGTERM'])
 })
 
 test('plugin service rejects service starts for disabled plugins', () => {
