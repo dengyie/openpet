@@ -1,6 +1,6 @@
 # OpenPet Development Summary
 
-> Last updated: 2026-06-16
+> Last updated: 2026-06-17
 > Branch: `main`
 > Current release track: `v1.0.1-rc.2`
 
@@ -17,7 +17,7 @@ OpenPet is now a desktop pet platform with:
 - AI chat with secret storage in the main process,
 - a permission-limited plugin system,
 - loopback-only local HTTP / MCP endpoints,
-- and a TypeScript migration baseline covering shared IPC and Control Center view contracts.
+- and a TypeScript migration baseline covering shared IPC, Control Center view contracts, the Control Center API facade, and representative product payload fixtures.
 
 ## Latest Delivered Changes
 
@@ -34,6 +34,7 @@ OpenPet is now a desktop pet platform with:
 - Plugin sandbox evaluation: current child-process + Node permission-model + VM runner remains the v1.1 recommendation, with documented limits and re-evaluation triggers.
 - Pet pack export and provenance: installed user packs can be exported as `.openpet-pet.zip`, imported provenance is retained, and built-in packs remain read-only.
 - AI behavior decision viewer: Control Center shows recent behavior decisions, supports replay, exports redacted diagnostics, and clears decision history.
+- TypeScript boundary expansion: Control Center API facade is typed, `window.controlCenterAPI` satisfies `ControlCenterApi`, and shared contracts now cover actions, pet packs, plugins, catalog, AI, local service, release evidence, and signed release claim summaries.
 
 ## Validation Baseline
 
@@ -51,11 +52,11 @@ npm run check:syntax         # Node syntax + typecheck + Control Center build
 - Signed release closure evidence is archived under `docs/release-evidence/signed-release-closure/2026-06-16T15-00-00Z/` and currently records official desktop, macOS, and Windows claims as `not-ready`.
 - Plugin author rehearsal evidence is archived under `docs/release-evidence/plugin-author-rehearsal/2026-06-16T16-00-00Z/` with minimal, network, storage, and AI-assisted scaffolds plus a validated submission bundle.
 - The plugin ecosystem has submission tooling, examples, scaffolding, an author rehearsal, and a documented sandbox decision; wider community onboarding is still future work.
-- The next prioritized work is filling native picker evidence, signed release evidence, and continuing TypeScript contract migration.
+- The next prioritized work is Phase 46 documentation consolidation, plus continuing native picker and signed release evidence work when real platform evidence is available.
 
 ## Next Migration Steps
 
 1. Use `docs/productization-v1.1-todo-design.md` to drive the next productization phases.
-2. Expand TypeScript from shared IPC and Control Center view contracts into the Control Center API facade, hooks, and main-process service boundaries.
+2. Expand TypeScript from the typed Control Center API facade into hook state, main-process JSDoc adapters, and high-drift service boundaries.
 3. Keep `npm start` functional during each migration step.
 4. Keep new user-facing configuration in Control Center, not in hidden JSON files.

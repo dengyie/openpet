@@ -1,6 +1,49 @@
 import { cloneAiConfig, cloneCatalog, cloneServiceStatus, cloneSettings, defaultAboutInfo, defaultActionsConfig, defaultAiConfig, defaultPetPacks, defaultServiceStatus, defaultSettings, defaultUpdateCheck } from '../lib/defaults'
+import type {
+  ActionFrameInspectRequest,
+  ActionFrameInspectionResult,
+  ActionFrameImportRequest,
+  ActionFrameReinspectRequest,
+  AiChatRequest,
+  AiConfigViewState,
+  CatalogBlocklistEntry,
+  CatalogInstallRequest,
+  CatalogInstallSelection,
+  CatalogPetPackEntry,
+  CatalogPluginEntry,
+  CatalogState,
+  ControlCenterApi,
+  ControlCenterSettings,
+  JsonObject,
+  PluginLogFilters,
+  PluginPackageReviewViewState,
+  PluginViewState,
+  ServiceStatusViewState
+} from '../../../shared/openpet-contracts'
 
-const createDemoInspection = (actionId = 'wave') => ({
+declare global {
+  interface Window {
+    controlCenterAPI?: ControlCenterApi
+  }
+}
+
+interface DemoState {
+  settings: ControlCenterSettings
+  aiConfig: AiConfigViewState
+  serviceStatus: ServiceStatusViewState
+  catalog: CatalogState
+  plugins: PluginViewState[]
+  pluginLogs: Array<{
+    id: string
+    timestamp: string
+    level: string
+    pluginId: string
+    commandId: string
+    message: string
+  }>
+}
+
+const createDemoInspection = (actionId = 'wave'): ActionFrameInspectionResult => ({
   canceled: false,
   selectionId: 'demo-selection',
   folderName: 'demo-wave',
@@ -24,7 +67,7 @@ const demoStorageKey = 'openpet.controlCenter.demoState'
 
 const demoCatalogHash = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
 
-const createDemoCatalog = () => cloneCatalog({
+const createDemoCatalog = (): CatalogState => cloneCatalog({
   schemaVersion: 1,
   updatedAt: '2026-06-15T00:00:00.000Z',
   feedbackUrl: 'https://github.com/dengyie/OpenPet/issues',
@@ -93,7 +136,7 @@ const createDemoCatalog = () => cloneCatalog({
   ]
 })
 
-const createDemoPluginReview = (item) => ({
+const createDemoPluginReview = (item: CatalogPluginEntry): PluginPackageReviewViewState => ({
   installMode: item.installed ? 'update' : 'install',
   existingVersion: item.installedVersion || '',
   riskLevel: item.installed ? 'review' : 'info',
@@ -126,7 +169,7 @@ const createDemoPluginReview = (item) => ({
   packageHash: item.sha256 || demoCatalogHash
 })
 
-const createDemoPetPackReview = (item) => ({
+const createDemoPetPackReview = (item: CatalogPetPackEntry) => ({
   pack: {
     id: item.id,
     displayName: item.displayName,
@@ -182,9 +225,9 @@ const demoManualPluginReview = {
   fileCount: 3,
   byteSize: 9216,
   requiresReview: false
-}
+} satisfies PluginPackageReviewViewState
 
-const createDemoManualPlugin = () => ({
+const createDemoManualPlugin = (): PluginViewState => ({
   id: demoManualPluginReview.plugin.id,
   name: demoManualPluginReview.plugin.name,
   version: demoManualPluginReview.plugin.version,
@@ -199,7 +242,7 @@ const createDemoManualPlugin = () => ({
   signatureStatus: { label: demoManualPluginReview.signature.label }
 })
 
-const createDemoPluginLog = (pluginId, message, commandId = '') => ({
+const createDemoPluginLog = (pluginId: string, message: string, commandId = '') => ({
   id: `${pluginId}-${message}-${Date.now()}`,
   timestamp: new Date().toISOString(),
   level: 'info',
@@ -208,7 +251,7 @@ const createDemoPluginLog = (pluginId, message, commandId = '') => ({
   message
 })
 
-const createDemoServiceStatus = () => cloneServiceStatus({
+const createDemoServiceStatus = (): ServiceStatusViewState => cloneServiceStatus({
   ...defaultServiceStatus,
   config: {
     ...defaultServiceStatus.config,
@@ -227,7 +270,7 @@ const createDemoServiceStatus = () => cloneServiceStatus({
   }
 })
 
-const createDefaultDemoState = () => ({
+const createDefaultDemoState = (): DemoState => ({
   settings: cloneSettings(defaultSettings),
   aiConfig: cloneAiConfig({
     ...defaultAiConfig,
@@ -255,7 +298,7 @@ const createDefaultDemoState = () => ({
   pluginLogs: []
 })
 
-const readDemoState = () => {
+const readDemoState = (): DemoState => {
   if (typeof window === 'undefined') return createDefaultDemoState()
   try {
     const rawState = window.sessionStorage.getItem(demoStorageKey)
@@ -280,10 +323,10 @@ const writeDemoState = () => {
 }
 
 const demoState = readDemoState()
-const demoCatalogSelections = new Map()
-let demoManualPluginSelection = null
+const demoCatalogSelections = new Map<string, CatalogInstallSelection>()
+let demoManualPluginSelection: string | null = null
 
-const cloneDemoPlugins = () => demoState.plugins.map((plugin) => ({
+const cloneDemoPlugins = (): PluginViewState[] => demoState.plugins.map((plugin) => ({
   ...plugin,
   permissions: Array.isArray(plugin.permissions) ? [...plugin.permissions] : [],
   commands: Array.isArray(plugin.commands) ? plugin.commands.map((command) => ({ ...command })) : [],
@@ -296,19 +339,19 @@ const cloneDemoPlugins = () => demoState.plugins.map((plugin) => ({
   signatureStatus: { ...(plugin.signatureStatus || {}) }
 }))
 
-const cloneDemoPluginLogs = (filters = {}) => demoState.pluginLogs.filter((log) => {
+const cloneDemoPluginLogs = (filters: PluginLogFilters = {}) => demoState.pluginLogs.filter((log) => {
   if (filters.pluginId && log.pluginId !== filters.pluginId) return false
   if (filters.level && log.level !== filters.level) return false
   if (filters.query && !`${log.pluginId} ${log.commandId} ${log.message}`.toLowerCase().includes(String(filters.query).toLowerCase())) return false
   return true
 }).map((log) => ({ ...log }))
 
-const findDemoCatalogItem = (kind, itemId) => {
+const findDemoCatalogItem = (kind: CatalogInstallRequest['kind'], itemId: string) => {
   const collection = kind === 'plugin' ? demoState.catalog.plugins : demoState.catalog.petPacks
   return collection.find((item) => item.id === itemId)
 }
 
-const markDemoCatalogItemInstalled = (selection) => {
+const markDemoCatalogItemInstalled = (selection: CatalogInstallSelection): CatalogState => {
   const collectionKey = selection.kind === 'plugin' ? 'plugins' : 'petPacks'
   demoState.catalog = cloneCatalog({
     ...demoState.catalog,
@@ -322,7 +365,7 @@ const markDemoCatalogItemInstalled = (selection) => {
   return cloneCatalog(demoState.catalog)
 }
 
-const demoApi = {
+const demoApi: ControlCenterApi = {
   getSettings: async () => cloneSettings(demoState.settings),
   saveSettings: async (settings) => {
     demoState.settings = cloneSettings(settings)
@@ -335,7 +378,7 @@ const demoApi = {
   reinspectActionFrames: async ({ selectionId, actionId } = {}) => ({ ...createDemoInspection(actionId), selectionId: selectionId || 'demo-selection' }),
   clearActionFrameSelection: async () => ({ ok: true }),
   importActionFrames: async ({ actionId, label } = {}) => ({ ok: true, result: { importedAction: { id: actionId, label: label || actionId } }, animations: defaultActionsConfig }),
-  saveActionsConfig: async (config) => ({ animations: config }),
+  saveActionsConfig: async (config) => ({ animations: { ...defaultActionsConfig, ...config } }),
   deleteAction: async () => ({ animations: defaultActionsConfig }),
   listPetPacks: async () => defaultPetPacks,
   inspectPetPackDirectory: async () => ({ canceled: true }),
@@ -475,13 +518,17 @@ const demoApi = {
   clearPluginStorage: async (pluginId) => ({ id: pluginId, storage: { keyCount: 0, byteSize: 2 } }),
   getServiceStatus: async () => cloneServiceStatus(demoState.serviceStatus),
   saveServiceConfig: async (config) => {
+    const nextConfig = {
+      ...demoState.serviceStatus.config,
+      ...config
+    }
     demoState.serviceStatus = cloneServiceStatus({
-      config,
+      config: nextConfig,
       runtime: {
         ...demoState.serviceStatus.runtime,
-        host: config.host || '127.0.0.1',
-        port: config.port,
-        enabled: config.enabled
+        host: nextConfig.host || '127.0.0.1',
+        port: nextConfig.port,
+        enabled: nextConfig.enabled
       }
     })
     writeDemoState()
@@ -520,15 +567,22 @@ const demoApi = {
     message: 'Update feed is not configured.'
   }),
   getCatalog: async () => cloneCatalog(demoState.catalog),
-  prepareCatalogInstall: async ({ kind, itemId } = {}) => {
+  prepareCatalogInstall: async ({ kind, itemId }) => {
     const item = findDemoCatalogItem(kind, itemId)
     if (!item) throw new Error('Catalog item not found')
     const selectionId = `demo-catalog-selection-${kind}-${itemId}`
-    const selection = {
+    const selection: CatalogInstallSelection = kind === 'plugin' ? {
       kind,
       itemId,
       selectionId,
-      ...(kind === 'plugin' ? { pluginReview: createDemoPluginReview(item) } : { petPackReview: createDemoPetPackReview(item) })
+      sourcePackageHash: item.sha256 || demoCatalogHash,
+      pluginReview: createDemoPluginReview(item as CatalogPluginEntry)
+    } : {
+      kind,
+      itemId,
+      selectionId,
+      sourcePackageHash: item.sha256 || demoCatalogHash,
+      petPackReview: createDemoPetPackReview(item as CatalogPetPackEntry)
     }
     demoCatalogSelections.set(selectionId, selection)
     return selection
@@ -543,7 +597,7 @@ const demoApi = {
     demoCatalogSelections.delete(selectionId)
     return { ok: true }
   },
-  addCatalogBlocklistEntry: async (entry = {}) => {
+  addCatalogBlocklistEntry: async (entry) => {
     const blocklistKey = entry.type === 'packId' ? 'packIds' : entry.type === 'sha256' ? 'sha256' : 'pluginIds'
     const value = String(entry.value || '').trim()
     const localBlocklist = {
@@ -556,7 +610,7 @@ const demoApi = {
     writeDemoState()
     return { catalog: cloneCatalog(demoState.catalog), blocklist: demoState.catalog.localBlocklist }
   },
-  removeCatalogBlocklistEntry: async (entry = {}) => {
+  removeCatalogBlocklistEntry: async (entry) => {
     const blocklistKey = entry.type === 'packId' ? 'packIds' : entry.type === 'sha256' ? 'sha256' : 'pluginIds'
     const value = String(entry.value || '').trim()
     const localBlocklist = {
@@ -570,4 +624,4 @@ const demoApi = {
   close: () => {}
 }
 
-export const controlCenterAPI = window.controlCenterAPI || demoApi
+export const controlCenterAPI: ControlCenterApi = window.controlCenterAPI || demoApi

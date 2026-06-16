@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { controlCenterAPI as api } from '../api/control-center-api.js'
+import { controlCenterAPI as api } from '../api/control-center-api'
 import { cloneAboutInfo, cloneUpdateCheck, defaultAboutInfo, defaultUpdateCheck } from '../lib/defaults'
 
 export function useAboutPane() {

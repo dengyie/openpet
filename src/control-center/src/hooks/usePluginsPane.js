@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { controlCenterAPI as api } from '../api/control-center-api.js'
+import { controlCenterAPI as api } from '../api/control-center-api'
 import { downloadTextFile } from '../lib/download.js'
 
 export function usePluginsPane() {

@@ -333,6 +333,8 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 - `npm run typecheck` is meaningful for real product data, not only scaffold files.
 - `npm start`, `npm test`, `npm run test:control-center`, and `npm run check:syntax` remain passing.
 
+**Status**: completed for the first high-value boundary expansion. Control Center API facade is now TypeScript, `window.controlCenterAPI` is typed, demo API satisfies `ControlCenterApi`, shared contracts cover actions, pet packs, plugins, catalog, AI, service, release evidence, and signed release summaries, and a type fixture keeps representative payloads in the no-emit check. Review fixes aligned catalog pet pack `kind: 'pet-pack'`, required `sourcePackageHash`, and modeled canceled/validation-failure result paths accurately.
+
 ### Phase 46: Documentation Consolidation
 
 **Goal**: reduce repeated historical prose and keep current facts easy to find.
@@ -369,7 +371,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 | P0 | Phase 43 signed release evidence closure | Controls release/support claims and user trust. |
 | P1 | Phase 40 pet pack export and provenance | Completed; keep provenance and conflict review as constraints for future catalog work. |
 | P1 | Phase 44 plugin author experience rehearsal | Makes third-party contribution paths repeatable and reviewable. |
-| P1 | Phase 45 TypeScript boundary expansion | Prevents cross-process and UI data drift during v1.1 work. |
+| P1 | Phase 45 TypeScript boundary expansion | Completed; preserve shared contracts as the migration gate for future UI and IPC work. |
 | P2 | Phase 41 AI behavior replay | Completed; preserve redacted diagnostics and replay semantics while future AI tooling evolves. |
 | P2 | Phase 39 plugin sandbox evaluation | Completed; keep current runner for v1.1 and revisit on high-risk plugin capability changes. |
 | P2 | Phase 46 documentation consolidation | Should happen after the v1.1 evidence and lifecycle work settles. |
@@ -382,7 +384,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 4. Phase 40 is complete; preserve pet pack export/provenance behavior while catalog work evolves.
 5. Phase 41 is complete; use AI behavior replay and diagnostics as the baseline for future behavior tooling.
 6. Execute Phase 44 to rehearse the plugin author path end to end before expanding community claims.
-7. Execute Phase 45 in parallel only when a touched boundary already has active product work.
+7. Phase 45 is complete; use the shared contracts and Control Center API facade as the next migration baseline.
 8. Execute Phase 46 after the live docs stabilize.
 
 ## 8. Verification Contract

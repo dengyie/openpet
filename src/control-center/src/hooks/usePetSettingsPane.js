@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { controlCenterAPI as api } from '../api/control-center-api.js'
+import { controlCenterAPI as api } from '../api/control-center-api'
 import { cloneSettings, defaultSettings } from '../lib/defaults'
 
 export function usePetSettingsPane() {

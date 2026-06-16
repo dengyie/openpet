@@ -120,6 +120,84 @@ export interface ActionsConfigViewState {
   actions: ActionEntry[]
 }
 
+export interface OkResponse {
+  ok: boolean
+}
+
+export interface ActionFrameInfo {
+  fileName: string
+  width: number
+  height: number
+  hasAlpha: boolean
+}
+
+export interface ActionFrameInspection {
+  valid: boolean
+  frameCount: number
+  maxWidth: number
+  maxHeight: number
+  frames: ActionFrameInfo[]
+  skippedFiles: string[]
+  errors: string[]
+  warnings: string[]
+}
+
+export interface CanceledDialogResult {
+  canceled: true
+}
+
+export interface CanceledSelectionResult extends CanceledDialogResult {
+  selectionId?: string
+}
+
+export interface CompletedActionFrameInspectionResult {
+  canceled: false
+  selectionId: string
+  folderName: string
+  actionId: string
+  inspection: ActionFrameInspection
+}
+
+export type ActionFrameInspectionResult = CanceledSelectionResult | CompletedActionFrameInspectionResult
+
+export interface ActionFrameInspectRequest {
+  actionId?: string
+}
+
+export interface ActionFrameReinspectRequest {
+  selectionId?: string
+  actionId?: string
+}
+
+export interface ActionFrameClearRequest {
+  selectionId: string
+}
+
+export interface ActionFrameImportRequest {
+  selectionId?: string
+  actionId?: string
+  label?: string
+}
+
+export interface ActionFrameImportResult {
+  ok?: boolean
+  canceled?: boolean
+  result?: {
+    importedAction?: ActionEntry
+  }
+  animations?: ActionsConfigViewState
+  inspectionResult?: ActionFrameInspectionResult
+}
+
+export interface ActionsSaveConfigRequest {
+  defaultAction: string
+  clickAction: string
+}
+
+export interface ActionsMutationResult {
+  animations: ActionsConfigViewState
+}
+
 export interface BlocklistState {
   pluginIds: string[]
   packIds: string[]
@@ -184,10 +262,39 @@ export interface PetPacksViewState {
   packs: PetPackSummary[]
 }
 
+export interface PetPackInspectionResult {
+  canceled?: boolean
+  selectionId?: string
+  valid?: boolean
+  errors?: string[]
+  warnings?: string[]
+  pack?: PetPackSummary
+}
+
+export interface PetPackMutationResult {
+  pack?: PetPackSummary
+  activePackId?: string
+  petPacks: PetPacksViewState
+  animations?: ActionsConfigViewState
+}
+
+export interface CompletedPetPackExportResult {
+  canceled?: false
+  packId: string
+  fileName: string
+  outputPath?: string
+  sha256?: string
+  byteSize?: number
+}
+
+export type PetPackExportResult = CanceledDialogResult | CompletedPetPackExportResult
+
 export interface CatalogReviewState {
   blocked: boolean
   reasons: string[]
 }
+
+export type CatalogItemKind = 'plugin' | 'pet-pack'
 
 export interface CatalogPluginEntry {
   id: string
@@ -232,6 +339,165 @@ export interface CatalogState {
   petPacks: CatalogPetPackEntry[]
 }
 
+export interface PermissionDiffState {
+  added: string[]
+  removed: string[]
+  unchanged: string[]
+}
+
+export interface PluginPermissionDiff {
+  permissions: PermissionDiffState
+  networkAllowlist: PermissionDiffState
+}
+
+export interface PluginCommandViewState {
+  id: string
+  title: string
+}
+
+export interface PluginManifestViewState {
+  id: string
+  name: string
+  version: string
+  description?: string
+  permissions: string[]
+  network?: {
+    allowlist: string[]
+  }
+  commands: PluginCommandViewState[]
+  main?: string
+  configSchema?: string
+}
+
+export interface PluginSignatureViewState {
+  status?: string
+  label: string
+  signer?: string
+  algorithm?: string
+  verified?: boolean
+  errors: string[]
+}
+
+export interface PluginPackageReviewViewState {
+  canceled?: false
+  selectionId?: string
+  sourceType?: string
+  installMode: 'install' | 'update'
+  existingVersion: string
+  riskLevel: string
+  plugin: PluginManifestViewState
+  permissionDiff: PluginPermissionDiff
+  signature: PluginSignatureViewState
+  blockStatus: CatalogReviewState
+  packageHash: string
+  fileCount: number
+  byteSize: number
+  requiresReview?: boolean
+}
+
+export type PluginPackageInspectionResult = CanceledSelectionResult | PluginPackageReviewViewState
+
+export interface PluginStorageViewState {
+  keyCount: number
+  byteSize: number
+  valid?: boolean
+}
+
+export interface PluginViewState {
+  id: string
+  name: string
+  version: string
+  source: string
+  enabled: boolean
+  runnable: boolean
+  permissions: string[]
+  commands: PluginCommandViewState[]
+  configSchema: {
+    properties: unknown[]
+  }
+  config: JsonObject
+  storage: PluginStorageViewState
+  signatureStatus: {
+    label: string
+  }
+}
+
+export interface PluginLogEntry {
+  id: string
+  timestamp: string
+  level: string
+  pluginId: string
+  commandId: string
+  message: string
+}
+
+export interface PluginLogFilters {
+  pluginId?: string
+  level?: string
+  query?: string
+  format?: 'json' | 'csv'
+}
+
+export interface PluginMutationResult extends OkResponse {
+  pluginId?: string
+  installMode?: string
+  disabled?: boolean
+  plugins: PluginViewState[]
+}
+
+export interface CatalogPluginInstallSelection {
+  kind: 'plugin'
+  itemId: string
+  selectionId: string
+  sourcePackageHash: string
+  pluginReview: PluginPackageReviewViewState
+}
+
+export interface CatalogPetPackInstallSelection {
+  kind: 'pet-pack'
+  itemId: string
+  selectionId: string
+  sourcePackageHash: string
+  petPackReview: {
+    pack: {
+      id: string
+      displayName: string
+      version: string
+      actionCount: number
+      defaultAction?: string
+      clickAction?: string
+      packageHash?: string
+      blockStatus?: CatalogReviewState
+    }
+  }
+}
+
+export type CatalogInstallSelection = CatalogPluginInstallSelection | CatalogPetPackInstallSelection
+
+export interface CatalogInstallRequest {
+  kind: CatalogItemKind
+  itemId: string
+}
+
+export interface CatalogInstallResult extends OkResponse {
+  kind?: CatalogItemKind
+  itemId?: string
+  catalog: CatalogState
+  plugins?: PluginViewState[]
+  petPacks?: PetPacksViewState
+  animations?: ActionsConfigViewState
+}
+
+export interface CatalogBlocklistEntry {
+  type: 'pluginId' | 'packId' | 'sha256'
+  value: string
+}
+
+export interface CatalogBlocklistResult {
+  catalog: CatalogState
+  blocklist: BlocklistState
+}
+
 export interface AboutUpdateInfo {
   configured: boolean
   provider: string
@@ -269,4 +535,130 @@ export interface UpdateCheckViewState {
 export interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
+}
+
+export interface AiSaveApiKeyResult {
+  apiKeyRef: string
+  hasApiKey: boolean
+}
+
+export interface AiConnectionTestResult {
+  ok: boolean
+  reply: string
+}
+
+export interface AiChatRequest {
+  conversationId: string
+  message: string
+}
+
+export interface AiChatResponse {
+  reply: string
+  messages?: ChatMessage[]
+  behavior?: Partial<AiBehaviorDecision>
+  action?: {
+    actionId?: string
+    label?: string
+    error?: string
+  }
+}
+
+export interface AiBehaviorDryRunRequest {
+  reply: string
+  behavior: AiBehaviorConfig
+}
+
+export interface AiBehaviorResult extends Partial<AiBehaviorDecision> {
+  matched: boolean
+  reason: string
+  actionId?: string
+  replayOf?: number
+}
+
+export interface ServiceLogFilters {
+  format?: 'json' | 'csv'
+  [key: string]: unknown
+}
+
+export interface ReleaseEvidenceFileSummary {
+  path: string
+  sha256: string
+  byteSize: number
+}
+
+export interface ReleaseEvidenceArchiveSummary {
+  generatedAt: string
+  archiveDir: string
+  releaseReady: boolean
+  files: ReleaseEvidenceFileSummary[]
+  blockers: string[]
+}
+
+export interface SignedReleaseClaimSummary {
+  generatedAt: string
+  officialDesktopReleaseReady: boolean
+  macosReleaseReady: boolean
+  windowsReleaseReady: boolean
+  blockers: string[]
+}
+
+export interface ControlCenterApi {
+  getSettings: () => Promise<ControlCenterSettings>
+  saveSettings: (settings: Partial<ControlCenterSettings>) => Promise<ControlCenterSettings>
+  previewScale: (scale: number) => void
+  getActions: () => Promise<ActionsConfigViewState>
+  inspectActionFrames: (payload?: ActionFrameInspectRequest) => Promise<ActionFrameInspectionResult>
+  reinspectActionFrames: (payload?: ActionFrameReinspectRequest) => Promise<ActionFrameInspectionResult>
+  clearActionFrameSelection: (payload: ActionFrameClearRequest) => Promise<OkResponse>
+  importActionFrames: (payload?: ActionFrameImportRequest) => Promise<ActionFrameImportResult>
+  saveActionsConfig: (payload: ActionsSaveConfigRequest) => Promise<ActionsMutationResult>
+  deleteAction: (actionId: string) => Promise<ActionsMutationResult>
+  listPetPacks: () => Promise<PetPacksViewState>
+  inspectPetPackDirectory: () => Promise<PetPackInspectionResult>
+  clearPetPackSelection: (selectionId: string) => Promise<OkResponse>
+  importPetPack: (selectionId: string) => Promise<PetPackMutationResult>
+  exportPetPack: (packId: string) => Promise<PetPackExportResult>
+  setActivePetPack: (packId: string) => Promise<PetPackMutationResult>
+  removePetPack: (packId: string) => Promise<PetPackMutationResult>
+  getAiConfig: () => Promise<AiConfigViewState>
+  saveAiConfig: (config: Partial<AiConfigViewState>) => Promise<AiConfigViewState>
+  saveAiApiKey: (apiKey: string) => Promise<AiSaveApiKeyResult>
+  testAiConnection: () => Promise<AiConnectionTestResult>
+  getAiConversation: (conversationId: string) => Promise<ChatMessage[]>
+  chat: (payload: AiChatRequest) => Promise<AiChatResponse>
+  getAiBehavior: () => Promise<AiBehaviorConfig>
+  saveAiBehavior: (config: AiBehaviorConfig) => Promise<AiBehaviorConfig>
+  dryRunAiBehavior: (payload: AiBehaviorDryRunRequest) => Promise<AiBehaviorResult>
+  replayAiBehaviorDecision: (decisionId: number) => Promise<AiBehaviorResult>
+  exportAiBehaviorDiagnostics: () => Promise<string>
+  clearAiBehaviorDecisions: () => Promise<AiBehaviorDecision[]>
+  getPlugins: () => Promise<PluginViewState[]>
+  setPluginEnabled: (pluginId: string, enabled: boolean) => Promise<Partial<PluginViewState>>
+  savePluginConfig: (pluginId: string, config: JsonObject) => Promise<Partial<PluginViewState>>
+  runPluginCommand: (pluginId: string, commandId: string, payload?: JsonObject) => Promise<OkResponse>
+  inspectPluginPackage: () => Promise<PluginPackageInspectionResult>
+  clearPluginSelection: (selectionId: string) => Promise<OkResponse>
+  installPlugin: (selectionId: string) => Promise<PluginMutationResult>
+  updatePlugin: (selectionId: string) => Promise<PluginMutationResult>
+  uninstallPlugin: (pluginId: string, options?: { removeStorage?: boolean }) => Promise<PluginMutationResult>
+  getPluginLogs: (filters?: PluginLogFilters) => Promise<PluginLogEntry[]>
+  exportPluginLogs: (filters?: PluginLogFilters) => Promise<string>
+  clearPluginLogs: () => Promise<PluginLogEntry[]>
+  clearPluginStorage: (pluginId: string) => Promise<Partial<PluginViewState>>
+  getServiceStatus: () => Promise<ServiceStatusViewState>
+  saveServiceConfig: (config: Partial<LocalHttpConfigViewState>) => Promise<ServiceStatusViewState>
+  getServiceLogs: (filters?: ServiceLogFilters) => Promise<ServiceLogEntry[]>
+  exportServiceLogs: (filters?: ServiceLogFilters) => Promise<string>
+  clearServiceLogs: () => Promise<ServiceLogEntry[]>
+  rotateServiceToken: () => Promise<ServiceStatusViewState>
+  revokeMcpSessions: () => Promise<ServiceStatusViewState>
+  getAboutInfo: () => Promise<AboutInfoViewState>
+  checkForUpdates: () => Promise<UpdateCheckViewState>
+  getCatalog: () => Promise<CatalogState>
+  prepareCatalogInstall: (payload: CatalogInstallRequest) => Promise<CatalogInstallSelection>
+  installCatalogSelection: (selectionId: string) => Promise<CatalogInstallResult>
+  clearCatalogSelection: (selectionId: string) => Promise<OkResponse>
+  addCatalogBlocklistEntry: (payload: CatalogBlocklistEntry) => Promise<CatalogBlocklistResult>
+  removeCatalogBlocklistEntry: (payload: CatalogBlocklistEntry) => Promise<CatalogBlocklistResult>
+  close: () => void
 }
