@@ -4,7 +4,7 @@
 
 An Electron desktop pet platform with a visual Control Center, AI chat, plugins, pet packs, and local agent APIs.
 
-[![Tests](https://img.shields.io/badge/tests-434%20node%20%2B%2010%20ui-success)](./tests)
+[![Tests](https://img.shields.io/badge/tests-443%20node%20%2B%2010%20ui-success)](./tests)
 [![Build](https://img.shields.io/badge/build-passing-success)](./package.json)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Version](https://img.shields.io/badge/version-1.0.1--rc.2-blue.svg)](./package.json)
@@ -106,7 +106,7 @@ For normal use, import pet packs from Control Center -> Actions -> Pet Packs.
 
 ## Extension Development
 
-OpenPet uses one third-party package model: an extension. The package manifest is still named `plugin.json` for compatibility. The host now normalizes and inspects extension declarations for `entries.commands`, `entries.services`, `entries.dashboards`, `manifest`, `config`, and `assets`; JavaScript compatibility packages can expose `entries.commands` through the existing runner. Enabled plugins can explicitly open declared HTTP/HTTPS dashboards and start or stop declared service entries from Control Center. Services do not auto-start, commands are spawned without shell expansion, and setup, health checks, bridge flows, and general shell command execution remain future runtime work.
+OpenPet uses one third-party package model: an extension. The package manifest is still named `plugin.json` for compatibility. The host now normalizes and inspects extension declarations for `entries.commands`, `entries.services`, `entries.dashboards`, `manifest`, `config`, and `assets`; JavaScript compatibility packages can expose `entries.commands` through the existing runner. Enabled plugins can explicitly open declared HTTP/HTTPS dashboards, start or stop declared service entries, and manually check declared loopback service health endpoints from Control Center. Services do not auto-start, commands are spawned without shell expansion, health checks do not run in the background, and setup, bridge flows, general shell command execution, and full process-tree cleanup remain future runtime work.
 
 Current legacy SDK examples are still useful while the host runtime catches up:
 
@@ -153,7 +153,7 @@ Extension authors should also read [plugin-ecosystem-rules.md](./docs/plugin-eco
 Current local baseline:
 
 ```bash
-npm test                     # 434/434 Node tests
+npm test                     # 443/443 Node tests
 npm run test:control-center  # 10/10 Playwright tests
 npm run typecheck            # TypeScript no-emit checks
 npm run check:syntax         # syntax + typecheck + Control Center build

@@ -152,7 +152,7 @@ Services are long-running local process entries managed by OpenPet.
 }
 ```
 
-OpenPet can explicitly start and stop services from Control Center, capture stdout/stderr snippets, show runtime state, stop services on plugin disable, and send stop signals on app quit. Services never auto-start, and the host spawns service commands without shell expansion. Health checks, setup coupling, bridge injection, and full process-tree cleanup are still future runtime work. The service model should not require a specific language, a self-contained package, or a full process sandbox.
+OpenPet can explicitly start and stop services from Control Center, capture stdout/stderr snippets, show runtime state, stop services on plugin disable, send stop signals on app quit, and manually check declared loopback health endpoints. Services never auto-start, health checks do not run in the background, and the host spawns service commands without shell expansion. Setup coupling, bridge injection, and full process-tree cleanup are still future runtime work. The service model should not require a specific language, a self-contained package, or a full process sandbox.
 
 ### Dashboards
 
@@ -373,7 +373,7 @@ npm run create-plugin-submission-bundle -- <extension-dir-or-zip> --output-dir p
 npm run validate-plugin-submission-bundle -- plugin-submission-bundle --require-ready
 ```
 
-These commands are useful for structural validation and reviewer handoff, but some checks still reflect the legacy short-lived JavaScript SDK plugin model. The host now supports explicit service start/stop, but generic shell command execution, setup status, health checks, bridge flows, and process-tree cleanup are still implementation gaps to reconcile with the extension boundary design when developing the next host runtime.
+These commands are useful for structural validation and reviewer handoff, but some checks still reflect the legacy short-lived JavaScript SDK plugin model. The host now supports explicit service start/stop and manual loopback service health checks, but generic shell command execution, setup status, bridge flows, and process-tree cleanup are still implementation gaps to reconcile with the extension boundary design when developing the next host runtime.
 
 For a local author rehearsal:
 

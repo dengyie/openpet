@@ -598,6 +598,54 @@ test('plugin service lifecycle handlers delegate to plugin service', async () =>
   ])
 })
 
+test('plugin service health handler delegates to plugin service', async () => {
+  const ipcMain = createIpcMainStub()
+  const calls = []
+
+  registerIpcHandlers({
+    ...createRequiredServices({
+      pluginInstallService: {
+        inspectPluginPackage: () => ({}),
+        clearPendingSelection: () => ({ ok: true }),
+        installPlugin: () => ({ ok: true }),
+        updatePlugin: () => ({ ok: true }),
+        uninstallPlugin: () => ({ ok: true })
+      },
+      pluginService: {
+        listPlugins: () => [],
+        checkServiceHealth: (pluginId, serviceId) => {
+          calls.push([pluginId, serviceId])
+          return {
+            ok: true,
+            pluginId,
+            serviceId,
+            health: { status: 'healthy', url: 'http://127.0.0.1:8787/health', statusCode: 200 },
+            runtime: { status: 'running', health: { status: 'healthy' } }
+          }
+        }
+      },
+      dialogService: {
+        showOpenDialog: async () => ({ canceled: true, filePaths: [] })
+      }
+    }),
+    ipcMainService: ipcMain
+  })
+
+  const result = await ipcMain.handlers.get(IPC.PLUGINS_CHECK_SERVICE_HEALTH)(null, {
+    pluginId: 'weather-declaration',
+    serviceId: 'companion'
+  })
+
+  assert.deepEqual(result, {
+    ok: true,
+    pluginId: 'weather-declaration',
+    serviceId: 'companion',
+    health: { status: 'healthy', url: 'http://127.0.0.1:8787/health', statusCode: 200 },
+    runtime: { status: 'running', health: { status: 'healthy' } }
+  })
+  assert.deepEqual(calls, [['weather-declaration', 'companion']])
+})
+
 test('pet-packs:inspect-directory opens native folder or zip picker and delegates selected source', async () => {
   const ipcMain = createIpcMainStub()
   const dialogCalls = []

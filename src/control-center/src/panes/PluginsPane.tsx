@@ -29,6 +29,7 @@ export interface PluginsPaneProps {
   runningCommand: string
   openingDashboard: string
   changingService: string
+  checkingServiceHealth: string
   savingConfig: string
   clearingStorage: string
   pluginReview: PluginPackageReviewViewState | null
@@ -46,6 +47,7 @@ export interface PluginsPaneProps {
   onOpenDashboard: (pluginId: string, dashboardId: string) => void | Promise<void>
   onStartService: (pluginId: string, serviceId: string) => void | Promise<void>
   onStopService: (pluginId: string, serviceId: string) => void | Promise<void>
+  onCheckServiceHealth: (pluginId: string, serviceId: string) => void | Promise<void>
   onChangeFilters: (filters: PluginLogFilters) => void
   onExportLogs: (format: ExportFormat) => void | Promise<void>
   onClearLogs: () => void | Promise<void>
@@ -135,7 +137,7 @@ function PluginReviewPanel({
   )
 }
 
-export function PluginsPane({ plugins, logs, filters, status, runningCommand, openingDashboard, changingService, savingConfig, clearingStorage, pluginReview, inspectingPlugin, installingPlugin, uninstallingPlugin, onToggle, onInspectPluginPackage, onClearPluginReview, onInstallReviewedPlugin, onUninstallPlugin, onChangeConfig, onSaveConfig, onRun, onOpenDashboard, onStartService, onStopService, onChangeFilters, onExportLogs, onClearLogs, onClearStorage }: PluginsPaneProps) {
+export function PluginsPane({ plugins, logs, filters, status, runningCommand, openingDashboard, changingService, checkingServiceHealth, savingConfig, clearingStorage, pluginReview, inspectingPlugin, installingPlugin, uninstallingPlugin, onToggle, onInspectPluginPackage, onClearPluginReview, onInstallReviewedPlugin, onUninstallPlugin, onChangeConfig, onSaveConfig, onRun, onOpenDashboard, onStartService, onStopService, onCheckServiceHealth, onChangeFilters, onExportLogs, onClearLogs, onClearStorage }: PluginsPaneProps) {
   return (
     <section className="pane">
       <header className="pane-header">
@@ -211,11 +213,13 @@ export function PluginsPane({ plugins, logs, filters, status, runningCommand, op
                   {plugin.entries.services.map((service) => {
                     const serviceKey = `${plugin.id}:${service.id}`
                     const runtimeStatus = service.runtime?.status || 'stopped'
+                    const healthStatus = service.runtime?.health?.status || (service.health?.url ? 'unknown' : 'not-configured')
                     const running = runtimeStatus === 'running'
                     const title = service.title || service.id
                     return (
                       <div className="plugin-service-control" key={service.id}>
                         <span>Service status: {runtimeStatus}{service.runtime?.pid ? ` · pid ${service.runtime.pid}` : ''}</span>
+                        <span>Health: {healthStatus}</span>
                         <button
                           type="button"
                           className="ghost"
@@ -227,6 +231,14 @@ export function PluginsPane({ plugins, logs, filters, status, runningCommand, op
                             : running
                               ? `Stop ${title}`
                               : `Start ${title}`}
+                        </button>
+                        <button
+                          type="button"
+                          className="ghost"
+                          disabled={!plugin.enabled || plugin.blockStatus?.blocked || !service.health?.url || checkingServiceHealth === serviceKey}
+                          onClick={() => onCheckServiceHealth(plugin.id, service.id)}
+                        >
+                          {checkingServiceHealth === serviceKey ? '检查中' : `Check ${title} Health`}
                         </button>
                       </div>
                     )

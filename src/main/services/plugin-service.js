@@ -12,11 +12,28 @@ const MAX_PLUGIN_STORAGE_VALUE_BYTES = 16 * 1024
 const MAX_PLUGIN_LOG_ENTRIES = 200
 const MAX_PLUGIN_NETWORK_REQUEST_BYTES = 64 * 1024
 const MAX_PLUGIN_NETWORK_RESPONSE_BYTES = 128 * 1024
+const PLUGIN_SERVICE_HEALTH_TIMEOUT_MS = 3000
 const LOCAL_PLUGIN_RUNNER_PATH = path.join(__dirname, '../plugins/local-plugin-runner.js')
 
 const createPluginServiceKey = (pluginId, serviceId) => `${pluginId}:${serviceId}`
 
 const ACTIVE_SERVICE_STATUSES = new Set(['running', 'stopping'])
+
+const LOOPBACK_HEALTH_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]'])
+
+const createServiceHealthView = (health = {}, serviceEntry = {}) => {
+  const hasConfiguredHealth = Boolean(serviceEntry.health?.url)
+  const statusCode = health.statusCode == null || health.statusCode === ''
+    ? null
+    : Number(health.statusCode)
+  return {
+    status: health.status || (hasConfiguredHealth ? 'unknown' : 'not-configured'),
+    checkedAt: health.checkedAt || '',
+    url: health.url || serviceEntry.health?.url || '',
+    statusCode: Number.isFinite(statusCode) ? statusCode : null,
+    message: health.message || ''
+  }
+}
 
 const parseServiceCommand = (command) => {
   const input = String(command || '').trim()
@@ -409,7 +426,7 @@ const readLocalPluginManifests = (pluginDirs = []) => {
   return plugins
 }
 
-const createPluginService = ({ settingsService, petService, aiService, fetchImpl = globalThis.fetch, openExternal = async () => { throw new Error('Dashboard opener is not available') }, spawnServiceProcess = spawn, pluginDirs = [], officialPlugins = [], getPluginBlockStatus = () => ({ blocked: false, reasons: [] }) }) => {
+const createPluginService = ({ settingsService, petService, aiService, fetchImpl = globalThis.fetch, serviceHealthTimeoutMs, healthCheckTimeoutMs = serviceHealthTimeoutMs ?? PLUGIN_SERVICE_HEALTH_TIMEOUT_MS, openExternal = async () => { throw new Error('Dashboard opener is not available') }, spawnServiceProcess = spawn, pluginDirs = [], officialPlugins = [], getPluginBlockStatus = () => ({ blocked: false, reasons: [] }) }) => {
   if (!settingsService) throw new Error('settingsService is required')
   if (!petService) throw new Error('petService is required')
   const serviceRuntimes = new Map()
@@ -580,8 +597,13 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
     return listPlugins().find((candidate) => candidate.id === pluginId)
   }
 
-  const createRuntimeView = (runtime) => {
-    if (!runtime) return { status: 'stopped' }
+  const createRuntimeView = (runtime, serviceEntry = {}) => {
+    if (!runtime) {
+      return {
+        status: 'stopped',
+        health: createServiceHealthView({}, serviceEntry)
+      }
+    }
     return {
       status: runtime.status || 'stopped',
       pid: runtime.pid || 0,
@@ -591,7 +613,8 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
       cwd: runtime.cwd || '',
       exitCode: Number.isFinite(runtime.exitCode) ? runtime.exitCode : null,
       signal: runtime.signal || '',
-      error: runtime.error || ''
+      error: runtime.error || '',
+      health: createServiceHealthView(runtime.health || {}, serviceEntry)
     }
   }
 
@@ -599,7 +622,7 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
     ...manifest.entries,
     services: (manifest.entries?.services || []).map((serviceEntry) => ({
       ...serviceEntry,
-      runtime: createRuntimeView(serviceRuntimes.get(createPluginServiceKey(manifest.id, serviceEntry.id)))
+      runtime: createRuntimeView(serviceRuntimes.get(createPluginServiceKey(manifest.id, serviceEntry.id)), serviceEntry)
     }))
   })
 
@@ -645,6 +668,26 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
     return realTargetPath
   }
 
+  const normalizeServiceHealthUrl = (serviceEntry) => {
+    const health = serviceEntry.health || {}
+    const type = String(health.type || '').trim() || 'none'
+    if (type === 'none' || !health.url) throw new Error('Plugin service health check is not configured')
+    if (type !== 'http') throw new Error('Plugin service health type must be http')
+    let healthUrl
+    try {
+      healthUrl = new URL(String(health.url || '').trim())
+    } catch (_) {
+      throw new Error('Plugin service health URL is invalid')
+    }
+    if (!['http:', 'https:'].includes(healthUrl.protocol)) {
+      throw new Error('Plugin service health URL must use HTTP or HTTPS')
+    }
+    if (!LOOPBACK_HEALTH_HOSTS.has(healthUrl.hostname.toLowerCase())) {
+      throw new Error('Plugin service health URL must use a loopback host')
+    }
+    return healthUrl.toString()
+  }
+
   const findPluginForService = (pluginId, { requireEnabled = true } = {}) => {
     const plugin = getPlugins().find((candidate) => candidate.manifest.id === pluginId)
     if (!plugin) throw new Error(`Plugin not found: ${pluginId}`)
@@ -658,6 +701,26 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
   const setServiceRuntime = (pluginId, serviceId, runtime) => {
     serviceRuntimes.set(createPluginServiceKey(pluginId, serviceId), runtime)
     return runtime
+  }
+
+  const getOrCreateServiceRuntime = (pluginId, serviceId, serviceEntry) => {
+    const existingRuntime = getPluginServiceRuntime(pluginId, serviceId)
+    if (existingRuntime) return existingRuntime
+    return setServiceRuntime(pluginId, serviceId, {
+      pluginId,
+      serviceId,
+      status: 'stopped',
+      pid: 0,
+      startedAt: '',
+      stoppedAt: '',
+      command: '',
+      cwd: '',
+      exitCode: null,
+      signal: '',
+      error: '',
+      child: null,
+      health: createServiceHealthView({}, serviceEntry)
+    })
   }
 
   const stopPluginServiceRuntime = (pluginId, serviceId, runtime, { log = true } = {}) => {
@@ -911,7 +974,8 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
         exitCode: null,
         signal: '',
         error: '',
-        child
+        child,
+        health: existingRuntime?.health || createServiceHealthView({}, serviceEntry)
       })
 
       child.stdout?.on?.('data', (chunk) => {
@@ -945,7 +1009,7 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
         ok: true,
         pluginId,
         serviceId,
-        runtime: createRuntimeView(runtime)
+        runtime: createRuntimeView(runtime, serviceEntry)
       }
     } catch (error) {
       appendLog({ pluginId, commandId, level: 'error', message: error.message || 'Service start failed' })
@@ -956,7 +1020,7 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
   const stopService = (pluginId, serviceId) => {
     const plugin = getPlugins().find((candidate) => candidate.manifest.id === pluginId)
     if (!plugin) throw new Error(`Plugin not found: ${pluginId}`)
-    getServiceEntry(plugin, serviceId)
+    const serviceEntry = getServiceEntry(plugin, serviceId)
     const runtime = getPluginServiceRuntime(pluginId, serviceId)
     if (!runtime || runtime.status !== 'running') throw new Error('Plugin service is not running')
     stopPluginServiceRuntime(pluginId, serviceId, runtime)
@@ -964,7 +1028,83 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
       ok: true,
       pluginId,
       serviceId,
-      runtime: createRuntimeView(runtime)
+      runtime: createRuntimeView(runtime, serviceEntry)
+    }
+  }
+
+  const checkServiceHealth = async (pluginId, serviceId) => {
+    const commandId = `service:${serviceId || ''}`
+    try {
+      const plugin = findPluginForService(pluginId)
+      const serviceEntry = getServiceEntry(plugin, serviceId)
+      const healthUrl = normalizeServiceHealthUrl(serviceEntry)
+      const runtime = getOrCreateServiceRuntime(pluginId, serviceId, serviceEntry)
+      const timeoutMs = Number.isFinite(Number(healthCheckTimeoutMs))
+        ? Math.max(0, Number(healthCheckTimeoutMs))
+        : PLUGIN_SERVICE_HEALTH_TIMEOUT_MS
+      const abortController = timeoutMs > 0 && typeof AbortController === 'function'
+        ? new AbortController()
+        : null
+      let timedOut = false
+      const timeoutId = abortController
+        ? setTimeout(() => {
+            timedOut = true
+            abortController.abort()
+          }, timeoutMs)
+        : null
+      timeoutId?.unref?.()
+      runtime.health = {
+        ...createServiceHealthView(runtime.health || {}, serviceEntry),
+        status: 'checking',
+        url: healthUrl,
+        checkedAt: new Date().toISOString(),
+        message: ''
+      }
+
+      try {
+        const response = await fetchImpl(healthUrl, {
+          method: 'GET',
+          ...(abortController ? { signal: abortController.signal } : {})
+        })
+        const statusCode = Number(response?.status)
+        const hasStatusCode = Number.isFinite(statusCode)
+        const healthy = hasStatusCode ? statusCode >= 200 && statusCode < 300 : Boolean(response?.ok)
+        runtime.health = {
+          status: healthy ? 'healthy' : 'unhealthy',
+          checkedAt: new Date().toISOString(),
+          url: healthUrl,
+          statusCode: hasStatusCode ? statusCode : null,
+          message: healthy ? 'OK' : `HTTP ${hasStatusCode ? statusCode : 'error'}`
+        }
+      } catch (error) {
+        runtime.health = {
+          status: 'unhealthy',
+          checkedAt: new Date().toISOString(),
+          url: healthUrl,
+          statusCode: null,
+          message: timedOut ? 'Health check timed out' : (error.message || 'Health check failed')
+        }
+      } finally {
+        if (timeoutId) clearTimeout(timeoutId)
+      }
+
+      appendLog({
+        pluginId,
+        commandId,
+        level: runtime.health.status === 'healthy' ? 'info' : 'error',
+        message: runtime.health.status === 'healthy' ? 'Service health healthy' : 'Service health unhealthy'
+      })
+
+      return {
+        ok: true,
+        pluginId,
+        serviceId,
+        health: createServiceHealthView(runtime.health, serviceEntry),
+        runtime: createRuntimeView(runtime, serviceEntry)
+      }
+    } catch (error) {
+      appendLog({ pluginId, commandId, level: 'error', message: error.message || 'Service health check failed' })
+      throw error
     }
   }
 
@@ -984,7 +1124,7 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
     return { ok: true }
   }
 
-  return { listPlugins, setEnabled, saveConfig, clearStorage, runCommand, openDashboard, startService, stopService, stopAllServices, getLogs, exportLogs: exportLogEntries, clearLogs }
+  return { listPlugins, setEnabled, saveConfig, clearStorage, runCommand, openDashboard, startService, stopService, checkServiceHealth, stopAllServices, getLogs, exportLogs: exportLogEntries, clearLogs }
 }
 
 module.exports = { createPluginService, readLocalPluginManifests }

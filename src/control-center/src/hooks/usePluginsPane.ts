@@ -22,6 +22,7 @@ export function usePluginsPane() {
   const [runningCommand, setRunningCommand] = useState('')
   const [openingDashboard, setOpeningDashboard] = useState('')
   const [changingService, setChangingService] = useState('')
+  const [checkingServiceHealth, setCheckingServiceHealth] = useState('')
   const [savingConfig, setSavingConfig] = useState('')
   const [clearingStorage, setClearingStorage] = useState('')
   const [pluginReview, setPluginReview] = useState<PluginPackageReviewViewState | null>(null)
@@ -228,6 +229,24 @@ export function usePluginsPane() {
     }
   }
 
+  const onCheckServiceHealth = async (pluginId: string, serviceId: string) => {
+    const serviceKey = `${pluginId}:${serviceId}`
+    setCheckingServiceHealth(serviceKey)
+    setStatus('')
+    try {
+      const result = await api.checkPluginServiceHealth(pluginId, serviceId)
+      await refreshPlugins()
+      await refreshLogs()
+      setStatus(result.health?.status === 'healthy' ? 'Service health healthy' : 'Service health unhealthy')
+    } catch (error) {
+      setStatus(messageFromError(error, 'Service health check failed'))
+      await refreshPlugins()
+      await refreshLogs()
+    } finally {
+      setCheckingServiceHealth('')
+    }
+  }
+
   const onExportLogs = async (format: ExportFormat) => {
     setStatus('')
     try {
@@ -285,6 +304,7 @@ export function usePluginsPane() {
     runningCommand,
     openingDashboard,
     changingService,
+    checkingServiceHealth,
     savingConfig,
     clearingStorage,
     pluginReview,
@@ -302,6 +322,7 @@ export function usePluginsPane() {
     onOpenDashboard,
     onStartService,
     onStopService,
+    onCheckServiceHealth,
     onChangeFilters: setFilters,
     onExportLogs,
     onClearLogs,

@@ -111,7 +111,7 @@ const createRunnablePluginDir = ({ manifest = {}, source, configSchema }) => {
   return root
 }
 
-const createDeclarationOnlyPluginDir = ({ dashboardUrl = 'http://127.0.0.1:8787', serviceCommand = 'npm run service:start', serviceCwd = '.' } = {}) => {
+const createDeclarationOnlyPluginDir = ({ dashboardUrl = 'http://127.0.0.1:8787', serviceCommand = 'npm run service:start', serviceCwd = '.', serviceHealth } = {}) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-declaration-plugin-'))
   const pluginPath = path.join(root, 'weather-declaration')
   fs.mkdirSync(pluginPath)
@@ -121,7 +121,13 @@ const createDeclarationOnlyPluginDir = ({ dashboardUrl = 'http://127.0.0.1:8787'
     version: '1.0.0',
     entries: {
       commands: [{ id: 'announce', title: 'Announce Weather', command: 'node ./commands/announce.js' }],
-      services: [{ id: 'companion', title: 'Companion Service', command: serviceCommand, cwd: serviceCwd }],
+      services: [{
+        id: 'companion',
+        title: 'Companion Service',
+        command: serviceCommand,
+        cwd: serviceCwd,
+        ...(serviceHealth ? { health: serviceHealth } : {})
+      }],
       dashboards: [{ id: 'main', title: 'Dashboard', url: dashboardUrl }]
     }
   }))
@@ -532,6 +538,207 @@ test('plugin service keeps services in stopping state until the child exits', ()
   child.emit('exit', 0, 'SIGTERM')
 
   assert.equal(service.listPlugins()[0].entries.services[0].runtime.status, 'stopped')
+})
+
+test('plugin service checks configured service health endpoints', async () => {
+  const fetched = []
+  const settingsService = createSettingsService({
+    plugins: { enabled: { 'weather-declaration': true } }
+  })
+  const service = createPluginService({
+    settingsService,
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir({
+      serviceHealth: { type: 'http', url: 'http://127.0.0.1:8787/health' }
+    })],
+    fetchImpl: async (url, options) => {
+      fetched.push({ url, options })
+      return { ok: true, status: 204 }
+    }
+  })
+
+  const result = await service.checkServiceHealth('weather-declaration', 'companion')
+
+  assert.equal(result.ok, true)
+  assert.equal(result.health.status, 'healthy')
+  assert.equal(result.health.statusCode, 204)
+  assert.equal(result.health.url, 'http://127.0.0.1:8787/health')
+  assert.equal(result.runtime.health.status, 'healthy')
+  assert.equal(fetched[0].url, 'http://127.0.0.1:8787/health')
+  assert.equal(fetched[0].options.method, 'GET')
+  assert.ok(fetched[0].options.signal)
+  assert.equal(service.listPlugins()[0].entries.services[0].runtime.health.status, 'healthy')
+  assert.equal(settingsService.get().plugins.logs[0].message, 'Service health healthy')
+})
+
+test('plugin service marks non-2xx service health responses unhealthy', async () => {
+  const settingsService = createSettingsService({
+    plugins: { enabled: { 'weather-declaration': true } }
+  })
+  const service = createPluginService({
+    settingsService,
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir({
+      serviceHealth: { type: 'http', url: 'http://127.0.0.1:8787/health' }
+    })],
+    fetchImpl: async () => ({ ok: false, status: 503 })
+  })
+
+  const result = await service.checkServiceHealth('weather-declaration', 'companion')
+
+  assert.equal(result.health.status, 'unhealthy')
+  assert.equal(result.health.statusCode, 503)
+  assert.match(result.health.message, /HTTP 503/)
+  assert.equal(service.listPlugins()[0].entries.services[0].runtime.health.status, 'unhealthy')
+  assert.equal(settingsService.get().plugins.logs[0].level, 'error')
+  assert.equal(settingsService.get().plugins.logs[0].message, 'Service health unhealthy')
+})
+
+test('plugin service times out slow service health checks', async () => {
+  const settingsService = createSettingsService({
+    plugins: { enabled: { 'weather-declaration': true } }
+  })
+  const service = createPluginService({
+    settingsService,
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir({
+      serviceHealth: { type: 'http', url: 'http://127.0.0.1:8787/health' }
+    })],
+    serviceHealthTimeoutMs: 1,
+    fetchImpl: async (_url, options = {}) => new Promise((resolve, reject) => {
+      options.signal?.addEventListener('abort', () => {
+        reject(new Error('Health check timed out'))
+      })
+      setTimeout(() => resolve({ ok: true, status: 200 }), 20)
+    })
+  })
+
+  const result = await service.checkServiceHealth('weather-declaration', 'companion')
+
+  assert.equal(result.health.status, 'unhealthy')
+  assert.equal(result.health.statusCode, null)
+  assert.match(result.health.message, /timed out/)
+  assert.equal(settingsService.get().plugins.logs[0].message, 'Service health unhealthy')
+})
+
+test('plugin service times out stalled service health endpoints', async () => {
+  const settingsService = createSettingsService({
+    plugins: { enabled: { 'weather-declaration': true } }
+  })
+  const service = createPluginService({
+    settingsService,
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir({
+      serviceHealth: { type: 'http', url: 'http://127.0.0.1:8787/health' }
+    })],
+    serviceHealthTimeoutMs: 1,
+    fetchImpl: async (_url, options = {}) => new Promise((_resolve, reject) => {
+      options.signal?.addEventListener('abort', () => reject(new Error('aborted')))
+    })
+  })
+
+  const result = await service.checkServiceHealth('weather-declaration', 'companion')
+
+  assert.equal(result.health.status, 'unhealthy')
+  assert.match(result.health.message, /timed out/)
+  assert.equal(service.listPlugins()[0].entries.services[0].runtime.health.status, 'unhealthy')
+  assert.equal(settingsService.get().plugins.logs[0].message, 'Service health unhealthy')
+})
+
+test('plugin service rejects service health checks for disabled plugins', async () => {
+  const fetched = []
+  const service = createPluginService({
+    settingsService: createSettingsService(),
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir({
+      serviceHealth: { type: 'http', url: 'http://127.0.0.1:8787/health' }
+    })],
+    fetchImpl: async (...args) => {
+      fetched.push(args)
+      return { ok: true, status: 200 }
+    }
+  })
+
+  await assert.rejects(
+    () => service.checkServiceHealth('weather-declaration', 'companion'),
+    /Plugin is disabled/
+  )
+  assert.deepEqual(fetched, [])
+})
+
+test('plugin service rejects service health checks without health declarations', async () => {
+  const fetched = []
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir()],
+    fetchImpl: async (...args) => {
+      fetched.push(args)
+      return { ok: true, status: 200 }
+    }
+  })
+
+  await assert.rejects(
+    () => service.checkServiceHealth('weather-declaration', 'companion'),
+    /Plugin service health check is not configured/
+  )
+  assert.deepEqual(fetched, [])
+})
+
+test('plugin service rejects unsafe service health protocols before fetching', async () => {
+  const fetched = []
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir({
+      serviceHealth: { type: 'http', url: 'file:///tmp/openpet-health' }
+    })],
+    fetchImpl: async (...args) => {
+      fetched.push(args)
+      return { ok: true, status: 200 }
+    }
+  })
+
+  await assert.rejects(
+    () => service.checkServiceHealth('weather-declaration', 'companion'),
+    /Plugin service health URL must use HTTP or HTTPS/
+  )
+  assert.deepEqual(fetched, [])
+})
+
+test('plugin service rejects non-loopback service health hosts before fetching', async () => {
+  const fetched = []
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir({
+      serviceHealth: { type: 'http', url: 'https://api.example.com/health' }
+    })],
+    fetchImpl: async (...args) => {
+      fetched.push(args)
+      return { ok: true, status: 200 }
+    }
+  })
+
+  await assert.rejects(
+    () => service.checkServiceHealth('weather-declaration', 'companion'),
+    /Plugin service health URL must use a loopback host/
+  )
+  assert.deepEqual(fetched, [])
 })
 
 test('plugin service rejects local plugin main symlinks escaping the plugin directory', () => {

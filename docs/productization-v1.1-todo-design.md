@@ -1,12 +1,12 @@
 # OpenPet v1.1 TODO Design
 
 > Date: 2026-06-16
-> Baseline: Phase 58 completed locally
+> Baseline: Phase 59 completed locally
 > Scope: Convert the remaining productization TODO into a phase-ready design for v1.1 work. This document does not upgrade platform support claims. Windows remains not release-ready until signed runtime smoke evidence passes.
 
 ## 1. Goal
 
-OpenPet has reached the intended platform shape: Electron desktop pet runtime, Control Center, pet packs, Codex pet import, bundled pets, a local extension ecosystem with `entries.commands` compatibility runtime support, explicit dashboard opening, and explicit service start/stop controls, AI behavior orchestration, local HTTP/MCP, desktop release tooling, and release evidence validators.
+OpenPet has reached the intended platform shape: Electron desktop pet runtime, Control Center, pet packs, Codex pet import, bundled pets, a local extension ecosystem with `entries.commands` compatibility runtime support, explicit dashboard opening, explicit service start/stop controls, and manual loopback service health checks, AI behavior orchestration, local HTTP/MCP, desktop release tooling, and release evidence validators.
 
 The v1.1 TODO is no longer about proving the platform can exist. It is about making the platform trustworthy for real users and maintainable for third-party contributors:
 
@@ -25,7 +25,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 - PetService remains the single source of truth for `say`, `action`, and event state.
 - Pet pack runtime supports legacy cat assets, OpenPet packs, Codex pet directory import, Codex pet zip import, and bundled packs.
 - Bundled pet assets are integrated without replacing the legacy `cat_anime/` structure.
-- Extension ecosystem docs now use a developer-first local extension model while current runtime/tools keep legacy JavaScript SDK compatibility, manifest validation, normalized `entries` declarations, `entries.commands` support through the existing JavaScript runner, entry declaration visibility, explicit HTTP/HTTPS dashboard opening, explicit `entries.services` start/stop, logs, catalog, blocklist, and submission tooling.
+- Extension ecosystem docs now use a developer-first local extension model while current runtime/tools keep legacy JavaScript SDK compatibility, manifest validation, normalized `entries` declarations, `entries.commands` support through the existing JavaScript runner, entry declaration visibility, explicit HTTP/HTTPS dashboard opening, explicit `entries.services` start/stop, manual loopback service health checks, logs, catalog, blocklist, and submission tooling.
 - AI provider configuration and API keys remain in the main process boundary.
 - Local HTTP/MCP is loopback-only, token-gated, logged, and off by default.
 - TypeScript scaffold, Control Center view contracts, API facade, hook state boundaries, pane prop surfaces, main-process Control Center adapters for service/catalog/plugin/pet pack/About/update/actions payloads, plugin entry/dashboard/service contracts, and full release evidence archive / signed closure report contracts exist.
@@ -36,7 +36,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 - macOS signed/notarized release evidence still needs real artifact capture and archive.
 - Windows signed installer/zip smoke evidence still needs real Windows execution.
 - Packaged runtime smoke reports still need real app evidence for pet window visibility, transparent rendering, bundled pack switching, and native picker flows.
-- Extension runtime support for explicit service start/stop now exists. Generic shell command execution, setup status, health checks, optional bridge flows, and stronger process-tree cleanup are still future work. Dashboard entries can now be opened explicitly as external HTTP/HTTPS URLs from Control Center.
+- Extension runtime support for explicit service start/stop and manual loopback service health checks now exists. Generic shell command execution, setup status, optional bridge flows, background health polling, and stronger process-tree cleanup are still future work. Dashboard entries can now be opened explicitly as external HTTP/HTTPS URLs from Control Center.
 - Legacy SDK plugin secrets policy remains conservative; target extension docs require honest disclosure for extension-managed secrets and data.
 - Plugin sandbox strategy has been evaluated against SES and Electron `utilityProcess`; current recommendation is to keep the existing runner for v1.1 while documenting limits.
 - AI behavior orchestration has a Control Center decision viewer, replay, redacted diagnostics export, and clear-history controls.
@@ -694,6 +694,29 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 
 **Status**: completed in Phase 58. Enabled local plugins can explicitly start/stop declared service entries from Control Center, with runtime state and logs. Services do not auto-start, and service commands are spawned without shell expansion.
 
+### Phase 59: Plugin service health checks
+
+**Goal**: make declared service health visible and manually checkable without expanding plugin network authority.
+
+**Scope**:
+
+- Add `PluginService.checkServiceHealth(pluginId, serviceId)` for enabled, policy-allowed plugins.
+- Accept `entries.services[].health` with `type: "http"` and HTTP/HTTPS loopback URLs only.
+- Use an abortable timeout for slow health endpoints and record `healthy`, `unhealthy`, `checking`, `unknown`, or `not-configured` runtime health state.
+- Expose `plugins:check-service-health` through IPC, preload, shared contracts, and Control Center.
+- Show service health state and a disabled-when-ineligible Check Health action in Control Center.
+- Do not auto-start services, poll in the background, run setup, inject bridge tokens, execute generic shell commands, or claim full process-tree cleanup.
+
+**Acceptance**:
+
+- Plugin service tests cover healthy responses, non-2xx unhealthy responses, timeouts, disabled plugins, missing health declarations, unsafe protocols, and non-loopback host rejection before fetch.
+- IPC tests cover `plugins:check-service-health`.
+- Control Center smoke tests cover disabled health checks, enabled health check action, health state rendering, and health logs.
+- TypeScript contracts include service health state and health check result shapes.
+- Production review verifies the loopback-only boundary, timeout behavior, renderer IPC path, and operator-facing logs.
+
+**Status**: completed in Phase 59. Enabled local plugins can manually check declared loopback service health endpoints from Control Center, with runtime health state and logs. Health checks are explicit user actions only and do not background poll.
+
 ## 6. Priority Order
 
 | Priority | Work | Reason |
@@ -715,6 +738,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 | P1 | Phase 56 Extension command entries | Completed; `entries.commands` can feed the JavaScript compatibility runner while service entries remain declarations and dashboard runtime moves to Phase 57. |
 | P1 | Phase 57 Plugin dashboard opening | Completed; dashboard entries can be opened explicitly as external HTTP/HTTPS URLs. |
 | P1 | Phase 58 Plugin service lifecycle | Completed; service entries can be explicitly started/stopped with runtime state and logs while auto-start, shell expansion, setup, health, and bridge remain out of scope. |
+| P1 | Phase 59 Plugin service health checks | Completed; service entries can be manually health-checked against declared loopback endpoints while background polling, setup, bridge, and process-tree cleanup remain out of scope. |
 | P2 | Phase 41 AI behavior replay | Completed; preserve redacted diagnostics and replay semantics while future AI tooling evolves. |
 | P2 | Phase 39 plugin sandbox evaluation | Completed; keep current runner for v1.1 and revisit on high-risk plugin capability changes. |
 | P2 | Phase 46 documentation consolidation | Completed; keep future live-doc updates fact-only and link-oriented. |
@@ -740,7 +764,8 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 17. Phase 55 is complete; extension ecosystem docs now follow the developer-first local extension boundary.
 18. Phase 56 is complete; `entries.commands` now feeds the JavaScript compatibility runner.
 19. Phase 57 is complete; dashboard entries can be opened explicitly as external HTTP/HTTPS URLs.
-20. Phase 58 is complete; service entries can be explicitly started/stopped with runtime state and logs, without auto-start or shell expansion. Choose the next phase from service health/setup, process-tree cleanup, bridge integration, real evidence work, community extension rehearsal, or another high-drift service/report boundary.
+20. Phase 58 is complete; service entries can be explicitly started/stopped with runtime state and logs, without auto-start or shell expansion.
+21. Phase 59 is complete; service health checks are manual, loopback-only, timeout-protected, and visible in Control Center. Choose the next phase from setup support, process-tree cleanup, bridge integration, real evidence work, community extension rehearsal, or another high-drift service/report boundary.
 
 ## 8. Verification Contract
 
