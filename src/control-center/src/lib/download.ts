@@ -1,4 +1,4 @@
-export const downloadTextFile = (filename, text, type) => {
+export const downloadTextFile = (filename: string, text: string, type: string): void => {
   const blob = new Blob([text], { type })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')

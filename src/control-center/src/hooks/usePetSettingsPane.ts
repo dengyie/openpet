@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { controlCenterAPI as api } from '../api/control-center-api'
 import { cloneSettings, defaultSettings } from '../lib/defaults'
+import { messageFromError } from '../lib/errors'
+import type { ControlCenterSettings } from '../../../shared/openpet-contracts'
 
 export function usePetSettingsPane() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [settings, setSettings] = useState(defaultSettings)
-  const [originalSettings, setOriginalSettings] = useState(defaultSettings)
-  const originalRef = useRef(defaultSettings)
+  const [settings, setSettings] = useState<ControlCenterSettings>(defaultSettings)
+  const [originalSettings, setOriginalSettings] = useState<ControlCenterSettings>(defaultSettings)
+  const [status, setStatus] = useState('')
+  const originalRef = useRef<ControlCenterSettings>(defaultSettings)
 
   useEffect(() => {
     let mounted = true
@@ -17,6 +20,10 @@ export function usePetSettingsPane() {
       originalRef.current = nextSettings
       setSettings(nextSettings)
       setOriginalSettings(nextSettings)
+      setLoading(false)
+    }).catch((error) => {
+      if (!mounted) return
+      setStatus(messageFromError(error, '宠物设置加载失败'))
       setLoading(false)
     })
     return () => { mounted = false }
@@ -28,9 +35,10 @@ export function usePetSettingsPane() {
     return () => window.removeEventListener('beforeunload', restorePreview)
   }, [])
 
-  const onChange = (partial, previewScale) => {
+  const onChange = (partial: Partial<ControlCenterSettings>, previewScale = false) => {
     const nextSettings = { ...settings, ...partial }
     setSettings(nextSettings)
+    if (status) setStatus('')
     if (previewScale) api.previewScale(nextSettings.scale)
   }
 
@@ -41,6 +49,9 @@ export function usePetSettingsPane() {
       originalRef.current = savedSettings
       setOriginalSettings(savedSettings)
       setSettings(savedSettings)
+      setStatus('')
+    } catch (error) {
+      setStatus(messageFromError(error, '宠物设置保存失败'))
     } finally {
       setSaving(false)
     }
@@ -49,6 +60,7 @@ export function usePetSettingsPane() {
   const onReset = () => {
     const restoredSettings = cloneSettings(originalRef.current)
     setSettings(restoredSettings)
+    setStatus('')
     api.previewScale(restoredSettings.scale)
   }
 
@@ -57,6 +69,7 @@ export function usePetSettingsPane() {
     paneProps: {
       settings,
       originalSettings,
+      status,
       saving,
       onChange,
       onSave,

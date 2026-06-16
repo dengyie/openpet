@@ -1,15 +1,27 @@
 import { useEffect, useState } from 'react'
 import { controlCenterAPI as api } from '../api/control-center-api'
 import { cloneActionsConfig, clonePetPacks, defaultActionsConfig, defaultPetPacks } from '../lib/defaults'
+import { messageFromError } from '../lib/errors'
+import type {
+  ActionFrameInspectionResult,
+  ActionsConfigViewState,
+  PetPackInspectionResult,
+  PetPacksViewState
+} from '../../../shared/openpet-contracts'
+
+interface ActionImportDraft {
+  actionId: string
+  label: string
+}
 
 export function useActionsPane() {
   const [loading, setLoading] = useState(true)
-  const [actionsConfig, setActionsConfig] = useState(defaultActionsConfig)
-  const [petPacks, setPetPacks] = useState(defaultPetPacks)
-  const [petPackInspection, setPetPackInspection] = useState(null)
+  const [actionsConfig, setActionsConfig] = useState<ActionsConfigViewState>(defaultActionsConfig)
+  const [petPacks, setPetPacks] = useState<PetPacksViewState>(defaultPetPacks)
+  const [petPackInspection, setPetPackInspection] = useState<PetPackInspectionResult | null>(null)
   const [selectedActionId, setSelectedActionId] = useState('')
-  const [importDraft, setImportDraft] = useState({ actionId: '', label: '' })
-  const [importInspection, setImportInspection] = useState(null)
+  const [importDraft, setImportDraft] = useState<ActionImportDraft>({ actionId: '', label: '' })
+  const [importInspection, setImportInspection] = useState<ActionFrameInspectionResult | null>(null)
   const [status, setStatus] = useState('')
   const [working, setWorking] = useState(false)
 
@@ -23,6 +35,10 @@ export function useActionsPane() {
       setActionsConfig(cloneActionsConfig(loadedActions))
       setPetPacks(clonePetPacks(loadedPetPacks))
       setLoading(false)
+    }).catch((error) => {
+      if (!mounted) return
+      setStatus(messageFromError(error, '动作与 Pet pack 加载失败'))
+      setLoading(false)
     })
     return () => { mounted = false }
   }, [])
@@ -32,7 +48,7 @@ export function useActionsPane() {
     setSelectedActionId(actionsConfig.defaultAction || actionsConfig.actions[0]?.id || '')
   }, [actionsConfig, selectedActionId])
 
-  const onChangeImportDraft = (partial, clearInspection) => {
+  const onChangeImportDraft = (partial: Partial<ActionImportDraft>, clearInspection = false) => {
     setImportDraft({ ...importDraft, ...partial })
     if (status) setStatus('')
     if (clearInspection && importInspection?.selectionId) {
@@ -52,7 +68,7 @@ export function useActionsPane() {
       setActionsConfig(cloneActionsConfig(response.animations))
       setStatus('动作配置已保存')
     } catch (error) {
-      setStatus(error.message || '保存失败')
+      setStatus(messageFromError(error, '保存失败'))
     } finally {
       setWorking(false)
     }
@@ -71,7 +87,7 @@ export function useActionsPane() {
       }
     } catch (error) {
       setImportInspection(null)
-      setStatus(error.message || '检查失败')
+      setStatus(messageFromError(error, '检查失败'))
     } finally {
       setWorking(false)
     }
@@ -86,11 +102,16 @@ export function useActionsPane() {
         selectionId: importInspection.selectionId,
         actionId: importDraft.actionId.trim()
       })
+      if (response.canceled) {
+        setImportInspection(null)
+        setStatus('已取消选择')
+        return
+      }
       setImportInspection(response)
       setStatus(response.inspection.valid ? '帧文件夹检查通过' : '帧文件夹需要修正')
     } catch (error) {
       setImportInspection(null)
-      setStatus(error.message || '重新检查失败')
+      setStatus(messageFromError(error, '重新检查失败'))
     } finally {
       setWorking(false)
     }
@@ -116,24 +137,26 @@ export function useActionsPane() {
         label: importDraft.label
       })
       if (response.ok === false) {
-        setImportInspection(response.inspectionResult)
+        setImportInspection(response.inspectionResult || null)
         setStatus('帧文件夹需要修正')
       } else if (response.canceled) {
         setStatus('已取消导入')
-      } else {
+      } else if (response.animations && response.result) {
         setActionsConfig(cloneActionsConfig(response.animations))
         if (response.result.importedAction?.id) setSelectedActionId(response.result.importedAction.id)
         setImportInspection(null)
         setStatus(`已导入 ${response.result.importedAction?.label || importDraft.actionId}`)
+      } else {
+        setStatus('导入返回结果不完整')
       }
     } catch (error) {
-      setStatus(error.message || '导入失败')
+      setStatus(messageFromError(error, '导入失败'))
     } finally {
       setWorking(false)
     }
   }
 
-  const onDelete = async (actionId) => {
+  const onDelete = async (actionId: string) => {
     if (!window.confirm(`删除动作 ${actionId}？`)) return
     setWorking(true)
     setStatus('')
@@ -142,7 +165,7 @@ export function useActionsPane() {
       setActionsConfig(cloneActionsConfig(response.animations))
       setStatus(`已删除 ${actionId}`)
     } catch (error) {
-      setStatus(error.message || '删除失败')
+      setStatus(messageFromError(error, '删除失败'))
     } finally {
       setWorking(false)
     }
@@ -161,7 +184,7 @@ export function useActionsPane() {
       }
     } catch (error) {
       setPetPackInspection(null)
-      setStatus(error.message || 'Pet pack 检查失败')
+      setStatus(messageFromError(error, 'Pet pack 检查失败'))
     } finally {
       setWorking(false)
     }
@@ -187,13 +210,13 @@ export function useActionsPane() {
       setPetPackInspection(null)
       setStatus(`已导入 ${response.pack?.displayName || response.pack?.id || 'Pet pack'}`)
     } catch (error) {
-      setStatus(error.message || 'Pet pack 导入失败')
+      setStatus(messageFromError(error, 'Pet pack 导入失败'))
     } finally {
       setWorking(false)
     }
   }
 
-  const onExportPetPack = async (packId) => {
+  const onExportPetPack = async (packId: string) => {
     setWorking(true)
     setStatus('')
     try {
@@ -204,13 +227,13 @@ export function useActionsPane() {
         setStatus(`已导出 ${response.fileName || packId}`)
       }
     } catch (error) {
-      setStatus(error.message || 'Pet pack 导出失败')
+      setStatus(messageFromError(error, 'Pet pack 导出失败'))
     } finally {
       setWorking(false)
     }
   }
 
-  const onSetActivePetPack = async (packId) => {
+  const onSetActivePetPack = async (packId: string) => {
     setWorking(true)
     setStatus('')
     try {
@@ -219,13 +242,13 @@ export function useActionsPane() {
       setActionsConfig(cloneActionsConfig(response.animations))
       setStatus(`已启用 ${response.pack?.displayName || packId}`)
     } catch (error) {
-      setStatus(error.message || 'Pet pack 启用失败')
+      setStatus(messageFromError(error, 'Pet pack 启用失败'))
     } finally {
       setWorking(false)
     }
   }
 
-  const onRemovePetPack = async (packId) => {
+  const onRemovePetPack = async (packId: string) => {
     if (!window.confirm(`删除 Pet pack ${packId}？`)) return
     setWorking(true)
     setStatus('')
@@ -234,7 +257,7 @@ export function useActionsPane() {
       setPetPacks(clonePetPacks(response.petPacks))
       setStatus(`已删除 ${packId}`)
     } catch (error) {
-      setStatus(error.message || 'Pet pack 删除失败')
+      setStatus(messageFromError(error, 'Pet pack 删除失败'))
     } finally {
       setWorking(false)
     }
@@ -253,7 +276,7 @@ export function useActionsPane() {
       working,
       onSelectAction: setSelectedActionId,
       onChangeImportDraft,
-      onChangeConfig: (partial) => setActionsConfig({ ...actionsConfig, ...partial }),
+      onChangeConfig: (partial: Partial<ActionsConfigViewState>) => setActionsConfig({ ...actionsConfig, ...partial }),
       onSaveConfig,
       onInspect,
       onReinspect,

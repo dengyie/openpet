@@ -1,7 +1,7 @@
 # OpenPet v1.1 TODO Design
 
 > Date: 2026-06-16
-> Baseline: Phase 46 completed locally
+> Baseline: Phase 47 completed locally
 > Scope: Convert the remaining productization TODO into a phase-ready design for v1.1 work. This document does not upgrade platform support claims. Windows remains not release-ready until signed runtime smoke evidence passes.
 
 ## 1. Goal
@@ -28,7 +28,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 - Plugin runtime has manifest validation, permission review, isolated runner, storage limits, network allowlist, logs, catalog, blocklist, and submission tooling.
 - AI provider configuration and API keys remain in the main process boundary.
 - Local HTTP/MCP is loopback-only, token-gated, logged, and off by default.
-- TypeScript scaffold and Control Center view contracts exist.
+- TypeScript scaffold, Control Center view contracts, API facade, and hook state boundaries exist.
 - Windows, desktop picker, packaged runtime, and release evidence tooling exist as validators, reports, runbooks, or archive manifests.
 
 ### Still Open
@@ -150,7 +150,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 - `src/main/pet-pack/loader.js`
 - `src/main/services/pet-pack-service.js`
 - `src/control-center/src/panes/ActionsPane.jsx`
-- `src/control-center/src/hooks/useActions.js`
+- `src/control-center/src/hooks/useActionsPane.ts`
 - `src/shared/`
 - `tests/pet-pack/schema.test.js`
 - `tests/pet-pack/importer.test.js`
@@ -182,7 +182,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 - `src/main/services/ai-service.js`
 - `src/main/services/settings-service.js`
 - `src/control-center/src/panes/AiPane.jsx`
-- `src/control-center/src/hooks/useAiSettings.js`
+- `src/control-center/src/hooks/useAiPane.ts`
 - `src/shared/`
 - `tests/services/behavior-orchestrator-service.test.js`
 - `tests/services/ai-action-orchestrator.test.js`
@@ -365,6 +365,36 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 
 **Status**: completed as live-doc consolidation. `project-status-review.md` is now a concise current snapshot, `HANDOFF` and `development-summary` are shorter and link-oriented, roadmap/TODO facts reflect Phase 45 completion, and `project-context.json` remains the compact machine-readable state.
 
+### Phase 47: TypeScript Hook Boundary Migration
+
+**Goal**: continue the TypeScript migration from API facade contracts into Control Center hook state and handler boundaries.
+
+**Scope**:
+
+- Rename Control Center pane hooks from `.js` to `.ts`.
+- Type hook state and user-event handlers with shared contracts.
+- Convert small renderer helpers that are directly consumed by typed hooks.
+- Keep Electron main process CommonJS stable and avoid broad UI rewrites.
+- Preserve existing Control Center behavior and Playwright baselines.
+
+**Likely files**:
+
+- `src/control-center/src/hooks/`
+- `src/control-center/src/lib/`
+- `src/control-center/src/App.jsx`
+- `src/control-center/src/panes/PetPane.jsx`
+- `package.json`
+- `package-lock.json`
+
+**Acceptance**:
+
+- `npm run typecheck` covers migrated hook state and handler boundaries.
+- Hook initialization failures do not leave tabs stuck in loading.
+- `npm run check:syntax`, `npm run test:control-center`, `npm test`, and `git diff --check` pass.
+- Renderer changes do not expose API keys or widen plugin privileges.
+
+**Status**: completed in Phase 47. The seven Control Center hooks, download helper, and renderer error helper are typed; React type dependencies are installed; initialization failure paths now surface status messages; review caught and fixed a Pet status-line regression.
+
 ## 6. Priority Order
 
 | Priority | Work | Reason |
@@ -374,6 +404,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 | P1 | Phase 40 pet pack export and provenance | Completed; keep provenance and conflict review as constraints for future catalog work. |
 | P1 | Phase 44 plugin author experience rehearsal | Completed; use the archived rehearsal as the plugin author baseline. |
 | P1 | Phase 45 TypeScript boundary expansion | Completed; preserve shared contracts as the migration gate for future UI and IPC work. |
+| P1 | Phase 47 TypeScript hook boundary migration | Completed; use typed Control Center hooks as the next UI boundary baseline. |
 | P2 | Phase 41 AI behavior replay | Completed; preserve redacted diagnostics and replay semantics while future AI tooling evolves. |
 | P2 | Phase 39 plugin sandbox evaluation | Completed; keep current runner for v1.1 and revisit on high-risk plugin capability changes. |
 | P2 | Phase 46 documentation consolidation | Completed; keep future live-doc updates fact-only and link-oriented. |
@@ -386,8 +417,9 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 4. Phase 40 is complete; preserve pet pack export/provenance behavior while catalog work evolves.
 5. Phase 41 is complete; use AI behavior replay and diagnostics as the baseline for future behavior tooling.
 6. Phase 44 is complete; keep the archived author rehearsal as the plugin onboarding baseline.
-7. Phase 45 is complete; use the shared contracts and Control Center API facade as the next migration baseline.
-8. Phase 46 is complete; start the next concrete phase from a fresh whole-project review or real evidence-producing work.
+7. Phase 45 is complete; use the shared contracts and Control Center API facade as the API boundary baseline.
+8. Phase 46 is complete; keep future live-doc updates fact-only and link-oriented.
+9. Phase 47 is complete; use the typed Control Center hooks as the UI state boundary baseline, then choose the next phase from evidence work or a high-drift TypeScript boundary.
 
 ## 8. Verification Contract
 
@@ -428,5 +460,5 @@ v1.1 productization is complete when:
 - plugin secrets are either safely supported or explicitly rejected.
 - pet packs can be exported, re-imported, version-reviewed, and source-audited.
 - AI behavior can be replayed and explained from Control Center.
-- shared TypeScript contracts cover the boundaries most likely to drift.
+- shared TypeScript contracts and typed Control Center hooks cover the UI/API boundaries most likely to drift.
 - live docs are concise, current, and not contradicted by phase history.

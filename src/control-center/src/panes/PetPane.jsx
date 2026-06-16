@@ -3,7 +3,7 @@ import { SegmentedControl } from '../components/SegmentedControl.jsx'
 import { Toggle } from '../components/Toggle.jsx'
 import { bubbleDurationOptions, speedOptions, walkDurationOptions } from '../constants.js'
 
-export function PetPane({ settings, originalSettings, onChange, onSave, onReset, saving }) {
+export function PetPane({ settings, originalSettings, status, onChange, onSave, onReset, saving }) {
   const scalePercent = Math.round(settings.scale * 100)
 
   return (
@@ -66,7 +66,7 @@ export function PetPane({ settings, originalSettings, onChange, onSave, onReset,
       </div>
 
       <div className="status-line">
-        原始大小 {Math.round(originalSettings.scale * 100)}%
+        {status || `原始大小 ${Math.round(originalSettings.scale * 100)}%`}
       </div>
     </section>
   )

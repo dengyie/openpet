@@ -1,23 +1,37 @@
 import { useEffect, useState } from 'react'
 import { controlCenterAPI as api } from '../api/control-center-api'
 import { cloneAiBehavior, cloneAiConfig, cloneChatMessages, defaultAiConfig } from '../lib/defaults'
-import { downloadTextFile } from '../lib/download.js'
+import { downloadTextFile } from '../lib/download'
+import { messageFromError } from '../lib/errors'
+import type {
+  AiBehaviorConfig,
+  AiBehaviorResult,
+  AiBehaviorRule,
+  AiConfigViewState,
+  ChatMessage
+} from '../../../shared/openpet-contracts'
+
+const parseBehaviorRules = (rulesText: string): AiBehaviorRule[] => {
+  const parsed: unknown = JSON.parse(rulesText || '[]')
+  if (!Array.isArray(parsed)) throw new Error('Behavior rules must be a JSON array')
+  return parsed as AiBehaviorRule[]
+}
 
 export function useAiPane() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [config, setConfig] = useState(defaultAiConfig)
+  const [config, setConfig] = useState<AiConfigViewState>(defaultAiConfig)
   const [apiKeyDraft, setApiKeyDraft] = useState('')
   const [status, setStatus] = useState('')
   const [chatDraft, setChatDraft] = useState('')
-  const [chatMessages, setChatMessages] = useState([])
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [chatting, setChatting] = useState(false)
-  const [behavior, setBehavior] = useState(defaultAiConfig.behavior)
+  const [behavior, setBehavior] = useState<AiBehaviorConfig>(defaultAiConfig.behavior)
   const [behaviorRulesText, setBehaviorRulesText] = useState('[]')
   const [dryRunText, setDryRunText] = useState('')
-  const [dryRunResult, setDryRunResult] = useState(null)
+  const [dryRunResult, setDryRunResult] = useState<AiBehaviorResult | null>(null)
   const [replayDraft, setReplayDraft] = useState('')
-  const [replayResult, setReplayResult] = useState(null)
+  const [replayResult, setReplayResult] = useState<AiBehaviorResult | null>(null)
 
   useEffect(() => {
     let mounted = true
@@ -33,6 +47,10 @@ export function useAiPane() {
       setBehavior(nextBehavior)
       setBehaviorRulesText(JSON.stringify(nextBehavior.rules || [], null, 2))
       setLoading(false)
+    }).catch((error) => {
+      if (!mounted) return
+      setStatus(messageFromError(error, 'AI 配置加载失败'))
+      setLoading(false)
     })
     return () => { mounted = false }
   }, [])
@@ -42,11 +60,12 @@ export function useAiPane() {
     setStatus('')
     try {
       const { behavior: _behavior, ...configWithoutBehavior } = config
+      void _behavior
       const savedConfig = cloneAiConfig(await api.saveAiConfig(configWithoutBehavior))
       setConfig(savedConfig)
       setStatus('AI 配置已保存')
     } catch (error) {
-      setStatus(error.message || '保存失败')
+      setStatus(messageFromError(error, '保存失败'))
     } finally {
       setSaving(false)
     }
@@ -56,15 +75,14 @@ export function useAiPane() {
     setSaving(true)
     setStatus('')
     try {
-      const parsedRules = JSON.parse(behaviorRulesText || '[]')
-      if (!Array.isArray(parsedRules)) throw new Error('Behavior rules must be a JSON array')
+      const parsedRules = parseBehaviorRules(behaviorRulesText)
       const savedBehavior = cloneAiBehavior(await api.saveAiBehavior({ ...behavior, rules: parsedRules }))
       setBehavior(savedBehavior)
       setBehaviorRulesText(JSON.stringify(savedBehavior.rules || [], null, 2))
       setConfig({ ...config, behavior: savedBehavior })
       setStatus('Behavior 配置已保存')
     } catch (error) {
-      setStatus(error.message || 'Behavior 配置保存失败')
+      setStatus(messageFromError(error, 'Behavior 配置保存失败'))
     } finally {
       setSaving(false)
     }
@@ -75,14 +93,13 @@ export function useAiPane() {
     if (!reply) return
     setStatus('')
     try {
-      const parsedRules = JSON.parse(behaviorRulesText || '[]')
-      if (!Array.isArray(parsedRules)) throw new Error('Behavior rules must be a JSON array')
+      const parsedRules = parseBehaviorRules(behaviorRulesText)
       const result = await api.dryRunAiBehavior({ reply, behavior: { ...behavior, rules: parsedRules } })
       setDryRunResult(result)
       setStatus(result.matched ? `Dry run 命中：${result.reason}` : `Dry run 未命中：${result.reason}`)
     } catch (error) {
       setDryRunResult(null)
-      setStatus(error.message || 'Dry run 失败')
+      setStatus(messageFromError(error, 'Dry run 失败'))
     }
   }
 
@@ -99,7 +116,7 @@ export function useAiPane() {
       setStatus(result.matched ? `Replay 命中：${result.reason}` : `Replay 未命中：${result.reason}`)
     } catch (error) {
       setReplayResult(null)
-      setStatus(error.message || 'Replay 失败')
+      setStatus(messageFromError(error, 'Replay 失败'))
     }
   }
 
@@ -110,7 +127,7 @@ export function useAiPane() {
       downloadTextFile('openpet-ai-behavior-diagnostics.json', content, 'application/json;charset=utf-8')
       setStatus('Behavior 诊断已导出')
     } catch (error) {
-      setStatus(error.message || 'Behavior 诊断导出失败')
+      setStatus(messageFromError(error, 'Behavior 诊断导出失败'))
     }
   }
 
@@ -126,7 +143,7 @@ export function useAiPane() {
       setDryRunResult(null)
       setStatus('Behavior 决策已清空')
     } catch (error) {
-      setStatus(error.message || '清空失败')
+      setStatus(messageFromError(error, '清空失败'))
     }
   }
 
@@ -139,7 +156,7 @@ export function useAiPane() {
       setApiKeyDraft('')
       setStatus('API Key 已保存')
     } catch (error) {
-      setStatus(error.message || '保存失败')
+      setStatus(messageFromError(error, '保存失败'))
     } finally {
       setSaving(false)
     }
@@ -152,7 +169,7 @@ export function useAiPane() {
       const result = await api.testAiConnection()
       setStatus(result.ok ? `连接正常：${result.reply}` : '连接失败')
     } catch (error) {
-      setStatus(error.message || '连接失败')
+      setStatus(messageFromError(error, '连接失败'))
     } finally {
       setSaving(false)
     }
@@ -161,7 +178,7 @@ export function useAiPane() {
   const onSendChat = async () => {
     const message = chatDraft.trim()
     if (!message || chatting) return
-    const nextMessages = [...chatMessages, { role: 'user', content: message }]
+    const nextMessages: ChatMessage[] = [...chatMessages, { role: 'user', content: message }]
     setChatMessages(nextMessages)
     setChatDraft('')
     setChatting(true)
@@ -180,7 +197,7 @@ export function useAiPane() {
       setBehavior(nextBehavior)
       setConfig((current) => ({ ...current, behavior: nextBehavior }))
     } catch (error) {
-      setStatus(error.message || '发送失败')
+      setStatus(messageFromError(error, '发送失败'))
     } finally {
       setChatting(false)
     }
@@ -207,8 +224,8 @@ export function useAiPane() {
       setDryRunText,
       setReplayDraft,
       setBehaviorRulesText,
-      onChangeBehavior: (partial) => setBehavior({ ...behavior, ...partial }),
-      onChange: (partial) => setConfig({ ...config, ...partial }),
+      onChangeBehavior: (partial: Partial<AiBehaviorConfig>) => setBehavior({ ...behavior, ...partial }),
+      onChange: (partial: Partial<AiConfigViewState>) => setConfig({ ...config, ...partial }),
       onSave,
       onSaveBehavior,
       onSaveApiKey,

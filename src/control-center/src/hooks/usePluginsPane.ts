@@ -1,17 +1,27 @@
 import { useEffect, useState } from 'react'
 import { controlCenterAPI as api } from '../api/control-center-api'
-import { downloadTextFile } from '../lib/download.js'
+import { downloadTextFile } from '../lib/download'
+import { messageFromError } from '../lib/errors'
+import type {
+  JsonValue,
+  PluginLogEntry,
+  PluginLogFilters,
+  PluginPackageReviewViewState,
+  PluginViewState
+} from '../../../shared/openpet-contracts'
+
+type ExportFormat = 'json' | 'csv'
 
 export function usePluginsPane() {
   const [loading, setLoading] = useState(true)
-  const [plugins, setPlugins] = useState([])
-  const [logs, setLogs] = useState([])
-  const [filters, setFilters] = useState({ pluginId: '', level: '', query: '' })
+  const [plugins, setPlugins] = useState<PluginViewState[]>([])
+  const [logs, setLogs] = useState<PluginLogEntry[]>([])
+  const [filters, setFilters] = useState<PluginLogFilters>({ pluginId: '', level: '', query: '' })
   const [status, setStatus] = useState('')
   const [runningCommand, setRunningCommand] = useState('')
   const [savingConfig, setSavingConfig] = useState('')
   const [clearingStorage, setClearingStorage] = useState('')
-  const [pluginReview, setPluginReview] = useState(null)
+  const [pluginReview, setPluginReview] = useState<PluginPackageReviewViewState | null>(null)
   const [inspectingPlugin, setInspectingPlugin] = useState(false)
   const [installingPlugin, setInstallingPlugin] = useState(false)
   const [uninstallingPlugin, setUninstallingPlugin] = useState('')
@@ -26,6 +36,10 @@ export function usePluginsPane() {
       setPlugins(loadedPlugins)
       setLogs(Array.isArray(loadedLogs) ? loadedLogs : [])
       setLoading(false)
+    }).catch((error) => {
+      if (!mounted) return
+      setStatus(messageFromError(error, '插件列表加载失败'))
+      setLoading(false)
     })
     return () => { mounted = false }
   }, [])
@@ -35,7 +49,7 @@ export function usePluginsPane() {
     api.getPluginLogs(filters).then((loadedLogs) => {
       if (mounted) setLogs(Array.isArray(loadedLogs) ? loadedLogs : [])
     }).catch((error) => {
-      if (mounted) setStatus(error.message || '日志加载失败')
+      if (mounted) setStatus(messageFromError(error, '日志加载失败'))
     })
     return () => { mounted = false }
   }, [filters])
@@ -57,7 +71,7 @@ export function usePluginsPane() {
       setPluginReview(result)
       setStatus(result.installMode === 'update' ? '已读取插件更新包' : '已读取插件安装包')
     } catch (error) {
-      setStatus(error.message || '插件包检查失败')
+      setStatus(messageFromError(error, '插件包检查失败'))
     } finally {
       setInspectingPlugin(false)
     }
@@ -83,14 +97,14 @@ export function usePluginsPane() {
       await refreshLogs()
       setStatus(pluginReview.installMode === 'update' ? '插件已更新，默认保持停用' : '插件已安装，默认保持停用')
     } catch (error) {
-      setStatus(error.message || '插件安装失败')
+      setStatus(messageFromError(error, '插件安装失败'))
       await refreshPlugins()
     } finally {
       setInstallingPlugin(false)
     }
   }
 
-  const onUninstallPlugin = async (pluginId) => {
+  const onUninstallPlugin = async (pluginId: string) => {
     if (!window.confirm(`卸载插件 ${pluginId}？插件文件和配置会被移除。`)) return
     const removeStorage = window.confirm('同时删除这个插件的私有存储？')
     setUninstallingPlugin(pluginId)
@@ -101,14 +115,14 @@ export function usePluginsPane() {
       await refreshLogs()
       setStatus(removeStorage ? '插件已卸载，私有存储已删除' : '插件已卸载，私有存储已保留')
     } catch (error) {
-      setStatus(error.message || '插件卸载失败')
+      setStatus(messageFromError(error, '插件卸载失败'))
       await refreshPlugins()
     } finally {
       setUninstallingPlugin('')
     }
   }
 
-  const onToggle = async (pluginId, enabled) => {
+  const onToggle = async (pluginId: string, enabled: boolean) => {
     setStatus('')
     try {
       const updatedPlugin = await api.setPluginEnabled(pluginId, enabled)
@@ -118,12 +132,12 @@ export function usePluginsPane() {
       await refreshLogs()
       setStatus(enabled ? '插件已启用' : '插件已停用')
     } catch (error) {
-      setStatus(error.message || '插件状态更新失败')
+      setStatus(messageFromError(error, '插件状态更新失败'))
       await refreshLogs()
     }
   }
 
-  const onSaveConfig = async (pluginId) => {
+  const onSaveConfig = async (pluginId: string) => {
     const plugin = plugins.find((candidate) => candidate.id === pluginId)
     if (!plugin) return
     setSavingConfig(pluginId)
@@ -136,14 +150,14 @@ export function usePluginsPane() {
       await refreshLogs()
       setStatus('插件配置已保存')
     } catch (error) {
-      setStatus(error.message || '插件配置保存失败')
+      setStatus(messageFromError(error, '插件配置保存失败'))
       await refreshLogs()
     } finally {
       setSavingConfig('')
     }
   }
 
-  const onRun = async (pluginId, commandId) => {
+  const onRun = async (pluginId: string, commandId: string) => {
     const commandKey = `${pluginId}:${commandId}`
     setRunningCommand(commandKey)
     setStatus('')
@@ -152,14 +166,14 @@ export function usePluginsPane() {
       await refreshLogs()
       setStatus('命令已运行')
     } catch (error) {
-      setStatus(error.message || '命令运行失败')
+      setStatus(messageFromError(error, '命令运行失败'))
       await refreshLogs()
     } finally {
       setRunningCommand('')
     }
   }
 
-  const onExportLogs = async (format) => {
+  const onExportLogs = async (format: ExportFormat) => {
     setStatus('')
     try {
       const content = await api.exportPluginLogs({ ...filters, format })
@@ -168,7 +182,7 @@ export function usePluginsPane() {
       downloadTextFile(`openpet-plugin-logs.${extension}`, content, type)
       setStatus('日志已导出')
     } catch (error) {
-      setStatus(error.message || '日志导出失败')
+      setStatus(messageFromError(error, '日志导出失败'))
     }
   }
 
@@ -177,11 +191,11 @@ export function usePluginsPane() {
     try {
       setLogs(await api.clearPluginLogs())
     } catch (error) {
-      setStatus(error.message || '日志清空失败')
+      setStatus(messageFromError(error, '日志清空失败'))
     }
   }
 
-  const onClearStorage = async (pluginId) => {
+  const onClearStorage = async (pluginId: string) => {
     if (!window.confirm(`清理插件 ${pluginId} 的私有存储？`)) return
     setClearingStorage(pluginId)
     setStatus('')
@@ -193,14 +207,14 @@ export function usePluginsPane() {
       await refreshLogs()
       setStatus('插件存储已清理')
     } catch (error) {
-      setStatus(error.message || '插件存储清理失败')
+      setStatus(messageFromError(error, '插件存储清理失败'))
       await refreshLogs()
     } finally {
       setClearingStorage('')
     }
   }
 
-  const onChangeConfig = (pluginId, key, value) => {
+  const onChangeConfig = (pluginId: string, key: string, value: JsonValue) => {
     setPlugins(plugins.map((plugin) => (
       plugin.id === pluginId
         ? { ...plugin, config: { ...(plugin.config || {}), [key]: value } }

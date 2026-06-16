@@ -1,15 +1,22 @@
 import { useEffect, useState } from 'react'
 import { controlCenterAPI as api } from '../api/control-center-api'
 import { cloneCatalog, defaultCatalog } from '../lib/defaults'
+import { messageFromError } from '../lib/errors'
+import type {
+  CatalogBlocklistEntry,
+  CatalogInstallSelection,
+  CatalogItemKind,
+  CatalogState
+} from '../../../shared/openpet-contracts'
 
 export function useCatalogPane() {
   const [loading, setLoading] = useState(true)
-  const [catalog, setCatalog] = useState(defaultCatalog)
+  const [catalog, setCatalog] = useState<CatalogState>(defaultCatalog)
   const [status, setStatus] = useState('')
   const [preparing, setPreparing] = useState('')
   const [installing, setInstalling] = useState(false)
-  const [selection, setSelection] = useState(null)
-  const [blocklistDraft, setBlocklistDraft] = useState({ type: 'pluginId', value: '' })
+  const [selection, setSelection] = useState<CatalogInstallSelection | null>(null)
+  const [blocklistDraft, setBlocklistDraft] = useState<CatalogBlocklistEntry>({ type: 'pluginId', value: '' })
 
   const refreshCatalog = async () => {
     const nextCatalog = cloneCatalog(await api.getCatalog())
@@ -25,13 +32,13 @@ export function useCatalogPane() {
       setLoading(false)
     }).catch((error) => {
       if (!mounted) return
-      setStatus(error.message || 'Catalog 加载失败')
+      setStatus(messageFromError(error, 'Catalog 加载失败'))
       setLoading(false)
     })
     return () => { mounted = false }
   }, [])
 
-  const onPrepareInstall = async (kind, itemId) => {
+  const onPrepareInstall = async (kind: CatalogItemKind, itemId: string) => {
     const key = `${kind}:${itemId}`
     setPreparing(key)
     setStatus('')
@@ -41,7 +48,7 @@ export function useCatalogPane() {
       setSelection(nextSelection)
       setStatus(kind === 'plugin' ? '插件包已下载并进入安装审查' : 'Pet pack 已下载并通过检查')
     } catch (error) {
-      setStatus(error.message || 'Catalog 安装准备失败')
+      setStatus(messageFromError(error, 'Catalog 安装准备失败'))
       await refreshCatalog().catch(() => {})
     } finally {
       setPreparing('')
@@ -65,7 +72,7 @@ export function useCatalogPane() {
       setSelection(null)
       setStatus(selection.kind === 'plugin' ? '插件已安装，默认保持停用' : 'Pet pack 已安装')
     } catch (error) {
-      setStatus(error.message || 'Catalog 安装失败')
+      setStatus(messageFromError(error, 'Catalog 安装失败'))
       await refreshCatalog().catch(() => {})
     } finally {
       setInstalling(false)
@@ -80,18 +87,18 @@ export function useCatalogPane() {
       setBlocklistDraft({ ...blocklistDraft, value: '' })
       setStatus('Blocklist 已更新')
     } catch (error) {
-      setStatus(error.message || 'Blocklist 更新失败')
+      setStatus(messageFromError(error, 'Blocklist 更新失败'))
     }
   }
 
-  const onRemoveBlocklistEntry = async (type, value) => {
+  const onRemoveBlocklistEntry = async (type: CatalogBlocklistEntry['type'], value: string) => {
     setStatus('')
     try {
       const result = await api.removeCatalogBlocklistEntry({ type, value })
       setCatalog(cloneCatalog(result.catalog || await api.getCatalog()))
       setStatus('Blocklist 已移除')
     } catch (error) {
-      setStatus(error.message || 'Blocklist 移除失败')
+      setStatus(messageFromError(error, 'Blocklist 移除失败'))
     }
   }
 
