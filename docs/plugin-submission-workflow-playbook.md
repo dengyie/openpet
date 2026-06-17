@@ -15,6 +15,7 @@ It covers:
 - validation of the generated bundle before review
 - recording and validating a separate maintainer approval artifact after review
 - one-command existing-plugin rehearsal for a more realistic local submission path
+- one-command repository-provenance rehearsal for a reviewed Git snapshot path
 
 It does not:
 
@@ -42,6 +43,14 @@ npm run create-plugin-real-world-submission-rehearsal -- --source examples/plugi
 ```
 
 This validates and packages an already-authored example plugin, creates a submission bundle, records maintainer approval, and writes local evidence files. It is closer to real contributor behavior than scaffold rehearsal, but it still does not prove external community provenance.
+
+For a repository-provenance rehearsal, run:
+
+```bash
+npm run create-plugin-repository-provenance-rehearsal -- --git-source examples/community-plugin-sources/weather-status-community.bundle --ref refs/heads/main --plugin-subdir plugin --output-dir docs/release-evidence/plugin-repository-provenance-rehearsal/<session>
+```
+
+This clones a Git source, records clone source, requested ref, resolved commit, and selected plugin subdirectory, then packages the selected plugin snapshot, creates a submission bundle, records maintainer approval, and writes local evidence files. It is closer to a real reviewer handoff than a plain directory rehearsal, but the current archived example still does not prove independent public community provenance or release trust.
 
 ## 3. Manual Rehearsal Order
 
