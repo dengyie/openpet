@@ -91,6 +91,7 @@ app.whenReady().then(() => {
     petService,
     petPackService,
     aiService,
+    actionImportService,
     pluginDirs: [pluginDir],
     officialPlugins: [createBasicBehaviorPlugin()],
     openExternal: (url) => shell.openExternal(url),

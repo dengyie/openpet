@@ -1,7 +1,7 @@
 # OpenPet v1.1 TODO Design
 
-> Date: 2026-06-16
-> Baseline: Phase 67 completed locally
+> Date: 2026-06-17
+> Baseline: Phase 68 completed locally
 > Scope: Convert the remaining productization TODO into a phase-ready design for v1.1 work. This document does not upgrade platform support claims. Windows remains not release-ready until signed runtime smoke evidence passes.
 
 ## 1. Goal
@@ -25,7 +25,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 - PetService remains the single source of truth for `say`, `action`, and event state.
 - Pet pack runtime supports legacy cat assets, OpenPet packs, Codex pet directory import, Codex pet zip import, and bundled packs.
 - Bundled pet assets are integrated without replacing the legacy `cat_anime/` structure.
-- Extension ecosystem docs now use a developer-first local extension model while current runtime/tools keep legacy JavaScript SDK compatibility, manifest validation, normalized `entries` declarations, explicit user-triggered `entries.setup` execution, `entries.commands` support through the existing JavaScript runner and explicit short-lived process execution for declaration-only local extensions, a short-lived command/service bridge for `pet.say` / `pet.action` / `pet.event` / read-only context / read-only action discovery, entry declaration visibility, explicit HTTP/HTTPS dashboard opening, explicit `entries.services` start/stop, manual loopback service health checks, logs, catalog, blocklist, and submission tooling.
+- Extension ecosystem docs now use a developer-first local extension model while current runtime/tools keep legacy JavaScript SDK compatibility, manifest validation, normalized `entries` declarations, explicit user-triggered `entries.setup` execution, `entries.commands` support through the existing JavaScript runner and explicit short-lived process execution for declaration-only local extensions, a short-lived command/service bridge for `pet.say` / `pet.action` / `pet.event` / read-only context / read-only action discovery / bounded action preset updates, entry declaration visibility, explicit HTTP/HTTPS dashboard opening, explicit `entries.services` start/stop, manual loopback service health checks, logs, catalog, blocklist, and submission tooling.
 - AI provider configuration and API keys remain in the main process boundary.
 - Local HTTP/MCP is loopback-only, token-gated, logged, and off by default.
 - TypeScript scaffold, Control Center view contracts, API facade, hook state boundaries, pane prop surfaces, main-process Control Center adapters for service/catalog/plugin/pet pack/About/update/actions payloads, plugin entry/dashboard/service contracts, and full release evidence archive / signed closure report contracts exist.
@@ -36,7 +36,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 - macOS signed/notarized release evidence still needs real artifact capture and archive.
 - Windows signed installer/zip smoke evidence still needs real Windows execution.
 - Packaged runtime smoke reports still need real app evidence for pet window visibility, transparent rendering, bundled pack switching, and native picker flows.
-- Extension runtime support for explicit setup execution, explicit short-lived command execution, explicit short-lived command/service bridge access including read-only action discovery, explicit service start/stop, manual loopback service health checks, and exit-confirmed best-effort process-group cleanup now exists. Background health polling, richer bridge surfaces for authoring workflows, richer command orchestration, and hard process-tree cleanup guarantees are still future work. Dashboard entries can now be opened explicitly as external HTTP/HTTPS URLs from Control Center.
+- Extension runtime support for explicit setup execution, explicit short-lived command execution, explicit short-lived command/service bridge access including read-only action discovery and bounded action preset updates, explicit service start/stop, manual loopback service health checks, and exit-confirmed best-effort process-group cleanup now exists. Background health polling, richer bridge surfaces for authoring workflows, richer command orchestration, and hard process-tree cleanup guarantees are still future work. Dashboard entries can now be opened explicitly as external HTTP/HTTPS URLs from Control Center.
 - Legacy SDK plugin secrets policy remains conservative; target extension docs require honest disclosure for extension-managed secrets and data.
 - Plugin sandbox strategy has been evaluated against SES and Electron `utilityProcess`; current recommendation is to keep the existing runner for v1.1 while documenting limits.
 - AI behavior orchestration has a Control Center decision viewer, replay, redacted diagnostics export, and clear-history controls.
@@ -902,6 +902,30 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 
 **Status**: completed in Phase 67. Explicit bridge runs can now read the current action catalog through `GET /pet/actions` with bounded action-summary fields while existing auth, expiry, and narrow-scope bridge boundaries remain unchanged.
 
+### Phase 68: Plugin authoring bridge action preset
+
+**Goal**: let explicit declaration-only command and service bridge runs safely apply installed action presets without widening into sprite or filesystem mutation.
+
+**Scope**:
+
+- Keep the existing bridge lifecycle, auth, and expiry boundaries unchanged.
+- Add a bounded `POST /pet/actions/preset` bridge route.
+- Allow updates to `defaultAction` and `clickAction` only.
+- Reject empty, non-string, or unknown action ids before any mutation.
+- Route writes through the existing host action-config save path rather than direct file edits.
+- Reuse the bounded `GET /pet/actions` response shape after successful updates.
+- Do not add action creation, sprite generation, atlas mutation, setup bridge access, renderer bridge access, or arbitrary filesystem writes.
+
+**Acceptance**:
+
+- Explicit command and service bridge runs can call `POST /pet/actions/preset`.
+- The route updates only `defaultAction` and `clickAction`.
+- Unknown action ids are rejected without partial mutation.
+- Invalid token and expired bridge requests are rejected.
+- Docs keep the new capability honest as bounded action preset control, not pet-pack editing or resource generation.
+
+**Status**: completed in Phase 68. Explicit bridge runs can now update `defaultAction` and `clickAction` to already-installed action ids through `POST /pet/actions/preset`, with writes flowing through the host action-config save path while existing auth, expiry, and narrow-scope bridge boundaries remain unchanged.
+
 ## 6. Priority Order
 
 | Priority | Work | Reason |
@@ -932,6 +956,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 | P1 | Phase 65 Plugin service hard cleanup | Completed; declared services now remain `stopping` until exit confirmation after explicit stop, disable cleanup, or app shutdown cleanup. |
 | P1 | Phase 66 Plugin service bridge | Completed; explicit declaration-only service runs now receive the same narrow bridge URL/token and lose access immediately on stop request or exit. |
 | P1 | Phase 67 Plugin bridge action catalog | Completed; explicit bridge runs can now read the current action catalog with bounded summary fields before choosing an action. |
+| P1 | Phase 68 Plugin authoring bridge action preset | Completed; explicit bridge runs can now update only `defaultAction` and `clickAction` to existing action ids through the host save path. |
 | P2 | Phase 41 AI behavior replay | Completed; preserve redacted diagnostics and replay semantics while future AI tooling evolves. |
 | P2 | Phase 39 plugin sandbox evaluation | Completed; keep current runner for v1.1 and revisit on high-risk plugin capability changes. |
 | P2 | Phase 46 documentation consolidation | Completed; keep future live-doc updates fact-only and link-oriented. |
@@ -966,7 +991,8 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 26. Phase 64 is complete; declaration-only commands now receive a short-lived bridge URL/token and can use it for pet-aware mutations and bounded context reads.
 27. Phase 65 is complete; declared services now stay `stopping` until exit confirmation after explicit stop, disable cleanup, or app shutdown cleanup.
 28. Phase 66 is complete; explicit declaration-only services now receive the same short-lived bridge URL/token as commands and can use it for pet-aware mutations and bounded context reads during the active run.
-29. Phase 67 is complete; explicit bridge runs can now read the current action catalog through a bounded `GET /pet/actions` route before choosing an action. Choose the next phase from real evidence work, community extension rehearsal, harder descendant-process guarantees, richer but still narrow authoring bridges, or another high-drift service/report boundary.
+29. Phase 67 is complete; explicit bridge runs can now read the current action catalog through a bounded `GET /pet/actions` route before choosing an action.
+30. Phase 68 is complete; explicit bridge runs can now update `defaultAction` and `clickAction` through a bounded `POST /pet/actions/preset` route using only already-installed action ids. Choose the next phase from real evidence work, community extension rehearsal, harder descendant-process guarantees, richer but still narrow authoring bridges, or another high-drift service/report boundary.
 
 ## 8. Verification Contract
 

@@ -152,7 +152,7 @@ Services are long-running local process entries managed by OpenPet.
 }
 ```
 
-OpenPet can explicitly run command and setup entries from Control Center, capture stdout/stderr snippets, show setup runtime state, explicitly start and stop services, show service runtime state, stop services on plugin disable, send stop signals on app quit, manually check declared loopback health endpoints, and attempt best-effort process-group cleanup when stopping services. Declaration-only command runs and explicitly started services receive a short-lived bridge URL/token so they can call `pet.say`, `pet.action`, `pet.event`, fetch a bounded read-only context, and discover the current action catalog during the active entry run. This lets extensions build practical long-running experiences such as weather companions, personality injectors, action announcers, pet-aware dashboards, and action-selection tools without forcing everything through the legacy JavaScript SDK. Command, setup, and service processes do not run during install or enable; services never auto-start; health checks do not run in the background; and the host spawns command, setup, and service processes without shell expansion. Hard process-tree cleanup guarantees are still future runtime work. The service model should not require a specific language, a self-contained package, or a full process sandbox.
+OpenPet can explicitly run command and setup entries from Control Center, capture stdout/stderr snippets, show setup runtime state, explicitly start and stop services, show service runtime state, stop services on plugin disable, send stop signals on app quit, manually check declared loopback health endpoints, and attempt best-effort process-group cleanup when stopping services. Declaration-only command runs and explicitly started services receive a short-lived bridge URL/token so they can call `pet.say`, `pet.action`, `pet.event`, fetch a bounded read-only context, discover the current action catalog, and apply a bounded action preset during the active entry run. This lets extensions build practical long-running experiences such as weather companions, personality injectors, action announcers, pet-aware dashboards, and action-selection tools without forcing everything through the legacy JavaScript SDK. Command, setup, and service processes do not run during install or enable; services never auto-start; health checks do not run in the background; and the host spawns command, setup, and service processes without shell expansion. Hard process-tree cleanup guarantees are still future runtime work. The service model should not require a specific language, a self-contained package, or a full process sandbox.
 
 ### Dashboards
 
@@ -215,6 +215,7 @@ Current bridge routes:
 
 - `GET /context`
 - `GET /pet/actions`
+- `POST /pet/actions/preset`
 - `POST /pet/say`
 - `POST /pet/action`
 - `POST /pet/event`
@@ -246,6 +247,7 @@ Current endpoint set:
 
 - `GET /context`
 - `GET /pet/actions`
+- `POST /pet/actions/preset`
 - `POST /pet/say`
 - `POST /pet/action`
 - `POST /pet/event`
@@ -256,8 +258,11 @@ Bridge rules:
 - the entry must belong to an enabled, policy-allowed local extension;
 - requests must use `Authorization: Bearer <OPENPET_BRIDGE_TOKEN>`;
 - `GET /pet/actions` is read-only and returns a bounded action summary rather than sprite paths or writable config locations;
+- `POST /pet/actions/preset` can update only `defaultAction` and `clickAction`, and every provided action id must already exist in the current action catalog;
+- preset updates flow through the host action-config save path instead of direct file writes;
 - `pet:say`, `pet:action`, and `pet:event` permissions are enforced per route;
 - all pet mutations still flow through `PetService`;
+- the bridge does not expose sprite editing, frame import, atlas mutation, preview image generation, or arbitrary filesystem access;
 - setup entries, install, enable, and background health paths do not receive bridge access.
 
 Example bridge requests:
@@ -279,11 +284,18 @@ curl "$OPENPET_BRIDGE_URL/pet/actions" \
   -H "Authorization: Bearer $OPENPET_BRIDGE_TOKEN"
 ```
 
+```bash
+curl -X POST "$OPENPET_BRIDGE_URL/pet/actions/preset" \
+  -H "Authorization: Bearer $OPENPET_BRIDGE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"defaultAction":"rain-idle","clickAction":"umbrella-wave"}'
+```
+
 Example command behavior:
 
 1. Read command context from stdin.
 2. Fetch weather using the extension's own network stack.
-3. Optionally call bridge routes such as `GET /pet/actions`, `POST /pet/say`, `POST /pet/action`, or `POST /pet/event`.
+3. Optionally call bridge routes such as `GET /pet/actions`, `POST /pet/actions/preset`, `POST /pet/say`, `POST /pet/action`, or `POST /pet/event`.
 4. Write final result JSON to stdout.
 
 Example service behavior:
@@ -291,7 +303,7 @@ Example service behavior:
 1. Start only after the user presses the service start action in Control Center.
 2. Read `OPENPET_BRIDGE_URL` and `OPENPET_BRIDGE_TOKEN` from the process environment.
 3. Run the extension's own scheduler, API client, dashboard server, model workflow, or asset generator.
-4. Call bridge routes when the pet should speak, switch action, emit an event, read bounded context, or discover which actions exist.
+4. Call bridge routes when the pet should speak, switch action, emit an event, read bounded context, discover which actions exist, or apply an already-installed default/click action pairing.
 5. Stop using the bridge as soon as OpenPet requests service stop or the process exits.
 
 ## Configuration
@@ -411,6 +423,8 @@ Good extension shapes include:
 
 Pet action tooling should prefer package-local assets and generated outputs under `OPENPET_DATA_DIR` or a declared asset directory. Do not modify `cat_anime/` directly unless the user is intentionally working on core app assets.
 
+When using bridge authoring hooks, prefer `POST /pet/actions/preset` only for selecting existing installed actions. Do not present the bridge as a sprite editor, atlas editor, frame importer, or generic asset pipeline.
+
 ## Packaging And Submission
 
 Current repository commands still use the historical "plugin" name:
@@ -421,7 +435,7 @@ npm run create-plugin-submission-bundle -- <extension-dir-or-zip> --output-dir p
 npm run validate-plugin-submission-bundle -- plugin-submission-bundle --require-ready
 ```
 
-These commands are useful for structural validation and reviewer handoff, but some checks still reflect the legacy short-lived JavaScript SDK plugin model. The host now supports explicit setup execution, visible setup runtime status, explicit language-neutral command execution, bridge access for explicit command and service entries, explicit service start/stop, manual loopback service health checks, and best-effort process-group cleanup on service stop. Hard process-tree cleanup guarantees are still implementation gaps to reconcile with the extension boundary design when developing the next host runtime.
+These commands are useful for structural validation and reviewer handoff, but some checks still reflect the legacy short-lived JavaScript SDK plugin model. The host now supports explicit setup execution, visible setup runtime status, explicit language-neutral command execution, bridge access for explicit command and service entries, bounded action preset updates through the bridge, explicit service start/stop, manual loopback service health checks, and best-effort process-group cleanup on service stop. Hard process-tree cleanup guarantees are still implementation gaps to reconcile with the extension boundary design when developing the next host runtime.
 
 For a local author rehearsal:
 

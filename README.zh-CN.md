@@ -24,7 +24,7 @@ OpenPet 会把一只小宠物放在你的桌面上。它能走动、说话、播
 - Pet pack runtime，兼容 legacy cat、动作帧文件夹、`.codex-pet.zip`，以及 `pet.json` + `spritesheet.webp` 的 Codex pet atlas。
 - 内置 `doro`、`duodong`、`chispa` 三个只读宠物包。
 - OpenAI 兼容聊天，API Key 只保存在主进程 secret store。
-- 面向开发者的本地扩展模型，当前兼容 legacy SDK，并支持显式 command、dashboard、service 控制、显式 command/service 的窄宠物 bridge（含只读动作发现）、校验、日志、catalog 安装和卸载流程。
+- 面向开发者的本地扩展模型，当前兼容 legacy SDK，并支持显式 command、dashboard、service 控制、显式 command/service 的窄宠物 bridge（含只读动作发现和受限动作预设更新）、校验、日志、catalog 安装和卸载流程。
 - 可选的本地 HTTP / MCP API，仅 loopback，默认关闭。
 - 渐进式 TypeScript 迁移基线，已覆盖共享 contracts 和 Control Center API facade。
 
@@ -106,7 +106,7 @@ npm run generate-sprites
 
 ## 扩展开发
 
-OpenPet 使用统一的第三方包模型：扩展。出于兼容性，包清单文件仍叫 `plugin.json`。宿主现在可以规范化并审查 `entries.setup`、`entries.commands`、`entries.services`、`entries.dashboards`、`manifest`、`config` 和 `assets` 声明；JavaScript 兼容包可以通过现有 runner 暴露 `entries.commands`，仅声明本地扩展也可以在用户显式触发时运行短生命周期的 `entries.commands`，通过 stdin 接收 JSON 上下文，并在运行期间获得短时 bridge 以调用 `pet.say`、`pet.action`、`pet.event`、受限 context 和只读动作目录。已启用插件可以从 Control Center 显式运行声明的 setup entry、打开声明的 HTTP/HTTPS dashboard、启动或停止声明的 service entry，并让显式启动的 service 进程在运行期间获得同一条窄 bridge；也可以手动检查声明的 loopback service health endpoint。Command、setup 和 service 进程启动都不经过 shell 展开，service 不会自动启动，setup 和 command 不会在 install 或 enable 时自动执行，停止 service 时会尽力清理进程组，health check 不会后台轮询；任意 shell 控制台和硬性的完整进程树清理保证仍属于后续 runtime 工作。
+OpenPet 使用统一的第三方包模型：扩展。出于兼容性，包清单文件仍叫 `plugin.json`。宿主现在可以规范化并审查 `entries.setup`、`entries.commands`、`entries.services`、`entries.dashboards`、`manifest`、`config` 和 `assets` 声明；JavaScript 兼容包可以通过现有 runner 暴露 `entries.commands`，仅声明本地扩展也可以在用户显式触发时运行短生命周期的 `entries.commands`，通过 stdin 接收 JSON 上下文，并在运行期间获得短时 bridge 以调用 `pet.say`、`pet.action`、`pet.event`、受限 context、只读动作目录，以及对已安装动作 id 的受限预设更新。已启用插件可以从 Control Center 显式运行声明的 setup entry、打开声明的 HTTP/HTTPS dashboard、启动或停止声明的 service entry，并让显式启动的 service 进程在运行期间获得同一条窄 bridge；也可以手动检查声明的 loopback service health endpoint。新的动作预设 bridge 只能通过宿主保存路径更新 `defaultAction` 和 `clickAction`，不会开放 sprite 编辑、素材导入、atlas 细节或任意文件写入。Command、setup 和 service 进程启动都不经过 shell 展开，service 不会自动启动，setup 和 command 不会在 install 或 enable 时自动执行，停止 service 时会尽力清理进程组，health check 不会后台轮询；任意 shell 控制台和硬性的完整进程树清理保证仍属于后续 runtime 工作。
 
 当前 legacy SDK 示例在宿主运行时追上新模型前仍然有参考价值：
 

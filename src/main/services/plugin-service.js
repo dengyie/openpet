@@ -510,7 +510,7 @@ const readLocalPluginManifests = (pluginDirs = []) => {
   return plugins
 }
 
-const createPluginService = ({ settingsService, petService, aiService, fetchImpl = globalThis.fetch, serviceHealthTimeoutMs, healthCheckTimeoutMs = serviceHealthTimeoutMs ?? PLUGIN_SERVICE_HEALTH_TIMEOUT_MS, commandProcessTimeoutMs = LOCAL_PLUGIN_COMMAND_TIMEOUT_MS, openExternal = async () => { throw new Error('Dashboard opener is not available') }, spawnServiceProcess = spawn, spawnSetupProcess = spawnServiceProcess, spawnCommandProcess = spawnServiceProcess, killServiceProcess = process.kill, pluginDirs = [], officialPlugins = [], getPluginBlockStatus = () => ({ blocked: false, reasons: [] }) }) => {
+const createPluginService = ({ settingsService, petService, aiService, actionImportService, fetchImpl = globalThis.fetch, serviceHealthTimeoutMs, healthCheckTimeoutMs = serviceHealthTimeoutMs ?? PLUGIN_SERVICE_HEALTH_TIMEOUT_MS, commandProcessTimeoutMs = LOCAL_PLUGIN_COMMAND_TIMEOUT_MS, openExternal = async () => { throw new Error('Dashboard opener is not available') }, spawnServiceProcess = spawn, spawnSetupProcess = spawnServiceProcess, spawnCommandProcess = spawnServiceProcess, killServiceProcess = process.kill, pluginDirs = [], officialPlugins = [], getPluginBlockStatus = () => ({ blocked: false, reasons: [] }) }) => {
   if (!settingsService) throw new Error('settingsService is required')
   if (!petService) throw new Error('petService is required')
   const serviceRuntimes = new Map()
@@ -591,6 +591,57 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
     }
   }
 
+  const normalizePluginBridgeActionPresetPayload = (payload = {}) => {
+    const hasDefaultAction = hasOwn(payload, 'defaultAction')
+    const hasClickAction = hasOwn(payload, 'clickAction')
+    if (!hasDefaultAction && !hasClickAction) {
+      throw new Error('Action preset update must include defaultAction or clickAction')
+    }
+
+    const snapshot = petService.getSnapshot?.() || {}
+    const actions = snapshot.actions || {}
+    const availableActionIds = new Set(
+      Array.isArray(actions.actions)
+        ? actions.actions.map((action) => String(action.id || '')).filter(Boolean)
+        : []
+    )
+    const normalized = {}
+
+    if (hasDefaultAction) {
+      if (typeof payload.defaultAction !== 'string' || !payload.defaultAction.trim()) {
+        throw new Error('defaultAction must be a non-empty string')
+      }
+      const actionId = payload.defaultAction.trim()
+      if (!availableActionIds.has(actionId)) {
+        throw new Error(`Unknown action preset: ${actionId}`)
+      }
+      normalized.defaultAction = actionId
+    }
+
+    if (hasClickAction) {
+      if (typeof payload.clickAction !== 'string' || !payload.clickAction.trim()) {
+        throw new Error('clickAction must be a non-empty string')
+      }
+      const actionId = payload.clickAction.trim()
+      if (!availableActionIds.has(actionId)) {
+        throw new Error(`Unknown action preset: ${actionId}`)
+      }
+      normalized.clickAction = actionId
+    }
+
+    return normalized
+  }
+
+  const applyPluginBridgeActionPreset = async (payload = {}) => {
+    if (!actionImportService?.updateActionConfig) {
+      throw new Error('Action preset updates are not available')
+    }
+    const normalized = normalizePluginBridgeActionPresetPayload(payload)
+    await actionImportService.updateActionConfig(normalized)
+    petService.reloadAnimations?.()
+    return createPluginBridgeActionCatalog()
+  }
+
   const createPluginBridgeHandlers = (plugin, entryId) => ({
     context: async () => {
       appendLog({ pluginId: plugin.manifest.id, commandId: entryId, level: 'info', message: 'Bridge context requested' })
@@ -599,6 +650,17 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
     petActions: async () => {
       appendLog({ pluginId: plugin.manifest.id, commandId: entryId, level: 'info', message: 'Bridge pet.actions requested' })
       return { ok: true, actions: createPluginBridgeActionCatalog() }
+    },
+    petActionPreset: async (payload = {}) => {
+      appendLog({ pluginId: plugin.manifest.id, commandId: entryId, level: 'info', message: 'Bridge pet.actions.preset requested' })
+      const actions = await applyPluginBridgeActionPreset(payload)
+      appendLog({
+        pluginId: plugin.manifest.id,
+        commandId: entryId,
+        level: 'info',
+        message: `Bridge pet.actions.preset applied: ${actions.defaultAction}/${actions.clickAction}`.slice(0, 240)
+      })
+      return { ok: true, actions }
     },
     petSay: async (payload = {}) => {
       assertPermission(plugin.manifest, 'pet:say')
@@ -662,7 +724,7 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
     pluginBridgeServer = http.createServer(async (request, response) => {
       try {
         const url = new URL(request.url, `http://${PLUGIN_BRIDGE_HOST}`)
-        const match = url.pathname.match(/^\/plugins\/bridge\/([^/]+)\/([^/]+)\/([^/]+)(\/context|\/pet\/actions|\/pet\/say|\/pet\/action|\/pet\/event)$/)
+        const match = url.pathname.match(/^\/plugins\/bridge\/([^/]+)\/([^/]+)\/([^/]+)(\/context|\/pet\/actions|\/pet\/actions\/preset|\/pet\/say|\/pet\/action|\/pet\/event)$/)
         if (!match) {
           sendJson(response, 404, { ok: false, error: 'Not found' })
           return
@@ -688,6 +750,15 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
         }
         if (route === '/pet/actions') {
           sendJson(response, 200, await runtime.handlers.petActions())
+          return
+        }
+        if (route === '/pet/actions/preset') {
+          if (!isJsonRequest(request)) {
+            sendJson(response, 415, { ok: false, error: 'Content-Type must be application/json' })
+            return
+          }
+          const payload = await readJsonBody(request)
+          sendJson(response, 200, await runtime.handlers.petActionPreset(payload))
           return
         }
 

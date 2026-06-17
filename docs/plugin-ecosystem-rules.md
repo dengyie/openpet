@@ -106,7 +106,7 @@ Commands should be allowed to use any suitable runtime. Do not require JavaScrip
 
 Services are long-running local process entries managed by OpenPet.
 
-OpenPet can run command and setup entries only after explicit Control Center action, record setup status/logs, start and stop declared service processes only after explicit Control Center action, apply service platform overrides, capture stdout/stderr snippets, show runtime state, manually check declared loopback health endpoints, and stop running services on disable/app quit with best-effort process-group cleanup. Declaration-only command runs and explicitly started services receive a short-lived bridge URL/token pair for bounded pet-aware actions, context reads, and read-only action discovery. Commands and setup do not run during install or enable, services do not auto-start, health checks do not run in the background, and command/setup/service processes are spawned without shell expansion. Hard process-tree cleanup guarantees remain future runtime work.
+OpenPet can run command and setup entries only after explicit Control Center action, record setup status/logs, start and stop declared service processes only after explicit Control Center action, apply service platform overrides, capture stdout/stderr snippets, show runtime state, manually check declared loopback health endpoints, and stop running services on disable/app quit with best-effort process-group cleanup. Declaration-only command runs and explicitly started services receive a short-lived bridge URL/token pair for bounded pet-aware actions, context reads, read-only action discovery, and bounded action preset updates. Commands and setup do not run during install or enable, services do not auto-start, health checks do not run in the background, and command/setup/service processes are spawned without shell expansion. Hard process-tree cleanup guarantees remain future runtime work.
 
 Services may power real local experiences: dashboards, background companions, schedulers, local model servers, voice processors, or integrations with external APIs.
 
@@ -150,6 +150,7 @@ Command results currently use the final stdout JSON line when present.
 The current local bridge stays intentionally small:
 
 - `GET /pet/actions`
+- `POST /pet/actions/preset`
 - `POST /pet/say`
 - `POST /pet/action`
 - `POST /pet/event`
@@ -157,7 +158,7 @@ The current local bridge stays intentionally small:
 
 The bridge is for integration convenience. It is not a complete SDK, not a full security broker, and not a reason to block extensions from using their own local capabilities.
 
-Bridge access is loopback-only, bearer-token gated, per-entry-run scoped, and permission-checked for `pet:say`, `pet:action`, and `pet:event`. The read-only `GET /pet/actions` route exposes only bounded action summaries and intentionally withholds sprite URLs, file paths, and writable config surfaces. The bridge is meant to make welcome third-party experiences possible, such as weather pets that speak and change action, pet action design tools, or personality companion services, without granting unrestricted Electron, main-process, filesystem, secret, or renderer access.
+Bridge access is loopback-only, bearer-token gated, per-entry-run scoped, and permission-checked for `pet:say`, `pet:action`, and `pet:event`. The read-only `GET /pet/actions` route exposes only bounded action summaries and intentionally withholds sprite URLs, file paths, and writable config surfaces. `POST /pet/actions/preset` can update only `defaultAction` and `clickAction`, and only to already-installed action ids through the host action-config save path. The bridge is meant to make welcome third-party experiences possible, such as weather pets that speak and change action, pet action design tools, or personality companion services, without granting unrestricted Electron, main-process, filesystem, secret, or renderer access.
 
 ## 7. Data And Secret Ownership
 

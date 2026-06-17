@@ -644,6 +644,192 @@ test('declaration-only command bridge exposes bounded action catalog', async () 
   assert.equal('previewSprite' in actionsResponse.body.actions.items[0], false)
 })
 
+test('declaration-only command bridge applies action presets through the host save path', async () => {
+  const spawned = []
+  const child = createFakeServiceProcess()
+  const presetCalls = []
+  const root = createDeclarationOnlyPluginDir()
+  const pluginPath = path.join(root, 'weather-declaration', 'plugin.json')
+  fs.writeFileSync(path.join(pluginPath), JSON.stringify({
+    id: 'weather-declaration',
+    name: 'Weather Declaration',
+    version: '1.0.0',
+    permissions: [],
+    entries: {
+      commands: [{ id: 'announce', title: 'Announce Weather', command: 'node ./commands/announce.js', cwd: '.' }]
+    }
+  }))
+  let snapshot = {
+    settings: {
+      name: 'Bridge Pet',
+      petPacks: { activePackId: 'legacy-cat' }
+    },
+    actions: {
+      defaultAction: 'idle',
+      clickAction: 'wave',
+      actions: [
+        { id: 'idle', label: 'Idle' },
+        { id: 'wave', label: 'Wave' }
+      ]
+    }
+  }
+  const petService = {
+    getSnapshot: () => snapshot
+  }
+  const actionImportService = {
+    updateActionConfig: async (payload) => {
+      presetCalls.push(payload)
+      snapshot = {
+        ...snapshot,
+        actions: {
+          ...snapshot.actions,
+          defaultAction: payload.defaultAction ?? snapshot.actions.defaultAction,
+          clickAction: payload.clickAction ?? snapshot.actions.clickAction
+        }
+      }
+      return snapshot.actions
+    }
+  }
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService,
+    actionImportService,
+    officialPlugins: [],
+    pluginDirs: [root],
+    spawnCommandProcess: (file, args, options) => {
+      spawned.push({ file, args, options })
+      return child
+    }
+  })
+
+  const commandRun = service.runCommand('weather-declaration', 'announce')
+  await waitFor(() => spawned.length === 1)
+  const baseUrl = spawned[0].options.env.OPENPET_BRIDGE_URL
+  const token = spawned[0].options.env.OPENPET_BRIDGE_TOKEN
+  const presetResponse = await requestBridge(`${baseUrl}/pet/actions/preset`, {
+    method: 'POST',
+    token,
+    body: { defaultAction: 'wave', clickAction: 'idle' }
+  })
+  const readbackResponse = await requestBridge(`${baseUrl}/pet/actions`, { token })
+
+  child.stdout.write('{"ok":true}\n')
+  child.emit('exit', 0, null)
+  await commandRun
+
+  assert.deepEqual(presetCalls, [{ defaultAction: 'wave', clickAction: 'idle' }])
+  assert.equal(presetResponse.status, 200)
+  assert.equal(presetResponse.body.actions.defaultAction, 'wave')
+  assert.equal(presetResponse.body.actions.clickAction, 'idle')
+  assert.equal(readbackResponse.body.actions.defaultAction, 'wave')
+  assert.equal(readbackResponse.body.actions.clickAction, 'idle')
+  assert.equal('sprite' in presetResponse.body.actions.items[0], false)
+})
+
+test('declaration-only command bridge preset update preserves omitted fields', async () => {
+  const spawned = []
+  const child = createFakeServiceProcess()
+  let snapshot = {
+    settings: { petPacks: { activePackId: 'legacy-cat' } },
+    actions: {
+      defaultAction: 'idle',
+      clickAction: 'nod',
+      actions: [
+        { id: 'idle', label: 'Idle' },
+        { id: 'wave', label: 'Wave' },
+        { id: 'nod', label: 'Nod' }
+      ]
+    }
+  }
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: {
+      getSnapshot: () => snapshot
+    },
+    actionImportService: {
+      updateActionConfig: async (payload) => {
+        snapshot = {
+          ...snapshot,
+          actions: {
+            ...snapshot.actions,
+            defaultAction: payload.defaultAction ?? snapshot.actions.defaultAction,
+            clickAction: payload.clickAction ?? snapshot.actions.clickAction
+          }
+        }
+        return snapshot.actions
+      }
+    },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir()],
+    spawnCommandProcess: (file, args, options) => {
+      spawned.push({ file, args, options })
+      return child
+    }
+  })
+
+  const commandRun = service.runCommand('weather-declaration', 'announce')
+  await waitFor(() => spawned.length === 1)
+  const baseUrl = spawned[0].options.env.OPENPET_BRIDGE_URL
+  const token = spawned[0].options.env.OPENPET_BRIDGE_TOKEN
+  const presetResponse = await requestBridge(`${baseUrl}/pet/actions/preset`, {
+    method: 'POST',
+    token,
+    body: { defaultAction: 'wave' }
+  })
+
+  child.stdout.write('{"ok":true}\n')
+  child.emit('exit', 0, null)
+  await commandRun
+
+  assert.equal(presetResponse.body.actions.defaultAction, 'wave')
+  assert.equal(presetResponse.body.actions.clickAction, 'nod')
+})
+
+test('declaration-only command bridge rejects unknown preset action ids without mutation', async () => {
+  const spawned = []
+  const child = createFakeServiceProcess()
+  const presetCalls = []
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: createBridgeAwarePetService(),
+    actionImportService: {
+      updateActionConfig: async (payload) => {
+        presetCalls.push(payload)
+        return payload
+      }
+    },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir()],
+    spawnCommandProcess: (file, args, options) => {
+      spawned.push({ file, args, options })
+      return child
+    }
+  })
+
+  const commandRun = service.runCommand('weather-declaration', 'announce')
+  await waitFor(() => spawned.length === 1)
+  const baseUrl = spawned[0].options.env.OPENPET_BRIDGE_URL
+  const token = spawned[0].options.env.OPENPET_BRIDGE_TOKEN
+  const presetResponse = await requestBridge(`${baseUrl}/pet/actions/preset`, {
+    method: 'POST',
+    token,
+    body: { defaultAction: 'storm-idle' }
+  })
+
+  child.stdout.write('{"ok":true}\n')
+  child.emit('exit', 0, null)
+  await commandRun
+
+  assert.equal(presetResponse.status, 400)
+  assert.deepEqual(presetCalls, [])
+})
+
 test('plugin service rejects declaration command cwd symlinks escaping the plugin directory', async () => {
   const root = createDeclarationOnlyPluginDir({ commandCwd: 'command-link' })
   const outsidePath = path.join(root, 'outside-command')
@@ -1470,6 +1656,11 @@ test('plugin service bridge rejects invalid tokens and missing permissions', asy
   const wrongActionsToken = await requestBridge(`${baseUrl}/pet/actions`, {
     token: 'wrong-token'
   })
+  const wrongPresetToken = await requestBridge(`${baseUrl}/pet/actions/preset`, {
+    method: 'POST',
+    token: 'wrong-token',
+    body: { defaultAction: 'wave' }
+  })
   const wrongToken = await requestBridge(`${baseUrl}/pet/say`, {
     method: 'POST',
     token: 'wrong-token',
@@ -1484,6 +1675,7 @@ test('plugin service bridge rejects invalid tokens and missing permissions', asy
   child.emit('exit', 0, null)
 
   assert.equal(wrongActionsToken.status, 401)
+  assert.equal(wrongPresetToken.status, 401)
   assert.equal(wrongToken.status, 401)
   assert.equal(missingPermission.status, 403)
 })
@@ -1538,6 +1730,102 @@ test('plugin service bridge exposes bounded action catalog', async () => {
     ]
   })
   assert.equal('sprite' in actionsResponse.body.actions.items[0], false)
+  assert.equal(expired.status, 401)
+})
+
+test('plugin service bridge applies action presets and keeps readback in sync', async () => {
+  const spawned = []
+  const child = createSlowStoppingServiceProcess()
+  const presetCalls = []
+  let snapshot = {
+    settings: { petPacks: { activePackId: 'legacy-cat' } },
+    actions: {
+      defaultAction: 'idle',
+      clickAction: 'wave',
+      actions: [
+        { id: 'idle', label: 'Idle' },
+        { id: 'wave', label: 'Wave' }
+      ]
+    }
+  }
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: {
+      getSnapshot: () => snapshot
+    },
+    actionImportService: {
+      updateActionConfig: async (payload) => {
+        presetCalls.push(payload)
+        snapshot = {
+          ...snapshot,
+          actions: {
+            ...snapshot.actions,
+            defaultAction: payload.defaultAction ?? snapshot.actions.defaultAction,
+            clickAction: payload.clickAction ?? snapshot.actions.clickAction
+          }
+        }
+        return snapshot.actions
+      }
+    },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir()],
+    spawnServiceProcess: (file, args, options) => {
+      spawned.push({ file, args, options, child })
+      return child
+    }
+  })
+
+  await service.startService('weather-declaration', 'companion')
+  const baseUrl = spawned[0].options.env.OPENPET_BRIDGE_URL
+  const token = spawned[0].options.env.OPENPET_BRIDGE_TOKEN
+  const presetResponse = await requestBridge(`${baseUrl}/pet/actions/preset`, {
+    method: 'POST',
+    token,
+    body: { clickAction: 'idle' }
+  })
+  const readbackResponse = await requestBridge(`${baseUrl}/pet/actions`, { token })
+
+  child.emit('exit', 0, null)
+
+  assert.deepEqual(presetCalls, [{ clickAction: 'idle' }])
+  assert.equal(presetResponse.status, 200)
+  assert.equal(presetResponse.body.actions.defaultAction, 'idle')
+  assert.equal(presetResponse.body.actions.clickAction, 'idle')
+  assert.equal(readbackResponse.body.actions.clickAction, 'idle')
+})
+
+test('plugin service bridge preset route expires when the service exits', async () => {
+  const spawned = []
+  const child = createSlowStoppingServiceProcess()
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: createBridgeAwarePetService(),
+    actionImportService: {
+      updateActionConfig: async (payload) => payload
+    },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir()],
+    spawnServiceProcess: (file, args, options) => {
+      spawned.push({ file, args, options, child })
+      return child
+    }
+  })
+
+  await service.startService('weather-declaration', 'companion')
+  const baseUrl = spawned[0].options.env.OPENPET_BRIDGE_URL
+  const token = spawned[0].options.env.OPENPET_BRIDGE_TOKEN
+
+  child.emit('exit', 0, null)
+  const expired = await requestBridge(`${baseUrl}/pet/actions/preset`, {
+    method: 'POST',
+    token,
+    body: { defaultAction: 'wave' }
+  })
+
   assert.equal(expired.status, 401)
 })
 
