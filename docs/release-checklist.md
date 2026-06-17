@@ -84,7 +84,11 @@ The app must continue to build unsigned local packages when these variables are 
 
 - Create a tag named `vX.Y.Z` or `vX.Y.Z-rc.N`.
 - Let GitHub Actions run the release workflow from the tag.
-- Download the `openpet-macos-release-evidence-<tag>` Actions artifact and preserve it with the reviewed release archive.
+- Download and unzip the `openpet-macos-release-evidence-<tag>` Actions artifact, then preserve it with the reviewed release archive:
+
+```bash
+npm run create-macos-release-evidence-archive -- --artifact-dir "<downloaded-openpet-macos-release-evidence-tag>" --archive-dir "docs/release-evidence/macos-release-evidence-archive/<tag>" --artifact-name "openpet-macos-release-evidence-<tag>" --release-tag "<tag>" --workflow-run-url "<actions-run-url>"
+```
 - Download the generated DMG/ZIP artifacts.
 - Verify the app launches and shows the pet window.
 - Open Control Center and smoke test Pet, Actions, AI, Plugins, Service, and About.
@@ -113,7 +117,7 @@ Capture canonical macOS release evidence before building the release archive:
 npm run create-macos-release-evidence -- --app "release/mac/OpenPet.app" --notarization-text "<notarytool accepted output>" --output-dir docs/release-evidence/<release-archive>
 ```
 
-The command writes `macos-codesign.txt`, `macos-notarization.txt`, `macos-gatekeeper.txt`, `macos-release-evidence-summary.md`, and `macos-release-evidence-summary.json`. The GitHub macOS release workflow uploads the same directory as `openpet-macos-release-evidence-<tag>` for maintainer review. It is allowed to archive failing or pending output for review, but official readiness still requires the summary and release archive manifest to report passing signed evidence.
+The command writes `macos-codesign.txt`, `macos-notarization.txt`, `macos-gatekeeper.txt`, `macos-release-evidence-summary.md`, and `macos-release-evidence-summary.json`. The GitHub macOS release workflow uploads the same directory as `openpet-macos-release-evidence-<tag>` for maintainer review, and `npm run create-macos-release-evidence-archive` copies the downloaded artifact into a permanent archive with provenance and hashes. It is allowed to archive failing or pending output for review, but official readiness still requires the summary and release archive manifest to report passing signed evidence.
 
 After all macOS packaged native picker checks are filled with concrete evidence, validate readiness:
 
