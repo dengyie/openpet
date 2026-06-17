@@ -552,6 +552,18 @@ export interface CreatorAssetsInspectFramesResponse {
   result: CreatorAssetsInspectFramesResult
 }
 
+export interface CreatorAssetsImportFramesRequest {
+  relativePath: string
+  actionId: string
+  label?: string
+}
+
+export interface CreatorAssetsImportFramesResponse {
+  ok: boolean
+  actions: ActionsConfigViewState
+  importedAction?: ActionEntry
+}
+
 export interface PluginMutationResult extends OkResponse {
   pluginId?: string
   installMode?: string

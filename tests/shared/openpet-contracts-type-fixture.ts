@@ -2,6 +2,8 @@ import type {
   CatalogInstallSelection,
   CreatorActionsMutationResult,
   CreatorActionsReadResponse,
+  CreatorAssetsImportFramesRequest,
+  CreatorAssetsImportFramesResponse,
   CreatorAssetsInspectFramesRequest,
   CreatorAssetsInspectFramesResponse,
   PluginCommandRunResultViewState,
@@ -156,6 +158,25 @@ const creatorAssetsInspectFramesResponseFixture = {
     }
   }
 } satisfies CreatorAssetsInspectFramesResponse
+
+const creatorAssetsImportFramesRequestFixture = {
+  relativePath: 'assets/actions/wave',
+  actionId: 'wave',
+  label: 'Wave Hello'
+} satisfies CreatorAssetsImportFramesRequest
+
+const creatorAssetsImportFramesResponseFixture = {
+  ok: true,
+  actions: {
+    defaultAction: 'idle',
+    clickAction: 'wave',
+    actions: [
+      { id: 'idle', label: 'Idle', sprite: 'file:///packs/cat/sprites/idle.png', frameCount: 1, frameMs: 100, frameWidth: 32, frameHeight: 32 },
+      { id: 'wave', label: 'Wave Hello', sprite: 'file:///packs/cat/sprites/wave.png', frameCount: 2, frameMs: 95, frameWidth: 8, frameHeight: 8 }
+    ]
+  },
+  importedAction: { id: 'wave', label: 'Wave Hello', sprite: 'file:///packs/cat/sprites/wave.png', frameCount: 2, frameMs: 95, frameWidth: 8, frameHeight: 8 }
+} satisfies CreatorAssetsImportFramesResponse
 
 const releaseArchiveFixture = {
   generatedAt: '2026-06-17T00:00:00.000Z',

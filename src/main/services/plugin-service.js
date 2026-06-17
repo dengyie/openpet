@@ -17,6 +17,10 @@ const MAX_PLUGIN_NETWORK_REQUEST_BYTES = 64 * 1024
 const MAX_PLUGIN_NETWORK_RESPONSE_BYTES = 128 * 1024
 const MAX_PLUGIN_COMMAND_OUTPUT_BYTES = 64 * 1024
 const MAX_PLUGIN_BRIDGE_BODY_BYTES = 1024 * 1024
+const MAX_PLUGIN_ASSET_IMPORT_FRAMES = 240
+const MAX_PLUGIN_ASSET_IMPORT_FRAME_PIXELS = 1024 * 1024
+const MAX_PLUGIN_ASSET_IMPORT_TOTAL_PIXELS = 48 * 1000 * 1000
+const MAX_PLUGIN_ASSET_IMPORT_BYTES = 50 * 1024 * 1024
 const PLUGIN_SERVICE_HEALTH_TIMEOUT_MS = 3000
 const PLUGIN_SERVICE_STOP_GRACE_PERIOD_MS = 1500
 const MIN_PLUGIN_SERVICE_HEALTH_INTERVAL_MS = 15000
@@ -84,6 +88,54 @@ const sendJson = (response, statusCode, body) => {
     'Cache-Control': 'no-store'
   })
   response.end(JSON.stringify(body))
+}
+
+const getDirectoryByteSize = (folderPath) => {
+  let totalBytes = 0
+  for (const entry of fs.readdirSync(folderPath, { withFileTypes: true })) {
+    const entryPath = path.join(folderPath, entry.name)
+    const stat = fs.lstatSync(entryPath)
+    if (stat.isDirectory() && !stat.isSymbolicLink()) {
+      totalBytes += getDirectoryByteSize(entryPath)
+    } else {
+      totalBytes += stat.size
+    }
+  }
+  return totalBytes
+}
+
+const assertDirectoryHasNoSymlinks = (folderPath) => {
+  for (const entry of fs.readdirSync(folderPath, { withFileTypes: true })) {
+    const entryPath = path.join(folderPath, entry.name)
+    const stat = fs.lstatSync(entryPath)
+    if (stat.isSymbolicLink()) {
+      throw new Error('Plugin asset folder must not contain symlinks')
+    }
+    if (stat.isDirectory()) assertDirectoryHasNoSymlinks(entryPath)
+  }
+}
+
+const assertCreatorAssetImportWithinLimits = (inspection = {}, sourceDir = '') => {
+  if (!inspection.valid) throw new Error((inspection.errors || []).join('; ') || 'Frame folder is invalid')
+  const frameCount = Number(inspection.frameCount) || 0
+  const maxWidth = Number(inspection.maxWidth) || 0
+  const maxHeight = Number(inspection.maxHeight) || 0
+  const framePixels = maxWidth * maxHeight
+  const totalPixels = framePixels * frameCount
+  const totalBytes = sourceDir ? getDirectoryByteSize(sourceDir) : 0
+
+  if (frameCount > MAX_PLUGIN_ASSET_IMPORT_FRAMES) {
+    throw new Error(`Frame folder has too many frames: ${frameCount}/${MAX_PLUGIN_ASSET_IMPORT_FRAMES}`)
+  }
+  if (framePixels > MAX_PLUGIN_ASSET_IMPORT_FRAME_PIXELS) {
+    throw new Error(`Frame dimensions are too large: ${maxWidth}x${maxHeight}`)
+  }
+  if (totalPixels > MAX_PLUGIN_ASSET_IMPORT_TOTAL_PIXELS) {
+    throw new Error(`Frame folder is too large to import: ${totalPixels} pixels`)
+  }
+  if (totalBytes > MAX_PLUGIN_ASSET_IMPORT_BYTES) {
+    throw new Error(`Frame folder is too large to import: ${totalBytes} bytes`)
+  }
 }
 
 const createServiceHealthView = (health = {}, serviceEntry = {}) => {
@@ -594,6 +646,7 @@ const createPluginService = ({ settingsService, petService, actionService, actio
       throw new Error('Plugin asset path must stay inside the plugin directory')
     }
     if (!fs.statSync(realTargetPath).isDirectory()) throw new Error('Plugin asset path must be a folder')
+    assertDirectoryHasNoSymlinks(realTargetPath)
     return realTargetPath
   }
 
@@ -645,12 +698,29 @@ const createPluginService = ({ settingsService, petService, actionService, actio
       assertPermission(plugin.manifest, 'assets:inspect')
       if (!actionImportService?.inspectActionFrames) throw new Error('Creator asset inspection is not available')
       const sourceDir = resolvePluginAssetPath(plugin.manifest, payload.relativePath)
+      assertDirectoryHasNoSymlinks(sourceDir)
       appendLog({ pluginId: plugin.manifest.id, commandId, level: 'info', message: 'Bridge creator.assets inspect-frames invoked' })
       const result = await actionImportService.inspectActionFrames({
         sourceDir,
         actionId: payload.actionId
       })
       return { ok: true, result }
+    },
+    creatorAssetsImportFrames: async (payload = {}) => {
+      assertPermission(plugin.manifest, 'assets:generate')
+      if (!actionImportService?.inspectActionFrames || !actionImportService?.importActionFrames) {
+        throw new Error('Creator asset import is not available')
+      }
+      const sourceDir = resolvePluginAssetPath(plugin.manifest, payload.relativePath)
+      assertDirectoryHasNoSymlinks(sourceDir)
+      const actionId = String(payload.actionId || '')
+      const label = payload.label == null || payload.label === '' ? undefined : String(payload.label)
+      appendLog({ pluginId: plugin.manifest.id, commandId, level: 'info', message: 'Bridge creator.assets import-frames invoked' })
+      const preflight = await actionImportService.inspectActionFrames({ sourceDir, actionId })
+      assertCreatorAssetImportWithinLimits(preflight.inspection, sourceDir)
+      const result = await actionImportService.importActionFrames({ sourceDir, actionId, label })
+      const { importedAction, ...actions } = result
+      return { ok: true, actions, importedAction }
     },
     petSay: async (payload = {}) => {
       assertPermission(plugin.manifest, 'pet:say')
@@ -713,7 +783,7 @@ const createPluginService = ({ settingsService, petService, actionService, actio
     commandBridgeServer = http.createServer(async (request, response) => {
       try {
         const url = new URL(request.url, `http://${PLUGIN_BRIDGE_HOST}`)
-        const match = url.pathname.match(/^\/plugins\/bridge\/([^/]+)\/([^/]+)\/([^/]+)(\/context|\/pet\/say|\/pet\/action|\/pet\/event|\/creator\/actions|\/creator\/actions\/validate|\/creator\/actions\/apply|\/creator\/assets\/inspect-frames)$/)
+        const match = url.pathname.match(/^\/plugins\/bridge\/([^/]+)\/([^/]+)\/([^/]+)(\/context|\/pet\/say|\/pet\/action|\/pet\/event|\/creator\/actions|\/creator\/actions\/validate|\/creator\/actions\/apply|\/creator\/assets\/inspect-frames|\/creator\/assets\/import-frames)$/)
         if (!match) {
           sendJson(response, 404, { ok: false, error: 'Not found' })
           return
@@ -771,6 +841,10 @@ const createPluginService = ({ settingsService, petService, actionService, actio
         }
         if (route === '/creator/assets/inspect-frames') {
           sendJson(response, 200, await runtime.handlers.creatorAssetsInspectFrames(payload))
+          return
+        }
+        if (route === '/creator/assets/import-frames') {
+          sendJson(response, 200, await runtime.handlers.creatorAssetsImportFrames(payload))
           return
         }
         sendJson(response, 404, { ok: false, error: 'Not found' })

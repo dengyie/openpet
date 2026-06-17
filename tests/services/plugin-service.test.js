@@ -698,6 +698,472 @@ test('declaration-only creator asset inspection bridge rejects path traversal an
   assert.equal(symlinkResponse.status, 400)
 })
 
+test('declaration-only creator asset inspection bridge rejects symlinked files inside the inspected folder', async (t) => {
+  const spawned = []
+  const child = createFakeServiceProcess()
+  const root = createDeclarationOnlyPluginDir({
+    profile: 'creator-tools',
+    permissions: ['assets:inspect']
+  })
+  const pluginAssetDir = path.join(root, 'weather-declaration', 'assets', 'actions', 'wave')
+  fs.mkdirSync(pluginAssetDir, { recursive: true })
+  const outsideFile = path.join(root, 'outside-frame.png')
+  await sharp({
+    create: {
+      width: 8,
+      height: 8,
+      channels: 4,
+      background: { r: 0, g: 180, b: 255, alpha: 0.9 }
+    }
+  }).png().toFile(outsideFile)
+  try {
+    fs.symlinkSync(outsideFile, path.join(pluginAssetDir, '01_no_bg.png'))
+  } catch (error) {
+    t.skip(`File symlinks are unavailable: ${error.message}`)
+    return
+  }
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: createBridgeAwarePetService(),
+    actionImportService: createTestActionImportService(root),
+    officialPlugins: [],
+    pluginDirs: [root],
+    spawnCommandProcess: (file, args, options) => {
+      spawned.push({ file, args, options })
+      return child
+    }
+  })
+
+  const commandRun = service.runCommand('weather-declaration', 'announce')
+  await waitFor(() => spawned.length === 1)
+  const baseUrl = spawned[0].options.env.OPENPET_BRIDGE_URL
+  const token = spawned[0].options.env.OPENPET_BRIDGE_TOKEN
+  const inspectResponse = await requestBridge(`${baseUrl}/creator/assets/inspect-frames`, {
+    method: 'POST',
+    token,
+    body: {
+      relativePath: 'assets/actions/wave',
+      actionId: 'wave'
+    }
+  })
+
+  child.stdout.write('{"ok":true}\n')
+  child.emit('exit', 0, null)
+  await commandRun
+
+  assert.equal(inspectResponse.status, 400)
+  assert.match(inspectResponse.body.error, /must not contain symlinks/)
+})
+
+test('declaration-only creator asset import bridge imports package-local frame folders', async () => {
+  const spawned = []
+  const child = createFakeServiceProcess()
+  const root = createDeclarationOnlyPluginDir({
+    profile: 'creator-tools',
+    permissions: ['assets:generate']
+  })
+  await createPluginAssetFrame(root, 'assets/actions/wave', '01_no_bg.png')
+  await createPluginAssetFrame(root, 'assets/actions/wave', '02_no_bg.png')
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: createBridgeAwarePetService(),
+    actionImportService: createTestActionImportService(root),
+    officialPlugins: [],
+    pluginDirs: [root],
+    spawnCommandProcess: (file, args, options) => {
+      spawned.push({ file, args, options })
+      return child
+    }
+  })
+
+  const commandRun = service.runCommand('weather-declaration', 'announce')
+  await waitFor(() => spawned.length === 1)
+  const baseUrl = spawned[0].options.env.OPENPET_BRIDGE_URL
+  const token = spawned[0].options.env.OPENPET_BRIDGE_TOKEN
+  const importResponse = await requestBridge(`${baseUrl}/creator/assets/import-frames`, {
+    method: 'POST',
+    token,
+    body: {
+      relativePath: 'assets/actions/wave',
+      actionId: 'wave',
+      label: 'Wave Hello'
+    }
+  })
+
+  child.stdout.write('{"ok":true}\n')
+  child.emit('exit', 0, null)
+  await commandRun
+
+  assert.equal(importResponse.status, 200)
+  assert.equal(importResponse.body.ok, true)
+  assert.equal(importResponse.body.importedAction.id, 'wave')
+  assert.equal(importResponse.body.importedAction.label, 'Wave Hello')
+  assert.equal(importResponse.body.actions.defaultAction, 'wave')
+  assert.equal(importResponse.body.actions.actions.find((action) => action.id === 'wave').sprite, 'cat_anime/sprites/wave.png')
+  assert.equal(fs.existsSync(path.join(root, 'cat_anime', 'flames', 'wave', '01_no_bg.png')), true)
+  assert.equal(fs.existsSync(path.join(root, 'cat_anime', 'sprites', 'wave.png')), true)
+  assert.equal(JSON.parse(fs.readFileSync(path.join(root, 'cat_anime', 'animations.json'), 'utf-8')).actions[0].id, 'wave')
+})
+
+test('declaration-only creator asset import bridge rejects missing generation permission', async () => {
+  const spawned = []
+  const child = createFakeServiceProcess()
+  const root = createDeclarationOnlyPluginDir({
+    profile: 'creator-tools',
+    permissions: ['assets:inspect']
+  })
+  await createPluginAssetFrame(root, 'assets/actions/wave', '01_no_bg.png')
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: createBridgeAwarePetService(),
+    actionImportService: createTestActionImportService(root),
+    officialPlugins: [],
+    pluginDirs: [root],
+    spawnCommandProcess: (file, args, options) => {
+      spawned.push({ file, args, options })
+      return child
+    }
+  })
+
+  const commandRun = service.runCommand('weather-declaration', 'announce')
+  await waitFor(() => spawned.length === 1)
+  const baseUrl = spawned[0].options.env.OPENPET_BRIDGE_URL
+  const token = spawned[0].options.env.OPENPET_BRIDGE_TOKEN
+  const importResponse = await requestBridge(`${baseUrl}/creator/assets/import-frames`, {
+    method: 'POST',
+    token,
+    body: {
+      relativePath: 'assets/actions/wave',
+      actionId: 'wave'
+    }
+  })
+
+  child.stdout.write('{"ok":true}\n')
+  child.emit('exit', 0, null)
+  await commandRun
+
+  assert.equal(importResponse.status, 403)
+})
+
+test('declaration-only creator asset import bridge rejects path traversal and symlink escapes', async (t) => {
+  const spawned = []
+  const child = createFakeServiceProcess()
+  const root = createDeclarationOnlyPluginDir({
+    profile: 'creator-tools',
+    permissions: ['assets:generate']
+  })
+  const outsideDir = path.join(root, 'outside-wave')
+  fs.mkdirSync(outsideDir, { recursive: true })
+  await sharp({
+    create: {
+      width: 8,
+      height: 8,
+      channels: 4,
+      background: { r: 255, g: 100, b: 0, alpha: 0.9 }
+    }
+  }).png().toFile(path.join(outsideDir, '01_no_bg.png'))
+  const pluginDir = path.join(root, 'weather-declaration')
+  const symlinkPath = path.join(pluginDir, 'assets', 'escape-import')
+  fs.mkdirSync(path.dirname(symlinkPath), { recursive: true })
+  try {
+    fs.symlinkSync(outsideDir, symlinkPath, 'dir')
+  } catch (error) {
+    t.skip(`Directory symlinks are unavailable: ${error.message}`)
+    return
+  }
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: createBridgeAwarePetService(),
+    actionImportService: createTestActionImportService(root),
+    officialPlugins: [],
+    pluginDirs: [root],
+    spawnCommandProcess: (file, args, options) => {
+      spawned.push({ file, args, options })
+      return child
+    }
+  })
+
+  const commandRun = service.runCommand('weather-declaration', 'announce')
+  await waitFor(() => spawned.length === 1)
+  const baseUrl = spawned[0].options.env.OPENPET_BRIDGE_URL
+  const token = spawned[0].options.env.OPENPET_BRIDGE_TOKEN
+  const traversalResponse = await requestBridge(`${baseUrl}/creator/assets/import-frames`, {
+    method: 'POST',
+    token,
+    body: {
+      relativePath: '../outside-wave',
+      actionId: 'wave'
+    }
+  })
+  const symlinkResponse = await requestBridge(`${baseUrl}/creator/assets/import-frames`, {
+    method: 'POST',
+    token,
+    body: {
+      relativePath: 'assets/escape-import',
+      actionId: 'wave'
+    }
+  })
+
+  child.stdout.write('{"ok":true}\n')
+  child.emit('exit', 0, null)
+  await commandRun
+
+  assert.equal(traversalResponse.status, 400)
+  assert.equal(symlinkResponse.status, 400)
+})
+
+test('declaration-only creator asset import bridge rejects symlinked files inside the source folder', async (t) => {
+  const spawned = []
+  const child = createFakeServiceProcess()
+  const root = createDeclarationOnlyPluginDir({
+    profile: 'creator-tools',
+    permissions: ['assets:generate']
+  })
+  const pluginAssetDir = path.join(root, 'weather-declaration', 'assets', 'actions', 'wave')
+  fs.mkdirSync(pluginAssetDir, { recursive: true })
+  const outsideFile = path.join(root, 'outside-frame.png')
+  await sharp({
+    create: {
+      width: 8,
+      height: 8,
+      channels: 4,
+      background: { r: 255, g: 80, b: 0, alpha: 0.9 }
+    }
+  }).png().toFile(outsideFile)
+  try {
+    fs.symlinkSync(outsideFile, path.join(pluginAssetDir, '01_no_bg.png'))
+  } catch (error) {
+    t.skip(`File symlinks are unavailable: ${error.message}`)
+    return
+  }
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: createBridgeAwarePetService(),
+    actionImportService: createTestActionImportService(root),
+    officialPlugins: [],
+    pluginDirs: [root],
+    spawnCommandProcess: (file, args, options) => {
+      spawned.push({ file, args, options })
+      return child
+    }
+  })
+
+  const commandRun = service.runCommand('weather-declaration', 'announce')
+  await waitFor(() => spawned.length === 1)
+  const baseUrl = spawned[0].options.env.OPENPET_BRIDGE_URL
+  const token = spawned[0].options.env.OPENPET_BRIDGE_TOKEN
+  const importResponse = await requestBridge(`${baseUrl}/creator/assets/import-frames`, {
+    method: 'POST',
+    token,
+    body: {
+      relativePath: 'assets/actions/wave',
+      actionId: 'wave'
+    }
+  })
+
+  child.stdout.write('{"ok":true}\n')
+  child.emit('exit', 0, null)
+  await commandRun
+
+  assert.equal(importResponse.status, 400)
+  assert.match(importResponse.body.error, /must not contain symlinks/)
+  assert.equal(fs.existsSync(path.join(root, 'cat_anime', 'flames', 'wave')), false)
+})
+
+test('declaration-only creator asset import bridge rejects duplicate action ids without overwriting', async () => {
+  const spawned = []
+  const child = createFakeServiceProcess()
+  const root = createDeclarationOnlyPluginDir({
+    profile: 'creator-tools',
+    permissions: ['assets:generate']
+  })
+  await createPluginAssetFrame(root, 'assets/actions/wave', '01_no_bg.png')
+  const existingActionDir = path.join(root, 'cat_anime', 'flames', 'wave')
+  fs.mkdirSync(existingActionDir, { recursive: true })
+  fs.writeFileSync(path.join(existingActionDir, 'keep.txt'), 'keep')
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: createBridgeAwarePetService(),
+    actionImportService: createTestActionImportService(root),
+    officialPlugins: [],
+    pluginDirs: [root],
+    spawnCommandProcess: (file, args, options) => {
+      spawned.push({ file, args, options })
+      return child
+    }
+  })
+
+  const commandRun = service.runCommand('weather-declaration', 'announce')
+  await waitFor(() => spawned.length === 1)
+  const baseUrl = spawned[0].options.env.OPENPET_BRIDGE_URL
+  const token = spawned[0].options.env.OPENPET_BRIDGE_TOKEN
+  const importResponse = await requestBridge(`${baseUrl}/creator/assets/import-frames`, {
+    method: 'POST',
+    token,
+    body: {
+      relativePath: 'assets/actions/wave',
+      actionId: 'wave'
+    }
+  })
+
+  child.stdout.write('{"ok":true}\n')
+  child.emit('exit', 0, null)
+  await commandRun
+
+  assert.equal(importResponse.status, 400)
+  assert.match(importResponse.body.error, /Action ID already exists: wave/)
+  assert.equal(fs.readFileSync(path.join(existingActionDir, 'keep.txt'), 'utf-8'), 'keep')
+  assert.equal(fs.existsSync(path.join(root, 'cat_anime', 'sprites', 'wave.png')), false)
+})
+
+test('declaration-only creator asset import bridge rejects oversized inspections before importing', async () => {
+  const spawned = []
+  const child = createFakeServiceProcess()
+  const root = createDeclarationOnlyPluginDir({
+    profile: 'creator-tools',
+    permissions: ['assets:generate']
+  })
+  const pluginAssetDir = path.join(root, 'weather-declaration', 'assets', 'actions', 'huge-wave')
+  fs.mkdirSync(pluginAssetDir, { recursive: true })
+  let importCalled = false
+  const actionImportService = {
+    inspectActionFrames: async () => ({
+      actionId: 'huge-wave',
+      folderName: 'huge-wave',
+      inspection: {
+        valid: true,
+        frameCount: 241,
+        maxWidth: 8,
+        maxHeight: 8,
+        frames: [],
+        skippedFiles: [],
+        errors: [],
+        warnings: []
+      }
+    }),
+    importActionFrames: async () => {
+      importCalled = true
+      return { defaultAction: 'huge-wave', clickAction: 'huge-wave', actions: [] }
+    }
+  }
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: createBridgeAwarePetService(),
+    actionImportService,
+    officialPlugins: [],
+    pluginDirs: [root],
+    spawnCommandProcess: (file, args, options) => {
+      spawned.push({ file, args, options })
+      return child
+    }
+  })
+
+  const commandRun = service.runCommand('weather-declaration', 'announce')
+  await waitFor(() => spawned.length === 1)
+  const baseUrl = spawned[0].options.env.OPENPET_BRIDGE_URL
+  const token = spawned[0].options.env.OPENPET_BRIDGE_TOKEN
+  const importResponse = await requestBridge(`${baseUrl}/creator/assets/import-frames`, {
+    method: 'POST',
+    token,
+    body: {
+      relativePath: 'assets/actions/huge-wave',
+      actionId: 'huge-wave'
+    }
+  })
+
+  child.stdout.write('{"ok":true}\n')
+  child.emit('exit', 0, null)
+  await commandRun
+
+  assert.equal(importResponse.status, 400)
+  assert.match(importResponse.body.error, /too many frames/)
+  assert.equal(importCalled, false)
+})
+
+test('declaration-only creator asset import bridge rejects oversized source folders before importing', async () => {
+  const spawned = []
+  const child = createFakeServiceProcess()
+  const root = createDeclarationOnlyPluginDir({
+    profile: 'creator-tools',
+    permissions: ['assets:generate']
+  })
+  const pluginAssetDir = path.join(root, 'weather-declaration', 'assets', 'actions', 'heavy-wave')
+  fs.mkdirSync(pluginAssetDir, { recursive: true })
+  await createPluginAssetFrame(root, 'assets/actions/heavy-wave', '01_no_bg.png')
+  const heavyFilePath = path.join(pluginAssetDir, 'heavy.bin')
+  fs.writeFileSync(heavyFilePath, '')
+  fs.truncateSync(heavyFilePath, 51 * 1024 * 1024)
+  let importCalled = false
+  const actionImportService = {
+    inspectActionFrames: async () => ({
+      actionId: 'heavy-wave',
+      folderName: 'heavy-wave',
+      inspection: {
+        valid: true,
+        frameCount: 1,
+        maxWidth: 8,
+        maxHeight: 8,
+        frames: [{ fileName: '01_no_bg.png', width: 8, height: 8, hasAlpha: true }],
+        skippedFiles: ['heavy.bin'],
+        errors: [],
+        warnings: []
+      }
+    }),
+    importActionFrames: async () => {
+      importCalled = true
+      return { defaultAction: 'heavy-wave', clickAction: 'heavy-wave', actions: [] }
+    }
+  }
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: createBridgeAwarePetService(),
+    actionImportService,
+    officialPlugins: [],
+    pluginDirs: [root],
+    spawnCommandProcess: (file, args, options) => {
+      spawned.push({ file, args, options })
+      return child
+    }
+  })
+
+  const commandRun = service.runCommand('weather-declaration', 'announce')
+  await waitFor(() => spawned.length === 1)
+  const baseUrl = spawned[0].options.env.OPENPET_BRIDGE_URL
+  const token = spawned[0].options.env.OPENPET_BRIDGE_TOKEN
+  const importResponse = await requestBridge(`${baseUrl}/creator/assets/import-frames`, {
+    method: 'POST',
+    token,
+    body: {
+      relativePath: 'assets/actions/heavy-wave',
+      actionId: 'heavy-wave'
+    }
+  })
+
+  child.stdout.write('{"ok":true}\n')
+  child.emit('exit', 0, null)
+  await commandRun
+
+  assert.equal(importResponse.status, 400)
+  assert.match(importResponse.body.error, /too large to import: \d+ bytes/)
+  assert.equal(importCalled, false)
+})
+
 test('plugin service rejects non-zero declaration command exits', async () => {
   const child = createFakeServiceProcess()
   const service = createPluginService({

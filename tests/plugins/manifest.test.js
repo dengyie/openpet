@@ -251,6 +251,19 @@ test('normalizes creator-tools asset inspection permission', () => {
   assert.deepEqual(manifest.permissions, ['assets:inspect'])
 })
 
+test('normalizes creator-tools asset generation permission', () => {
+  const manifest = normalizePluginManifest({
+    id: 'asset-generator',
+    name: 'Asset Generator',
+    version: '1.0.0',
+    profile: 'creator-tools',
+    permissions: ['assets:generate']
+  })
+
+  assert.equal(manifest.profile, 'creator-tools')
+  assert.deepEqual(manifest.permissions, ['assets:generate'])
+})
+
 test('normalizes optional plugin signature metadata', () => {
   assert.deepEqual(normalizePluginManifest({
     id: 'signed-plugin',
