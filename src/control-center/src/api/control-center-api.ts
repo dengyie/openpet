@@ -15,6 +15,7 @@ import type {
   ControlCenterApi,
   ControlCenterSettings,
   JsonObject,
+  PluginCommandRunResultViewState,
   PluginLogFilters,
   PluginPackageReviewViewState,
   PluginServiceHealthViewState,
@@ -633,7 +634,17 @@ const demoApi: ControlCenterApi = {
   runPluginCommand: async (pluginId, commandId) => {
     demoState.pluginLogs = [createDemoPluginLog(pluginId, 'Command completed', commandId), ...demoState.pluginLogs]
     writeDemoState()
-    return { ok: true }
+    return {
+      ok: true,
+      pluginId,
+      commandId,
+      exitCode: 0,
+      result: {
+        ok: true,
+        message: 'Demo command completed',
+        petSay: 'hello'
+      }
+    } satisfies PluginCommandRunResultViewState
   },
   runPluginSetup: async (pluginId, setupId) => {
     const runtime = updateDemoPluginSetupRuntime(pluginId, setupId, {

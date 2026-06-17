@@ -1,7 +1,7 @@
 # OpenPet v1.1 TODO Design
 
 > Date: 2026-06-16
-> Baseline: Phase 62 completed locally
+> Baseline: Phase 63 completed locally
 > Scope: Convert the remaining productization TODO into a phase-ready design for v1.1 work. This document does not upgrade platform support claims. Windows remains not release-ready until signed runtime smoke evidence passes.
 
 ## 1. Goal
@@ -36,7 +36,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 - macOS signed/notarized release evidence still needs real artifact capture and archive.
 - Windows signed installer/zip smoke evidence still needs real Windows execution.
 - Packaged runtime smoke reports still need real app evidence for pet window visibility, transparent rendering, bundled pack switching, and native picker flows.
-- Extension runtime support for explicit setup execution, explicit short-lived command execution, explicit service start/stop, manual loopback service health checks, and best-effort process-group cleanup now exists. Bridge flows, background health polling, richer command result UX, and hard process-tree cleanup guarantees are still future work. Dashboard entries can now be opened explicitly as external HTTP/HTTPS URLs from Control Center.
+- Extension runtime support for explicit setup execution, explicit short-lived command execution, explicit service start/stop, manual loopback service health checks, and best-effort process-group cleanup now exists. Bridge flows, background health polling, richer command orchestration, and hard process-tree cleanup guarantees are still future work. Dashboard entries can now be opened explicitly as external HTTP/HTTPS URLs from Control Center.
 - Legacy SDK plugin secrets policy remains conservative; target extension docs require honest disclosure for extension-managed secrets and data.
 - Plugin sandbox strategy has been evaluated against SES and Electron `utilityProcess`; current recommendation is to keep the existing runner for v1.1 while documenting limits.
 - AI behavior orchestration has a Control Center decision viewer, replay, redacted diagnostics export, and clear-history controls.
@@ -790,6 +790,29 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 
 **Status**: completed in Phase 62. Declaration-only local `entries.commands` can run as explicit short-lived processes for enabled policy-allowed plugins, receive JSON stdin context, log stdout/stderr snippets, parse final stdout JSON results, timeout when stalled, and remain separated from install and enable.
 
+### Phase 63: Plugin command result UX
+
+**Goal**: show useful immediate feedback for the most recent plugin command result in Control Center, so users do not have to inspect logs to understand a successful command.
+
+**Scope**:
+
+- Keep the Phase 62 command execution boundary unchanged.
+- Add a per-session latest command result preview in the Plugins pane.
+- Prefer `result.message`, then `result.petSay`, then a generic exit-code summary.
+- Display parsed JSON result previews and bounded stdout/stderr snippets when available.
+- Update demo API and smoke coverage so the result path remains verifiable without the real host runtime.
+- Keep the preview compact and session-local; do not add persistent history or a new orchestration surface.
+
+**Acceptance**:
+
+- Plugins pane shows a visible command result block after a successful command run.
+- Status line uses the result summary rather than a generic success string.
+- Helper test covers preview shaping directly.
+- Playwright smoke covers the manual plugin result preview.
+- Docs keep the UX improvement honest as a renderer presentation improvement, not a bridge or sandbox change.
+
+**Status**: completed in Phase 63. The Plugins pane now shows the latest command result summary on the matching plugin card, including message, exit code, JSON result preview, and bounded stdout/stderr snippets.
+
 ## 6. Priority Order
 
 | Priority | Work | Reason |
@@ -815,6 +838,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 | P1 | Phase 60 Plugin setup status and service cleanup | Completed; setup entries are visible but not executed, and service stops attempt best-effort process-group cleanup while setup execution, bridge, generic shell execution, background health polling, and hard cleanup guarantees remain out of scope. |
 | P1 | Phase 61 Plugin setup execution | Completed; setup entries can be run by explicit Control Center action for enabled policy-allowed local plugins, without install/enable auto-run or shell expansion. |
 | P1 | Phase 62 Plugin command process execution | Completed; declaration-only local command entries can run as explicit short-lived processes with stdin JSON context, without install/enable auto-run or shell expansion. |
+| P1 | Phase 63 Plugin command result UX | Completed; Plugins pane now shows the latest command result summary, JSON preview, and bounded stdout/stderr snippets for successful runs. |
 | P2 | Phase 41 AI behavior replay | Completed; preserve redacted diagnostics and replay semantics while future AI tooling evolves. |
 | P2 | Phase 39 plugin sandbox evaluation | Completed; keep current runner for v1.1 and revisit on high-risk plugin capability changes. |
 | P2 | Phase 46 documentation consolidation | Completed; keep future live-doc updates fact-only and link-oriented. |
@@ -844,7 +868,8 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 21. Phase 59 is complete; service health checks are manual, loopback-only, timeout-protected, and visible in Control Center.
 22. Phase 60 is complete; setup entries are visible with read-only `not-run` status, and service stops attempt best-effort process-group cleanup with child-kill fallback.
 23. Phase 61 is complete; setup entries can be explicitly run from Control Center for enabled policy-allowed local plugins, with runtime status and logs.
-24. Phase 62 is complete; declaration-only local command entries can be explicitly run from Control Center for enabled policy-allowed local plugins, with stdin JSON context, timeout handling, logs, and no shell expansion. Choose the next phase from bridge integration, richer command result UX, real evidence work, community extension rehearsal, hard cleanup guarantees, or another high-drift service/report boundary.
+24. Phase 62 is complete; declaration-only local command entries can be explicitly run from Control Center for enabled policy-allowed local plugins, with stdin JSON context, timeout handling, logs, and no shell expansion.
+25. Phase 63 is complete; the Plugins pane now shows the latest command result summary on the matching plugin card, with result message, exit code, JSON preview, and bounded stdout/stderr snippets. Choose the next phase from bridge integration, real evidence work, community extension rehearsal, hard cleanup guarantees, or another high-drift service/report boundary.
 
 ## 8. Verification Contract
 

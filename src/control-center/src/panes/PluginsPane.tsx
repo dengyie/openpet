@@ -27,6 +27,15 @@ export interface PluginsPaneProps {
   filters: PluginLogFilters
   status: string
   runningCommand: string
+  lastCommandResult: {
+    pluginId: string
+    commandId: string
+    exitCode: number | null
+    message: string
+    stdout: string
+    stderr: string
+    resultText: string
+  } | null
   runningSetup: string
   openingDashboard: string
   changingService: string
@@ -139,7 +148,7 @@ function PluginReviewPanel({
   )
 }
 
-export function PluginsPane({ plugins, logs, filters, status, runningCommand, runningSetup, openingDashboard, changingService, checkingServiceHealth, savingConfig, clearingStorage, pluginReview, inspectingPlugin, installingPlugin, uninstallingPlugin, onToggle, onInspectPluginPackage, onClearPluginReview, onInstallReviewedPlugin, onUninstallPlugin, onChangeConfig, onSaveConfig, onRun, onRunSetup, onOpenDashboard, onStartService, onStopService, onCheckServiceHealth, onChangeFilters, onExportLogs, onClearLogs, onClearStorage }: PluginsPaneProps) {
+export function PluginsPane({ plugins, logs, filters, status, runningCommand, lastCommandResult, runningSetup, openingDashboard, changingService, checkingServiceHealth, savingConfig, clearingStorage, pluginReview, inspectingPlugin, installingPlugin, uninstallingPlugin, onToggle, onInspectPluginPackage, onClearPluginReview, onInstallReviewedPlugin, onUninstallPlugin, onChangeConfig, onSaveConfig, onRun, onRunSetup, onOpenDashboard, onStartService, onStopService, onCheckServiceHealth, onChangeFilters, onExportLogs, onClearLogs, onClearStorage }: PluginsPaneProps) {
   return (
     <section className="pane">
       <header className="pane-header">
@@ -207,6 +216,16 @@ export function PluginsPane({ plugins, logs, filters, status, runningCommand, ru
                       </button>
                     )
                   })}
+                </div>
+              ) : null}
+              {lastCommandResult?.pluginId === plugin.id ? (
+                <div className="plugin-command-result">
+                  <strong>最近命令结果</strong>
+                  <span>{lastCommandResult.commandId}{lastCommandResult.exitCode != null ? ` · exit ${lastCommandResult.exitCode}` : ''}</span>
+                  <p>{lastCommandResult.message}</p>
+                  {lastCommandResult.resultText ? <code>{lastCommandResult.resultText}</code> : null}
+                  {lastCommandResult.stdout ? <p>stdout: {lastCommandResult.stdout}</p> : null}
+                  {lastCommandResult.stderr ? <p>stderr: {lastCommandResult.stderr}</p> : null}
                 </div>
               ) : null}
               <PluginEntryDetails source={plugin} compact />

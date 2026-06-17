@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { controlCenterAPI as api } from '../api/control-center-api'
 import { downloadTextFile } from '../lib/download'
 import { messageFromError } from '../lib/errors'
+import { toCommandResultPreview } from '../lib/plugin-command-result.mjs'
 import type {
   JsonValue,
   PluginLogEntry,
@@ -13,6 +14,8 @@ import type { PluginsPaneProps } from '../panes/PluginsPane'
 
 type ExportFormat = 'json' | 'csv'
 
+type PluginCommandResultPreview = ReturnType<typeof toCommandResultPreview>
+
 export function usePluginsPane() {
   const [loading, setLoading] = useState(true)
   const [plugins, setPlugins] = useState<PluginViewState[]>([])
@@ -20,6 +23,7 @@ export function usePluginsPane() {
   const [filters, setFilters] = useState<PluginLogFilters>({ pluginId: '', level: '', query: '' })
   const [status, setStatus] = useState('')
   const [runningCommand, setRunningCommand] = useState('')
+  const [lastCommandResult, setLastCommandResult] = useState<PluginCommandResultPreview | null>(null)
   const [runningSetup, setRunningSetup] = useState('')
   const [openingDashboard, setOpeningDashboard] = useState('')
   const [changingService, setChangingService] = useState('')
@@ -167,10 +171,13 @@ export function usePluginsPane() {
     setRunningCommand(commandKey)
     setStatus('')
     try {
-      await api.runPluginCommand(pluginId, commandId)
+      const result = await api.runPluginCommand(pluginId, commandId)
+      const preview = toCommandResultPreview(result)
+      setLastCommandResult(preview)
       await refreshLogs()
-      setStatus('命令已运行')
+      setStatus(preview.message || '命令执行成功')
     } catch (error) {
+      setLastCommandResult(null)
       setStatus(messageFromError(error, '命令运行失败'))
       await refreshLogs()
     } finally {
@@ -333,6 +340,7 @@ export function usePluginsPane() {
     filters,
     status,
     runningCommand,
+    lastCommandResult,
     runningSetup,
     openingDashboard,
     changingService,

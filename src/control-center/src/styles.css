@@ -928,6 +928,37 @@ button {
   gap: 8px;
 }
 
+.plugin-command-result {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid #dde2e8;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.plugin-command-result strong {
+  color: #111827;
+  font-size: 12px;
+}
+
+.plugin-command-result span,
+.plugin-command-result p,
+.plugin-command-result code {
+  margin: 0;
+  color: #4b5563;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.plugin-command-result code {
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: #eef2f7;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
 .plugin-log-row {
   display: grid;
   grid-template-columns: 76px 48px minmax(140px, 220px) minmax(0, 1fr);

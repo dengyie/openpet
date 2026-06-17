@@ -1,6 +1,6 @@
 # OpenPet Handoff
 
-> Last updated: 2026-06-17 | Branch: `codex/plugin-command-process-execution`
+> Last updated: 2026-06-17 | Branch: `codex/plugin-bridge-phase63`
 
 ## Current Snapshot
 
@@ -12,7 +12,7 @@ OpenPet is a desktop pet platform with:
 - bundled built-in packs `doro`, `duodong`, and `chispa`,
 - AI chat with secret storage in the main process,
 - AI behavior decisions with Control Center replay and redacted diagnostics,
-- developer-first local extension docs with explicit `entries.setup` execution, language-neutral explicit `entries.commands` process execution, explicit dashboard opening, explicit service start/stop controls, explicit loopback service health checks, and best-effort service process-group cleanup,
+- developer-first local extension docs with explicit `entries.setup` execution, language-neutral explicit `entries.commands` process execution, explicit command result feedback, explicit dashboard opening, explicit service start/stop controls, explicit loopback service health checks, and best-effort service process-group cleanup,
 - loopback-only local HTTP / MCP,
 - and a TypeScript migration baseline covering shared IPC, Control Center view contracts, the Control Center API facade, Control Center hook state boundaries, Control Center pane prop surfaces, main-process Control Center adapters for service/catalog/plugin/pet pack/About/update/actions payloads, plugin extension entry contracts, full release evidence archive / signed closure report contracts, and representative payload fixtures.
 
@@ -38,7 +38,7 @@ OpenPet is a desktop pet platform with:
 ```bash
 npm start
 npm run dev:control-center
-npm test                     # 465/465 Node tests
+npm test                     # 468/468 Node tests
 npm run test:control-center
 npm run typecheck
 npm run check:syntax
@@ -70,6 +70,6 @@ npm run create-signed-release-closure-report
 ## Next Steps
 
 1. Use the archived Phase 43 signed release closure report as the current release-claim gate: official desktop, macOS, and Windows release readiness remain `not-ready` until signed evidence and platform smoke reports are complete.
-2. Use Phase 62 plugin command process execution as the current runtime boundary: command entries run only from an explicit Control Center action on enabled policy-allowed local plugins, receive JSON stdin context, use plugin-local cwd symlink guards, timeout protection, and no shell expansion.
-3. Use Phase 54 Release Evidence Contracts plus Phase 62 plugin entry/setup/command/dashboard/service contracts as the current TypeScript migration baseline.
-4. After Phase 62, start the next concrete phase from bridge integration, real evidence work, community extension rehearsal, hard process-tree guarantees, richer command result UX, or another high-drift service/report boundary.
+2. Use Phase 63 plugin command result UX as the current plugin-command boundary: command entries still run only from an explicit Control Center action on enabled policy-allowed local plugins, and Control Center now shows the latest result summary, exit code, JSON preview, and bounded stdout/stderr snippets on the matching plugin card.
+3. Use Phase 54 Release Evidence Contracts plus Phase 63 plugin entry/setup/command/dashboard/service contracts as the current TypeScript migration baseline.
+4. After Phase 63, start the next concrete phase from bridge integration, real evidence work, community extension rehearsal, hard process-tree guarantees, or another high-drift service/report boundary.
