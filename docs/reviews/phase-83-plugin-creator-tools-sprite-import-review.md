@@ -68,7 +68,7 @@ Fresh verification run before this review:
 
 ```bash
 node --test tests/plugins/manifest.test.js tests/services/plugin-service.test.js
-# 135/135 pass
+# 117/117 pass
 
 npm run typecheck
 # pass
@@ -77,7 +77,7 @@ npm run check:syntax
 # pass
 
 npm test
-# 584/584 pass
+# 586/586 pass
 
 npm run test:control-center
 # 10/10 pass

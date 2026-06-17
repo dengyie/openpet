@@ -22,7 +22,7 @@ test.describe('Control Center smoke', () => {
 
     await expect(page).toHaveTitle('OpenPet Control Center')
     await expect(page.getByText('OpenPet')).toBeVisible()
-    await expect(page.getByText('Control Center')).toBeVisible()
+    await expect(page.getByRole('navigation', { name: 'Control Center' })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Pet' })).toBeVisible()
 
     for (const tab of tabs) {

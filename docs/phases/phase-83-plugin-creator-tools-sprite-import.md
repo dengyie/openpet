@@ -99,7 +99,7 @@ Full local verification:
 
 ```bash
 npm run check:syntax        # pass
-npm test                    # 584/584 pass
+npm test                    # 586/586 pass
 npm run test:control-center # 10/10 pass
 git diff --check            # pass
 node -e "JSON.parse(require('node:fs').readFileSync('docs/project-context.json','utf8')); console.log('project-context ok')"
