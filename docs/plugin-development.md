@@ -256,15 +256,17 @@ Current endpoint set:
 - `GET /creator/actions`
 - `POST /creator/actions/validate`
 - `POST /creator/actions/apply`
+- `POST /creator/assets/inspect-frames`
 
 Bridge rules:
 
 - the bridge exists only during an explicit declaration-only command run;
 - the command must belong to an enabled, policy-allowed local extension;
 - requests must use `Authorization: Bearer <OPENPET_BRIDGE_TOKEN>`;
-- `pet:say`, `pet:action`, `pet:event`, `actions:read`, and `actions:write` permissions are enforced per route;
+- `pet:say`, `pet:action`, `pet:event`, `actions:read`, `actions:write`, and `assets:inspect` permissions are enforced per route;
 - all pet mutations still flow through `PetService`;
 - creator-tools reads and writes flow through the host action service boundary;
+- creator-tools frame inspection is read-only, package-local, and confined to the extension directory;
 - setup entries, services, install, enable, and background health paths do not receive bridge access.
 
 Example bridge requests:
@@ -284,6 +286,13 @@ curl "$OPENPET_BRIDGE_URL/context" \
 ```bash
 curl "$OPENPET_BRIDGE_URL/creator/actions" \
   -H "Authorization: Bearer $OPENPET_BRIDGE_TOKEN"
+```
+
+```bash
+curl -X POST "$OPENPET_BRIDGE_URL/creator/assets/inspect-frames" \
+  -H "Authorization: Bearer $OPENPET_BRIDGE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"relativePath":"assets/actions/wave","actionId":"wave"}'
 ```
 
 Example command behavior:
@@ -424,7 +433,7 @@ npm run create-plugin-maintainer-approval -- plugin-submission-bundle --reviewer
 npm run validate-plugin-maintainer-approval -- plugin-submission-bundle --require-approved
 ```
 
-These commands are useful for structural validation and reviewer handoff, but some checks still reflect the legacy short-lived JavaScript SDK plugin model. The host now supports explicit setup execution, visible setup runtime status, explicit language-neutral command execution, explicit service start/stop, manual and opt-in periodic loopback service health checks, exit-confirmed cleanup for explicit setup/command/service stop flows, bounded service-side force stop, a broader process-tree cleanup fallback for explicit stop paths, creator-tools action reads and bounded writes through the short-lived bridge, and a separate maintainer approval artifact layered on top of a ready-for-review submission bundle. Approval remains human-authored and does not prove signing trust, catalog publication, runtime safety, or release readiness. Broader bridge flows and universal process-tree cleanup guarantees are still implementation gaps to reconcile with the extension boundary design when developing the next host runtime.
+These commands are useful for structural validation and reviewer handoff, but some checks still reflect the legacy short-lived JavaScript SDK plugin model. The host now supports explicit setup execution, visible setup runtime status, explicit language-neutral command execution, explicit service start/stop, manual and opt-in periodic loopback service health checks, exit-confirmed cleanup for explicit setup/command/service stop flows, bounded service-side force stop, a broader process-tree cleanup fallback for explicit stop paths, creator-tools action reads and bounded writes through the short-lived bridge, package-local creator frame inspection through `assets:inspect`, and a separate maintainer approval artifact layered on top of a ready-for-review submission bundle. Approval remains human-authored and does not prove signing trust, catalog publication, runtime safety, or release readiness. Sprite generation, pet-pack writes, broader bridge flows, and universal process-tree cleanup guarantees are still implementation gaps to reconcile with the extension boundary design when developing the next host runtime.
 
 For a local author rehearsal:
 

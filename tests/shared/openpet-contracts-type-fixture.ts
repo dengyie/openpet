@@ -2,6 +2,8 @@ import type {
   CatalogInstallSelection,
   CreatorActionsMutationResult,
   CreatorActionsReadResponse,
+  CreatorAssetsInspectFramesRequest,
+  CreatorAssetsInspectFramesResponse,
   PluginCommandRunResultViewState,
   PluginPackageReviewViewState,
   PluginSetupRunResultViewState,
@@ -128,6 +130,32 @@ const creatorActionsMutationFixture = {
     ]
   }
 } satisfies CreatorActionsMutationResult
+
+const creatorAssetsInspectFramesRequestFixture = {
+  relativePath: 'assets/actions/wave',
+  actionId: 'wave'
+} satisfies CreatorAssetsInspectFramesRequest
+
+const creatorAssetsInspectFramesResponseFixture = {
+  ok: true,
+  result: {
+    actionId: 'wave',
+    folderName: 'wave',
+    inspection: {
+      valid: true,
+      frameCount: 2,
+      maxWidth: 8,
+      maxHeight: 8,
+      frames: [
+        { fileName: '01_no_bg.png', width: 8, height: 8, hasAlpha: true },
+        { fileName: '02_no_bg.png', width: 8, height: 8, hasAlpha: true }
+      ],
+      skippedFiles: [],
+      errors: [],
+      warnings: []
+    }
+  }
+} satisfies CreatorAssetsInspectFramesResponse
 
 const releaseArchiveFixture = {
   generatedAt: '2026-06-17T00:00:00.000Z',

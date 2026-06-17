@@ -98,6 +98,7 @@ app.whenReady().then(() => {
     settingsService,
     petService,
     actionService,
+    actionImportService,
     petPackService,
     aiService,
     pluginDirs: [pluginDir],

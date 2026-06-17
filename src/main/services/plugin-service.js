@@ -515,7 +515,7 @@ const readLocalPluginManifests = (pluginDirs = []) => {
   return plugins
 }
 
-const createPluginService = ({ settingsService, petService, actionService, aiService, fetchImpl = globalThis.fetch, serviceHealthTimeoutMs, healthCheckTimeoutMs = serviceHealthTimeoutMs ?? PLUGIN_SERVICE_HEALTH_TIMEOUT_MS, serviceStopGracePeriodMs = PLUGIN_SERVICE_STOP_GRACE_PERIOD_MS, commandProcessTimeoutMs = LOCAL_PLUGIN_COMMAND_TIMEOUT_MS, openExternal = async () => { throw new Error('Dashboard opener is not available') }, spawnServiceProcess = spawn, spawnSetupProcess = spawnServiceProcess, spawnCommandProcess = spawnServiceProcess, killServiceProcess = process.kill, signalServiceProcessTree = defaultServiceProcessTree.signalServiceProcessTree, setServiceHealthTimer = setTimeout, clearServiceHealthTimer = clearTimeout, pluginDirs = [], officialPlugins = [], getPluginBlockStatus = () => ({ blocked: false, reasons: [] }) }) => {
+const createPluginService = ({ settingsService, petService, actionService, actionImportService, aiService, fetchImpl = globalThis.fetch, serviceHealthTimeoutMs, healthCheckTimeoutMs = serviceHealthTimeoutMs ?? PLUGIN_SERVICE_HEALTH_TIMEOUT_MS, serviceStopGracePeriodMs = PLUGIN_SERVICE_STOP_GRACE_PERIOD_MS, commandProcessTimeoutMs = LOCAL_PLUGIN_COMMAND_TIMEOUT_MS, openExternal = async () => { throw new Error('Dashboard opener is not available') }, spawnServiceProcess = spawn, spawnSetupProcess = spawnServiceProcess, spawnCommandProcess = spawnServiceProcess, killServiceProcess = process.kill, signalServiceProcessTree = defaultServiceProcessTree.signalServiceProcessTree, setServiceHealthTimer = setTimeout, clearServiceHealthTimer = clearTimeout, pluginDirs = [], officialPlugins = [], getPluginBlockStatus = () => ({ blocked: false, reasons: [] }) }) => {
   if (!settingsService) throw new Error('settingsService is required')
   if (!petService) throw new Error('petService is required')
   const serviceRuntimes = new Map()
@@ -568,6 +568,35 @@ const createPluginService = ({ settingsService, petService, actionService, aiSer
     return { dataDir, cacheDir, logDir }
   }
 
+  const resolvePluginAssetPath = (manifest, relativePath) => {
+    if (!manifest.basePath) throw new Error('Plugin assets require a local plugin directory')
+    if (typeof relativePath !== 'string' || !relativePath.trim()) {
+      throw new Error('Plugin asset relativePath is required')
+    }
+    const normalized = relativePath.replace(/\\/g, '/')
+    if (
+      normalized.startsWith('/') ||
+      /^[a-zA-Z]:\//.test(normalized) ||
+      normalized.includes('\0') ||
+      normalized.split('/').includes('..')
+    ) {
+      throw new Error('Plugin asset path must be a safe relative path')
+    }
+    const basePath = path.resolve(manifest.basePath)
+    const targetPath = path.resolve(basePath, normalized)
+    if (targetPath !== basePath && !targetPath.startsWith(`${basePath}${path.sep}`)) {
+      throw new Error('Plugin asset path must stay inside the plugin directory')
+    }
+    if (!fs.existsSync(targetPath)) throw new Error('Plugin asset path does not exist')
+    const realTargetPath = fs.realpathSync(targetPath)
+    const realBasePath = fs.realpathSync(basePath)
+    if (realTargetPath !== realBasePath && !realTargetPath.startsWith(`${realBasePath}${path.sep}`)) {
+      throw new Error('Plugin asset path must stay inside the plugin directory')
+    }
+    if (!fs.statSync(realTargetPath).isDirectory()) throw new Error('Plugin asset path must be a folder')
+    return realTargetPath
+  }
+
   const createPluginBridgeContext = () => {
     const snapshot = petService.getSnapshot?.() || {}
     const settings = snapshot.settings || {}
@@ -611,6 +640,17 @@ const createPluginService = ({ settingsService, petService, actionService, aiSer
       appendLog({ pluginId: plugin.manifest.id, commandId, level: 'info', message: 'Bridge creator.actions apply invoked' })
       const actions = actionService.applyCreatorActionMutation(payload)
       return { ok: true, actions }
+    },
+    creatorAssetsInspectFrames: async (payload = {}) => {
+      assertPermission(plugin.manifest, 'assets:inspect')
+      if (!actionImportService?.inspectActionFrames) throw new Error('Creator asset inspection is not available')
+      const sourceDir = resolvePluginAssetPath(plugin.manifest, payload.relativePath)
+      appendLog({ pluginId: plugin.manifest.id, commandId, level: 'info', message: 'Bridge creator.assets inspect-frames invoked' })
+      const result = await actionImportService.inspectActionFrames({
+        sourceDir,
+        actionId: payload.actionId
+      })
+      return { ok: true, result }
     },
     petSay: async (payload = {}) => {
       assertPermission(plugin.manifest, 'pet:say')
@@ -673,7 +713,7 @@ const createPluginService = ({ settingsService, petService, actionService, aiSer
     commandBridgeServer = http.createServer(async (request, response) => {
       try {
         const url = new URL(request.url, `http://${PLUGIN_BRIDGE_HOST}`)
-        const match = url.pathname.match(/^\/plugins\/bridge\/([^/]+)\/([^/]+)\/([^/]+)(\/context|\/pet\/say|\/pet\/action|\/pet\/event|\/creator\/actions|\/creator\/actions\/validate|\/creator\/actions\/apply)$/)
+        const match = url.pathname.match(/^\/plugins\/bridge\/([^/]+)\/([^/]+)\/([^/]+)(\/context|\/pet\/say|\/pet\/action|\/pet\/event|\/creator\/actions|\/creator\/actions\/validate|\/creator\/actions\/apply|\/creator\/assets\/inspect-frames)$/)
         if (!match) {
           sendJson(response, 404, { ok: false, error: 'Not found' })
           return
@@ -727,6 +767,10 @@ const createPluginService = ({ settingsService, petService, actionService, aiSer
         }
         if (route === '/creator/actions/apply') {
           sendJson(response, 200, await runtime.handlers.creatorActionsApply(payload))
+          return
+        }
+        if (route === '/creator/assets/inspect-frames') {
+          sendJson(response, 200, await runtime.handlers.creatorAssetsInspectFrames(payload))
           return
         }
         sendJson(response, 404, { ok: false, error: 'Not found' })

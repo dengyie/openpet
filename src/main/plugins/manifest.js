@@ -7,7 +7,8 @@ const KNOWN_PLUGIN_PERMISSIONS = new Set([
   'network',
   'commands',
   'actions:read',
-  'actions:write'
+  'actions:write',
+  'assets:inspect'
 ])
 
 const KNOWN_PLUGIN_PROFILES = new Set(['runtime', 'creator-tools', 'hybrid'])

@@ -238,6 +238,19 @@ test('defaults plugin profile to runtime and accepts hybrid profile', () => {
   }).profile, 'hybrid')
 })
 
+test('normalizes creator-tools asset inspection permission', () => {
+  const manifest = normalizePluginManifest({
+    id: 'asset-inspector',
+    name: 'Asset Inspector',
+    version: '1.0.0',
+    profile: 'creator-tools',
+    permissions: ['assets:inspect']
+  })
+
+  assert.equal(manifest.profile, 'creator-tools')
+  assert.deepEqual(manifest.permissions, ['assets:inspect'])
+})
+
 test('normalizes optional plugin signature metadata', () => {
   assert.deepEqual(normalizePluginManifest({
     id: 'signed-plugin',

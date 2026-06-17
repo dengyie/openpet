@@ -536,6 +536,22 @@ export interface CreatorActionsMutationResult {
   actions?: ActionsConfigViewState
 }
 
+export interface CreatorAssetsInspectFramesRequest {
+  relativePath: string
+  actionId: string
+}
+
+export interface CreatorAssetsInspectFramesResult {
+  actionId: string
+  folderName: string
+  inspection: ActionFrameInspection
+}
+
+export interface CreatorAssetsInspectFramesResponse {
+  ok: boolean
+  result: CreatorAssetsInspectFramesResult
+}
+
 export interface PluginMutationResult extends OkResponse {
   pluginId?: string
   installMode?: string
