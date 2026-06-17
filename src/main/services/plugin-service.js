@@ -1133,6 +1133,7 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
     } catch (error) {
       runtime.status = 'failed'
       runtime.error = error.message || 'Plugin command stop failed'
+      error.openpetLogged = true
       appendLog({ pluginId, commandId, level: 'error', message: runtime.error })
       runtime.failStop?.(error)
     }
@@ -1394,7 +1395,9 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
             runtime.status = 'failed'
             runtime.error = runtime.stopReason || 'Command stopped'
             appendLog({ pluginId, commandId, level: 'error', message: 'Command stopped' })
-            reject(new Error(runtime.error))
+            const error = new Error(runtime.error)
+            error.openpetLogged = true
+            reject(error)
             return
           }
           if (exitCode !== 0 || signal) {
@@ -1466,11 +1469,7 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
       appendLog({ pluginId, commandId, level: 'info', message: 'Command completed' })
       return result
     } catch (error) {
-      const alreadyLoggedStop = (
-        commandRuntimes.get(createPluginServiceKey(pluginId, commandId))?.status === 'stopping' &&
-        (error.message || 'Command failed') === 'Command stopped'
-      )
-      if (alreadyLoggedStop) throw error
+      if (error?.openpetLogged) throw error
       appendLog({
         pluginId,
         commandId,

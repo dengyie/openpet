@@ -774,7 +774,8 @@ test('plugin service stops running declaration commands when a plugin is disable
   child.emit('exit', 0, 'SIGTERM')
 
   await assert.rejects(commandRun, /Command stopped/)
-  assert.equal(settingsService.get().plugins.logs.some((entry) => entry.message === 'Command stopped'), true)
+  const stopLogs = settingsService.get().plugins.logs.filter((entry) => entry.message === 'Command stopped')
+  assert.equal(stopLogs.length, 1)
 })
 
 test('plugin service stops running declaration commands during app shutdown cleanup', async () => {
