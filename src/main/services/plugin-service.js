@@ -1088,6 +1088,16 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
     runtime.child?.kill?.(signal)
   }
 
+  const stopRuntimeProcessWithFallback = (runtime, signal = 'SIGTERM') => {
+    const pid = Number(runtime?.pid) || 0
+    if (pid > 0) {
+      try {
+        if (signalServiceProcessTree(pid, signal)) return
+      } catch (_) {}
+    }
+    runtime.child?.kill?.(signal)
+  }
+
   const clearServiceStopTimer = (runtime) => {
     if (!runtime?.stopTimer) return
     clearTimeout(runtime.stopTimer)
@@ -1167,7 +1177,7 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
     runtime.exitCode = null
     runtime.lastRunAt = new Date().toISOString()
     try {
-      runtime.child?.kill?.('SIGTERM')
+      stopRuntimeProcessWithFallback(runtime, 'SIGTERM')
     } catch (error) {
       runtime.error = error.message || 'Plugin setup stop failed'
       runtime.status = 'failed'
@@ -1409,6 +1419,7 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
       pluginId,
       commandId,
       status: 'running',
+      pid: Number(child.pid) || 0,
       error: '',
       child,
       stopReason: '',
@@ -1452,7 +1463,7 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
         runtime.status = 'stopping'
         runtime.error = ''
         runtime.stopReason = reason
-        child.kill?.(signal)
+        stopRuntimeProcessWithFallback(runtime, signal)
         return true
       }
       const timeoutMs = Number.isFinite(Number(commandProcessTimeoutMs))
@@ -1600,6 +1611,7 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
         pluginId,
         setupId,
         status: 'running',
+        pid: Number(child.pid) || 0,
         lastRunAt: new Date().toISOString(),
         exitCode: null,
         error: '',

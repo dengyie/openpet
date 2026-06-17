@@ -752,6 +752,7 @@ test('plugin service times out stalled declaration command processes', async () 
 test('plugin service stops running declaration commands when a plugin is disabled', async () => {
   const child = createSlowStoppingServiceProcess()
   let started = false
+  const treeSignals = []
   const settingsService = createSettingsService({
     plugins: { enabled: { 'weather-declaration': true } }
   })
@@ -763,6 +764,10 @@ test('plugin service stops running declaration commands when a plugin is disable
     spawnCommandProcess: () => {
       started = true
       return child
+    },
+    signalServiceProcessTree: (pid, signal) => {
+      treeSignals.push({ pid, signal })
+      return false
     }
   })
 
@@ -770,6 +775,7 @@ test('plugin service stops running declaration commands when a plugin is disable
   await waitFor(() => started)
   service.setEnabled('weather-declaration', false)
 
+  assert.deepEqual(treeSignals, [{ pid: 4321, signal: 'SIGTERM' }])
   assert.deepEqual(child.killCalls, ['SIGTERM'])
   assert.equal(settingsService.get().plugins.logs.some((entry) => entry.message === 'Command stop requested'), true)
 
@@ -783,6 +789,7 @@ test('plugin service stops running declaration commands when a plugin is disable
 test('plugin service stops running declaration commands during app shutdown cleanup', async () => {
   const child = createSlowStoppingServiceProcess()
   let started = false
+  const treeSignals = []
   const service = createPluginService({
     settingsService: createSettingsService({
       plugins: { enabled: { 'weather-declaration': true } }
@@ -793,6 +800,10 @@ test('plugin service stops running declaration commands during app shutdown clea
     spawnCommandProcess: () => {
       started = true
       return child
+    },
+    signalServiceProcessTree: (pid, signal) => {
+      treeSignals.push({ pid, signal })
+      return false
     }
   })
 
@@ -801,6 +812,7 @@ test('plugin service stops running declaration commands during app shutdown clea
   const result = service.stopAllServices()
 
   assert.deepEqual(result, { ok: true })
+  assert.deepEqual(treeSignals, [{ pid: 4321, signal: 'SIGTERM' }])
   assert.deepEqual(child.killCalls, ['SIGTERM'])
 
   child.emit('exit', 0, 'SIGTERM')
@@ -1030,6 +1042,7 @@ test('plugin service rejects duplicate setup runs while one is running', () => {
 
 test('plugin service stops running setup when a plugin is disabled', () => {
   const child = createSlowStoppingServiceProcess()
+  const treeSignals = []
   const settingsService = createSettingsService({
     plugins: { enabled: { 'weather-declaration': true } }
   })
@@ -1040,12 +1053,17 @@ test('plugin service stops running setup when a plugin is disabled', () => {
     pluginDirs: [createDeclarationOnlyPluginDir({
       setupEntries: [{ id: 'install-deps', title: 'Install Dependencies', command: 'npm install', cwd: '.' }]
     })],
-    spawnSetupProcess: () => child
+    spawnSetupProcess: () => child,
+    signalServiceProcessTree: (pid, signal) => {
+      treeSignals.push({ pid, signal })
+      return false
+    }
   })
 
   service.runSetup('weather-declaration', 'install-deps')
   service.setEnabled('weather-declaration', false)
 
+  assert.deepEqual(treeSignals, [{ pid: 4321, signal: 'SIGTERM' }])
   assert.deepEqual(child.killCalls, ['SIGTERM'])
   const runtimeBeforeExit = service.listPlugins()[0].entries.setup[0].runtime
   assert.equal(runtimeBeforeExit.status, 'stopping')
@@ -1061,6 +1079,7 @@ test('plugin service stops running setup when a plugin is disabled', () => {
 
 test('plugin service stops running setup during app shutdown cleanup', () => {
   const child = createSlowStoppingServiceProcess()
+  const treeSignals = []
   const service = createPluginService({
     settingsService: createSettingsService({
       plugins: { enabled: { 'weather-declaration': true } }
@@ -1070,13 +1089,18 @@ test('plugin service stops running setup during app shutdown cleanup', () => {
     pluginDirs: [createDeclarationOnlyPluginDir({
       setupEntries: [{ id: 'install-deps', title: 'Install Dependencies', command: 'npm install', cwd: '.' }]
     })],
-    spawnSetupProcess: () => child
+    spawnSetupProcess: () => child,
+    signalServiceProcessTree: (pid, signal) => {
+      treeSignals.push({ pid, signal })
+      return false
+    }
   })
 
   service.runSetup('weather-declaration', 'install-deps')
   const result = service.stopAllServices()
 
   assert.deepEqual(result, { ok: true })
+  assert.deepEqual(treeSignals, [{ pid: 4321, signal: 'SIGTERM' }])
   assert.deepEqual(child.killCalls, ['SIGTERM'])
   const runtimeBeforeExit = service.listPlugins()[0].entries.setup[0].runtime
   assert.equal(runtimeBeforeExit.status, 'stopping')
@@ -1102,7 +1126,8 @@ test('plugin service marks setup cleanup failure as failed when child kill throw
     pluginDirs: [createDeclarationOnlyPluginDir({
       setupEntries: [{ id: 'install-deps', title: 'Install Dependencies', command: 'npm install', cwd: '.' }]
     })],
-    spawnSetupProcess: () => child
+    spawnSetupProcess: () => child,
+    signalServiceProcessTree: () => false
   })
 
   const setupRun = service.runSetup('weather-declaration', 'install-deps')
@@ -1112,6 +1137,129 @@ test('plugin service marks setup cleanup failure as failed when child kill throw
   assert.equal(runtime.status, 'failed')
   assert.match(runtime.error, /setup stop failed/)
   return assert.rejects(setupRun, /setup stop failed/)
+})
+
+test('plugin service uses tree cleanup for declaration command stop requests before child kill fallback', async () => {
+  const child = createSlowStoppingServiceProcess({ pid: 4321 })
+  let started = false
+  const treeSignals = []
+  const settingsService = createSettingsService({
+    plugins: { enabled: { 'weather-declaration': true } }
+  })
+  const service = createPluginService({
+    settingsService,
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir()],
+    spawnCommandProcess: () => {
+      started = true
+      return child
+    },
+    signalServiceProcessTree: (pid, signal) => {
+      treeSignals.push({ pid, signal })
+      return true
+    }
+  })
+
+  const commandRun = service.runCommand('weather-declaration', 'announce')
+  await waitFor(() => started)
+  service.setEnabled('weather-declaration', false)
+
+  assert.deepEqual(treeSignals, [{ pid: 4321, signal: 'SIGTERM' }])
+  assert.deepEqual(child.killCalls, [])
+
+  child.emit('exit', 0, 'SIGTERM')
+  await assert.rejects(commandRun, /Command stopped/)
+})
+
+test('plugin service falls back to child kill when declaration command tree cleanup fails', async () => {
+  const child = createSlowStoppingServiceProcess({ pid: 4321 })
+  let started = false
+  const treeSignals = []
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir()],
+    spawnCommandProcess: () => {
+      started = true
+      return child
+    },
+    signalServiceProcessTree: (pid, signal) => {
+      treeSignals.push({ pid, signal })
+      throw new Error('tree cleanup unavailable')
+    }
+  })
+
+  const commandRun = service.runCommand('weather-declaration', 'announce')
+  await waitFor(() => started)
+  service.stopAllServices()
+
+  assert.deepEqual(treeSignals, [{ pid: 4321, signal: 'SIGTERM' }])
+  assert.deepEqual(child.killCalls, ['SIGTERM'])
+
+  child.emit('exit', 0, 'SIGTERM')
+  await assert.rejects(commandRun, /Command stopped/)
+})
+
+test('plugin service uses tree cleanup for setup stop requests before child kill fallback', () => {
+  const child = createSlowStoppingServiceProcess({ pid: 4321 })
+  const treeSignals = []
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir({
+      setupEntries: [{ id: 'install-deps', title: 'Install Dependencies', command: 'npm install', cwd: '.' }]
+    })],
+    spawnSetupProcess: () => child,
+    signalServiceProcessTree: (pid, signal) => {
+      treeSignals.push({ pid, signal })
+      return true
+    }
+  })
+
+  service.runSetup('weather-declaration', 'install-deps')
+  service.setEnabled('weather-declaration', false)
+
+  assert.deepEqual(treeSignals, [{ pid: 4321, signal: 'SIGTERM' }])
+  assert.deepEqual(child.killCalls, [])
+  assert.equal(service.listPlugins()[0].entries.setup[0].runtime.status, 'stopping')
+
+  child.emit('exit', 0, 'SIGTERM')
+
+  assert.equal(service.listPlugins()[0].entries.setup[0].runtime.status, 'failed')
+  assert.equal(service.listPlugins()[0].entries.setup[0].runtime.error, 'Setup stopped')
+})
+
+test('plugin service falls back to child kill when setup tree cleanup fails', () => {
+  const child = createSlowStoppingServiceProcess({ pid: 4321 })
+  const treeSignals = []
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir({
+      setupEntries: [{ id: 'install-deps', title: 'Install Dependencies', command: 'npm install', cwd: '.' }]
+    })],
+    spawnSetupProcess: () => child,
+    signalServiceProcessTree: (pid, signal) => {
+      treeSignals.push({ pid, signal })
+      throw new Error('tree cleanup unavailable')
+    }
+  })
+
+  service.runSetup('weather-declaration', 'install-deps')
+  service.stopAllServices()
+
+  assert.deepEqual(treeSignals, [{ pid: 4321, signal: 'SIGTERM' }])
+  assert.deepEqual(child.killCalls, ['SIGTERM'])
 })
 
 test('plugin service opens enabled declaration dashboard entries through the injected opener', async () => {

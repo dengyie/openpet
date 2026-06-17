@@ -952,7 +952,30 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 - Tests cover the helper and the new fallback ordering for stop/force-stop paths.
 - Docs describe the result as stronger service-only cleanup, not guaranteed total process policing.
 
-**Status**: completed in Phase 72. Declared service entries now try a host-owned process-tree cleanup path before direct child kill when process-group signalling fails, while setup and declaration-only command cleanup remain on their current direct-child best-effort contract.
+**Status**: completed in Phase 72. Declared service entries now try a host-owned process-tree cleanup path before direct child kill when process-group signalling fails.
+
+### Phase 73: Plugin setup and command process-tree hardening
+
+**Goal**: extend host-owned process-tree cleanup fallback to setup and declaration-only command stop paths without widening them to the full service lifecycle contract.
+
+**Scope**:
+
+- Reuse the existing `signalServiceProcessTree(pid, signal)` helper.
+- Apply the helper to setup stop requests before direct child kill fallback.
+- Apply the helper to declaration-only command stop requests before direct child kill fallback.
+- Keep Phase 70 exit-confirmed stop semantics unchanged.
+- Keep Phase 69 force-stop semantics service-only.
+- Do not add process-group signalling, manifest changes, or new renderer statuses for setup/command runtimes.
+
+**Acceptance**:
+
+- Setup stop requests try host-owned process-tree signalling before child kill fallback when the child pid is valid.
+- Declaration-only command stop requests do the same.
+- Existing stop-intent / exit-confirmed cleanup truth remains unchanged.
+- Services remain the only runtime shape with process-group signalling plus bounded force-stop escalation.
+- Docs describe the result as broader cleanup hardening, not total process policing.
+
+**Status**: completed in Phase 73. Setup and declaration-only command cleanup now try host-owned process-tree signalling before direct child kill fallback, while services still keep the strongest explicit local-process cleanup contract.
 
 ## 6. Priority Order
 
@@ -985,7 +1008,8 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 | P1 | Phase 69 Plugin service force stop | Completed; stubborn declared service entries now trigger one bounded host-side force-stop attempt after a grace period, while final forced-stop outcomes remain on the existing `failed` contract. |
 | P1 | Phase 70 Plugin setup and command cleanup parity | Completed; setup and declaration-only command cleanup now keep stop intent visible until child exit confirmation, while staying on direct-child best effort rather than service-style force-stop escalation. |
 | P1 | Phase 71 Plugin service periodic health policy | Completed; running declared services can now receive opt-in host-managed periodic health checks from Control Center, while services still do not auto-start and plugin manifests still do not own scheduler policy. |
-| P1 | Phase 72 Plugin service process-tree hardening | Completed; declared service entries now use a host-owned process-tree fallback before direct child kill when process-group signalling fails, while setup and declaration-only command cleanup stay unchanged. |
+| P1 | Phase 72 Plugin service process-tree hardening | Completed; declared service entries now use a host-owned process-tree fallback before direct child kill when process-group signalling fails. |
+| P1 | Phase 73 Plugin setup and command process-tree hardening | Completed; setup and declaration-only command cleanup now also try host-owned process-tree signalling before direct child kill fallback, while services remain the only runtime shape with process-group plus bounded force-stop cleanup. |
 | P2 | Phase 41 AI behavior replay | Completed; preserve redacted diagnostics and replay semantics while future AI tooling evolves. |
 | P2 | Phase 39 plugin sandbox evaluation | Completed; keep current runner for v1.1 and revisit on high-risk plugin capability changes. |
 | P2 | Phase 46 documentation consolidation | Completed; keep future live-doc updates fact-only and link-oriented. |
@@ -1022,7 +1046,8 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 28. Phase 69 is complete; declaration-only service entries now use a bounded grace period plus one host-side force-stop attempt for stubborn shutdowns, while setup and command cleanup remain on their previous paths.
 29. Phase 70 is complete; setup and declaration-only command cleanup now share the stop-intent/exit-confirmation boundary while still keeping their direct-child best-effort cleanup model.
 30. Phase 71 is complete; running declared services can now receive opt-in host-managed periodic health checks from Control Center, while services still do not auto-start and plugin manifests still do not own scheduler policy.
-31. Phase 72 is complete; requested service stops now require both root exit confirmation and no host-visible surviving descendants before OpenPet reports a clean stop.
+31. Phase 72 is complete; declared service entries now use host-owned process-tree fallback before direct child kill when process-group signalling fails.
+32. Phase 73 is complete; setup and declaration-only command cleanup now use host-owned process-tree fallback before direct child kill while keeping their Phase 70 exit-confirmed stop semantics.
 
 ## 8. Verification Contract
 
