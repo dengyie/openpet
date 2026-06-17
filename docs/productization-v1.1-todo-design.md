@@ -36,7 +36,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 - macOS signed/notarized release evidence still needs real artifact capture and archive.
 - Windows signed installer/zip smoke evidence still needs real Windows execution.
 - Packaged runtime smoke reports still need real app evidence for pet window visibility, transparent rendering, bundled pack switching, and native picker flows.
-- Extension runtime support for explicit setup execution, explicit short-lived command execution, explicit short-lived command bridge access, explicit service start/stop, manual loopback service health checks, opt-in periodic health checks for running services, and best-effort process-group cleanup now exists. Richer bridge surfaces for authoring workflows, richer command orchestration, and hard process-tree cleanup guarantees are still future work. Dashboard entries can now be opened explicitly as external HTTP/HTTPS URLs from Control Center.
+- Extension runtime support for explicit setup execution, explicit short-lived command execution, explicit short-lived command bridge access, explicit service start/stop, manual loopback service health checks, opt-in periodic health checks for running services, and best-effort process-group cleanup now exists. Local scaffold and existing-plugin submission rehearsals now exist. External community provenance, richer bridge surfaces for authoring workflows, richer command orchestration, and hard process-tree cleanup guarantees are still future work. Dashboard entries can now be opened explicitly as external HTTP/HTTPS URLs from Control Center.
 - Legacy SDK plugin secrets policy remains conservative; target extension docs require honest disclosure for extension-managed secrets and data.
 - Plugin sandbox strategy has been evaluated against SES and Electron `utilityProcess`; current recommendation is to keep the existing runner for v1.1 while documenting limits.
 - AI behavior orchestration has a Control Center decision viewer, replay, redacted diagnostics export, and clear-history controls.
@@ -1000,6 +1000,25 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 
 **Status**: completed in Phase 74. Submission bundles can now receive a separate maintainer approval Markdown/JSON artifact, and author rehearsal now points explicitly to that maintainer-side follow-up.
 
+### Phase 75: Plugin real-world submission rehearsal
+
+**Goal**: run the full local submission workflow on an existing example plugin rather than only generated scaffolds.
+
+**Scope**:
+
+- add `create-plugin-real-world-submission-rehearsal`;
+- validate an existing plugin directory before packaging;
+- package, validate, create submission bundle, validate bundle, create maintainer approval, and validate approval;
+- archive one example using `examples/plugins/weather-status`.
+
+**Acceptance**:
+
+- existing-plugin rehearsal writes README, commands, checklist, summary, package zip, submission bundle, and approval artifacts;
+- tests cover argument parsing and the full local handoff chain;
+- docs describe this as local workflow evidence, not external community provenance or release trust.
+
+**Status**: completed in Phase 75. The archived session under `docs/release-evidence/plugin-real-world-submission-rehearsal/2026-06-17T15-14-15Z/` uses `weather-status` and includes package, submission bundle, and maintainer approval evidence.
+
 ## 6. Priority Order
 
 | Priority | Work | Reason |
@@ -1009,6 +1028,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 | P1 | Phase 40 pet pack export and provenance | Completed; keep provenance and conflict review as constraints for future catalog work. |
 | P1 | Phase 44 plugin author experience rehearsal | Completed; use the archived rehearsal as the plugin author baseline. |
 | P1 | Phase 74 Plugin maintainer approval rehearsal | Completed; submission bundles can now receive separate maintainer approval artifacts and author rehearsal now points at that human review step explicitly. |
+| P1 | Phase 75 Plugin real-world submission rehearsal | Completed; an existing example plugin now has a local package-to-approval rehearsal archive without claiming external provenance. |
 | P1 | Phase 45 TypeScript boundary expansion | Completed; preserve shared contracts as the migration gate for future UI and IPC work. |
 | P1 | Phase 47 TypeScript hook boundary migration | Completed; use typed Control Center hooks as the next UI boundary baseline. |
 | P1 | Phase 48 Control Center pane prop surfaces | Completed; use Pane props plus hook `satisfies` checks as the current renderer UI contract baseline. |
@@ -1034,7 +1054,6 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 | P1 | Phase 71 Plugin service periodic health policy | Completed; running declared services can now receive opt-in host-managed periodic health checks from Control Center, while services still do not auto-start and plugin manifests still do not own scheduler policy. |
 | P1 | Phase 72 Plugin service process-tree hardening | Completed; declared service entries now use a host-owned process-tree fallback before direct child kill when process-group signalling fails. |
 | P1 | Phase 73 Plugin setup and command process-tree hardening | Completed; setup and declaration-only command cleanup now also try host-owned process-tree signalling before direct child kill fallback, while services remain the only runtime shape with process-group plus bounded force-stop cleanup. |
-| P1 | Phase 74 Plugin maintainer approval rehearsal | Completed; submission bundles can now receive separate maintainer approval artifacts and author rehearsal now points at that human review step explicitly. |
 | P2 | Phase 41 AI behavior replay | Completed; preserve redacted diagnostics and replay semantics while future AI tooling evolves. |
 | P2 | Phase 39 plugin sandbox evaluation | Completed; keep current runner for v1.1 and revisit on high-risk plugin capability changes. |
 | P2 | Phase 46 documentation consolidation | Completed; keep future live-doc updates fact-only and link-oriented. |
@@ -1047,33 +1066,35 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 4. Phase 40 is complete; preserve pet pack export/provenance behavior while catalog work evolves.
 5. Phase 41 is complete; use AI behavior replay and diagnostics as the baseline for future behavior tooling.
 6. Phase 44 and Phase 74 are complete; keep the archived author-plus-maintainer rehearsal as the plugin submission baseline.
-7. Phase 45 is complete; use the shared contracts and Control Center API facade as the API boundary baseline.
-8. Phase 46 is complete; keep future live-doc updates fact-only and link-oriented.
-9. Phase 47 is complete; typed Control Center hooks are the UI state boundary baseline.
-10. Phase 48 is complete; Pane props are now checked against hook output.
-11. Phase 49 is complete; first main-process Control Center adapters are checked against shared contracts.
-12. Phase 50 is complete; plugin mutation results now follow the same adapter contract.
-13. Phase 51 is complete; Pet pack mutation results now follow the same adapter contract.
-14. Phase 52 is complete; About/update results now follow the same adapter contract.
-15. Phase 53 is complete; action mutation results now follow the same adapter contract.
-16. Phase 54 is complete; release evidence archive and signed closure report payloads now have full shared contracts.
-17. Phase 55 is complete; extension ecosystem docs now follow the developer-first local extension boundary.
-18. Phase 56 is complete; `entries.commands` now feeds the JavaScript compatibility runner.
-19. Phase 57 is complete; dashboard entries can be opened explicitly as external HTTP/HTTPS URLs.
-20. Phase 58 is complete; service entries can be explicitly started/stopped with runtime state and logs, without auto-start or shell expansion.
-21. Phase 59 is complete; service health checks are manual, loopback-only, timeout-protected, and visible in Control Center.
-22. Phase 60 is complete; setup entries are visible with read-only `not-run` status, and service stops attempt best-effort process-group cleanup with child-kill fallback.
-23. Phase 61 is complete; setup entries can be explicitly run from Control Center for enabled policy-allowed local plugins, with runtime status and logs.
-24. Phase 62 is complete; declaration-only local command entries can be explicitly run from Control Center for enabled policy-allowed local plugins, with stdin JSON context, timeout handling, logs, and no shell expansion.
-25. Phase 63 is complete; the Plugins pane now shows the latest command result summary on the matching plugin card, with result message, exit code, JSON preview, and bounded stdout/stderr snippets.
-26. Phase 64 is complete; declaration-only commands now receive a short-lived bridge URL/token and can use it for pet-aware mutations and bounded context reads.
-27. Phase 68 is complete; declaration-only service entries now remain `stopping` until child exit confirmation and only log final stop completion after that confirmation.
-28. Phase 69 is complete; declaration-only service entries now use a bounded grace period plus one host-side force-stop attempt for stubborn shutdowns, while setup and command cleanup remain on their previous paths.
-29. Phase 70 is complete; setup and declaration-only command cleanup now share the stop-intent/exit-confirmation boundary while still keeping their direct-child best-effort cleanup model.
-30. Phase 71 is complete; running declared services can now receive opt-in host-managed periodic health checks from Control Center, while services still do not auto-start and plugin manifests still do not own scheduler policy.
-31. Phase 72 is complete; declared service entries now use host-owned process-tree fallback before direct child kill when process-group signalling fails.
-32. Phase 73 is complete; setup and declaration-only command cleanup now use host-owned process-tree fallback before direct child kill while keeping their Phase 70 exit-confirmed stop semantics.
-33. Phase 74 is complete; ready-for-review submission bundles can now receive a separate maintainer approval record, and author rehearsal now documents that approval remains a human maintainer step.
+7. Phase 75 is complete; use the archived `weather-status` real-world rehearsal as the existing-plugin submission baseline until external community evidence is available.
+8. Phase 45 is complete; use the shared contracts and Control Center API facade as the API boundary baseline.
+9. Phase 46 is complete; keep future live-doc updates fact-only and link-oriented.
+10. Phase 47 is complete; typed Control Center hooks are the UI state boundary baseline.
+11. Phase 48 is complete; Pane props are now checked against hook output.
+12. Phase 49 is complete; first main-process Control Center adapters are checked against shared contracts.
+13. Phase 50 is complete; plugin mutation results now follow the same adapter contract.
+14. Phase 51 is complete; Pet pack mutation results now follow the same adapter contract.
+15. Phase 52 is complete; About/update results now follow the same adapter contract.
+16. Phase 53 is complete; action mutation results now follow the same adapter contract.
+17. Phase 54 is complete; release evidence archive and signed closure report payloads now have full shared contracts.
+18. Phase 55 is complete; extension ecosystem docs now follow the developer-first local extension boundary.
+19. Phase 56 is complete; `entries.commands` now feeds the JavaScript compatibility runner.
+20. Phase 57 is complete; dashboard entries can be opened explicitly as external HTTP/HTTPS URLs.
+21. Phase 58 is complete; service entries can be explicitly started/stopped with runtime state and logs, without auto-start or shell expansion.
+22. Phase 59 is complete; service health checks are manual, loopback-only, timeout-protected, and visible in Control Center.
+23. Phase 60 is complete; setup entries are visible with read-only `not-run` status, and service stops attempt best-effort process-group cleanup with child-kill fallback.
+24. Phase 61 is complete; setup entries can be explicitly run from Control Center for enabled policy-allowed local plugins, with runtime status and logs.
+25. Phase 62 is complete; declaration-only local command entries can be explicitly run from Control Center for enabled policy-allowed local plugins, with stdin JSON context, timeout handling, logs, and no shell expansion.
+26. Phase 63 is complete; the Plugins pane now shows the latest command result summary on the matching plugin card, with result message, exit code, JSON preview, and bounded stdout/stderr snippets.
+27. Phase 64 is complete; declaration-only commands now receive a short-lived bridge URL/token and can use it for pet-aware mutations and bounded context reads.
+28. Phase 68 is complete; declaration-only service entries now remain `stopping` until child exit confirmation and only log final stop completion after that confirmation.
+29. Phase 69 is complete; declaration-only service entries now use a bounded grace period plus one host-side force-stop attempt for stubborn shutdowns, while setup and command cleanup remain on their previous paths.
+30. Phase 70 is complete; setup and declaration-only command cleanup now share the stop-intent/exit-confirmation boundary while still keeping their direct-child best-effort cleanup model.
+31. Phase 71 is complete; running declared services can now receive opt-in host-managed periodic health checks from Control Center, while services still do not auto-start and plugin manifests still do not own scheduler policy.
+32. Phase 72 is complete; declared service entries now use host-owned process-tree fallback before direct child kill when process-group signalling fails.
+33. Phase 73 is complete; setup and declaration-only command cleanup now use host-owned process-tree fallback before direct child kill while keeping their Phase 70 exit-confirmed stop semantics.
+34. Phase 74 is complete; ready-for-review submission bundles can now receive a separate maintainer approval record, and author rehearsal now documents that approval remains a human maintainer step.
+35. Phase 75 is complete; an existing example plugin can now run through a local package, submission bundle, and maintainer approval rehearsal without claiming external provenance.
 
 ## 8. Verification Contract
 

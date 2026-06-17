@@ -1,6 +1,6 @@
 # OpenPet Handoff
 
-> Last updated: 2026-06-17 | Branch: `codex/plugin-maintainer-approval-rehearsal-phase74`
+> Last updated: 2026-06-17 | Branch: `codex/plugin-real-world-submission-rehearsal-phase75`
 
 ## Current Snapshot
 
@@ -12,7 +12,7 @@ OpenPet is a desktop pet platform with:
 - bundled built-in packs `doro`, `duodong`, and `chispa`,
 - AI chat with secret storage in the main process,
 - AI behavior decisions with Control Center replay and redacted diagnostics,
-- developer-first local extension docs with explicit `entries.setup` execution, language-neutral explicit `entries.commands` process execution, explicit command result feedback, explicit command bridge access, explicit dashboard opening, explicit service start/stop controls, explicit loopback service health checks, host-managed periodic service health policy for running services, best-effort service process-group cleanup, exit-confirmed setup/command/service stop semantics, bounded host-side force stop for stubborn services, host-owned process-tree fallback cleanup across service/setup/declaration-command stop paths, plugin submission bundles, author rehearsal, and structured maintainer approval rehearsal records,
+- developer-first local extension docs with explicit `entries.setup` execution, language-neutral explicit `entries.commands` process execution, explicit command result feedback, explicit command bridge access, explicit dashboard opening, explicit service start/stop controls, explicit loopback service health checks, host-managed periodic service health policy for running services, best-effort service process-group cleanup, exit-confirmed setup/command/service stop semantics, bounded host-side force stop for stubborn services, host-owned process-tree fallback cleanup across service/setup/declaration-command stop paths, plugin submission bundles, scaffold author rehearsal, maintainer approval rehearsal records, and existing-plugin real-world submission rehearsal evidence,
 - loopback-only local HTTP / MCP,
 - and a TypeScript migration baseline covering shared IPC, Control Center view contracts, the Control Center API facade, Control Center hook state boundaries, Control Center pane prop surfaces, main-process Control Center adapters for service/catalog/plugin/pet pack/About/update/actions payloads, plugin extension entry contracts, full release evidence archive / signed closure report contracts, and representative payload fixtures.
 
@@ -38,12 +38,13 @@ OpenPet is a desktop pet platform with:
 ```bash
 npm start
 npm run dev:control-center
-npm test                     # 532/532 Node tests
+npm test                     # 537/537 Node tests
 npm run test:control-center
 npm run typecheck
 npm run check:syntax
 npm run create-openpet-plugin -- "My Plugin" --template minimal --output-dir scratch/plugins
 npm run create-plugin-author-rehearsal
+npm run create-plugin-real-world-submission-rehearsal -- --source examples/plugins/weather-status --output-dir docs/release-evidence/plugin-real-world-submission-rehearsal/<session>
 npm run create-plugin-maintainer-approval -- <submission-bundle-dir> --reviewer "OpenPet Maintainer" --decision approved --notes "..."
 npm run validate-plugin-maintainer-approval -- <submission-bundle-dir> --require-approved
 npm run create-packaged-runtime-smoke-report
@@ -70,7 +71,7 @@ npm run create-signed-release-closure-report
 - `scripts/create-desktop-picker-evidence-summary.js` and `scripts/create-desktop-picker-archive-manifest.js` for reviewed native picker evidence archive summaries and manifests.
 - `scripts/create-release-evidence-archive-manifest.js` and `scripts/create-signed-release-closure-report.js` for release-level evidence archive validation and release-claim closure.
 - `docs/plugin-development.md`, `docs/plugin-ecosystem-rules.md`, and `docs/plugin-submission-workflow-playbook.md` for extension onboarding, maintainer approval rehearsal, and legacy SDK compatibility.
-- `scripts/create-openpet-plugin.js`, `scripts/create-plugin-author-rehearsal.js`, `scripts/create-plugin-maintainer-approval.js`, and `scripts/validate-plugin-maintainer-approval.js` for current compatibility starter templates and reviewer-path rehearsal.
+- `scripts/create-openpet-plugin.js`, `scripts/create-plugin-author-rehearsal.js`, `scripts/create-plugin-real-world-submission-rehearsal.js`, `scripts/create-plugin-maintainer-approval.js`, and `scripts/validate-plugin-maintainer-approval.js` for current compatibility starter templates, existing-plugin submission rehearsal, and reviewer-path rehearsal.
 
 ## Next Steps
 
@@ -82,4 +83,5 @@ npm run create-signed-release-closure-report
 6. Use Phase 73 cleanup hardening plus Phase 72 service process-tree fallback, Phase 71 periodic health policy, Phase 70 setup/command cleanup parity, and Phase 69 plugin service force stop as the current extension cleanup/health boundary: setup, declaration-only command, and service stop requests now keep stop intent visible until child exit confirmation, setup and declaration-only commands now try host-owned process-tree cleanup before direct child kill fallback, only service entries add the bounded host-side force-stop path, and only running services can receive opt-in periodic health checks.
 7. Use Phase 74 maintainer approval rehearsal as the current extension review-handoff boundary: author rehearsal stops at a ready-for-human-review submission bundle, maintainer approval is recorded as a separate Markdown/JSON artifact, and approval remains explicit human judgment rather than automated trust or publication.
 8. Use Phase 54 Release Evidence Contracts plus Phase 64 plugin entry/setup/command/dashboard/service contracts as the current TypeScript migration baseline.
-9. After Phase 74, continue from real signed evidence work, broader real-world extension rehearsal, stronger cleanup evidence on real hosts, or another high-drift service/report boundary.
+9. Use Phase 75 real-world submission rehearsal as the current existing-plugin submission baseline: `examples/plugins/weather-status` now has an archived local package -> submission bundle -> maintainer approval evidence chain, but that archive still does not prove external community provenance, signing trust, catalog publication, runtime safety, or release readiness.
+10. After Phase 75, continue from real signed evidence work, external community submission evidence, stronger cleanup evidence on real hosts, or another high-drift service/report boundary.

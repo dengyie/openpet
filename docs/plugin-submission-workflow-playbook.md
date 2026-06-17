@@ -14,6 +14,7 @@ It covers:
 - generation of the full submission bundle
 - validation of the generated bundle before review
 - recording and validating a separate maintainer approval artifact after review
+- one-command existing-plugin rehearsal for a more realistic local submission path
 
 It does not:
 
@@ -33,6 +34,14 @@ npm run create-plugin-author-rehearsal -- --output-dir docs/release-evidence/plu
 This creates minimal, network, storage, and AI-assisted legacy scaffolds; validates every scaffold; packages the selected extension as `.openpet-plugin.zip`; creates a submission bundle; validates the bundle with `--require-ready`; and writes an author README, command list, checklist, and machine-readable summary.
 
 The generated bundle is still an author-to-reviewer handoff packet. It does not install, enable, run, approve, sign, or publish the extension.
+
+For a local existing-plugin rehearsal, run:
+
+```bash
+npm run create-plugin-real-world-submission-rehearsal -- --source examples/plugins/weather-status --output-dir docs/release-evidence/plugin-real-world-submission-rehearsal/<session>
+```
+
+This validates and packages an already-authored example plugin, creates a submission bundle, records maintainer approval, and writes local evidence files. It is closer to real contributor behavior than scaffold rehearsal, but it still does not prove external community provenance.
 
 ## 3. Manual Rehearsal Order
 

@@ -403,6 +403,7 @@ Current repository commands still use the historical "plugin" name:
 npm run validate:plugin -- <extension-dir-or-zip>
 npm run create-plugin-submission-bundle -- <extension-dir-or-zip> --output-dir plugin-submission-bundle
 npm run validate-plugin-submission-bundle -- plugin-submission-bundle --require-ready
+npm run create-plugin-real-world-submission-rehearsal -- --source examples/plugins/weather-status --output-dir docs/release-evidence/plugin-real-world-submission-rehearsal/<session>
 npm run create-plugin-maintainer-approval -- plugin-submission-bundle --reviewer "OpenPet Maintainer" --decision approved --notes "Manifest, permissions, package hash, and submission artifacts reviewed."
 npm run validate-plugin-maintainer-approval -- plugin-submission-bundle --require-approved
 ```
@@ -423,6 +424,8 @@ npm run validate-plugin-maintainer-approval -- <submission-bundle-dir> --require
 ```
 
 This is still review evidence, not catalog approval or signing trust.
+
+For an existing-plugin rehearsal, use `create-plugin-real-world-submission-rehearsal`. The current archived example uses `examples/plugins/weather-status` to exercise package validation, network allowlist review, submission bundle generation, and maintainer approval in one local evidence chain. It is workflow evidence, not proof of external community provenance.
 
 ## Legacy JavaScript SDK Compatibility
 
