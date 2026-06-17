@@ -1,7 +1,7 @@
 # OpenPet v1.1 TODO Design
 
 > Date: 2026-06-16
-> Baseline: Phase 64 completed locally
+> Baseline: Phase 65 completed locally
 > Scope: Convert the remaining productization TODO into a phase-ready design for v1.1 work. This document does not upgrade platform support claims. Windows remains not release-ready until signed runtime smoke evidence passes.
 
 ## 1. Goal
@@ -36,7 +36,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 - macOS signed/notarized release evidence still needs real artifact capture and archive.
 - Windows signed installer/zip smoke evidence still needs real Windows execution.
 - Packaged runtime smoke reports still need real app evidence for pet window visibility, transparent rendering, bundled pack switching, and native picker flows.
-- Extension runtime support for explicit setup execution, explicit short-lived command execution, explicit short-lived command bridge access, explicit service start/stop, manual loopback service health checks, and best-effort process-group cleanup now exists. Background health polling, richer bridge surfaces for authoring workflows, richer command orchestration, and hard process-tree cleanup guarantees are still future work. Dashboard entries can now be opened explicitly as external HTTP/HTTPS URLs from Control Center.
+- Extension runtime support for explicit setup execution, explicit short-lived command execution, explicit short-lived command bridge access, explicit service start/stop, manual loopback service health checks, and exit-confirmed best-effort process-group cleanup now exists. Background health polling, richer bridge surfaces for authoring workflows, richer command orchestration, and hard process-tree cleanup guarantees are still future work. Dashboard entries can now be opened explicitly as external HTTP/HTTPS URLs from Control Center.
 - Legacy SDK plugin secrets policy remains conservative; target extension docs require honest disclosure for extension-managed secrets and data.
 - Plugin sandbox strategy has been evaluated against SES and Electron `utilityProcess`; current recommendation is to keep the existing runner for v1.1 while documenting limits.
 - AI behavior orchestration has a Control Center decision viewer, replay, redacted diagnostics export, and clear-history controls.
@@ -836,6 +836,28 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 
 **Status**: completed in Phase 64. Declaration-only commands now receive a short-lived bridge URL/token pair and can explicitly call `pet.say`, `pet.action`, `pet.event`, and read a bounded context during an active run.
 
+### Phase 65: Plugin service hard cleanup
+
+**Goal**: keep declared service runtime state honest during shutdown so OpenPet does not report a service as fully stopped until child exit confirmation arrives.
+
+**Scope**:
+
+- Keep the existing explicit service start/stop boundary unchanged.
+- Keep setup execution, command execution, command bridge behavior, and service health checks unchanged.
+- Tighten declared service stop semantics so runtime remains `stopping` until `exit`.
+- Apply the same exit-confirmed semantics to explicit stop, plugin disable cleanup, and app shutdown cleanup.
+- Split service stop logs into request and completion phases.
+- Keep cleanup wording honest: process-group cleanup is still best-effort and does not claim hard descendant termination guarantees.
+
+**Acceptance**:
+
+- Explicit service stop returns and renders `stopping` until exit confirmation.
+- Disable cleanup and app shutdown cleanup follow the same exit-confirmed service stop contract.
+- Process-group stop and child-kill fallback still work under the stricter state machine.
+- Docs describe the stronger service boundary honestly without claiming setup/command changes or complete process-tree cleanup.
+
+**Status**: completed in Phase 65. Declared service runtime now stays `stopping` until child exit confirmation after a stop request, while process-group cleanup remains best-effort and setup/command behavior stays unchanged.
+
 ## 6. Priority Order
 
 | Priority | Work | Reason |
@@ -863,6 +885,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 | P1 | Phase 62 Plugin command process execution | Completed; declaration-only local command entries can run as explicit short-lived processes with stdin JSON context, without install/enable auto-run or shell expansion. |
 | P1 | Phase 63 Plugin command result UX | Completed; Plugins pane now shows the latest command result summary, JSON preview, and bounded stdout/stderr snippets for successful runs. |
 | P1 | Phase 64 Plugin command bridge | Completed; declaration-only commands can receive a short-lived bridge URL/token and use it for bounded pet-aware mutations and context reads. |
+| P1 | Phase 65 Plugin service hard cleanup | Completed; declared services now remain `stopping` until exit confirmation after explicit stop, disable cleanup, or app shutdown cleanup. |
 | P2 | Phase 41 AI behavior replay | Completed; preserve redacted diagnostics and replay semantics while future AI tooling evolves. |
 | P2 | Phase 39 plugin sandbox evaluation | Completed; keep current runner for v1.1 and revisit on high-risk plugin capability changes. |
 | P2 | Phase 46 documentation consolidation | Completed; keep future live-doc updates fact-only and link-oriented. |
@@ -894,7 +917,8 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 23. Phase 61 is complete; setup entries can be explicitly run from Control Center for enabled policy-allowed local plugins, with runtime status and logs.
 24. Phase 62 is complete; declaration-only local command entries can be explicitly run from Control Center for enabled policy-allowed local plugins, with stdin JSON context, timeout handling, logs, and no shell expansion.
 25. Phase 63 is complete; the Plugins pane now shows the latest command result summary on the matching plugin card, with result message, exit code, JSON preview, and bounded stdout/stderr snippets.
-26. Phase 64 is complete; declaration-only commands now receive a short-lived bridge URL/token and can use it for pet-aware mutations and bounded context reads. Choose the next phase from real evidence work, community extension rehearsal, hard cleanup guarantees, or another high-drift service/report boundary.
+26. Phase 64 is complete; declaration-only commands now receive a short-lived bridge URL/token and can use it for pet-aware mutations and bounded context reads.
+27. Phase 65 is complete; declared services now stay `stopping` until exit confirmation after explicit stop, disable cleanup, or app shutdown cleanup. Choose the next phase from real evidence work, community extension rehearsal, harder descendant-process guarantees, or another high-drift service/report boundary.
 
 ## 8. Verification Contract
 

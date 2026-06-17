@@ -1019,8 +1019,10 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
     } catch (error) {
       runtime.error = error.message || 'Plugin service stop failed'
       runtime.status = 'failed'
+      if (log) appendLog({ pluginId, commandId: `service:${serviceId}`, level: 'error', message: 'Service stop failed' })
+      return runtime
     }
-    if (log) appendLog({ pluginId, commandId: `service:${serviceId}`, level: 'info', message: 'Service stopped' })
+    if (log) appendLog({ pluginId, commandId: `service:${serviceId}`, level: 'info', message: 'Service stop requested' })
     return runtime
   }
 
@@ -1557,7 +1559,8 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
       })
       child.on?.('exit', (code, signal) => {
         if (runtime.status === 'stopping') {
-          runtime.status = 'stopped'
+          runtime.status = code === 0 ? 'stopped' : 'failed'
+          appendLog({ pluginId, commandId, level: runtime.status === 'failed' ? 'error' : 'info', message: runtime.status === 'stopped' ? 'Service stopped' : 'Service exited' })
         } else if (runtime.status === 'running') {
           runtime.status = code === 0 && !signal ? 'exited' : 'failed'
           appendLog({ pluginId, commandId, level: runtime.status === 'failed' ? 'error' : 'info', message: 'Service exited' })
