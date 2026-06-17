@@ -931,6 +931,29 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 
 **Status**: completed in Phase 71. Running declared services can now receive opt-in host-managed periodic health checks from Control Center, while services still do not auto-start and plugin manifests still do not own scheduler policy.
 
+### Phase 72: Plugin service process-tree hardening
+
+**Goal**: harden declared service cleanup so OpenPet no longer reports a clean stop when the root process exits but known descendants are still running.
+
+**Scope**:
+
+- Keep Phase 68 exit-confirmed stop semantics unchanged as the base lifecycle truth.
+- Keep Phase 69 bounded force-stop behavior unchanged as the base escalation path.
+- Add host-owned descendant inspection for declared service entries only.
+- Reclassify requested-stop completions as `failed` when known descendants survive the bounded stop sequence.
+- Keep setup and declaration-only command cleanup semantics unchanged in this phase.
+- Do not add manifest hints, new renderer-only statuses, bridge expansion, or universal sandbox claims.
+
+**Acceptance**:
+
+- Clean requested stops with no visible descendants still end in `stopped`.
+- Requested stops with known surviving descendants end in `failed`, not `stopped`.
+- Disable cleanup and app-shutdown cleanup share the same harder service stop path.
+- Tests cover descendant-verification success, leftover-descendant failure, and unsupported-verification fallback.
+- Docs describe the result as stronger service-only cleanup verification, not guaranteed total process policing.
+
+**Status**: completed in Phase 72. Requested service stops now fail closed when host-visible descendants survive root exit, while setup and declaration-only command cleanup remain on their current direct-child best-effort contract.
+
 ## 6. Priority Order
 
 | Priority | Work | Reason |
@@ -962,6 +985,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 | P1 | Phase 69 Plugin service force stop | Completed; stubborn declared service entries now trigger one bounded host-side force-stop attempt after a grace period, while final forced-stop outcomes remain on the existing `failed` contract. |
 | P1 | Phase 70 Plugin setup and command cleanup parity | Completed; setup and declaration-only command cleanup now keep stop intent visible until child exit confirmation, while staying on direct-child best effort rather than service-style force-stop escalation. |
 | P1 | Phase 71 Plugin service periodic health policy | Completed; running declared services can now receive opt-in host-managed periodic health checks from Control Center, while services still do not auto-start and plugin manifests still do not own scheduler policy. |
+| P1 | Phase 72 Plugin service process-tree hardening | Completed; declared service entries no longer claim a clean stop when known descendants survive the bounded host cleanup path, while setup and declaration-only command cleanup stay unchanged. |
 | P2 | Phase 41 AI behavior replay | Completed; preserve redacted diagnostics and replay semantics while future AI tooling evolves. |
 | P2 | Phase 39 plugin sandbox evaluation | Completed; keep current runner for v1.1 and revisit on high-risk plugin capability changes. |
 | P2 | Phase 46 documentation consolidation | Completed; keep future live-doc updates fact-only and link-oriented. |
@@ -998,6 +1022,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 28. Phase 69 is complete; declaration-only service entries now use a bounded grace period plus one host-side force-stop attempt for stubborn shutdowns, while setup and command cleanup remain on their previous paths.
 29. Phase 70 is complete; setup and declaration-only command cleanup now share the stop-intent/exit-confirmation boundary while still keeping their direct-child best-effort cleanup model.
 30. Phase 71 is complete; running declared services can now receive opt-in host-managed periodic health checks from Control Center, while services still do not auto-start and plugin manifests still do not own scheduler policy.
+31. Phase 72 is complete; requested service stops now require both root exit confirmation and no host-visible surviving descendants before OpenPet reports a clean stop.
 
 ## 8. Verification Contract
 

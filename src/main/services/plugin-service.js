@@ -3,6 +3,7 @@ const path = require('path')
 const crypto = require('crypto')
 const http = require('http')
 const { fork, spawn } = require('child_process')
+const { createServiceProcessTree } = require('./service-process-tree')
 const { normalizePluginManifest } = require('../plugins/manifest')
 const { coerceConfigValue, normalizeConfigSchema } = require('../plugins/config-schema')
 
@@ -31,6 +32,7 @@ const ACTIVE_SETUP_STATUSES = new Set(['running', 'stopping'])
 const ACTIVE_COMMAND_STATUSES = new Set(['running', 'stopping'])
 
 const LOOPBACK_HEALTH_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]'])
+const defaultServiceProcessTree = createServiceProcessTree()
 
 const createPluginBridgeKey = (pluginId, commandId, runId) => `${pluginId}:${commandId}:${runId}`
 
@@ -514,7 +516,7 @@ const readLocalPluginManifests = (pluginDirs = []) => {
   return plugins
 }
 
-const createPluginService = ({ settingsService, petService, aiService, fetchImpl = globalThis.fetch, serviceHealthTimeoutMs, healthCheckTimeoutMs = serviceHealthTimeoutMs ?? PLUGIN_SERVICE_HEALTH_TIMEOUT_MS, serviceStopGracePeriodMs = PLUGIN_SERVICE_STOP_GRACE_PERIOD_MS, commandProcessTimeoutMs = LOCAL_PLUGIN_COMMAND_TIMEOUT_MS, openExternal = async () => { throw new Error('Dashboard opener is not available') }, spawnServiceProcess = spawn, spawnSetupProcess = spawnServiceProcess, spawnCommandProcess = spawnServiceProcess, killServiceProcess = process.kill, setServiceHealthTimer = setTimeout, clearServiceHealthTimer = clearTimeout, pluginDirs = [], officialPlugins = [], getPluginBlockStatus = () => ({ blocked: false, reasons: [] }) }) => {
+const createPluginService = ({ settingsService, petService, aiService, fetchImpl = globalThis.fetch, serviceHealthTimeoutMs, healthCheckTimeoutMs = serviceHealthTimeoutMs ?? PLUGIN_SERVICE_HEALTH_TIMEOUT_MS, serviceStopGracePeriodMs = PLUGIN_SERVICE_STOP_GRACE_PERIOD_MS, commandProcessTimeoutMs = LOCAL_PLUGIN_COMMAND_TIMEOUT_MS, openExternal = async () => { throw new Error('Dashboard opener is not available') }, spawnServiceProcess = spawn, spawnSetupProcess = spawnServiceProcess, spawnCommandProcess = spawnServiceProcess, killServiceProcess = process.kill, signalServiceProcessTree = defaultServiceProcessTree.signalServiceProcessTree, setServiceHealthTimer = setTimeout, clearServiceHealthTimer = clearTimeout, pluginDirs = [], officialPlugins = [], getPluginBlockStatus = () => ({ blocked: false, reasons: [] }) }) => {
   if (!settingsService) throw new Error('settingsService is required')
   if (!petService) throw new Error('petService is required')
   const serviceRuntimes = new Map()
@@ -1062,7 +1064,11 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
       try {
         killServiceProcess(-pid, signal)
         return
-      } catch (_) {}
+      } catch (_) {
+        try {
+          if (signalServiceProcessTree(pid, signal)) return
+        } catch (_) {}
+      }
     }
     runtime.child?.kill?.(signal)
   }
@@ -1073,7 +1079,11 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
       try {
         killServiceProcess(-pid, signal)
         return
-      } catch (_) {}
+      } catch (_) {
+        try {
+          if (signalServiceProcessTree(pid, signal)) return
+        } catch (_) {}
+      }
     }
     runtime.child?.kill?.(signal)
   }
@@ -1755,8 +1765,9 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
         clearServiceStopTimer(runtime)
         clearServiceHealthSchedule(runtime)
         const stoppedByRequest = runtime.status === 'stopping'
+        let forcedStop = false
         if (runtime.status === 'stopping') {
-          const forcedStop = /force kill/i.test(String(runtime.error || ''))
+          forcedStop = /force kill/i.test(String(runtime.error || ''))
           runtime.status = forcedStop
             ? 'failed'
             : (Number.isFinite(Number(code)) && Number(code) !== 0 && !signal ? 'failed' : 'stopped')
@@ -1774,7 +1785,7 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
             level: runtime.status === 'failed' ? 'error' : 'info',
             message: runtime.status === 'stopped'
               ? 'Service stopped'
-              : (/force kill/i.test(String(runtime.error || '')) ? 'Service exited after force stop' : 'Service exited')
+              : (forcedStop ? 'Service exited after force stop' : 'Service exited')
           })
         } else {
           appendLog({

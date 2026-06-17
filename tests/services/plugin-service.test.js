@@ -1639,6 +1639,104 @@ test('plugin service app shutdown cleanup force stops stubborn services after th
   assert.deepEqual(processSignals.map((entry) => entry.signal), ['SIGTERM', 'SIGKILL'])
 })
 
+test('plugin service reports stopped when root exit leaves no visible descendants', () => {
+  const child = createSlowStoppingServiceProcess({ pid: 4321 })
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir()],
+    spawnServiceProcess: () => child,
+    killServiceProcess: () => true,
+    listServiceDescendantPids: () => []
+  })
+
+  service.startService('weather-declaration', 'companion')
+  service.stopService('weather-declaration', 'companion')
+  child.emit('exit', 0, 'SIGTERM')
+
+  assert.equal(service.listPlugins()[0].entries.services[0].runtime.status, 'stopped')
+})
+
+test('plugin service fails requested stop when descendants remain after root exit', () => {
+  const child = createSlowStoppingServiceProcess({ pid: 4321 })
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir()],
+    spawnServiceProcess: () => child,
+    killServiceProcess: () => true,
+    listServiceDescendantPids: () => [4330, 4331]
+  })
+
+  service.startService('weather-declaration', 'companion')
+  service.stopService('weather-declaration', 'companion')
+  child.emit('exit', 0, 'SIGTERM')
+
+  const runtime = service.listPlugins()[0].entries.services[0].runtime
+  assert.equal(runtime.status, 'failed')
+  assert.match(runtime.error, /descendants/i)
+  assert.match(service.getLogs()[0].message, /descendants still running/i)
+})
+
+test('plugin service keeps bounded stop result when descendant verification is unavailable', () => {
+  const child = createSlowStoppingServiceProcess({ pid: 4321 })
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir()],
+    spawnServiceProcess: () => child,
+    killServiceProcess: () => true,
+    listServiceDescendantPids: () => {
+      throw new Error('ps unavailable')
+    }
+  })
+
+  service.startService('weather-declaration', 'companion')
+  service.stopService('weather-declaration', 'companion')
+  child.emit('exit', 0, 'SIGTERM')
+
+  assert.equal(service.listPlugins()[0].entries.services[0].runtime.status, 'stopped')
+  assert.match(service.getLogs()[0].message, /verification unavailable/i)
+})
+
+test('plugin service reuses one descendant verification result for requested stop completion', () => {
+  const child = createSlowStoppingServiceProcess({ pid: 4321 })
+  let verificationCalls = 0
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir()],
+    spawnServiceProcess: () => child,
+    killServiceProcess: () => true,
+    listServiceDescendantPids: () => {
+      verificationCalls += 1
+      return verificationCalls === 1 ? [4330] : []
+    }
+  })
+
+  service.startService('weather-declaration', 'companion')
+  service.stopService('weather-declaration', 'companion')
+  child.emit('exit', 0, 'SIGTERM')
+
+  const runtime = service.listPlugins()[0].entries.services[0].runtime
+  assert.equal(verificationCalls, 1)
+  assert.equal(runtime.status, 'failed')
+  assert.match(runtime.error, /descendants/i)
+  assert.match(service.getLogs()[0].message, /descendants still running/i)
+})
+
 test('plugin service exposes persisted periodic health policy on service entries', () => {
   const service = createPluginService({
     settingsService: createSettingsService({
