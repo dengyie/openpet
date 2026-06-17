@@ -940,6 +940,54 @@ test('plugins:inspect-package opens native package picker options and returns ca
   assert.deepEqual(dialogCalls[0].filters[0], { name: 'OpenPet Plugin Package', extensions: ['zip'] })
 })
 
+test('plugins:run-command delegates payloads to plugin service', async () => {
+  const ipcMain = createIpcMainStub()
+  const calls = []
+  const commandResult = {
+    ok: true,
+    pluginId: 'weather-declaration',
+    commandId: 'announce',
+    exitCode: 0,
+    result: { ok: true }
+  }
+
+  registerIpcHandlers({
+    ...createRequiredServices({
+      pluginInstallService: {
+        inspectPluginPackage: () => ({}),
+        clearPendingSelection: () => ({ ok: true }),
+        installPlugin: () => ({ ok: true }),
+        updatePlugin: () => ({ ok: true }),
+        uninstallPlugin: () => ({ ok: true })
+      },
+      pluginService: {
+        listPlugins: () => [],
+        runCommand: (pluginId, commandId, payload) => {
+          calls.push({ pluginId, commandId, payload })
+          return commandResult
+        }
+      },
+      dialogService: {
+        showOpenDialog: async () => ({ canceled: true, filePaths: [] })
+      }
+    }),
+    ipcMainService: ipcMain
+  })
+
+  const result = await ipcMain.handlers.get(IPC.PLUGINS_RUN_COMMAND)(null, {
+    pluginId: 'weather-declaration',
+    commandId: 'announce',
+    payload: { city: 'Shanghai' }
+  })
+
+  assert.deepEqual(result, commandResult)
+  assert.deepEqual(calls, [{
+    pluginId: 'weather-declaration',
+    commandId: 'announce',
+    payload: { city: 'Shanghai' }
+  }])
+})
+
 test('plugins:inspect-package and plugins:install handle a selected .openpet-plugin.zip through main-process IPC', async () => {
   const ipcMain = createIpcMainStub()
   const pluginDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-ipc-installed-plugins-'))

@@ -12,6 +12,7 @@ const MAX_PLUGIN_STORAGE_VALUE_BYTES = 16 * 1024
 const MAX_PLUGIN_LOG_ENTRIES = 200
 const MAX_PLUGIN_NETWORK_REQUEST_BYTES = 64 * 1024
 const MAX_PLUGIN_NETWORK_RESPONSE_BYTES = 128 * 1024
+const MAX_PLUGIN_COMMAND_OUTPUT_BYTES = 64 * 1024
 const PLUGIN_SERVICE_HEALTH_TIMEOUT_MS = 3000
 const LOCAL_PLUGIN_RUNNER_PATH = path.join(__dirname, '../plugins/local-plugin-runner.js')
 
@@ -19,6 +20,7 @@ const createPluginServiceKey = (pluginId, serviceId) => `${pluginId}:${serviceId
 
 const ACTIVE_SERVICE_STATUSES = new Set(['running', 'stopping'])
 const ACTIVE_SETUP_STATUSES = new Set(['running'])
+const ACTIVE_COMMAND_STATUSES = new Set(['running'])
 
 const LOOPBACK_HEALTH_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]'])
 
@@ -89,6 +91,30 @@ const createServiceProcessEnv = () => {
     if (process.env.WINDIR) env.WINDIR = process.env.WINDIR
   }
   return env
+}
+
+const appendLimitedOutput = (current, chunk) => {
+  const next = `${current}${String(chunk || '')}`
+  return next.length > MAX_PLUGIN_COMMAND_OUTPUT_BYTES
+    ? next.slice(0, MAX_PLUGIN_COMMAND_OUTPUT_BYTES)
+    : next
+}
+
+const parseJsonLine = (line) => {
+  try {
+    return JSON.parse(line)
+  } catch (_) {
+    return null
+  }
+}
+
+const readCommandResult = (stdoutText) => {
+  const lines = String(stdoutText || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const parsed = parseJsonLine(lines[index])
+    if (parsed && typeof parsed === 'object') return parsed
+  }
+  return null
 }
 
 const getSignatureStatus = (manifest) => {
@@ -427,11 +453,12 @@ const readLocalPluginManifests = (pluginDirs = []) => {
   return plugins
 }
 
-const createPluginService = ({ settingsService, petService, aiService, fetchImpl = globalThis.fetch, serviceHealthTimeoutMs, healthCheckTimeoutMs = serviceHealthTimeoutMs ?? PLUGIN_SERVICE_HEALTH_TIMEOUT_MS, openExternal = async () => { throw new Error('Dashboard opener is not available') }, spawnServiceProcess = spawn, spawnSetupProcess = spawnServiceProcess, killServiceProcess = process.kill, pluginDirs = [], officialPlugins = [], getPluginBlockStatus = () => ({ blocked: false, reasons: [] }) }) => {
+const createPluginService = ({ settingsService, petService, aiService, fetchImpl = globalThis.fetch, serviceHealthTimeoutMs, healthCheckTimeoutMs = serviceHealthTimeoutMs ?? PLUGIN_SERVICE_HEALTH_TIMEOUT_MS, commandProcessTimeoutMs = LOCAL_PLUGIN_COMMAND_TIMEOUT_MS, openExternal = async () => { throw new Error('Dashboard opener is not available') }, spawnServiceProcess = spawn, spawnSetupProcess = spawnServiceProcess, spawnCommandProcess = spawnServiceProcess, killServiceProcess = process.kill, pluginDirs = [], officialPlugins = [], getPluginBlockStatus = () => ({ blocked: false, reasons: [] }) }) => {
   if (!settingsService) throw new Error('settingsService is required')
   if (!petService) throw new Error('petService is required')
   const serviceRuntimes = new Map()
   const setupRuntimes = new Map()
+  const commandRuntimes = new Map()
 
   const getLogStore = () => {
     const logs = settingsService.get().plugins?.logs
@@ -643,7 +670,7 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
     ...plugin.manifest,
     entries: decorateEntriesWithRuntime(plugin.manifest),
     enabled: Boolean(getEnabledMap()[plugin.manifest.id]),
-    runnable: typeof plugin.activate === 'function' || Boolean(plugin.mainPath),
+    runnable: typeof plugin.activate === 'function' || Boolean(plugin.mainPath) || Boolean(plugin.manifest.entries?.commands?.length),
     signatureStatus: getPluginSignatureStatus(plugin.manifest),
     blockStatus: getPluginPolicyStatus(plugin.manifest),
     configSchema: plugin.configSchema,
@@ -661,6 +688,12 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
     const setupEntry = (plugin.manifest.entries?.setup || []).find((entry) => entry.id === setupId)
     if (!setupEntry) throw new Error(`Plugin setup entry not found: ${setupId}`)
     return setupEntry
+  }
+
+  const getCommandEntry = (plugin, commandId) => {
+    const commandEntry = (plugin.manifest.entries?.commands || []).find((entry) => entry.id === commandId)
+    if (!commandEntry) throw new Error(`Plugin command entry not found: ${commandId}`)
+    return commandEntry
   }
 
   const resolveServiceRuntimeDeclaration = (serviceEntry) => {
@@ -690,6 +723,8 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
   const resolveServiceCwd = (manifest, cwd) => resolvePluginEntryCwd(manifest, cwd, 'service')
 
   const resolveSetupCwd = (manifest, cwd) => resolvePluginEntryCwd(manifest, cwd, 'setup')
+
+  const resolveCommandCwd = (manifest, cwd) => resolvePluginEntryCwd(manifest, cwd, 'command')
 
   const normalizeServiceHealthUrl = (serviceEntry) => {
     const health = serviceEntry.health || {}
@@ -809,9 +844,26 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
     }
   }
 
+  const stopPluginCommandRuntime = (pluginId, commandId, runtime, _options = {}) => {
+    if (!runtime || runtime.status !== 'running') return runtime
+    runtime.status = 'failed'
+    runtime.error = 'Command stopped'
+    runtime.stop?.()
+    return runtime
+  }
+
+  const stopPluginCommands = (pluginId, options = {}) => {
+    for (const [key, runtime] of commandRuntimes.entries()) {
+      if (key.startsWith(`${pluginId}:`)) {
+        stopPluginCommandRuntime(pluginId, runtime.commandId, runtime, options)
+      }
+    }
+  }
+
   const setEnabled = (pluginId, enabled) => {
     if (enabled) assertPluginAllowed(pluginId)
     if (!enabled) {
+      stopPluginCommands(pluginId)
       stopPluginServices(pluginId)
       stopPluginSetups(pluginId)
     }
@@ -933,6 +985,125 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
     }
   }
 
+  const runCommandEntryProcess = ({ plugin, commandEntry, commandId, payload, config }) => {
+    const pluginId = plugin.manifest.id
+    const runtimeKey = createPluginServiceKey(pluginId, commandId)
+    const existingRuntime = commandRuntimes.get(runtimeKey)
+    if (ACTIVE_COMMAND_STATUSES.has(existingRuntime?.status)) throw new Error('Plugin command is already running')
+    const { file, args } = parseServiceCommand(commandEntry.command)
+    const cwd = resolveCommandCwd(plugin.manifest, commandEntry.cwd)
+    const commandContext = {
+      pluginId,
+      commandId,
+      payload: cloneJsonValue(payload, 'payload', { allowUndefined: true }),
+      config: cloneJsonValue(config, 'config'),
+      paths: {
+        extensionDir: cwd
+      }
+    }
+    const child = spawnCommandProcess(file, args, {
+      cwd,
+      detached: false,
+      env: createServiceProcessEnv(),
+      shell: false,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      windowsHide: true
+    })
+    const runtime = {
+      pluginId,
+      commandId,
+      status: 'running',
+      error: '',
+      child,
+      stop: null
+    }
+    commandRuntimes.set(runtimeKey, runtime)
+    let stdoutText = ''
+    let stderrText = ''
+
+    return new Promise((resolve, reject) => {
+      let settled = false
+      const safeKillChild = () => {
+        try {
+          child.kill?.('SIGTERM')
+        } catch (_) {}
+      }
+      const settle = (callback) => {
+        if (settled) return
+        settled = true
+        if (timeoutId) clearTimeout(timeoutId)
+        commandRuntimes.delete(runtimeKey)
+        callback()
+      }
+      runtime.stop = () => {
+        settle(() => {
+          safeKillChild()
+          reject(new Error('Command stopped'))
+        })
+      }
+      const timeoutMs = Number.isFinite(Number(commandProcessTimeoutMs))
+        ? Math.max(0, Number(commandProcessTimeoutMs))
+        : LOCAL_PLUGIN_COMMAND_TIMEOUT_MS
+      const timeoutId = timeoutMs > 0
+        ? setTimeout(() => {
+            settle(() => {
+              safeKillChild()
+              reject(new Error(`Plugin command timed out after ${timeoutMs}ms`))
+            })
+          }, timeoutMs)
+        : null
+      timeoutId?.unref?.()
+
+      child.stdout?.on?.('data', (chunk) => {
+        stdoutText = appendLimitedOutput(stdoutText, chunk)
+        const message = String(chunk || '').trim()
+        if (message) appendLog({ pluginId: plugin.manifest.id, commandId, level: 'info', message: `Command stdout: ${message}`.slice(0, 500) })
+      })
+      child.stderr?.on?.('data', (chunk) => {
+        stderrText = appendLimitedOutput(stderrText, chunk)
+        const message = String(chunk || '').trim()
+        if (message) appendLog({ pluginId: plugin.manifest.id, commandId, level: 'error', message: `Command stderr: ${message}`.slice(0, 500) })
+      })
+      child.on?.('error', (error) => {
+        settle(() => reject(error))
+      })
+      child.stdin?.on?.('error', (error) => {
+        settle(() => {
+          safeKillChild()
+          reject(error)
+        })
+      })
+      child.on?.('exit', (code, signal) => {
+        settle(() => {
+          const exitCode = Number.isFinite(Number(code)) ? Number(code) : null
+          if (exitCode !== 0 || signal) {
+            reject(new Error(signal ? `Plugin command exited with signal ${signal}` : `Plugin command exited with code ${exitCode ?? 'unknown'}`))
+            return
+          }
+          const parsedResult = readCommandResult(stdoutText)
+          resolve({
+            ok: true,
+            pluginId,
+            commandId,
+            exitCode,
+            ...(parsedResult ? { result: parsedResult } : {}),
+            ...(!parsedResult && stdoutText.trim() ? { stdout: stdoutText.trim() } : {}),
+            ...(stderrText.trim() ? { stderr: stderrText.trim() } : {})
+          })
+        })
+      })
+
+      try {
+        child.stdin?.end?.(`${JSON.stringify(commandContext)}\n`)
+      } catch (error) {
+        settle(() => {
+          safeKillChild()
+          reject(error)
+        })
+      }
+    })
+  }
+
   const runCommand = async (pluginId, commandId, payload = {}) => {
     try {
       const plugin = getPlugins().find((candidate) => candidate.manifest.id === pluginId)
@@ -955,6 +1126,15 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
         result = await runLocalPluginCommand({
           plugin,
           sdk,
+          commandId,
+          payload,
+          config: getPluginConfig(plugin.manifest.id, plugin.configSchema)
+        })
+      } else if (plugin.manifest.entries?.commands?.length) {
+        const commandEntry = getCommandEntry(plugin, commandId)
+        result = await runCommandEntryProcess({
+          plugin,
+          commandEntry,
           commandId,
           payload,
           config: getPluginConfig(plugin.manifest.id, plugin.configSchema)
@@ -1274,6 +1454,9 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
     }
     for (const runtime of setupRuntimes.values()) {
       stopPluginSetupRuntime(runtime.pluginId, runtime.setupId, runtime, { log: false })
+    }
+    for (const runtime of commandRuntimes.values()) {
+      stopPluginCommandRuntime(runtime.pluginId, runtime.commandId, runtime, { log: false })
     }
     return { ok: true }
   }

@@ -96,17 +96,17 @@ Entries are the runtime surfaces OpenPet can operate.
 
 ### Commands
 
-Commands are shell entries triggered by the user or OpenPet UI.
+Commands are explicit short-lived process entries triggered by the user or OpenPet UI.
 
-OpenPet should run them in the extension directory, inject standard environment variables, send stdin JSON, capture logs, read `OPENPET_RESULT_PATH`, and show success/failure state.
+OpenPet runs them in the extension directory, rejects cwd escapes, spawns without shell expansion, sends stdin JSON with command context, captures stdout/stderr logs, parses the final stdout JSON line when present, and times out stalled processes.
 
-Commands should be allowed to use any suitable runtime. Do not require JavaScript, a particular bundler, or a special host SDK when a shell command is enough.
+Commands should be allowed to use any suitable runtime. Do not require JavaScript, a particular bundler, or a special host SDK when a local process command is enough.
 
 ### Services
 
 Services are long-running local process entries managed by OpenPet.
 
-OpenPet can run setup entries only after explicit Control Center action, record setup status/logs, start and stop declared service processes only after explicit Control Center action, apply service platform overrides, capture stdout/stderr snippets, show runtime state, manually check declared loopback health endpoints, and stop running services on disable/app quit with best-effort process-group cleanup. Setup does not run during install or enable, services do not auto-start, health checks do not run in the background, and setup/service commands are spawned without shell expansion. Bridge injection, generic shell command execution, and hard process-tree cleanup guarantees remain future runtime work.
+OpenPet can run command and setup entries only after explicit Control Center action, record setup status/logs, start and stop declared service processes only after explicit Control Center action, apply service platform overrides, capture stdout/stderr snippets, show runtime state, manually check declared loopback health endpoints, and stop running services on disable/app quit with best-effort process-group cleanup. Commands and setup do not run during install or enable, services do not auto-start, health checks do not run in the background, and command/setup/service processes are spawned without shell expansion. Bridge injection and hard process-tree cleanup guarantees remain future runtime work.
 
 Services may power real local experiences: dashboards, background companions, schedulers, local model servers, voice processors, or integrations with external APIs.
 
@@ -124,7 +124,7 @@ First-version rules should stay simple:
 
 OpenPet should use language-neutral context passing.
 
-Standard environment variables:
+Future bridge/context work may add standard environment variables:
 
 - `OPENPET_EXTENSION_ID`
 - `OPENPET_EXTENSION_DIR`
@@ -136,9 +136,9 @@ Standard environment variables:
 - `OPENPET_BRIDGE_URL`
 - `OPENPET_BRIDGE_TOKEN`
 
-Commands should receive JSON on stdin with command id, payload, config, and OpenPet-provided paths.
+Commands currently receive JSON on stdin with `pluginId`, command id, payload, config, and OpenPet-provided paths.
 
-Command results should prefer `OPENPET_RESULT_PATH`; a final stdout JSON line may be accepted as fallback.
+Command results currently use the final stdout JSON line when present.
 
 The optional local bridge should start small:
 
@@ -328,4 +328,4 @@ Some repository tools and examples still reflect the older plugin SDK implementa
 - `ctx.ai`;
 - short-lived isolated JavaScript command handlers.
 
-These are compatibility surfaces, not the target boundary. The host now supports explicit setup execution with runtime state and logs, explicit lifecycle-managed service start/stop, manual loopback health checks, best-effort process-group cleanup, and dashboard entries opened explicitly as external HTTP/HTTPS URLs from Control Center. Future development should close the remaining gap by adding richer command execution, language-neutral context passing, bridge flows, hard cleanup guarantees where possible, and honest user-facing copy.
+These are compatibility surfaces, not the target boundary. The host now supports explicit setup execution with runtime state and logs, explicit language-neutral command process execution with stdin JSON context, explicit lifecycle-managed service start/stop, manual loopback health checks, best-effort process-group cleanup, and dashboard entries opened explicitly as external HTTP/HTTPS URLs from Control Center. Future development should close the remaining gap by adding bridge flows, richer command result UX, hard cleanup guarantees where possible, and honest user-facing copy.

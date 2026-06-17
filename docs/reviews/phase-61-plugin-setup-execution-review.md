@@ -19,6 +19,7 @@ No blocking production findings remain after review.
 ## Review Optimizations Applied
 
 - `src/control-center/src/hooks/usePluginsPane.ts`: setup success now updates plugins through a functional `setPlugins((currentPlugins) => ...)` call so the UI does not depend on a stale closure if plugin state refreshes while setup is running.
+- `src/main/services/plugin-service.js`: active setup processes are now stopped when a plugin is disabled or when app shutdown cleanup runs, avoiding orphaned setup children owned by OpenPet.
 - `docs/plugin-ecosystem-rules.md`: clarified that platform overrides apply to service entries, not setup entries, avoiding an overbroad third-party author promise.
 
 ## Architecture Assessment
@@ -27,15 +28,15 @@ The behavior lives in the correct layer. `PluginService` owns setup runtime stat
 
 ## Robustness Assessment
 
-Setup rejects disabled plugins, policy-blocked plugins, unknown setup ids, duplicate running setup, and cwd paths or symlinks that escape the plugin directory before spawning. Commands are spawned without shell expansion and with a minimal environment. Runtime state records success, failure exit codes, spawn errors, and logs. Operators can identify setup runs through `setup:<setupId>` plugin logs.
+Setup rejects disabled plugins, policy-blocked plugins, unknown setup ids, duplicate running setup, and cwd paths or symlinks that escape the plugin directory before spawning. Commands are spawned without shell expansion and with a minimal environment. Runtime state records success, failure exit codes, spawn errors, stop events, and logs. Operators can identify setup runs through `setup:<setupId>` plugin logs.
 
-The main residual operational limit is intentional: once a setup process starts, Phase 61 does not add cancellation, timeout, or hard process-tree cleanup guarantees. Docs keep those limits explicit.
+The main residual operational limit is intentional: setup cleanup sends `SIGTERM` to the direct child process, but Phase 61 does not add a timeout or hard process-tree cleanup guarantee. Docs keep those limits explicit.
 
 ## Test Assessment
 
 Strong coverage:
 
-- service tests cover success, non-zero failure, disabled plugins, policy blocks, unknown setup ids, cwd symlink escapes, duplicate running setup, stdout/stderr logs, no shell expansion, and runtime state;
+- service tests cover success, non-zero failure, disabled plugins, policy blocks, unknown setup ids, cwd symlink escapes, duplicate running setup, stdout/stderr logs, direct setup cleanup on disable/shutdown, no shell expansion, and runtime state;
 - IPC tests cover `plugins:run-setup` delegation;
 - shared TypeScript fixture covers `PluginSetupRunResultViewState`;
 - Control Center smoke covers disabled setup action, enabled setup execution, succeeded status, and setup logs.
@@ -48,7 +49,7 @@ Checks run during review:
 
 ```bash
 node --test tests/services/plugin-service.test.js
-# 68/68 pass
+# 70/70 pass
 
 node --test tests/main/ipc-plugin-install.test.js
 # 15/15 pass

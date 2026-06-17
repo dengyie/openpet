@@ -107,7 +107,7 @@ Entries describe what OpenPet can start, run, or open. They do not create separa
 
 ### Commands
 
-Commands are user-triggered or OpenPet-triggered shell entries.
+Commands are explicit short-lived process entries. They are triggered from OpenPet UI or another explicit host action, not during install or enable.
 
 ```json
 {
@@ -118,17 +118,17 @@ Commands are user-triggered or OpenPet-triggered shell entries.
 }
 ```
 
-OpenPet should:
+OpenPet currently:
 
-- run the command in the installed extension directory;
-- inject standard environment variables;
-- pass command context as stdin JSON;
-- collect stdout and stderr;
-- read result JSON from `OPENPET_RESULT_PATH` when provided;
-- optionally parse the final stdout JSON line as a fallback;
-- show success/failure state and recent logs.
+- runs the command in the installed extension directory;
+- rejects cwd paths or symlinks that escape the extension directory;
+- spawns the process without shell expansion;
+- passes command context as stdin JSON with `pluginId`, `commandId`, `payload`, `config`, and `paths.extensionDir`;
+- captures stdout and stderr snippets into plugin logs;
+- parses the final stdout JSON line as the command result when possible;
+- times out stalled command processes.
 
-Commands may be written in JavaScript, Python, shell, compiled binaries, or any runtime the user has installed. JavaScript is supported as ordinary shell execution, not as the only extension runtime.
+Commands may be written in JavaScript, Python, shell scripts, compiled binaries, or any runtime the user has installed. JavaScript is supported as one ordinary process option, not as the only extension runtime.
 
 ### Services
 
@@ -152,7 +152,7 @@ Services are long-running local process entries managed by OpenPet.
 }
 ```
 
-OpenPet can explicitly run setup entries from Control Center, capture setup stdout/stderr snippets, show setup runtime state, explicitly start and stop services, show service runtime state, stop services on plugin disable, send stop signals on app quit, manually check declared loopback health endpoints, and attempt best-effort process-group cleanup when stopping services. Setup does not run during install or enable, services never auto-start, health checks do not run in the background, and the host spawns setup and service commands without shell expansion. Bridge injection, generic shell command execution, and hard process-tree cleanup guarantees are still future runtime work. The service model should not require a specific language, a self-contained package, or a full process sandbox.
+OpenPet can explicitly run command and setup entries from Control Center, capture stdout/stderr snippets, show setup runtime state, explicitly start and stop services, show service runtime state, stop services on plugin disable, send stop signals on app quit, manually check declared loopback health endpoints, and attempt best-effort process-group cleanup when stopping services. Command, setup, and service processes do not run during install or enable; services never auto-start; health checks do not run in the background; and the host spawns command, setup, and service processes without shell expansion. Bridge injection and hard process-tree cleanup guarantees are still future runtime work. The service model should not require a specific language, a self-contained package, or a full process sandbox.
 
 ### Dashboards
 
@@ -172,7 +172,9 @@ First-version behavior should stay simple: OpenPet shows an "Open Dashboard" act
 
 OpenPet should use language-neutral context passing.
 
-Common environment variables:
+Current command entries receive context on stdin and run with a minimal host environment. OpenPet does not currently inject bridge tokens, data/cache/log paths, config files, or result-file paths into command processes.
+
+Future bridge/context work may add standard environment variables:
 
 | Variable | Purpose |
 | --- | --- |
@@ -190,25 +192,21 @@ Commands receive JSON on stdin:
 
 ```json
 {
+  "pluginId": "weather-morning-report",
   "commandId": "announce-weather",
   "payload": {},
   "config": {},
   "paths": {
-    "extensionDir": "...",
-    "dataDir": "...",
-    "cacheDir": "...",
-    "logDir": "..."
+    "extensionDir": "..."
   }
 }
 ```
 
-Preferred command result:
-
-- write JSON to `OPENPET_RESULT_PATH`.
-
-Fallback command result:
+Current command result:
 
 - write JSON as the final stdout line.
+
+Future result-file bridge work may add `OPENPET_RESULT_PATH`.
 
 OpenPet may interpret common result keys:
 
@@ -243,8 +241,8 @@ Example command behavior:
 
 1. Read command context from stdin.
 2. Fetch weather using the extension's own network stack.
-3. Write a result JSON file to `OPENPET_RESULT_PATH`.
-4. Optionally call `POST /pet/say` or include `petSay` in the result.
+3. Write final result JSON to stdout.
+4. In a future bridge phase, optionally call `POST /pet/say`; until then, include desired pet-facing intent such as `petSay` in the result for host/UI display.
 
 ## Configuration
 
@@ -373,7 +371,7 @@ npm run create-plugin-submission-bundle -- <extension-dir-or-zip> --output-dir p
 npm run validate-plugin-submission-bundle -- plugin-submission-bundle --require-ready
 ```
 
-These commands are useful for structural validation and reviewer handoff, but some checks still reflect the legacy short-lived JavaScript SDK plugin model. The host now supports explicit setup execution, visible setup runtime status, explicit service start/stop, manual loopback service health checks, and best-effort process-group cleanup on service stop, but generic shell command execution, bridge flows, and hard process-tree cleanup guarantees are still implementation gaps to reconcile with the extension boundary design when developing the next host runtime.
+These commands are useful for structural validation and reviewer handoff, but some checks still reflect the legacy short-lived JavaScript SDK plugin model. The host now supports explicit setup execution, visible setup runtime status, explicit language-neutral command execution, explicit service start/stop, manual loopback service health checks, and best-effort process-group cleanup on service stop, but bridge flows and hard process-tree cleanup guarantees are still implementation gaps to reconcile with the extension boundary design when developing the next host runtime.
 
 For a local author rehearsal:
 

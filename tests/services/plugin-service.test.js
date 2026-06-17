@@ -111,7 +111,7 @@ const createRunnablePluginDir = ({ manifest = {}, source, configSchema }) => {
   return root
 }
 
-const createDeclarationOnlyPluginDir = ({ dashboardUrl = 'http://127.0.0.1:8787', serviceCommand = 'npm run service:start', serviceCwd = '.', serviceHealth, setupEntries = [] } = {}) => {
+const createDeclarationOnlyPluginDir = ({ dashboardUrl = 'http://127.0.0.1:8787', commandCommand = 'node ./commands/announce.js', commandCwd = '.', serviceCommand = 'npm run service:start', serviceCwd = '.', serviceHealth, setupEntries = [] } = {}) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-declaration-plugin-'))
   const pluginPath = path.join(root, 'weather-declaration')
   fs.mkdirSync(pluginPath)
@@ -121,7 +121,7 @@ const createDeclarationOnlyPluginDir = ({ dashboardUrl = 'http://127.0.0.1:8787'
     version: '1.0.0',
     entries: {
       setup: setupEntries,
-      commands: [{ id: 'announce', title: 'Announce Weather', command: 'node ./commands/announce.js' }],
+      commands: [{ id: 'announce', title: 'Announce Weather', command: commandCommand, cwd: commandCwd }],
       services: [{
         id: 'companion',
         title: 'Companion Service',
@@ -138,6 +138,7 @@ const createDeclarationOnlyPluginDir = ({ dashboardUrl = 'http://127.0.0.1:8787'
 const createFakeServiceProcess = ({ pid = 4321 } = {}) => {
   const child = new EventEmitter()
   child.pid = pid
+  child.stdin = new PassThrough()
   child.stdout = new PassThrough()
   child.stderr = new PassThrough()
   child.killCalls = []
@@ -190,29 +191,286 @@ test('plugin service isolates invalid local manifests', () => {
   assert.deepEqual(service.listPlugins().map((plugin) => plugin.id), ['focus-timer'])
 })
 
-test('plugin service lists declaration-only extension entries without making them runnable', async () => {
+test('plugin service lists declaration-only extension entries as runnable command entries', async () => {
+  const spawned = []
+  const child = createFakeServiceProcess()
+  const stdinChunks = []
+  child.stdin.on('data', (chunk) => stdinChunks.push(String(chunk)))
+  const settingsService = createSettingsService({
+    plugins: { enabled: { 'weather-declaration': true } }
+  })
   const service = createPluginService({
-    settingsService: createSettingsService({
-      plugins: { enabled: { 'weather-declaration': true } }
-    }),
+    settingsService,
     petService: { say: async () => {} },
     officialPlugins: [],
-    pluginDirs: [createDeclarationOnlyPluginDir()]
+    pluginDirs: [createDeclarationOnlyPluginDir()],
+    spawnCommandProcess: (file, args, options) => {
+      spawned.push({ file, args, options })
+      return child
+    }
   })
 
   const [plugin] = service.listPlugins()
 
   assert.equal(plugin.id, 'weather-declaration')
   assert.equal(plugin.enabled, true)
-  assert.equal(plugin.runnable, false)
+  assert.equal(plugin.runnable, true)
   assert.deepEqual(plugin.commands, [{ id: 'announce', title: 'Announce Weather' }])
   assert.equal(plugin.entries.commands[0].command, 'node ./commands/announce.js')
   assert.equal(plugin.entries.services[0].id, 'companion')
   assert.equal(plugin.entries.dashboards[0].url, 'http://127.0.0.1:8787')
+
+  const commandRun = service.runCommand('weather-declaration', 'announce', { message: 'rain soon' })
+  child.stdout.write('{"ok":true,"petSay":"Bring an umbrella"}\n')
+  child.stderr.write('warmup\n')
+  child.emit('exit', 0, null)
+  const result = await commandRun
+
+  assert.equal(spawned[0].file, 'node')
+  assert.deepEqual(spawned[0].args, ['./commands/announce.js'])
+  assert.equal(path.basename(spawned[0].options.cwd), 'weather-declaration')
+  assert.equal(spawned[0].options.shell, false)
+  assert.deepEqual(Object.keys(spawned[0].options.env).sort(), ['PATH'].filter((key) => process.env[key]).sort())
+  const stdinPayload = JSON.parse(stdinChunks.join(''))
+  assert.equal(stdinPayload.pluginId, 'weather-declaration')
+  assert.equal(stdinPayload.commandId, 'announce')
+  assert.deepEqual(stdinPayload.payload, { message: 'rain soon' })
+  assert.equal(path.basename(stdinPayload.paths.extensionDir), 'weather-declaration')
+  assert.equal(result.ok, true)
+  assert.equal(result.pluginId, 'weather-declaration')
+  assert.equal(result.commandId, 'announce')
+  assert.equal(result.exitCode, 0)
+  assert.deepEqual(result.result, { ok: true, petSay: 'Bring an umbrella' })
+  assert.equal(result.stderr, 'warmup')
+  assert.deepEqual(settingsService.get().plugins.logs.map((entry) => entry.message).slice(0, 4), [
+    'Command completed',
+    'Command stderr: warmup',
+    'Command stdout: {"ok":true,"petSay":"Bring an umbrella"}',
+    'Command started'
+  ])
+})
+
+test('plugin service rejects non-zero declaration command exits', async () => {
+  const child = createFakeServiceProcess()
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir()],
+    spawnCommandProcess: () => child
+  })
+
+  const commandRun = service.runCommand('weather-declaration', 'announce')
+  child.stderr.write('boom\n')
+  child.emit('exit', 7, null)
+
+  await assert.rejects(commandRun, /Plugin command exited with code 7/)
+  assert.deepEqual(service.getLogs().map((entry) => entry.message).slice(0, 3), [
+    'Plugin command exited with code 7',
+    'Command stderr: boom',
+    'Command started'
+  ])
+})
+
+test('plugin service rejects declaration command cwd symlinks escaping the plugin directory', async () => {
+  const root = createDeclarationOnlyPluginDir({ commandCwd: 'command-link' })
+  const outsidePath = path.join(root, 'outside-command')
+  fs.mkdirSync(outsidePath)
+  fs.symlinkSync(outsidePath, path.join(root, 'weather-declaration', 'command-link'))
+  const spawned = []
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [root],
+    spawnCommandProcess: (...args) => {
+      spawned.push(args)
+      return createFakeServiceProcess()
+    }
+  })
+
   await assert.rejects(
     () => service.runCommand('weather-declaration', 'announce'),
-    /Plugin is not runnable/
+    /Plugin command cwd must stay inside the plugin directory/
   )
+  assert.deepEqual(spawned, [])
+})
+
+test('plugin service rejects declaration command runs for disabled plugins', async () => {
+  const spawned = []
+  const service = createPluginService({
+    settingsService: createSettingsService(),
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir()],
+    spawnCommandProcess: (...args) => {
+      spawned.push(args)
+      return createFakeServiceProcess()
+    }
+  })
+
+  await assert.rejects(
+    () => service.runCommand('weather-declaration', 'announce'),
+    /Plugin is disabled/
+  )
+  assert.deepEqual(spawned, [])
+})
+
+test('plugin service blocks declaration command runs when ecosystem policy denies the plugin', async () => {
+  const spawned = []
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir()],
+    getPluginBlockStatus: () => ({ blocked: true, reasons: ['blocked for review'] }),
+    spawnCommandProcess: (...args) => {
+      spawned.push(args)
+      return createFakeServiceProcess()
+    }
+  })
+
+  await assert.rejects(
+    () => service.runCommand('weather-declaration', 'announce'),
+    /Plugin is blocked: blocked for review/
+  )
+  assert.deepEqual(spawned, [])
+})
+
+test('plugin service rejects unknown declaration command ids before spawning processes', async () => {
+  const spawned = []
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir()],
+    spawnCommandProcess: (...args) => {
+      spawned.push(args)
+      return createFakeServiceProcess()
+    }
+  })
+
+  await assert.rejects(
+    () => service.runCommand('weather-declaration', 'missing'),
+    /Plugin command entry not found: missing/
+  )
+  assert.deepEqual(spawned, [])
+})
+
+test('plugin service rejects non-json declaration command payloads before spawning processes', async () => {
+  const spawned = []
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir()],
+    spawnCommandProcess: (...args) => {
+      spawned.push(args)
+      return createFakeServiceProcess()
+    }
+  })
+  const circularPayload = { city: 'Shanghai' }
+  circularPayload.self = circularPayload
+
+  await assert.rejects(
+    () => service.runCommand('weather-declaration', 'announce', circularPayload),
+    /Plugin payload must be JSON serializable/
+  )
+  assert.deepEqual(spawned, [])
+})
+
+test('plugin service rejects duplicate declaration command runs while one is running', async () => {
+  const child = createSlowStoppingServiceProcess()
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir()],
+    spawnCommandProcess: () => child
+  })
+
+  const firstRun = service.runCommand('weather-declaration', 'announce')
+
+  await assert.rejects(
+    () => service.runCommand('weather-declaration', 'announce'),
+    /Plugin command is already running/
+  )
+
+  child.emit('exit', 0, null)
+  await firstRun
+})
+
+test('plugin service times out stalled declaration command processes', async () => {
+  const child = createSlowStoppingServiceProcess()
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir()],
+    commandProcessTimeoutMs: 1,
+    spawnCommandProcess: () => child
+  })
+
+  await assert.rejects(
+    () => service.runCommand('weather-declaration', 'announce'),
+    /Plugin command timed out after 1ms/
+  )
+  assert.deepEqual(child.killCalls, ['SIGTERM'])
+})
+
+test('plugin service stops running declaration commands when a plugin is disabled', async () => {
+  const child = createSlowStoppingServiceProcess()
+  const settingsService = createSettingsService({
+    plugins: { enabled: { 'weather-declaration': true } }
+  })
+  const service = createPluginService({
+    settingsService,
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir()],
+    spawnCommandProcess: () => child
+  })
+
+  const commandRun = service.runCommand('weather-declaration', 'announce')
+  service.setEnabled('weather-declaration', false)
+
+  await assert.rejects(commandRun, /Command stopped/)
+  assert.deepEqual(child.killCalls, ['SIGTERM'])
+  assert.equal(settingsService.get().plugins.logs.some((entry) => entry.message === 'Command stopped'), true)
+})
+
+test('plugin service stops running declaration commands during app shutdown cleanup', async () => {
+  const child = createSlowStoppingServiceProcess()
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir()],
+    spawnCommandProcess: () => child
+  })
+
+  const commandRun = service.runCommand('weather-declaration', 'announce')
+  const result = service.stopAllServices()
+
+  await assert.rejects(commandRun, /Command stopped/)
+  assert.deepEqual(result, { ok: true })
+  assert.deepEqual(child.killCalls, ['SIGTERM'])
 })
 
 test('plugin service lists setup entries with not-run runtime status', () => {

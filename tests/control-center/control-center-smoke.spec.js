@@ -289,6 +289,7 @@ test.describe('Control Center smoke', () => {
     await expect(pluginRow.getByRole('button', { name: 'Run Install Dependencies Setup' })).toBeDisabled()
     await expect(pluginRow).toContainText('Command entries')
     await expect(pluginRow).toContainText('hello')
+    await expect(pluginRow.getByRole('button', { name: 'Say hello' })).toBeDisabled()
     await expect(pluginRow).toContainText('Service entries')
     await expect(pluginRow).toContainText('manual-companion')
     await expect(pluginRow).toContainText('Dashboard entries')
@@ -303,6 +304,9 @@ test.describe('Control Center smoke', () => {
 
     await pluginRow.getByRole('switch').click()
     await expect(page.locator('.status-line')).toContainText('插件已启用')
+    await pluginRow.getByRole('button', { name: 'Say hello' }).click()
+    await expect(page.locator('.status-line')).toContainText('命令已运行')
+    await expect(page.locator('.plugin-log-row', { hasText: 'Command completed' })).toContainText('hello')
     await pluginRow.getByRole('button', { name: 'Run Install Dependencies Setup' }).click()
     await expect(page.locator('.status-line')).toContainText('Setup completed')
     await expect(pluginRow).toContainText('install-deps · npm install · succeeded')

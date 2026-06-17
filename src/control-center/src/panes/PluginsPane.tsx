@@ -200,7 +200,7 @@ export function PluginsPane({ plugins, logs, filters, status, runningCommand, ru
                         type="button"
                         className="ghost"
                         key={command.id}
-                        disabled={!plugin.enabled || !plugin.runnable || runningCommand === commandKey}
+                        disabled={!plugin.enabled || !plugin.runnable || plugin.blockStatus?.blocked || runningCommand === commandKey}
                         onClick={() => onRun(plugin.id, command.id)}
                       >
                         {runningCommand === commandKey ? '运行中' : command.title}

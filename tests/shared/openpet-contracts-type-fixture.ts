@@ -1,5 +1,6 @@
 import type {
   CatalogInstallSelection,
+  PluginCommandRunResultViewState,
   PluginPackageReviewViewState,
   PluginSetupRunResultViewState,
   ReleaseEvidenceArchiveManifest,
@@ -70,6 +71,17 @@ const pluginSetupRunFixture = {
     error: ''
   }
 } satisfies PluginSetupRunResultViewState
+
+const pluginCommandRunFixture = {
+  ok: true,
+  pluginId: 'openpet.fixture.plugin',
+  commandId: 'run',
+  exitCode: 0,
+  result: {
+    ok: true,
+    message: 'Command completed'
+  }
+} satisfies PluginCommandRunResultViewState
 
 const releaseArchiveFixture = {
   generatedAt: '2026-06-17T00:00:00.000Z',

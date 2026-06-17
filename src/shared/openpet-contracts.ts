@@ -525,6 +525,15 @@ export interface PluginMutationResult extends OkResponse {
   plugins: PluginViewState[]
 }
 
+export interface PluginCommandRunResultViewState extends OkResponse {
+  pluginId?: string
+  commandId?: string
+  exitCode?: number | null
+  stdout?: string
+  stderr?: string
+  result?: JsonValue
+}
+
 export interface PluginDashboardOpenResult extends OkResponse {
   pluginId: string
   dashboardId: string
@@ -860,7 +869,7 @@ export interface ControlCenterApi {
   getPlugins: () => Promise<PluginViewState[]>
   setPluginEnabled: (pluginId: string, enabled: boolean) => Promise<Partial<PluginViewState>>
   savePluginConfig: (pluginId: string, config: JsonObject) => Promise<Partial<PluginViewState>>
-  runPluginCommand: (pluginId: string, commandId: string, payload?: JsonObject) => Promise<OkResponse>
+  runPluginCommand: (pluginId: string, commandId: string, payload?: JsonObject) => Promise<PluginCommandRunResultViewState>
   runPluginSetup: (pluginId: string, setupId: string) => Promise<PluginSetupRunResultViewState>
   openPluginDashboard: (pluginId: string, dashboardId: string) => Promise<PluginDashboardOpenResult>
   startPluginService: (pluginId: string, serviceId: string) => Promise<PluginServiceControlResult>
