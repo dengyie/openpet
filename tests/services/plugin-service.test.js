@@ -768,8 +768,12 @@ test('plugin service stops running declaration commands when a plugin is disable
   await waitFor(() => started)
   service.setEnabled('weather-declaration', false)
 
-  await assert.rejects(commandRun, /Command stopped/)
   assert.deepEqual(child.killCalls, ['SIGTERM'])
+  assert.equal(settingsService.get().plugins.logs.some((entry) => entry.message === 'Command stop requested'), true)
+
+  child.emit('exit', 0, 'SIGTERM')
+
+  await assert.rejects(commandRun, /Command stopped/)
   assert.equal(settingsService.get().plugins.logs.some((entry) => entry.message === 'Command stopped'), true)
 })
 
@@ -793,9 +797,12 @@ test('plugin service stops running declaration commands during app shutdown clea
   await waitFor(() => started)
   const result = service.stopAllServices()
 
-  await assert.rejects(commandRun, /Command stopped/)
   assert.deepEqual(result, { ok: true })
   assert.deepEqual(child.killCalls, ['SIGTERM'])
+
+  child.emit('exit', 0, 'SIGTERM')
+
+  await assert.rejects(commandRun, /Command stopped/)
 })
 
 test('plugin service lists setup entries with not-run runtime status', () => {
@@ -1036,11 +1043,17 @@ test('plugin service stops running setup when a plugin is disabled', () => {
   service.runSetup('weather-declaration', 'install-deps')
   service.setEnabled('weather-declaration', false)
 
-  const runtime = service.listPlugins()[0].entries.setup[0].runtime
   assert.deepEqual(child.killCalls, ['SIGTERM'])
-  assert.equal(runtime.status, 'failed')
-  assert.equal(runtime.error, 'Setup stopped')
-  assert.equal(settingsService.get().plugins.logs[1].message, 'Setup stopped')
+  const runtimeBeforeExit = service.listPlugins()[0].entries.setup[0].runtime
+  assert.equal(runtimeBeforeExit.status, 'stopping')
+  assert.equal(settingsService.get().plugins.logs[1].message, 'Setup stop requested')
+
+  child.emit('exit', 0, 'SIGTERM')
+
+  const runtimeAfterExit = service.listPlugins()[0].entries.setup[0].runtime
+  assert.equal(runtimeAfterExit.status, 'failed')
+  assert.equal(runtimeAfterExit.error, 'Setup stopped')
+  assert.equal(settingsService.get().plugins.logs[0].message, 'Setup stopped')
 })
 
 test('plugin service stops running setup during app shutdown cleanup', () => {
@@ -1060,11 +1073,42 @@ test('plugin service stops running setup during app shutdown cleanup', () => {
   service.runSetup('weather-declaration', 'install-deps')
   const result = service.stopAllServices()
 
-  const runtime = service.listPlugins()[0].entries.setup[0].runtime
   assert.deepEqual(result, { ok: true })
   assert.deepEqual(child.killCalls, ['SIGTERM'])
+  const runtimeBeforeExit = service.listPlugins()[0].entries.setup[0].runtime
+  assert.equal(runtimeBeforeExit.status, 'stopping')
+
+  child.emit('exit', 0, 'SIGTERM')
+
+  const runtimeAfterExit = service.listPlugins()[0].entries.setup[0].runtime
+  assert.equal(runtimeAfterExit.status, 'failed')
+  assert.equal(runtimeAfterExit.error, 'Setup stopped')
+})
+
+test('plugin service marks setup cleanup failure as failed when child kill throws', () => {
+  const child = createSlowStoppingServiceProcess()
+  child.kill = () => {
+    throw new Error('setup stop failed')
+  }
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir({
+      setupEntries: [{ id: 'install-deps', title: 'Install Dependencies', command: 'npm install', cwd: '.' }]
+    })],
+    spawnSetupProcess: () => child
+  })
+
+  const setupRun = service.runSetup('weather-declaration', 'install-deps')
+  service.stopAllServices()
+
+  const runtime = service.listPlugins()[0].entries.setup[0].runtime
   assert.equal(runtime.status, 'failed')
-  assert.equal(runtime.error, 'Setup stopped')
+  assert.match(runtime.error, /setup stop failed/)
+  return assert.rejects(setupRun, /setup stop failed/)
 })
 
 test('plugin service opens enabled declaration dashboard entries through the injected opener', async () => {

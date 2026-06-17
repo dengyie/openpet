@@ -24,8 +24,8 @@ const PLUGIN_BRIDGE_HOST = '127.0.0.1'
 const createPluginServiceKey = (pluginId, serviceId) => `${pluginId}:${serviceId}`
 
 const ACTIVE_SERVICE_STATUSES = new Set(['running', 'stopping'])
-const ACTIVE_SETUP_STATUSES = new Set(['running'])
-const ACTIVE_COMMAND_STATUSES = new Set(['running'])
+const ACTIVE_SETUP_STATUSES = new Set(['running', 'stopping'])
+const ACTIVE_COMMAND_STATUSES = new Set(['running', 'stopping'])
 
 const LOOPBACK_HEALTH_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]'])
 
@@ -1097,16 +1097,23 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
 
   const stopPluginSetupRuntime = (pluginId, setupId, runtime, { log = true } = {}) => {
     if (!runtime || runtime.status !== 'running') return runtime
-    runtime.status = 'failed'
-    runtime.error = 'Setup stopped'
+    runtime.status = 'stopping'
+    runtime.error = ''
     runtime.exitCode = null
     runtime.lastRunAt = new Date().toISOString()
     try {
       runtime.child?.kill?.('SIGTERM')
     } catch (error) {
       runtime.error = error.message || 'Plugin setup stop failed'
+      runtime.status = 'failed'
     }
-    if (log) appendLog({ pluginId, commandId: `setup:${setupId}`, level: 'error', message: 'Setup stopped' })
+    if (log) appendLog({
+      pluginId,
+      commandId: `setup:${setupId}`,
+      level: runtime.status === 'failed' ? 'error' : 'info',
+      message: runtime.status === 'failed' ? runtime.error : 'Setup stop requested'
+    })
+    if (runtime.status === 'failed') runtime.failStop?.(new Error(runtime.error))
     return runtime
   }
 
@@ -1120,9 +1127,15 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
 
   const stopPluginCommandRuntime = (pluginId, commandId, runtime, _options = {}) => {
     if (!runtime || runtime.status !== 'running') return runtime
-    runtime.status = 'failed'
-    runtime.error = 'Command stopped'
-    runtime.stop?.()
+    try {
+      runtime.stop?.({ reason: 'Command stopped' })
+      appendLog({ pluginId, commandId, level: 'info', message: 'Command stop requested' })
+    } catch (error) {
+      runtime.status = 'failed'
+      runtime.error = error.message || 'Plugin command stop failed'
+      appendLog({ pluginId, commandId, level: 'error', message: runtime.error })
+      runtime.failStop?.(error)
+    }
     return runtime
   }
 
@@ -1298,7 +1311,9 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
       status: 'running',
       error: '',
       child,
-      stop: null
+      stopReason: '',
+      stop: null,
+      failStop: null
     }
     commandBridgeRuntimes.set(bridgeRuntimeKey, {
       pluginId,
@@ -1330,11 +1345,15 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
         }
         callback()
       }
-      runtime.stop = () => {
-        settle(() => {
-          safeKillChild()
-          reject(new Error('Command stopped'))
-        })
+      runtime.failStop = (error) => {
+        settle(() => reject(error))
+      }
+      runtime.stop = ({ reason = 'Command stopped', signal = 'SIGTERM' } = {}) => {
+        runtime.status = 'stopping'
+        runtime.error = ''
+        runtime.stopReason = reason
+        child.kill?.(signal)
+        return true
       }
       const timeoutMs = Number.isFinite(Number(commandProcessTimeoutMs))
         ? Math.max(0, Number(commandProcessTimeoutMs))
@@ -1371,6 +1390,13 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
       child.on?.('exit', (code, signal) => {
         settle(() => {
           const exitCode = Number.isFinite(Number(code)) ? Number(code) : null
+          if (runtime.status === 'stopping') {
+            runtime.status = 'failed'
+            runtime.error = runtime.stopReason || 'Command stopped'
+            appendLog({ pluginId, commandId, level: 'error', message: 'Command stopped' })
+            reject(new Error(runtime.error))
+            return
+          }
           if (exitCode !== 0 || signal) {
             reject(new Error(signal ? `Plugin command exited with signal ${signal}` : `Plugin command exited with code ${exitCode ?? 'unknown'}`))
             return
@@ -1474,7 +1500,8 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
         lastRunAt: new Date().toISOString(),
         exitCode: null,
         error: '',
-        child
+        child,
+        failStop: null
       })
 
       appendLog({ pluginId, commandId, level: 'info', message: 'Setup started' })
@@ -1485,6 +1512,9 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
           if (settled) return
           settled = true
           callback()
+        }
+        runtime.failStop = (error) => {
+          settle(() => reject(error))
         }
 
         child.stdout?.on?.('data', (chunk) => {
@@ -1508,15 +1538,20 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
         child.on?.('exit', (code, signal) => {
           settle(() => {
             const exitCode = Number.isFinite(Number(code)) ? Number(code) : null
-            runtime.status = exitCode === 0 && !signal ? 'succeeded' : 'failed'
+            const stopRequested = runtime.status === 'stopping'
+            runtime.status = stopRequested
+              ? 'failed'
+              : (exitCode === 0 && !signal ? 'succeeded' : 'failed')
             runtime.exitCode = exitCode
-            runtime.error = runtime.status === 'failed' ? (signal ? `Setup exited with signal ${signal}` : `Setup exited with code ${exitCode ?? 'unknown'}`) : ''
+            runtime.error = stopRequested
+              ? 'Setup stopped'
+              : (runtime.status === 'failed' ? (signal ? `Setup exited with signal ${signal}` : `Setup exited with code ${exitCode ?? 'unknown'}`) : '')
             runtime.lastRunAt = new Date().toISOString()
             appendLog({
               pluginId,
               commandId,
               level: runtime.status === 'failed' ? 'error' : 'info',
-              message: runtime.status === 'failed' ? 'Setup failed' : 'Setup completed'
+              message: stopRequested ? 'Setup stopped' : (runtime.status === 'failed' ? 'Setup failed' : 'Setup completed')
             })
             resolve({
               ok: true,

@@ -882,6 +882,30 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 
 **Status**: completed in Phase 69. Declared service entries now use a bounded grace period plus one host-side force-stop attempt for stubborn shutdowns, while final forced-stop outcomes remain on the existing `failed` contract.
 
+### Phase 70: Plugin setup and command cleanup parity
+
+**Goal**: make explicit setup runs and declaration-only command runs keep stop intent visible until child exit confirmation, matching the narrower cleanup truth already established for services.
+
+**Scope**:
+
+- Keep the Phase 61 explicit setup execution boundary unchanged.
+- Keep the Phase 62 declaration-only command execution boundary unchanged.
+- Keep the Phase 69 service-only force-stop behavior unchanged.
+- Make setup disable/app-shutdown cleanup enter `stopping` before terminal completion.
+- Make declaration-only command disable/app-shutdown cleanup log stop intent first and reject only after exit confirmation.
+- Keep setup and declaration-only command cleanup on direct-child best effort only.
+- Do not add process-group cleanup, force-stop escalation, bridge expansion, background health policy, or hard process-tree guarantees for setup/command paths.
+
+**Acceptance**:
+
+- Setup runtime exposes `stopping` until child exit confirms cleanup.
+- Declaration-only command cleanup logs `Command stop requested` before final `Command stopped`.
+- Disable cleanup and app-shutdown cleanup share the same stop-intent boundary for setup and declaration-only commands.
+- Tests cover setup stop intent, declaration-only command stop intent, and setup cleanup failure paths.
+- Live docs describe the new cleanup truth without widening sandbox/support claims.
+
+**Status**: completed in Phase 70. Explicit setup runs and declaration-only command runs now keep stop intent visible until child exit confirmation, while both paths remain on direct-child best effort without service-style force-stop escalation.
+
 ## 6. Priority Order
 
 | Priority | Work | Reason |
@@ -911,6 +935,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 | P1 | Phase 64 Plugin command bridge | Completed; declaration-only commands can receive a short-lived bridge URL/token and use it for bounded pet-aware mutations and context reads. |
 | P1 | Phase 68 Plugin service exit-confirmed stop | Completed; declared service entries now remain `stopping` until child exit confirmation, and logs distinguish stop request from confirmed stop completion while hard cleanup guarantees remain out of scope. |
 | P1 | Phase 69 Plugin service force stop | Completed; stubborn declared service entries now trigger one bounded host-side force-stop attempt after a grace period, while final forced-stop outcomes remain on the existing `failed` contract. |
+| P1 | Phase 70 Plugin setup and command cleanup parity | Completed; setup and declaration-only command cleanup now keep stop intent visible until child exit confirmation, while staying on direct-child best effort rather than service-style force-stop escalation. |
 | P2 | Phase 41 AI behavior replay | Completed; preserve redacted diagnostics and replay semantics while future AI tooling evolves. |
 | P2 | Phase 39 plugin sandbox evaluation | Completed; keep current runner for v1.1 and revisit on high-risk plugin capability changes. |
 | P2 | Phase 46 documentation consolidation | Completed; keep future live-doc updates fact-only and link-oriented. |
@@ -945,6 +970,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 26. Phase 64 is complete; declaration-only commands now receive a short-lived bridge URL/token and can use it for pet-aware mutations and bounded context reads.
 27. Phase 68 is complete; declaration-only service entries now remain `stopping` until child exit confirmation and only log final stop completion after that confirmation. Choose the next phase from real evidence work, community extension rehearsal, hard cleanup guarantees, or another high-drift service/report boundary.
 28. Phase 69 is complete; declaration-only service entries now use a bounded grace period plus one host-side force-stop attempt for stubborn shutdowns, while setup and command cleanup remain on their previous paths.
+29. Phase 70 is complete; setup and declaration-only command cleanup now share the stop-intent/exit-confirmation boundary while still keeping their direct-child best-effort cleanup model.
 
 ## 8. Verification Contract
 

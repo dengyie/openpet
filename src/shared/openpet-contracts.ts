@@ -373,7 +373,7 @@ export interface PluginCommandEntryViewState extends PluginCommandViewState {
   cwd: string
 }
 
-export type PluginSetupRuntimeStatus = 'not-run' | 'running' | 'succeeded' | 'failed'
+export type PluginSetupRuntimeStatus = 'not-run' | 'running' | 'stopping' | 'succeeded' | 'failed'
 
 export interface PluginSetupRuntimeViewState {
   status: PluginSetupRuntimeStatus
