@@ -1300,6 +1300,7 @@ test('plugin service stops service process groups before falling back to child k
 
 test('plugin service falls back to child kill when process group stop fails', () => {
   const child = createSlowStoppingServiceProcess({ pid: 4321 })
+  const treeSignals = []
   const service = createPluginService({
     settingsService: createSettingsService({
       plugins: { enabled: { 'weather-declaration': true } }
@@ -1310,6 +1311,10 @@ test('plugin service falls back to child kill when process group stop fails', ()
     spawnServiceProcess: () => child,
     killServiceProcess: () => {
       throw new Error('process group missing')
+    },
+    signalServiceProcessTree: (pid, signal) => {
+      treeSignals.push({ pid, signal })
+      return true
     }
   })
 
@@ -1317,6 +1322,36 @@ test('plugin service falls back to child kill when process group stop fails', ()
   const stopped = service.stopService('weather-declaration', 'companion')
 
   assert.equal(stopped.runtime.status, 'stopping')
+  assert.deepEqual(treeSignals, [{ pid: 4321, signal: 'SIGTERM' }])
+  assert.deepEqual(child.killCalls, [])
+  assert.equal(service.listPlugins()[0].entries.services[0].runtime.status, 'stopping')
+})
+
+test('plugin service falls back to child kill when process group and tree cleanup both fail', () => {
+  const child = createSlowStoppingServiceProcess({ pid: 4321 })
+  const treeSignals = []
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir()],
+    spawnServiceProcess: () => child,
+    killServiceProcess: () => {
+      throw new Error('process group missing')
+    },
+    signalServiceProcessTree: (pid, signal) => {
+      treeSignals.push({ pid, signal })
+      throw new Error('tree cleanup unavailable')
+    }
+  })
+
+  service.startService('weather-declaration', 'companion')
+  const stopped = service.stopService('weather-declaration', 'companion')
+
+  assert.equal(stopped.runtime.status, 'stopping')
+  assert.deepEqual(treeSignals, [{ pid: 4321, signal: 'SIGTERM' }])
   assert.deepEqual(child.killCalls, ['SIGTERM'])
   assert.equal(service.listPlugins()[0].entries.services[0].runtime.status, 'stopping')
 })
@@ -1639,8 +1674,10 @@ test('plugin service app shutdown cleanup force stops stubborn services after th
   assert.deepEqual(processSignals.map((entry) => entry.signal), ['SIGTERM', 'SIGKILL'])
 })
 
-test('plugin service reports stopped when root exit leaves no visible descendants', () => {
-  const child = createSlowStoppingServiceProcess({ pid: 4321 })
+test('plugin service force-stop falls back to tree cleanup when process group kill fails', async () => {
+  const child = createStubbornServiceProcess({ pid: 4321 })
+  const processSignals = []
+  const treeSignals = []
   const service = createPluginService({
     settingsService: createSettingsService({
       plugins: { enabled: { 'weather-declaration': true } }
@@ -1648,93 +1685,29 @@ test('plugin service reports stopped when root exit leaves no visible descendant
     petService: { say: async () => {} },
     officialPlugins: [],
     pluginDirs: [createDeclarationOnlyPluginDir()],
+    serviceStopGracePeriodMs: 10,
     spawnServiceProcess: () => child,
-    killServiceProcess: () => true,
-    listServiceDescendantPids: () => []
-  })
-
-  service.startService('weather-declaration', 'companion')
-  service.stopService('weather-declaration', 'companion')
-  child.emit('exit', 0, 'SIGTERM')
-
-  assert.equal(service.listPlugins()[0].entries.services[0].runtime.status, 'stopped')
-})
-
-test('plugin service fails requested stop when descendants remain after root exit', () => {
-  const child = createSlowStoppingServiceProcess({ pid: 4321 })
-  const service = createPluginService({
-    settingsService: createSettingsService({
-      plugins: { enabled: { 'weather-declaration': true } }
-    }),
-    petService: { say: async () => {} },
-    officialPlugins: [],
-    pluginDirs: [createDeclarationOnlyPluginDir()],
-    spawnServiceProcess: () => child,
-    killServiceProcess: () => true,
-    listServiceDescendantPids: () => [4330, 4331]
-  })
-
-  service.startService('weather-declaration', 'companion')
-  service.stopService('weather-declaration', 'companion')
-  child.emit('exit', 0, 'SIGTERM')
-
-  const runtime = service.listPlugins()[0].entries.services[0].runtime
-  assert.equal(runtime.status, 'failed')
-  assert.match(runtime.error, /descendants/i)
-  assert.match(service.getLogs()[0].message, /descendants still running/i)
-})
-
-test('plugin service keeps bounded stop result when descendant verification is unavailable', () => {
-  const child = createSlowStoppingServiceProcess({ pid: 4321 })
-  const service = createPluginService({
-    settingsService: createSettingsService({
-      plugins: { enabled: { 'weather-declaration': true } }
-    }),
-    petService: { say: async () => {} },
-    officialPlugins: [],
-    pluginDirs: [createDeclarationOnlyPluginDir()],
-    spawnServiceProcess: () => child,
-    killServiceProcess: () => true,
-    listServiceDescendantPids: () => {
-      throw new Error('ps unavailable')
+    killServiceProcess: (pid, signal) => {
+      processSignals.push({ pid, signal })
+      if (signal === 'SIGKILL') throw new Error('group force kill failed')
+      return true
+    },
+    signalServiceProcessTree: (pid, signal) => {
+      treeSignals.push({ pid, signal })
+      return true
     }
   })
 
   service.startService('weather-declaration', 'companion')
   service.stopService('weather-declaration', 'companion')
-  child.emit('exit', 0, 'SIGTERM')
+  await waitFor(() => processSignals.length === 2)
 
-  assert.equal(service.listPlugins()[0].entries.services[0].runtime.status, 'stopped')
-  assert.match(service.getLogs()[0].message, /verification unavailable/i)
-})
-
-test('plugin service reuses one descendant verification result for requested stop completion', () => {
-  const child = createSlowStoppingServiceProcess({ pid: 4321 })
-  let verificationCalls = 0
-  const service = createPluginService({
-    settingsService: createSettingsService({
-      plugins: { enabled: { 'weather-declaration': true } }
-    }),
-    petService: { say: async () => {} },
-    officialPlugins: [],
-    pluginDirs: [createDeclarationOnlyPluginDir()],
-    spawnServiceProcess: () => child,
-    killServiceProcess: () => true,
-    listServiceDescendantPids: () => {
-      verificationCalls += 1
-      return verificationCalls === 1 ? [4330] : []
-    }
-  })
-
-  service.startService('weather-declaration', 'companion')
-  service.stopService('weather-declaration', 'companion')
-  child.emit('exit', 0, 'SIGTERM')
-
-  const runtime = service.listPlugins()[0].entries.services[0].runtime
-  assert.equal(verificationCalls, 1)
-  assert.equal(runtime.status, 'failed')
-  assert.match(runtime.error, /descendants/i)
-  assert.match(service.getLogs()[0].message, /descendants still running/i)
+  assert.deepEqual(processSignals, [
+    { pid: -4321, signal: 'SIGTERM' },
+    { pid: -4321, signal: 'SIGKILL' }
+  ])
+  assert.deepEqual(treeSignals, [{ pid: 4321, signal: 'SIGKILL' }])
+  assert.deepEqual(child.killCalls, [])
 })
 
 test('plugin service exposes persisted periodic health policy on service entries', () => {

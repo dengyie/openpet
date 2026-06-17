@@ -933,26 +933,26 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 
 ### Phase 72: Plugin service process-tree hardening
 
-**Goal**: harden declared service cleanup so OpenPet no longer reports a clean stop when the root process exits but known descendants are still running.
+**Goal**: harden declared service cleanup by adding a host-owned process-tree fallback when process-group signalling is unavailable or fails.
 
 **Scope**:
 
 - Keep Phase 68 exit-confirmed stop semantics unchanged as the base lifecycle truth.
 - Keep Phase 69 bounded force-stop behavior unchanged as the base escalation path.
-- Add host-owned descendant inspection for declared service entries only.
-- Reclassify requested-stop completions as `failed` when known descendants survive the bounded stop sequence.
+- Add a small host-owned process-tree helper for declared service entries only.
+- Use the helper between process-group signalling and direct child kill for both stop and force-stop paths.
 - Keep setup and declaration-only command cleanup semantics unchanged in this phase.
 - Do not add manifest hints, new renderer-only statuses, bridge expansion, or universal sandbox claims.
 
 **Acceptance**:
 
-- Clean requested stops with no visible descendants still end in `stopped`.
-- Requested stops with known surviving descendants end in `failed`, not `stopped`.
-- Disable cleanup and app-shutdown cleanup share the same harder service stop path.
-- Tests cover descendant-verification success, leftover-descendant failure, and unsupported-verification fallback.
-- Docs describe the result as stronger service-only cleanup verification, not guaranteed total process policing.
+- Process-group stop still remains the first cleanup tier.
+- Process-tree cleanup now runs before direct child kill when group signalling fails.
+- The same fallback ordering applies to bounded force-stop escalation.
+- Tests cover the helper and the new fallback ordering for stop/force-stop paths.
+- Docs describe the result as stronger service-only cleanup, not guaranteed total process policing.
 
-**Status**: completed in Phase 72. Requested service stops now fail closed when host-visible descendants survive root exit, while setup and declaration-only command cleanup remain on their current direct-child best-effort contract.
+**Status**: completed in Phase 72. Declared service entries now try a host-owned process-tree cleanup path before direct child kill when process-group signalling fails, while setup and declaration-only command cleanup remain on their current direct-child best-effort contract.
 
 ## 6. Priority Order
 
@@ -985,7 +985,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 | P1 | Phase 69 Plugin service force stop | Completed; stubborn declared service entries now trigger one bounded host-side force-stop attempt after a grace period, while final forced-stop outcomes remain on the existing `failed` contract. |
 | P1 | Phase 70 Plugin setup and command cleanup parity | Completed; setup and declaration-only command cleanup now keep stop intent visible until child exit confirmation, while staying on direct-child best effort rather than service-style force-stop escalation. |
 | P1 | Phase 71 Plugin service periodic health policy | Completed; running declared services can now receive opt-in host-managed periodic health checks from Control Center, while services still do not auto-start and plugin manifests still do not own scheduler policy. |
-| P1 | Phase 72 Plugin service process-tree hardening | Completed; declared service entries no longer claim a clean stop when known descendants survive the bounded host cleanup path, while setup and declaration-only command cleanup stay unchanged. |
+| P1 | Phase 72 Plugin service process-tree hardening | Completed; declared service entries now use a host-owned process-tree fallback before direct child kill when process-group signalling fails, while setup and declaration-only command cleanup stay unchanged. |
 | P2 | Phase 41 AI behavior replay | Completed; preserve redacted diagnostics and replay semantics while future AI tooling evolves. |
 | P2 | Phase 39 plugin sandbox evaluation | Completed; keep current runner for v1.1 and revisit on high-risk plugin capability changes. |
 | P2 | Phase 46 documentation consolidation | Completed; keep future live-doc updates fact-only and link-oriented. |

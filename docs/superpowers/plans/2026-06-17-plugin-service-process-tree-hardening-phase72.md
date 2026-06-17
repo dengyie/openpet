@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add host-owned descendant verification so requested plugin service stops no longer claim clean completion when known descendants survive root exit.
+**Goal:** Add a host-owned process-tree fallback for plugin service cleanup when process-group signalling is unavailable.
 
-**Architecture:** Keep `PluginService` as the owner of lifecycle state and logs, but move descendant inspection into a focused helper module. Service stop should keep the existing signal ordering, grace-period force-stop path, and exit-confirmed lifecycle semantics, while tightening the final requested-stop classification after root exit.
+**Architecture:** Keep `PluginService` as the owner of lifecycle state and logs, but move descendant-aware cleanup into a focused helper module. Service stop should keep the existing order of intent and confirmation while inserting one new fallback tier between process-group signalling and direct child kill.
 
 **Tech Stack:** Electron main process, CommonJS Node services, Node child-process utilities, Node native test runner.
 
@@ -13,13 +13,13 @@
 ## File Map
 
 - Create: `src/main/services/service-process-tree.js`
-  Purpose: host-owned descendant inspection helper for service cleanup verification.
+  Purpose: host-owned process-tree signalling helper for service cleanup.
 - Modify: `src/main/services/plugin-service.js`
-  Purpose: use the helper for requested-stop descendant verification after root exit.
+  Purpose: use the helper as the fallback between process-group signalling and direct child kill.
 - Create: `tests/services/service-process-tree.test.js`
-  Purpose: deterministic unit coverage for POSIX and Windows descendant traversal.
+  Purpose: deterministic unit coverage for POSIX descendant traversal and Windows `taskkill` execution.
 - Modify: `tests/services/plugin-service.test.js`
-  Purpose: verify requested-stop completion stays `stopped` only when no visible descendants remain and fails closed otherwise.
+  Purpose: verify service stop and force-stop use the tree helper before direct child fallback.
 - Create: `docs/phases/phase-72-plugin-service-process-tree-hardening.md`
   Purpose: record scope, behavior, verification, and remaining limits.
 - Create: `docs/reviews/phase-72-plugin-service-process-tree-hardening-review.md`
@@ -34,7 +34,7 @@
 - Modify: `docs/plugin-ecosystem-rules.md`
   Purpose for all live docs: keep the extension cleanup boundary current and conservative.
 
-## Task 1: Write failing tests for descendant verification
+## Task 1: Write failing tests for the new fallback tier
 
 **Files:**
 - Create: `tests/services/service-process-tree.test.js`
@@ -42,15 +42,15 @@
 
 - [ ] **Step 1: Add helper tests**
 
-Add a POSIX traversal test and a Windows traversal test for the new helper.
+Add a POSIX traversal test and a Windows `taskkill` test for the new helper.
 
-- [ ] **Step 2: Add PluginService completion tests**
+- [ ] **Step 2: Add PluginService fallback tests**
 
 Add tests showing:
 
-- requested stop stays `stopped` when no descendants remain;
-- requested stop becomes `failed` when descendants remain;
-- unavailable verification keeps the bounded result and logs the limitation.
+- process-group `SIGTERM` failure uses the tree helper before child kill;
+- process-group `SIGKILL` failure during force-stop uses the tree helper before child kill;
+- direct child kill still happens when both stronger paths fail.
 
 - [ ] **Step 3: Run targeted tests and verify RED**
 
@@ -63,7 +63,7 @@ node --test tests/services/service-process-tree.test.js tests/services/plugin-se
 Expected before implementation:
 
 - helper module does not exist yet;
-- `PluginService` still treats root exit as sufficient proof of a clean stop.
+- `PluginService` cannot accept or use the tree helper fallback.
 
 ## Task 2: Implement the helper and wire it into PluginService
 
@@ -76,16 +76,19 @@ Expected before implementation:
 Add a small CommonJS module that exports a factory or function for:
 
 - recursive descendant discovery from `ps` output on POSIX-like systems;
-- recursive descendant discovery from Windows process-table output;
+- `taskkill /PID <pid> /T` on Windows for graceful stop;
+- `taskkill /PID <pid> /T /F` on Windows for force stop;
 - invalid-PID guardrails.
 
-- [ ] **Step 2: Wire the helper into requested-stop completion**
+- [ ] **Step 2: Wire the helper into service stop**
 
-Update `PluginService` so requested-stop completion becomes:
+Update `PluginService` so service cleanup ordering becomes:
 
-1. keep existing process-group and child stop behavior;
-2. keep existing bounded force-stop escalation behavior;
-3. after a non-force-stop requested exit, inspect descendants and fail closed when known survivors remain.
+1. process-group signal;
+2. process-tree helper;
+3. direct child kill.
+
+Apply the same ordering to force-stop escalation.
 
 - [ ] **Step 3: Run targeted tests and verify GREEN**
 
@@ -114,7 +117,7 @@ python3 /Users/mango/.agents/skills/production-code-quality-review/scripts/colle
 
 Write the phase record, review note, and live-doc updates. Keep wording explicit that:
 
-- service cleanup truth is stronger after requested stop completion;
+- service cleanup is stronger when process-group signalling fails;
 - setup and command cleanup are unchanged;
 - OpenPet still does not claim universal hard descendant termination.
 

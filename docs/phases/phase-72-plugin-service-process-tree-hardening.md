@@ -1,18 +1,18 @@
 # Phase 72: Plugin Service Process-Tree Hardening
 
 > Date: 2026-06-17
-> Scope: harden declared plugin service cleanup so OpenPet no longer reports a clean stop when the root process exits but known descendants are still running.
+> Scope: strengthen declared plugin service cleanup by adding a host-owned process-tree fallback when process-group signalling is unavailable or fails.
 
 ## Goal
 
 Phase 68 made service stop state honest, and Phase 69 made it bounded with one conservative host-side force-stop attempt.
 
-Phase 72 tightens the remaining gap in service cleanup truth:
+Phase 72 closes the next narrower cleanup gap:
 
-- root-child exit is no longer treated as sufficient proof of a clean stop;
-- OpenPet now performs a host-owned descendant verification step for declared service entries;
-- positively observed leftover descendants fail closed on the existing `failed` runtime contract;
-- unsupported verification paths keep the current bounded result, but log that stronger verification was unavailable.
+- service stop still prefers process-group signalling first;
+- when that path fails, OpenPet now tries a host-owned process-tree fallback before dropping to direct child kill;
+- the same stronger fallback applies to both graceful stop and bounded force-stop escalation;
+- renderer contracts remain unchanged, and docs stay conservative about what the host can prove.
 
 This phase stays service-only. Setup and declaration-only command cleanup semantics do not change.
 
@@ -20,10 +20,10 @@ This phase stays service-only. Setup and declaration-only command cleanup semant
 
 In scope:
 
-- service-only descendant verification after requested stop completion;
-- fail-closed service runtime classification when known descendants survive;
-- deterministic service-layer tests for clean verification, leftover descendants, and unavailable verification;
-- live-doc updates for the stronger service-only cleanup truth.
+- a small host-owned `service-process-tree` helper;
+- process-tree fallback between process-group signalling and direct child kill for declared service entries;
+- deterministic helper tests and service-layer fallback-order tests;
+- live-doc updates for the stronger but still non-absolute service cleanup truth.
 
 Out of scope:
 
@@ -38,32 +38,37 @@ Out of scope:
 
 Updated files:
 
+- `src/main/services/service-process-tree.js`
 - `src/main/services/plugin-service.js`
+- `tests/services/service-process-tree.test.js`
 - `tests/services/plugin-service.test.js`
 
 Behavior changes:
 
-1. `src/main/services/service-process-tree.js` now provides a host-owned `listServiceDescendantPids(pid)` helper that reads POSIX or Windows process tables and recursively gathers visible descendants.
+1. `src/main/services/service-process-tree.js` now provides:
+   - recursive descendant discovery from POSIX `ps` output;
+   - recursive descendant discovery from Windows `Get-CimInstance Win32_Process` output;
+   - `signalServiceProcessTree(pid, signal)` that:
+     - returns `false` for invalid root pids,
+     - uses `taskkill /PID <pid> /T` on Windows for `SIGTERM`,
+     - uses `taskkill /PID <pid> /T /F` on Windows for `SIGKILL`,
+     - signals POSIX descendants before the root pid.
 
-2. `createPluginService(...)` now defaults `listServiceDescendantPids(pid)` to that host helper while still allowing test injection.
+2. `PluginService` now defaults `signalServiceProcessTree(pid, signal)` to that helper while still allowing test injection.
 
-3. `verifyServiceDescendantsStopped(pluginId, serviceId, runtime)` now:
-   - inspects visible descendants for the service root pid;
-   - returns clean when no descendants remain;
-   - marks the runtime fail-closed when visible descendants survive;
-   - preserves the current bounded result but reports verification-unavailable when the host cannot inspect descendants.
+3. Service cleanup ordering is now:
+   1. process-group signal via negative pid;
+   2. process-tree helper fallback;
+   3. direct child kill fallback.
 
-4. Requested service-stop exit handling now:
-   - keeps the existing Phase 68 stop-intent and Phase 69 force-stop behavior;
-   - runs descendant verification before final `stopped` classification for non-force-stop exits;
-   - reclassifies the runtime to `failed` when leftover descendants are positively observed;
-   - logs one of:
-     - `Service stopped`
-     - `Service descendants still running after stop`
-     - `Service stop verification unavailable`
-     - `Service exited after force stop`
+4. The same fallback ordering now applies to:
+   - graceful requested stop with `SIGTERM`;
+   - bounded force-stop escalation with `SIGKILL`.
 
-5. Disable cleanup and app-shutdown cleanup continue to use the same service stop path, so the stronger cleanup truth applies consistently outside explicit Control Center stop actions too.
+5. Service runtime/log semantics from Phase 68 and Phase 69 remain unchanged:
+   - stop intent still becomes visible as `stopping`;
+   - exit confirmation still decides the terminal result;
+   - force-stop outcomes still remain fail-closed on the existing `failed` contract.
 
 ## Decision Record
 
@@ -71,22 +76,22 @@ Behavior changes:
 
 - Problem: setup and declaration-only command cleanup still remain weaker than services.
 - Choice: harden only declared `entries.services` in this phase.
-- Reason: long-running services are the path where orphaned descendants most directly undermine operator trust. Expanding setup and command cleanup at the same time would widen scope across multiple runtime shapes.
+- Reason: long-running services are the runtime shape where leftover descendants most directly undermine operator trust. Expanding setup and command cleanup at the same time would widen scope across multiple runtime shapes.
 - Risk: setup and declaration-only commands still remain direct-child best effort. This is acceptable because the limitation is explicit and unchanged.
 
-### Decision 2: reuse `failed` instead of widening runtime contracts
+### Decision 2: strengthen fallback order instead of widening renderer contracts
 
-- Problem: leftover descendants after requested stop could justify a new renderer-only state.
-- Choice: keep the existing runtime surface and reuse `failed`.
-- Reason: the important truth is that the service did not stop cleanly. Reusing `failed` preserves current shared contracts and keeps the surface fail-closed.
-- Risk: operators do not get a dedicated `orphaned` status. Logs carry the more specific reason, which is enough for this phase.
+- Problem: better cleanup could be expressed either as stricter runtime classification or as a stronger host fallback path.
+- Choice: add the stronger host fallback path without changing renderer statuses.
+- Reason: the current product gap was operational cleanup strength, not renderer state shape. Keeping `PluginService` state stable lowers risk and matches the existing Phase 72 branch plan.
+- Risk: the renderer still cannot distinguish whether process-group stop or tree fallback succeeded. That is acceptable because this phase is about cleanup strength, not new UI states.
 
 ## Validation
 
 Targeted verification during implementation:
 
 ```bash
-node --test tests/services/service-process-tree.test.js tests/services/plugin-service.test.js
+node --test tests/services/service-process-tree.test.js tests/services/plugin-service.test.js --test-name-pattern "service process tree|plugin service falls back to child kill when process group stop fails|plugin service falls back to child kill when process group and tree cleanup both fail|plugin service force-stop falls back to tree cleanup when process group kill fails|plugin service force stops stubborn services after the grace period|plugin service app shutdown cleanup force stops stubborn services after the grace period"
 ```
 
 Full verification before commit:
@@ -104,8 +109,8 @@ node -e "JSON.parse(require('node:fs').readFileSync('docs/project-context.json',
 
 After Phase 72:
 
-- declared service entries still stop through the existing bounded host cleanup path;
-- a clean `stopped` result now means root exit was confirmed and no visible descendants were positively observed;
-- surviving known descendants now fail closed on the existing `failed` contract instead of being misreported as clean stops;
+- declared service entries still use the existing bounded host cleanup path;
+- service cleanup now has one stronger host-owned process-tree fallback before direct child kill;
+- the same stronger fallback is used for bounded force-stop escalation;
 - setup and declaration-only command cleanup remain on their previous direct-child best-effort contract;
 - OpenPet still does not claim universal sandboxing or guaranteed total process policing.
