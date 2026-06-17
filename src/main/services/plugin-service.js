@@ -1014,13 +1014,22 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
     if (!runtime || runtime.status !== 'running') return runtime
     runtime.status = 'stopping'
     runtime.stoppedAt = new Date().toISOString()
+    let stopped = false
     try {
       stopServiceProcess(runtime, 'SIGTERM')
+      stopped = true
     } catch (error) {
       runtime.error = error.message || 'Plugin service stop failed'
       runtime.status = 'failed'
     }
-    if (log) appendLog({ pluginId, commandId: `service:${serviceId}`, level: 'info', message: 'Service stopped' })
+    if (log) {
+      appendLog({
+        pluginId,
+        commandId: `service:${serviceId}`,
+        level: stopped ? 'info' : 'error',
+        message: stopped ? 'Service stop requested' : 'Service stop failed'
+      })
+    }
     return runtime
   }
 
@@ -1556,15 +1565,31 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
         appendLog({ pluginId, commandId, level: 'error', message: runtime.error })
       })
       child.on?.('exit', (code, signal) => {
+        const stoppedByRequest = runtime.status === 'stopping'
         if (runtime.status === 'stopping') {
-          runtime.status = 'stopped'
+          runtime.status = Number.isFinite(Number(code)) && Number(code) !== 0 && !signal ? 'failed' : 'stopped'
         } else if (runtime.status === 'running') {
           runtime.status = code === 0 && !signal ? 'exited' : 'failed'
-          appendLog({ pluginId, commandId, level: runtime.status === 'failed' ? 'error' : 'info', message: 'Service exited' })
         }
         runtime.exitCode = Number.isFinite(Number(code)) ? Number(code) : null
         runtime.signal = signal || ''
+        runtime.child = null
         runtime.stoppedAt = runtime.stoppedAt || new Date().toISOString()
+        if (stoppedByRequest) {
+          appendLog({
+            pluginId,
+            commandId,
+            level: runtime.status === 'failed' ? 'error' : 'info',
+            message: runtime.status === 'stopped' ? 'Service stopped' : 'Service exited'
+          })
+        } else {
+          appendLog({
+            pluginId,
+            commandId,
+            level: runtime.status === 'failed' ? 'error' : 'info',
+            message: 'Service exited'
+          })
+        }
       })
 
       appendLog({ pluginId, commandId, level: 'info', message: 'Service started' })

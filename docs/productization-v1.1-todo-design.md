@@ -836,6 +836,29 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 
 **Status**: completed in Phase 64. Declaration-only commands now receive a short-lived bridge URL/token pair and can explicitly call `pet.say`, `pet.action`, `pet.event`, and read a bounded context during an active run.
 
+### Phase 68: Plugin service exit-confirmed stop
+
+**Goal**: make declaration-only plugin service stop state and logs reflect confirmed child-process exit rather than only a stop signal attempt.
+
+**Scope**:
+
+- Keep the Phase 58 service lifecycle surface unchanged.
+- Keep the Phase 60 best-effort process-group cleanup behavior unchanged.
+- Keep explicit stop, disable cleanup, and app-shutdown cleanup on the same `PluginService` stop path.
+- Return service runtime state as `stopping` until the child `exit` event confirms shutdown.
+- Log `Service stop requested` during the shutdown window and `Service stopped` only after exit confirmation.
+- Preserve existing duplicate-start protection while a service is still `stopping`.
+- Do not add `SIGKILL` escalation, retry loops, setup/command cleanup expansion, background health policy, or hard process-tree guarantees.
+
+**Acceptance**:
+
+- Service tests prove explicit stop, process-group success, child fallback, and disable cleanup all remain `stopping` until exit.
+- Stop-completion logs are emitted only after exit confirmation.
+- Live docs describe the narrower service-stop truth without overstating cleanup guarantees.
+- `npm run check:syntax`, `npm test`, `npm run test:control-center`, `npm run typecheck`, and `git diff --check` pass.
+
+**Status**: completed in Phase 68. Declared service entries now stay `stopping` until child exit confirmation, and service logs distinguish stop intent from confirmed stop completion while hard descendant termination remains future work.
+
 ## 6. Priority Order
 
 | Priority | Work | Reason |
@@ -863,6 +886,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 | P1 | Phase 62 Plugin command process execution | Completed; declaration-only local command entries can run as explicit short-lived processes with stdin JSON context, without install/enable auto-run or shell expansion. |
 | P1 | Phase 63 Plugin command result UX | Completed; Plugins pane now shows the latest command result summary, JSON preview, and bounded stdout/stderr snippets for successful runs. |
 | P1 | Phase 64 Plugin command bridge | Completed; declaration-only commands can receive a short-lived bridge URL/token and use it for bounded pet-aware mutations and context reads. |
+| P1 | Phase 68 Plugin service exit-confirmed stop | Completed; declared service entries now remain `stopping` until child exit confirmation, and logs distinguish stop request from confirmed stop completion while hard cleanup guarantees remain out of scope. |
 | P2 | Phase 41 AI behavior replay | Completed; preserve redacted diagnostics and replay semantics while future AI tooling evolves. |
 | P2 | Phase 39 plugin sandbox evaluation | Completed; keep current runner for v1.1 and revisit on high-risk plugin capability changes. |
 | P2 | Phase 46 documentation consolidation | Completed; keep future live-doc updates fact-only and link-oriented. |
@@ -894,7 +918,8 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 23. Phase 61 is complete; setup entries can be explicitly run from Control Center for enabled policy-allowed local plugins, with runtime status and logs.
 24. Phase 62 is complete; declaration-only local command entries can be explicitly run from Control Center for enabled policy-allowed local plugins, with stdin JSON context, timeout handling, logs, and no shell expansion.
 25. Phase 63 is complete; the Plugins pane now shows the latest command result summary on the matching plugin card, with result message, exit code, JSON preview, and bounded stdout/stderr snippets.
-26. Phase 64 is complete; declaration-only commands now receive a short-lived bridge URL/token and can use it for pet-aware mutations and bounded context reads. Choose the next phase from real evidence work, community extension rehearsal, hard cleanup guarantees, or another high-drift service/report boundary.
+26. Phase 64 is complete; declaration-only commands now receive a short-lived bridge URL/token and can use it for pet-aware mutations and bounded context reads.
+27. Phase 68 is complete; declaration-only service entries now remain `stopping` until child exit confirmation and only log final stop completion after that confirmation. Choose the next phase from real evidence work, community extension rehearsal, hard cleanup guarantees, or another high-drift service/report boundary.
 
 ## 8. Verification Contract
 

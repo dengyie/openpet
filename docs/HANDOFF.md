@@ -1,6 +1,6 @@
 # OpenPet Handoff
 
-> Last updated: 2026-06-17 | Branch: `codex/release-picker-archive-link-phase67`
+> Last updated: 2026-06-17 | Branch: `codex/plugin-service-exit-confirmed-stop-phase68`
 
 ## Current Snapshot
 
@@ -12,7 +12,7 @@ OpenPet is a desktop pet platform with:
 - bundled built-in packs `doro`, `duodong`, and `chispa`,
 - AI chat with secret storage in the main process,
 - AI behavior decisions with Control Center replay and redacted diagnostics,
-- developer-first local extension docs with explicit `entries.setup` execution, language-neutral explicit `entries.commands` process execution, explicit command result feedback, explicit command bridge access, explicit dashboard opening, explicit service start/stop controls, explicit loopback service health checks, and best-effort service process-group cleanup,
+- developer-first local extension docs with explicit `entries.setup` execution, language-neutral explicit `entries.commands` process execution, explicit command result feedback, explicit command bridge access, explicit dashboard opening, explicit service start/stop controls, explicit loopback service health checks, best-effort service process-group cleanup, and exit-confirmed service stop semantics,
 - loopback-only local HTTP / MCP,
 - and a TypeScript migration baseline covering shared IPC, Control Center view contracts, the Control Center API facade, Control Center hook state boundaries, Control Center pane prop surfaces, main-process Control Center adapters for service/catalog/plugin/pet pack/About/update/actions payloads, plugin extension entry contracts, full release evidence archive / signed closure report contracts, and representative payload fixtures.
 
@@ -29,7 +29,7 @@ OpenPet is a desktop pet platform with:
 - `PetService` remains the single source of truth for pet state.
 - New user-facing configuration belongs in Control Center.
 - API keys must stay out of the renderer.
-- Extension docs must be honest: OpenPet now parses declarations, can explicitly run `entries.setup` for enabled policy-allowed local plugins, can run `entries.commands` through the JavaScript compatibility runner when `main` exists, can explicitly run declaration-only local `entries.commands` as short-lived processes with JSON stdin context, can inject short-lived bridge URL/token env vars for those declaration-only command runs, can explicitly open declared HTTP/HTTPS dashboards for enabled plugins, can explicitly start/stop declared local service entries, can manually check declared loopback service health endpoints, and attempts best-effort process-group cleanup when stopping service entries. Command, setup, and service processes are spawned without shell expansion. Services do not auto-start, setup and command entries do not run during install or enable, health checks do not run in the background, hard process-tree cleanup guarantees are not implemented yet, and OpenPet does not claim complete sandboxing for arbitrary local processes.
+- Extension docs must be honest: OpenPet now parses declarations, can explicitly run `entries.setup` for enabled policy-allowed local plugins, can run `entries.commands` through the JavaScript compatibility runner when `main` exists, can explicitly run declaration-only local `entries.commands` as short-lived processes with JSON stdin context, can inject short-lived bridge URL/token env vars for those declaration-only command runs, can explicitly open declared HTTP/HTTPS dashboards for enabled plugins, can explicitly start/stop declared local service entries, can manually check declared loopback service health endpoints, attempts best-effort process-group cleanup when stopping service entries, and only reports a service as fully stopped after child exit confirmation. Command, setup, and service processes are spawned without shell expansion. Services do not auto-start, setup and command entries do not run during install or enable, health checks do not run in the background, hard process-tree cleanup guarantees are not implemented yet, and OpenPet does not claim complete sandboxing for arbitrary local processes.
 - `cat_anime/` structure is unchanged.
 - Windows is not release-ready yet.
 
@@ -38,7 +38,7 @@ OpenPet is a desktop pet platform with:
 ```bash
 npm start
 npm run dev:control-center
-npm test                     # 493/493 Node tests
+npm test                     # 497/497 Node tests
 npm run test:control-center
 npm run typecheck
 npm run check:syntax
@@ -77,5 +77,6 @@ npm run create-signed-release-closure-report
 3. Use Phase 65 release evidence link closure as the current runtime/picker evidence boundary: packaged runtime reports must link the paired desktop picker report before they can claim readiness, and archive release readiness now fails when that link is missing or mismatched.
 4. Use Phase 66 desktop picker evidence archive tooling when a packaged native picker run is collected: generate the summary, create the archive manifest, and only claim readiness when the filled report and archive both pass.
 5. Use Phase 67 release picker archive link closure as the current release-claim boundary: release-level archive manifests and signed closure wording now explicitly require the reviewed desktop picker archive manifest to match the archived picker report.
-6. Use Phase 54 Release Evidence Contracts plus Phase 64 plugin entry/setup/command/dashboard/service contracts as the current TypeScript migration baseline.
-7. After Phase 67, start the next concrete phase from real signed evidence work, community extension rehearsal, hard process-tree guarantees, or another high-drift service/report boundary.
+6. Use Phase 68 plugin service exit-confirmed stop semantics as the current extension-service cleanup boundary: stop requests remain `stopping` until child exit confirmation, while hard descendant termination and stronger OS cleanup guarantees remain future work.
+7. Use Phase 54 Release Evidence Contracts plus Phase 64 plugin entry/setup/command/dashboard/service contracts as the current TypeScript migration baseline.
+8. After Phase 68, start the next concrete phase from real signed evidence work, community extension rehearsal, hard process-tree guarantees, or another high-drift service/report boundary.
