@@ -859,6 +859,29 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 
 **Status**: completed in Phase 68. Declared service entries now stay `stopping` until child exit confirmation, and service logs distinguish stop intent from confirmed stop completion while hard descendant termination remains future work.
 
+### Phase 69: Plugin service force stop
+
+**Goal**: add a bounded host-side force-stop path for stubborn declaration-only service entries that ignore the initial stop request.
+
+**Scope**:
+
+- Keep the Phase 68 exit-confirmed stop semantics unchanged.
+- Keep the work limited to `entries.services`.
+- Add a grace-period timer after the current best-effort `SIGTERM` stop request.
+- If the service still has not exited when the grace period expires, attempt a host-side force stop with the existing process-group-first model and direct-child fallback.
+- Keep the final terminal state inside the existing `failed` contract instead of adding new renderer/runtime enums.
+- Do not expand setup cleanup, declaration-command cleanup, background health policy, or broader sandbox claims.
+
+**Acceptance**:
+
+- Graceful service exits do not trigger force stop.
+- Stubborn services trigger one bounded force-stop attempt after the grace period.
+- Explicit stop, disable cleanup, and app-shutdown cleanup share the same bounded service cleanup contract.
+- Tests cover graceful stop, stubborn stop, disable cleanup, and app-shutdown cleanup deterministically.
+- Live docs describe the stronger service-only cleanup truth without overstating descendant guarantees.
+
+**Status**: completed in Phase 69. Declared service entries now use a bounded grace period plus one host-side force-stop attempt for stubborn shutdowns, while final forced-stop outcomes remain on the existing `failed` contract.
+
 ## 6. Priority Order
 
 | Priority | Work | Reason |
@@ -887,6 +910,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 | P1 | Phase 63 Plugin command result UX | Completed; Plugins pane now shows the latest command result summary, JSON preview, and bounded stdout/stderr snippets for successful runs. |
 | P1 | Phase 64 Plugin command bridge | Completed; declaration-only commands can receive a short-lived bridge URL/token and use it for bounded pet-aware mutations and context reads. |
 | P1 | Phase 68 Plugin service exit-confirmed stop | Completed; declared service entries now remain `stopping` until child exit confirmation, and logs distinguish stop request from confirmed stop completion while hard cleanup guarantees remain out of scope. |
+| P1 | Phase 69 Plugin service force stop | Completed; stubborn declared service entries now trigger one bounded host-side force-stop attempt after a grace period, while final forced-stop outcomes remain on the existing `failed` contract. |
 | P2 | Phase 41 AI behavior replay | Completed; preserve redacted diagnostics and replay semantics while future AI tooling evolves. |
 | P2 | Phase 39 plugin sandbox evaluation | Completed; keep current runner for v1.1 and revisit on high-risk plugin capability changes. |
 | P2 | Phase 46 documentation consolidation | Completed; keep future live-doc updates fact-only and link-oriented. |
@@ -920,6 +944,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 25. Phase 63 is complete; the Plugins pane now shows the latest command result summary on the matching plugin card, with result message, exit code, JSON preview, and bounded stdout/stderr snippets.
 26. Phase 64 is complete; declaration-only commands now receive a short-lived bridge URL/token and can use it for pet-aware mutations and bounded context reads.
 27. Phase 68 is complete; declaration-only service entries now remain `stopping` until child exit confirmation and only log final stop completion after that confirmation. Choose the next phase from real evidence work, community extension rehearsal, hard cleanup guarantees, or another high-drift service/report boundary.
+28. Phase 69 is complete; declaration-only service entries now use a bounded grace period plus one host-side force-stop attempt for stubborn shutdowns, while setup and command cleanup remain on their previous paths.
 
 ## 8. Verification Contract
 

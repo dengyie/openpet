@@ -160,6 +160,15 @@ const createSlowStoppingServiceProcess = ({ pid = 4321 } = {}) => {
   return child
 }
 
+const createStubbornServiceProcess = ({ pid = 4321 } = {}) => {
+  const child = createFakeServiceProcess({ pid })
+  child.kill = (signal) => {
+    child.killCalls.push(signal || 'SIGTERM')
+    return true
+  }
+  return child
+}
+
 const createBridgeAwarePetService = () => {
   const calls = []
   return {
@@ -1461,6 +1470,126 @@ test('plugin service stop completion is logged after exit confirmation', () => {
   child.emit('exit', 0, 'SIGTERM')
 
   assert.equal(service.getLogs()[0].message, 'Service stopped')
+})
+
+test('plugin service does not force stop when the child exits before the grace period', async () => {
+  const child = createStubbornServiceProcess()
+  const forceStops = []
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir()],
+    serviceStopGracePeriodMs: 20,
+    spawnServiceProcess: () => child,
+    killServiceProcess: (pid, signal) => {
+      forceStops.push({ pid, signal })
+      return true
+    }
+  })
+
+  service.startService('weather-declaration', 'companion')
+  service.stopService('weather-declaration', 'companion')
+  child.emit('exit', 0, 'SIGTERM')
+
+  await new Promise((resolve) => setTimeout(resolve, 40))
+
+  assert.deepEqual(forceStops, [{ pid: -4321, signal: 'SIGTERM' }])
+  assert.equal(service.listPlugins()[0].entries.services[0].runtime.status, 'stopped')
+})
+
+test('plugin service force stops stubborn services after the grace period', async () => {
+  const child = createStubbornServiceProcess()
+  const processSignals = []
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir()],
+    serviceStopGracePeriodMs: 10,
+    spawnServiceProcess: () => child,
+    killServiceProcess: (pid, signal) => {
+      processSignals.push({ pid, signal })
+      return true
+    }
+  })
+
+  service.startService('weather-declaration', 'companion')
+  const stopped = service.stopService('weather-declaration', 'companion')
+
+  assert.equal(stopped.runtime.status, 'stopping')
+  assert.throws(
+    () => service.startService('weather-declaration', 'companion'),
+    /Plugin service is already running/
+  )
+  await waitFor(() => processSignals.length === 2)
+
+  assert.deepEqual(processSignals, [
+    { pid: -4321, signal: 'SIGTERM' },
+    { pid: -4321, signal: 'SIGKILL' }
+  ])
+  assert.match(service.getLogs()[0].message, /force stop requested/)
+  assert.equal(service.listPlugins()[0].entries.services[0].runtime.status, 'stopping')
+
+  child.emit('exit', null, 'SIGKILL')
+
+  assert.equal(service.listPlugins()[0].entries.services[0].runtime.status, 'failed')
+  assert.match(service.listPlugins()[0].entries.services[0].runtime.error, /force kill/i)
+})
+
+test('plugin service disable cleanup force stops stubborn services after the grace period', async () => {
+  const child = createStubbornServiceProcess()
+  const processSignals = []
+  const settingsService = createSettingsService({
+    plugins: { enabled: { 'weather-declaration': true } }
+  })
+  const service = createPluginService({
+    settingsService,
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir()],
+    serviceStopGracePeriodMs: 10,
+    spawnServiceProcess: () => child,
+    killServiceProcess: (pid, signal) => {
+      processSignals.push({ pid, signal })
+      return true
+    }
+  })
+
+  service.startService('weather-declaration', 'companion')
+  service.setEnabled('weather-declaration', false)
+
+  await waitFor(() => processSignals.length === 2)
+  assert.deepEqual(processSignals.map((entry) => entry.signal), ['SIGTERM', 'SIGKILL'])
+})
+
+test('plugin service app shutdown cleanup force stops stubborn services after the grace period', async () => {
+  const child = createStubbornServiceProcess()
+  const processSignals = []
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir()],
+    serviceStopGracePeriodMs: 10,
+    spawnServiceProcess: () => child,
+    killServiceProcess: (pid, signal) => {
+      processSignals.push({ pid, signal })
+      return true
+    }
+  })
+
+  service.startService('weather-declaration', 'companion')
+  service.stopAllServices()
+
+  await waitFor(() => processSignals.length === 2)
+  assert.deepEqual(processSignals.map((entry) => entry.signal), ['SIGTERM', 'SIGKILL'])
 })
 
 test('plugin service checks configured service health endpoints', async () => {
