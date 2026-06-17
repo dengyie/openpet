@@ -37,7 +37,71 @@
 - Modify: `docs/plugin-ecosystem-rules.md`
   Purpose: keep ecosystem support wording aligned with the host’s confirmed-stop boundary.
 
-## Task 1: Write failing tests for exit-confirmed service stop
+## Execution Preconditions
+
+Before implementing this plan, confirm the branch and working tree are safe:
+
+```bash
+git status --short --branch
+```
+
+Expected:
+
+- you are on a Phase 68 branch such as `codex/plugin-service-exit-confirmed-stop-phase68`, or an isolated worktree created for this phase;
+- unrelated user edits, later-phase work, release evidence, and generated files are not mixed into the Phase 68 commit;
+- if later phases already exist in the current branch, only touch the Phase 68 files listed in this plan.
+
+If `src/main/services/plugin-service.js` already contains later-phase force-stop or process-tree hardening work, do not remove it. Instead, adapt only the tests/docs needed to preserve the Phase 68 contract and keep later-phase behavior out of the Phase 68 narrative.
+
+## Task 1: Baseline and locate the service lifecycle boundary
+
+**Files:**
+- Read: `src/main/services/plugin-service.js`
+- Read: `tests/services/plugin-service.test.js`
+
+- [ ] **Step 1: Locate the active service status guard**
+
+Run:
+
+```bash
+rg -n "ACTIVE_SERVICE_STATUSES|startService|stopService|stopPluginServiceRuntime|child.on\\?\\('exit'" src/main/services/plugin-service.js
+```
+
+Expected:
+
+- `ACTIVE_SERVICE_STATUSES` exists near the top of the file;
+- `stopPluginServiceRuntime()` owns service stop requests;
+- `startService()` rejects duplicate active service starts;
+- the service child `exit` handler owns final service runtime completion.
+
+- [ ] **Step 2: Locate existing service tests and helpers**
+
+Run:
+
+```bash
+rg -n "createSlowStoppingServiceProcess|starts and stops enabled declaration service entries|stops service process groups|falls back to child kill|stops running services when a plugin is disabled" tests/services/plugin-service.test.js
+```
+
+Expected:
+
+- `createSlowStoppingServiceProcess()` already provides deterministic child-process event control;
+- service lifecycle tests already create a declaration-only `weather-declaration` plugin;
+- the new Phase 68 assertions can reuse existing helpers instead of adding a new fixture format.
+
+- [ ] **Step 3: Run the current service test baseline**
+
+Run:
+
+```bash
+node --test tests/services/plugin-service.test.js
+```
+
+Expected before editing:
+
+- tests may pass on the old eager-stop behavior;
+- after Task 2 test edits, the targeted subset must fail before implementation.
+
+## Task 2: Write failing tests for exit-confirmed service stop
 
 **Files:**
 - Modify: `tests/services/plugin-service.test.js`
@@ -156,7 +220,7 @@ Expected before implementation:
 - logs still imply final stop completion before exit confirmation;
 - duplicate-start protection while `stopping` is not yet enforced by the runtime truth.
 
-## Task 2: Implement exit-confirmed stop semantics in `PluginService`
+## Task 3: Implement exit-confirmed stop semantics in `PluginService`
 
 **Files:**
 - Modify: `src/main/services/plugin-service.js`
@@ -253,7 +317,7 @@ Expected:
 - PASS with explicit stop, disable cleanup, and process-group fallback all staying `stopping` until `exit`;
 - PASS with final `Service stopped` logging only after exit confirmation.
 
-## Task 3: Record the phase and refresh live docs
+## Task 4: Record the phase and refresh live docs
 
 **Files:**
 - Create: `docs/phases/phase-68-plugin-service-exit-confirmed-stop.md`
@@ -311,7 +375,21 @@ Do not claim:
 - force-stop escalation;
 - universal descendant termination guarantees.
 
-## Task 4: Full verification and atomic commit
+- [ ] **Step 5: Validate machine-readable context if `docs/project-context.json` changed**
+
+Run:
+
+```bash
+node -e "JSON.parse(require('node:fs').readFileSync('docs/project-context.json','utf8')); console.log('project-context ok')"
+```
+
+Expected:
+
+```text
+project-context ok
+```
+
+## Task 5: Full verification and atomic commit
 
 **Files:**
 - All changed files
@@ -346,3 +424,34 @@ git commit -m "feat(阶段68): confirm plugin service stop on exit"
 ```
 
 If a matching Phase 68 spec file also exists in the branch during implementation, stage it in the same commit. Do not fold later-phase force-stop or process-tree work into this commit.
+
+- [ ] **Step 3: Confirm the committed diff is Phase 68 only**
+
+Run:
+
+```bash
+git show --stat --oneline --decorate --name-only HEAD
+```
+
+Expected:
+
+- the commit message is `feat(阶段68): confirm plugin service stop on exit`;
+- changed runtime files are limited to `src/main/services/plugin-service.js` and `tests/services/plugin-service.test.js`;
+- changed docs are the Phase 68 docs and live documentation listed in this plan;
+- no Phase 69+ process-tree hardening, generated release evidence, or third-party plugin submission rehearsal files are included.
+
+## Self-Review Checklist
+
+- [ ] Every behavior claim is scoped to declaration-only `entries.services`, not setup runs, declaration commands, or dashboards.
+- [ ] The plan preserves `PetService` as unrelated to this lifecycle change; no pet speech/action/event paths are modified.
+- [ ] The plan keeps existing process-group-first cleanup order and does not introduce `SIGKILL`, retries, health policy, or descendant guarantees.
+- [ ] Tests prove the visible runtime state is `stopping` before child exit and `stopped` only after child exit.
+- [ ] Logs prove `Service stop requested` is separate from later `Service stopped`.
+- [ ] Documentation uses conservative wording and does not imply hard process-tree cleanup.
+
+Plan complete and saved to `docs/superpowers/plans/2026-06-17-plugin-service-exit-confirmed-stop-phase68.md`.
+
+Two execution options:
+
+1. Subagent-Driven (recommended) - dispatch a fresh subagent per task, review between tasks, fast iteration.
+2. Inline Execution - execute tasks in this session using `superpowers:executing-plans`, with checkpoints for review.
