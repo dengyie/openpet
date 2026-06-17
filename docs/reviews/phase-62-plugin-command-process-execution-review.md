@@ -2,15 +2,15 @@
 
 > Date: 2026-06-17
 > Branch: `codex/plugin-command-process-execution`
-> Scope: declaration-only plugin command process execution, IPC exposure, Control Center operation, shared contracts, tests, and docs
+> Scope: explicit declaration-only `entries.commands` process execution, Control Center command state, shared contracts, tests, and docs
 
 ## Scope
 
-- Base: current working tree on `codex/plugin-command-process-execution`
-- Scope mode: Phase 62 diff, with review helper output collected against the repo
-- Changed files: `PluginService.runCommand()` declaration command path, shared command result contract, IPC command delegation test, Control Center command action smoke, extension docs, live project status docs, and Phase 62 records
-- Risk level: high because the phase adds an explicit third-party local process execution path for command entries
-- Assumptions: command execution is intentionally user-triggered only; install, update, enable, setup, service start, and health checks must not run command entries
+- Base: `origin/main`
+- Scope mode: working tree, with Phase 62 focus on command-entry execution changes
+- Risk level: high because the change adds a new explicit local process execution path for third-party extensions
+- Review method: `production-code-quality-review` context collection plus correctness, architecture, reliability, security, and tests review
+- Assumption: command execution is intentionally user-triggered only and must not run during install, update, enable, setup, service start, or health checks
 
 ## Findings
 
@@ -18,55 +18,46 @@ No blocking production findings remain after review.
 
 ## Review Optimizations Applied
 
-- `src/main/services/plugin-service.js`: command stdin context is now JSON-cloned before spawning, so non-serializable payloads fail before any local process starts.
-- `src/main/services/plugin-service.js`: command stdin write failures now clear the active runtime guard, reject the command run, and attempt direct-child termination.
-- `src/main/services/plugin-service.js`: timeout termination now wraps child kill in a best-effort guard so kill errors do not escape the timer callback.
-- `docs/plugin-development.md`: context/result docs now describe current stdin-only command context and final stdout JSON result handling instead of implying `OPENPET_RESULT_PATH` exists today.
+- `src/main/services/plugin-service.js`: running declaration command processes are now stopped when a plugin is disabled or when app shutdown cleanup runs, matching the existing setup/service lifecycle cleanup posture.
+- `tests/services/plugin-service.test.js`: added disable/shutdown cleanup coverage for active declaration command processes.
+- `docs/plugin-development.md` and `docs/plugin-ecosystem-rules.md`: tightened command context wording so current docs no longer imply `OPENPET_RESULT_PATH` or bridge token injection already exists.
 
 ## Architecture Assessment
 
-The behavior lives in the correct layer. `PluginService.runCommand()` remains the single command boundary and preserves the existing official and JavaScript compatibility runner paths. The new declaration-only path uses the same local entry posture as setup/service entries: policy check, enabled check, plugin-local cwd resolution, minimal environment, explicit Control Center action, logs, and no shell expansion. IPC and preload only delegate; Control Center only renders explicit actions.
+The behavior lives in the correct layer. `PluginService.runCommand()` remains the single host command boundary, while IPC/preload/UI continue to delegate without gaining Node or Electron power. Official and legacy JavaScript plugin commands keep their existing compatibility path; declaration-only local commands use a new process path with explicit cwd and policy checks.
 
 ## Robustness Assessment
 
-The command path rejects disabled plugins, policy-blocked plugins, unknown command ids, non-JSON payloads, escaping cwd paths or symlinks, duplicate running commands, non-zero exits, signals, spawn errors, stdin write errors, and stalled processes. Operators and extension authors get `Command started`, stdout/stderr snippets, `Command completed`, or failure logs in the existing plugin log stream.
+Command entries reject disabled plugins, policy-blocked plugins, unknown command ids, cwd escapes and symlink escapes, duplicate running commands, non-JSON payloads, non-zero exits, and stalled processes. Command processes run with `shell: false`, minimal inherited environment, bounded output capture, stdout/stderr logs, timeout cleanup, and direct-child stop on plugin disable/app cleanup.
 
-Residual limits are intentional and documented: timeout cleanup is direct-child best effort, not a hard process-tree guarantee; stdout/stderr snippets are bounded but not secret-redacted; command results currently come from the final stdout JSON line rather than a result file or bridge.
+Residual limits remain intentional and documented: command cleanup is direct-child best effort rather than a hard process-tree guarantee, there is no bridge token injection, and command result UX is still minimal.
 
 ## Test Assessment
 
 Strong coverage:
 
-- service tests cover success, no shell expansion, minimal env, stdin context, final stdout JSON parsing, stderr return, failure exits, disabled plugins, policy blocks, unknown command ids, cwd symlink escapes, non-JSON payload rejection before spawn, duplicate running guards, and timeout termination;
+- service tests cover success, stdin JSON context, stdout/stderr logs, final stdout JSON parsing, non-zero failure, disabled plugins, policy blocks, unknown command ids, non-JSON payload rejection, cwd symlink escapes, duplicate running command, timeout cleanup, disable cleanup, shutdown cleanup, and no shell expansion;
 - IPC tests cover `plugins:run-command` payload/result delegation;
 - shared TypeScript fixture covers `PluginCommandRunResultViewState`;
-- Control Center smoke covers disabled command buttons, enabled command execution, status feedback, and command logs.
-
-The most valuable future test would be a real spawned fixture that emits an async stdin error or large output, but the current fake-process coverage exercises the introduced failure branches enough for this phase.
+- Control Center smoke covers disabled command action before enablement and successful command execution after enablement.
 
 ## Verification
 
-Checks run during implementation/review:
-
 ```bash
 node --test tests/services/plugin-service.test.js
-# 78/78 pass
+# 80/80 pass
+
+node --test tests/main/ipc-plugin-install.test.js
+# 16/16 pass
 
 npm run typecheck
 # pass
 
 npm run check:syntax
 # pass
-```
-
-Full verification before commit:
-
-```bash
-npm run check:syntax
-# pass
 
 npm test
-# 465/465 pass
+# 467/467 pass
 
 npm run test:control-center
 # 10/10 pass
