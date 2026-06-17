@@ -1,7 +1,7 @@
 # OpenPet v1.1 TODO Design
 
 > Date: 2026-06-16
-> Baseline: Phase 63 completed locally
+> Baseline: Phase 64 completed locally
 > Scope: Convert the remaining productization TODO into a phase-ready design for v1.1 work. This document does not upgrade platform support claims. Windows remains not release-ready until signed runtime smoke evidence passes.
 
 ## 1. Goal
@@ -25,7 +25,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 - PetService remains the single source of truth for `say`, `action`, and event state.
 - Pet pack runtime supports legacy cat assets, OpenPet packs, Codex pet directory import, Codex pet zip import, and bundled packs.
 - Bundled pet assets are integrated without replacing the legacy `cat_anime/` structure.
-- Extension ecosystem docs now use a developer-first local extension model while current runtime/tools keep legacy JavaScript SDK compatibility, manifest validation, normalized `entries` declarations, explicit user-triggered `entries.setup` execution, `entries.commands` support through the existing JavaScript runner and explicit short-lived process execution for declaration-only local extensions, entry declaration visibility, explicit HTTP/HTTPS dashboard opening, explicit `entries.services` start/stop, manual loopback service health checks, logs, catalog, blocklist, and submission tooling.
+- Extension ecosystem docs now use a developer-first local extension model while current runtime/tools keep legacy JavaScript SDK compatibility, manifest validation, normalized `entries` declarations, explicit user-triggered `entries.setup` execution, `entries.commands` support through the existing JavaScript runner and explicit short-lived process execution for declaration-only local extensions, a short-lived command bridge for `pet.say` / `pet.action` / `pet.event` / read-only context, entry declaration visibility, explicit HTTP/HTTPS dashboard opening, explicit `entries.services` start/stop, manual loopback service health checks, logs, catalog, blocklist, and submission tooling.
 - AI provider configuration and API keys remain in the main process boundary.
 - Local HTTP/MCP is loopback-only, token-gated, logged, and off by default.
 - TypeScript scaffold, Control Center view contracts, API facade, hook state boundaries, pane prop surfaces, main-process Control Center adapters for service/catalog/plugin/pet pack/About/update/actions payloads, plugin entry/dashboard/service contracts, and full release evidence archive / signed closure report contracts exist.
@@ -36,7 +36,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 - macOS signed/notarized release evidence still needs real artifact capture and archive.
 - Windows signed installer/zip smoke evidence still needs real Windows execution.
 - Packaged runtime smoke reports still need real app evidence for pet window visibility, transparent rendering, bundled pack switching, and native picker flows.
-- Extension runtime support for explicit setup execution, explicit short-lived command execution, explicit service start/stop, manual loopback service health checks, and best-effort process-group cleanup now exists. Bridge flows, background health polling, richer command orchestration, and hard process-tree cleanup guarantees are still future work. Dashboard entries can now be opened explicitly as external HTTP/HTTPS URLs from Control Center.
+- Extension runtime support for explicit setup execution, explicit short-lived command execution, explicit short-lived command bridge access, explicit service start/stop, manual loopback service health checks, and best-effort process-group cleanup now exists. Background health polling, richer bridge surfaces for authoring workflows, richer command orchestration, and hard process-tree cleanup guarantees are still future work. Dashboard entries can now be opened explicitly as external HTTP/HTTPS URLs from Control Center.
 - Legacy SDK plugin secrets policy remains conservative; target extension docs require honest disclosure for extension-managed secrets and data.
 - Plugin sandbox strategy has been evaluated against SES and Electron `utilityProcess`; current recommendation is to keep the existing runner for v1.1 while documenting limits.
 - AI behavior orchestration has a Control Center decision viewer, replay, redacted diagnostics export, and clear-history controls.
@@ -813,6 +813,29 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 
 **Status**: completed in Phase 63. The Plugins pane now shows the latest command result summary on the matching plugin card, including message, exit code, JSON result preview, and bounded stdout/stderr snippets.
 
+### Phase 64: Plugin command bridge
+
+**Goal**: let declaration-only local plugin commands perform a small amount of pet-aware behavior during an explicit run without falling back to the legacy JavaScript runner.
+
+**Scope**:
+
+- Keep the Phase 62 command execution boundary unchanged.
+- Keep the Phase 63 command result UX unchanged.
+- Inject a short-lived bridge URL and token into explicit declaration-only command runs.
+- Support bounded read-only context plus `pet.say`, `pet.action`, and `pet.event`.
+- Keep bridge calls loopback-only, token-gated, run-scoped, and logged.
+- Do not add renderer bridge access, install-time execution, background automation, or hard process-tree cleanup guarantees.
+
+**Acceptance**:
+
+- Declaration-only command runs receive bridge env vars.
+- Bridge-backed `pet.say`, `pet.action`, and `pet.event` mutate through `PetService`.
+- Invalid token, missing permission, and expired bridge requests are rejected.
+- `GET /context` returns bounded read-only context.
+- Docs keep the bridge honest as a short-lived command capability, not a general sandbox or background API.
+
+**Status**: completed in Phase 64. Declaration-only commands now receive a short-lived bridge URL/token pair and can explicitly call `pet.say`, `pet.action`, `pet.event`, and read a bounded context during an active run.
+
 ## 6. Priority Order
 
 | Priority | Work | Reason |
@@ -839,6 +862,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 | P1 | Phase 61 Plugin setup execution | Completed; setup entries can be run by explicit Control Center action for enabled policy-allowed local plugins, without install/enable auto-run or shell expansion. |
 | P1 | Phase 62 Plugin command process execution | Completed; declaration-only local command entries can run as explicit short-lived processes with stdin JSON context, without install/enable auto-run or shell expansion. |
 | P1 | Phase 63 Plugin command result UX | Completed; Plugins pane now shows the latest command result summary, JSON preview, and bounded stdout/stderr snippets for successful runs. |
+| P1 | Phase 64 Plugin command bridge | Completed; declaration-only commands can receive a short-lived bridge URL/token and use it for bounded pet-aware mutations and context reads. |
 | P2 | Phase 41 AI behavior replay | Completed; preserve redacted diagnostics and replay semantics while future AI tooling evolves. |
 | P2 | Phase 39 plugin sandbox evaluation | Completed; keep current runner for v1.1 and revisit on high-risk plugin capability changes. |
 | P2 | Phase 46 documentation consolidation | Completed; keep future live-doc updates fact-only and link-oriented. |
@@ -869,7 +893,8 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 22. Phase 60 is complete; setup entries are visible with read-only `not-run` status, and service stops attempt best-effort process-group cleanup with child-kill fallback.
 23. Phase 61 is complete; setup entries can be explicitly run from Control Center for enabled policy-allowed local plugins, with runtime status and logs.
 24. Phase 62 is complete; declaration-only local command entries can be explicitly run from Control Center for enabled policy-allowed local plugins, with stdin JSON context, timeout handling, logs, and no shell expansion.
-25. Phase 63 is complete; the Plugins pane now shows the latest command result summary on the matching plugin card, with result message, exit code, JSON preview, and bounded stdout/stderr snippets. Choose the next phase from bridge integration, real evidence work, community extension rehearsal, hard cleanup guarantees, or another high-drift service/report boundary.
+25. Phase 63 is complete; the Plugins pane now shows the latest command result summary on the matching plugin card, with result message, exit code, JSON preview, and bounded stdout/stderr snippets.
+26. Phase 64 is complete; declaration-only commands now receive a short-lived bridge URL/token and can use it for pet-aware mutations and bounded context reads. Choose the next phase from real evidence work, community extension rehearsal, hard cleanup guarantees, or another high-drift service/report boundary.
 
 ## 8. Verification Contract
 

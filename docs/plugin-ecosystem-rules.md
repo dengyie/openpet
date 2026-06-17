@@ -106,7 +106,7 @@ Commands should be allowed to use any suitable runtime. Do not require JavaScrip
 
 Services are long-running local process entries managed by OpenPet.
 
-OpenPet can run command and setup entries only after explicit Control Center action, record setup status/logs, start and stop declared service processes only after explicit Control Center action, apply service platform overrides, capture stdout/stderr snippets, show runtime state, manually check declared loopback health endpoints, and stop running services on disable/app quit with best-effort process-group cleanup. Commands and setup do not run during install or enable, services do not auto-start, health checks do not run in the background, and command/setup/service processes are spawned without shell expansion. Bridge injection and hard process-tree cleanup guarantees remain future runtime work.
+OpenPet can run command and setup entries only after explicit Control Center action, record setup status/logs, start and stop declared service processes only after explicit Control Center action, apply service platform overrides, capture stdout/stderr snippets, show runtime state, manually check declared loopback health endpoints, and stop running services on disable/app quit with best-effort process-group cleanup. Declaration-only command runs also receive a short-lived bridge URL/token pair for bounded pet-aware actions and context reads. Commands and setup do not run during install or enable, services do not auto-start, health checks do not run in the background, and command/setup/service processes are spawned without shell expansion. Hard process-tree cleanup guarantees remain future runtime work.
 
 Services may power real local experiences: dashboards, background companions, schedulers, local model servers, voice processors, or integrations with external APIs.
 
@@ -124,7 +124,12 @@ First-version rules should stay simple:
 
 OpenPet should use language-neutral context passing.
 
-Future bridge/context work may add standard environment variables:
+Current declaration-only command runs receive stdin JSON context plus:
+
+- `OPENPET_BRIDGE_URL`
+- `OPENPET_BRIDGE_TOKEN`
+
+Reserved future environment variables may still add:
 
 - `OPENPET_EXTENSION_ID`
 - `OPENPET_EXTENSION_DIR`
@@ -140,13 +145,12 @@ Commands currently receive JSON on stdin with `pluginId`, command id, payload, c
 
 Command results currently use the final stdout JSON line when present.
 
-The optional local bridge should start small:
+The current local bridge stays intentionally small:
 
 - `POST /pet/say`
 - `POST /pet/action`
-- `POST /notification`
-- `POST /status`
-- `GET /config`
+- `POST /pet/event`
+- `GET /context`
 
 The bridge is for integration convenience. It is not a complete SDK, not a full security broker, and not a reason to block extensions from using their own local capabilities.
 

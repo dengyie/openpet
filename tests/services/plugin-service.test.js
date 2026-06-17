@@ -4,6 +4,7 @@ const fs = require('fs')
 const os = require('os')
 const path = require('path')
 const { EventEmitter } = require('events')
+const http = require('http')
 const { PassThrough } = require('stream')
 
 const { createPluginService } = require('../../src/main/services/plugin-service')
@@ -159,6 +160,87 @@ const createSlowStoppingServiceProcess = ({ pid = 4321 } = {}) => {
   return child
 }
 
+const createBridgeAwarePetService = () => {
+  const calls = []
+  return {
+    calls,
+    getSnapshot: () => ({
+      settings: {
+        name: 'Bridge Pet',
+        ai: {
+          behavior: {
+            enabled: true
+          }
+        },
+        petPacks: {
+          activePackId: 'legacy-cat'
+        }
+      },
+      actions: {
+        defaultAction: 'idle',
+        clickAction: 'wave',
+        actions: [{ id: 'idle', label: 'Idle' }, { id: 'wave', label: 'Wave' }]
+      }
+    }),
+    say: (payload) => {
+      calls.push(['say', payload])
+      return payload
+    },
+    playAction: (payload) => {
+      calls.push(['action', payload])
+      return payload
+    },
+    setEvent: (payload) => {
+      calls.push(['event', payload])
+      return payload
+    }
+  }
+}
+
+const waitFor = async (predicate, { timeoutMs = 500, intervalMs = 5 } = {}) => {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (predicate()) return
+    await new Promise((resolve) => setTimeout(resolve, intervalMs))
+  }
+  throw new Error('Timed out waiting for async condition')
+}
+
+const requestBridge = (url, { method = 'GET', token, body } = {}) => new Promise((resolve, reject) => {
+  const target = new URL(url)
+  const request = http.request({
+    protocol: target.protocol,
+    hostname: target.hostname,
+    port: target.port,
+    path: `${target.pathname}${target.search}`,
+    method,
+    agent: false,
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(body ? { 'Content-Type': 'application/json' } : {})
+    }
+  }, (response) => {
+    let responseBody = ''
+    response.setEncoding('utf-8')
+    response.on('data', (chunk) => {
+      responseBody += chunk
+    })
+    response.on('end', () => {
+      try {
+        resolve({
+          status: response.statusCode,
+          body: responseBody ? JSON.parse(responseBody) : {}
+        })
+      } catch (error) {
+        reject(error)
+      }
+    })
+  })
+  request.on('error', reject)
+  if (body) request.write(JSON.stringify(body))
+  request.end()
+})
+
 test('plugin service discovers official plugins and local manifests', () => {
   const service = createPluginService({
     settingsService: createSettingsService({
@@ -221,6 +303,7 @@ test('plugin service lists declaration-only extension entries as runnable comman
   assert.equal(plugin.entries.dashboards[0].url, 'http://127.0.0.1:8787')
 
   const commandRun = service.runCommand('weather-declaration', 'announce', { message: 'rain soon' })
+  await waitFor(() => child.listenerCount('exit') > 0)
   child.stdout.write('{"ok":true,"petSay":"Bring an umbrella"}\n')
   child.stderr.write('warmup\n')
   child.emit('exit', 0, null)
@@ -230,7 +313,9 @@ test('plugin service lists declaration-only extension entries as runnable comman
   assert.deepEqual(spawned[0].args, ['./commands/announce.js'])
   assert.equal(path.basename(spawned[0].options.cwd), 'weather-declaration')
   assert.equal(spawned[0].options.shell, false)
-  assert.deepEqual(Object.keys(spawned[0].options.env).sort(), ['PATH'].filter((key) => process.env[key]).sort())
+  assert.equal(spawned[0].options.env.PATH, process.env.PATH)
+  assert.match(spawned[0].options.env.OPENPET_BRIDGE_URL, /^http:\/\/127\.0\.0\.1:\d+\/plugins\/bridge\//)
+  assert.match(spawned[0].options.env.OPENPET_BRIDGE_TOKEN, /^[A-Za-z0-9_-]{20,}$/)
   const stdinPayload = JSON.parse(stdinChunks.join(''))
   assert.equal(stdinPayload.pluginId, 'weather-declaration')
   assert.equal(stdinPayload.commandId, 'announce')
@@ -263,6 +348,7 @@ test('plugin service rejects non-zero declaration command exits', async () => {
   })
 
   const commandRun = service.runCommand('weather-declaration', 'announce')
+  await waitFor(() => child.stdout.listenerCount('data') > 0)
   child.stderr.write('boom\n')
   child.emit('exit', 7, null)
 
@@ -272,6 +358,221 @@ test('plugin service rejects non-zero declaration command exits', async () => {
     'Command stderr: boom',
     'Command started'
   ])
+})
+
+test('declaration-only command entries receive short-lived bridge env vars', async () => {
+  const spawned = []
+  const child = createFakeServiceProcess()
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: {
+        enabled: { 'weather-declaration': true }
+      }
+    }),
+    petService: createBridgeAwarePetService(),
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir()],
+    spawnCommandProcess: (file, args, options) => {
+      spawned.push({ file, args, options })
+      return child
+    }
+  })
+
+  const commandRun = service.runCommand('weather-declaration', 'announce')
+  await waitFor(() => child.listenerCount('exit') > 0)
+  child.stdout.write('{"ok":true}\n')
+  child.emit('exit', 0, null)
+  await commandRun
+
+  assert.match(spawned[0].options.env.OPENPET_BRIDGE_URL, /^http:\/\/127\.0\.0\.1:\d+\/plugins\/bridge\//)
+  assert.match(spawned[0].options.env.OPENPET_BRIDGE_TOKEN, /^[A-Za-z0-9_-]{20,}$/)
+})
+
+test('declaration-only command bridge forwards pet mutations through PetService', async () => {
+  const spawned = []
+  const child = createFakeServiceProcess()
+  const petService = createBridgeAwarePetService()
+  const root = createDeclarationOnlyPluginDir()
+  const pluginPath = path.join(root, 'weather-declaration', 'plugin.json')
+  fs.writeFileSync(path.join(pluginPath), JSON.stringify({
+    id: 'weather-declaration',
+    name: 'Weather Declaration',
+    version: '1.0.0',
+    permissions: ['pet:say', 'pet:action', 'pet:event'],
+    entries: {
+      commands: [{ id: 'announce', title: 'Announce Weather', command: 'node ./commands/announce.js', cwd: '.' }]
+    }
+  }))
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: {
+        enabled: { 'weather-declaration': true }
+      }
+    }),
+    petService,
+    officialPlugins: [],
+    pluginDirs: [root],
+    spawnCommandProcess: (file, args, options) => {
+      spawned.push({ file, args, options })
+      return child
+    }
+  })
+
+  const commandRun = service.runCommand('weather-declaration', 'announce')
+  await waitFor(() => child.listenerCount('exit') > 0)
+  const baseUrl = spawned[0].options.env.OPENPET_BRIDGE_URL
+  const token = spawned[0].options.env.OPENPET_BRIDGE_TOKEN
+
+  const sayResult = await requestBridge(`${baseUrl}/pet/say`, {
+    method: 'POST',
+    token,
+    body: { text: 'Bridge says hi', ttlMs: 1500 }
+  })
+
+  const actionResult = await requestBridge(`${baseUrl}/pet/action`, {
+    method: 'POST',
+    token,
+    body: { actionId: 'wave' }
+  })
+
+  const eventResult = await requestBridge(`${baseUrl}/pet/event`, {
+    method: 'POST',
+    token,
+    body: { type: 'weather', message: 'Rain soon', ttlMs: 3000 }
+  })
+
+  child.stdout.write('{"ok":true}\n')
+  child.emit('exit', 0, null)
+  await commandRun
+
+  assert.equal(sayResult.status, 200)
+  assert.equal(sayResult.body.ok, true)
+  assert.equal(actionResult.status, 200)
+  assert.equal(actionResult.body.ok, true)
+  assert.equal(eventResult.status, 200)
+  assert.equal(eventResult.body.ok, true)
+  assert.deepEqual(petService.calls, [
+    ['say', { text: 'Bridge says hi', ttlMs: 1500, source: 'plugin:weather-declaration:bridge' }],
+    ['action', { actionId: 'wave', source: 'plugin:weather-declaration:bridge' }],
+    ['event', { type: 'weather', message: 'Rain soon', ttlMs: 3000, source: 'plugin:weather-declaration:bridge' }]
+  ])
+})
+
+test('declaration-only command bridge rejects missing permissions, invalid token, and expired runs', async () => {
+  const spawned = []
+  const child = createFakeServiceProcess()
+  const root = createDeclarationOnlyPluginDir()
+  const pluginPath = path.join(root, 'weather-declaration', 'plugin.json')
+  fs.writeFileSync(path.join(pluginPath), JSON.stringify({
+    id: 'weather-declaration',
+    name: 'Weather Declaration',
+    version: '1.0.0',
+    permissions: ['pet:say'],
+    entries: {
+      commands: [{ id: 'announce', title: 'Announce Weather', command: 'node ./commands/announce.js', cwd: '.' }]
+    }
+  }))
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: {
+        enabled: { 'weather-declaration': true }
+      }
+    }),
+    petService: createBridgeAwarePetService(),
+    officialPlugins: [],
+    pluginDirs: [root],
+    spawnCommandProcess: (file, args, options) => {
+      spawned.push({ file, args, options })
+      return child
+    }
+  })
+
+  const commandRun = service.runCommand('weather-declaration', 'announce')
+  await waitFor(() => child.listenerCount('exit') > 0)
+  const baseUrl = spawned[0].options.env.OPENPET_BRIDGE_URL
+  const token = spawned[0].options.env.OPENPET_BRIDGE_TOKEN
+
+  const wrongToken = await requestBridge(`${baseUrl}/pet/say`, {
+    method: 'POST',
+    token: 'wrong-token',
+    body: { text: 'nope' }
+  })
+
+  const missingPermission = await requestBridge(`${baseUrl}/pet/event`, {
+    method: 'POST',
+    token,
+    body: { type: 'weather', message: 'nope' }
+  })
+
+  child.stdout.write('{"ok":true}\n')
+  child.emit('exit', 0, null)
+  await commandRun
+
+  const expired = await requestBridge(`${baseUrl}/pet/say?expired=1`, {
+    method: 'POST',
+    token,
+    body: { text: 'too late' }
+  })
+
+  assert.equal(wrongToken.status, 401)
+  assert.equal(missingPermission.status, 403)
+  assert.equal(expired.status, 401)
+})
+
+test('declaration-only command bridge exposes bounded read-only context', async () => {
+  const spawned = []
+  const child = createFakeServiceProcess()
+  const root = createDeclarationOnlyPluginDir()
+  const pluginPath = path.join(root, 'weather-declaration', 'plugin.json')
+  fs.writeFileSync(path.join(pluginPath), JSON.stringify({
+    id: 'weather-declaration',
+    name: 'Weather Declaration',
+    version: '1.0.0',
+    permissions: [],
+    entries: {
+      commands: [{ id: 'announce', title: 'Announce Weather', command: 'node ./commands/announce.js', cwd: '.' }]
+    }
+  }))
+  const petService = createBridgeAwarePetService()
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: {
+        enabled: { 'weather-declaration': true }
+      }
+    }),
+    petService,
+    officialPlugins: [],
+    pluginDirs: [root],
+    spawnCommandProcess: (file, args, options) => {
+      spawned.push({ file, args, options })
+      return child
+    }
+  })
+
+  const commandRun = service.runCommand('weather-declaration', 'announce')
+  await waitFor(() => spawned.length === 1)
+  const baseUrl = spawned[0].options.env.OPENPET_BRIDGE_URL
+  const token = spawned[0].options.env.OPENPET_BRIDGE_TOKEN
+  const contextResponse = await requestBridge(`${baseUrl}/context`, {
+    token
+  })
+
+  child.stdout.write('{"ok":true}\n')
+  child.emit('exit', 0, null)
+  await commandRun
+
+  assert.deepEqual(contextResponse.body, {
+    ok: true,
+    context: {
+      petName: 'Bridge Pet',
+      selectedPetId: 'legacy-cat',
+      currentActionId: 'idle',
+      personality: {
+        tone: 'friendly',
+        tags: ['companion', 'playful']
+      }
+    }
+  })
 })
 
 test('plugin service rejects declaration command cwd symlinks escaping the plugin directory', async () => {
@@ -391,6 +692,7 @@ test('plugin service rejects non-json declaration command payloads before spawni
 
 test('plugin service rejects duplicate declaration command runs while one is running', async () => {
   const child = createSlowStoppingServiceProcess()
+  let started = false
   const service = createPluginService({
     settingsService: createSettingsService({
       plugins: { enabled: { 'weather-declaration': true } }
@@ -398,10 +700,14 @@ test('plugin service rejects duplicate declaration command runs while one is run
     petService: { say: async () => {} },
     officialPlugins: [],
     pluginDirs: [createDeclarationOnlyPluginDir()],
-    spawnCommandProcess: () => child
+    spawnCommandProcess: () => {
+      started = true
+      return child
+    }
   })
 
   const firstRun = service.runCommand('weather-declaration', 'announce')
+  await waitFor(() => started)
 
   await assert.rejects(
     () => service.runCommand('weather-declaration', 'announce'),
@@ -434,6 +740,7 @@ test('plugin service times out stalled declaration command processes', async () 
 
 test('plugin service stops running declaration commands when a plugin is disabled', async () => {
   const child = createSlowStoppingServiceProcess()
+  let started = false
   const settingsService = createSettingsService({
     plugins: { enabled: { 'weather-declaration': true } }
   })
@@ -442,10 +749,14 @@ test('plugin service stops running declaration commands when a plugin is disable
     petService: { say: async () => {} },
     officialPlugins: [],
     pluginDirs: [createDeclarationOnlyPluginDir()],
-    spawnCommandProcess: () => child
+    spawnCommandProcess: () => {
+      started = true
+      return child
+    }
   })
 
   const commandRun = service.runCommand('weather-declaration', 'announce')
+  await waitFor(() => started)
   service.setEnabled('weather-declaration', false)
 
   await assert.rejects(commandRun, /Command stopped/)
@@ -455,6 +766,7 @@ test('plugin service stops running declaration commands when a plugin is disable
 
 test('plugin service stops running declaration commands during app shutdown cleanup', async () => {
   const child = createSlowStoppingServiceProcess()
+  let started = false
   const service = createPluginService({
     settingsService: createSettingsService({
       plugins: { enabled: { 'weather-declaration': true } }
@@ -462,10 +774,14 @@ test('plugin service stops running declaration commands during app shutdown clea
     petService: { say: async () => {} },
     officialPlugins: [],
     pluginDirs: [createDeclarationOnlyPluginDir()],
-    spawnCommandProcess: () => child
+    spawnCommandProcess: () => {
+      started = true
+      return child
+    }
   })
 
   const commandRun = service.runCommand('weather-declaration', 'announce')
+  await waitFor(() => started)
   const result = service.stopAllServices()
 
   await assert.rejects(commandRun, /Command stopped/)

@@ -152,7 +152,7 @@ Services are long-running local process entries managed by OpenPet.
 }
 ```
 
-OpenPet can explicitly run command and setup entries from Control Center, capture stdout/stderr snippets, show setup runtime state, explicitly start and stop services, show service runtime state, stop services on plugin disable, send stop signals on app quit, manually check declared loopback health endpoints, and attempt best-effort process-group cleanup when stopping services. Command, setup, and service processes do not run during install or enable; services never auto-start; health checks do not run in the background; and the host spawns command, setup, and service processes without shell expansion. Bridge injection and hard process-tree cleanup guarantees are still future runtime work. The service model should not require a specific language, a self-contained package, or a full process sandbox.
+OpenPet can explicitly run command and setup entries from Control Center, capture stdout/stderr snippets, show setup runtime state, explicitly start and stop services, show service runtime state, stop services on plugin disable, send stop signals on app quit, manually check declared loopback health endpoints, and attempt best-effort process-group cleanup when stopping services. Declaration-only command runs also receive a short-lived bridge URL/token so they can call `pet.say`, `pet.action`, `pet.event`, and fetch a bounded read-only context during the active run. Command, setup, and service processes do not run during install or enable; services never auto-start; health checks do not run in the background; and the host spawns command, setup, and service processes without shell expansion. Hard process-tree cleanup guarantees are still future runtime work. The service model should not require a specific language, a self-contained package, or a full process sandbox.
 
 ### Dashboards
 
@@ -172,9 +172,16 @@ First-version behavior should stay simple: OpenPet shows an "Open Dashboard" act
 
 OpenPet should use language-neutral context passing.
 
-Current command entries receive context on stdin and run with a minimal host environment. OpenPet does not currently inject bridge tokens, data/cache/log paths, config files, or result-file paths into command processes.
+Current command entries receive context on stdin and run with a minimal host environment. Declaration-only command runs now also receive a short-lived bridge URL/token pair. OpenPet does not currently inject data/cache/log paths, generated config files, or result-file paths into command processes.
 
-Future bridge/context work may add standard environment variables:
+Current standard environment variables:
+
+| Variable | Purpose |
+| --- | --- |
+| `OPENPET_BRIDGE_URL` | Short-lived local bridge endpoint for the active declaration-only command run. |
+| `OPENPET_BRIDGE_TOKEN` | Bearer token for the active declaration-only command bridge. |
+
+Reserved future variables:
 
 | Variable | Purpose |
 | --- | --- |
@@ -185,8 +192,6 @@ Future bridge/context work may add standard environment variables:
 | `OPENPET_LOG_DIR` | Recommended log directory. |
 | `OPENPET_CONFIG_PATH` | Optional generated config JSON path. |
 | `OPENPET_RESULT_PATH` | Command result JSON output path. |
-| `OPENPET_BRIDGE_URL` | Optional local bridge endpoint. |
-| `OPENPET_BRIDGE_TOKEN` | Optional bridge token. |
 
 Commands receive JSON on stdin:
 
@@ -206,7 +211,14 @@ Current command result:
 
 - write JSON as the final stdout line.
 
-Future result-file bridge work may add `OPENPET_RESULT_PATH`.
+Current bridge routes:
+
+- `GET /context`
+- `POST /pet/say`
+- `POST /pet/action`
+- `POST /pet/event`
+
+The bridge is loopback-only, token-gated, and valid only while the command run is active.
 
 OpenPet may interpret common result keys:
 
@@ -222,27 +234,49 @@ OpenPet may interpret common result keys:
 
 ## Optional Bridge
 
-For deeper pet integration, OpenPet should provide a minimal optional local bridge. The bridge is not a heavy SDK and should not become a full permission broker in the first version.
+For deeper pet integration, OpenPet now provides a minimal optional local bridge for explicit declaration-only command runs. The bridge is not a heavy SDK and should not become a full permission broker in the first version.
 
 Injected values:
 
 - `OPENPET_BRIDGE_URL`
 - `OPENPET_BRIDGE_TOKEN`
 
-First-version endpoint set:
+Current endpoint set:
 
+- `GET /context`
 - `POST /pet/say`
 - `POST /pet/action`
-- `POST /notification`
-- `POST /status`
-- `GET /config`
+- `POST /pet/event`
+
+Bridge rules:
+
+- the bridge exists only during an explicit declaration-only command run;
+- the command must belong to an enabled, policy-allowed local extension;
+- requests must use `Authorization: Bearer <OPENPET_BRIDGE_TOKEN>`;
+- `pet:say`, `pet:action`, and `pet:event` permissions are enforced per route;
+- all pet mutations still flow through `PetService`;
+- setup entries, services, install, enable, and background health paths do not receive bridge access.
+
+Example bridge requests:
+
+```bash
+curl -X POST "$OPENPET_BRIDGE_URL/pet/say" \
+  -H "Authorization: Bearer $OPENPET_BRIDGE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"text":"今天上海有雨，带伞。","ttlMs":6000}'
+```
+
+```bash
+curl "$OPENPET_BRIDGE_URL/context" \
+  -H "Authorization: Bearer $OPENPET_BRIDGE_TOKEN"
+```
 
 Example command behavior:
 
 1. Read command context from stdin.
 2. Fetch weather using the extension's own network stack.
-3. Write final result JSON to stdout.
-4. In a future bridge phase, optionally call `POST /pet/say`; until then, include desired pet-facing intent such as `petSay` in the result for host/UI display.
+3. Optionally call bridge routes such as `POST /pet/say`, `POST /pet/action`, or `POST /pet/event`.
+4. Write final result JSON to stdout.
 
 ## Configuration
 

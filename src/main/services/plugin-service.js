@@ -1,5 +1,7 @@
 const fs = require('fs')
 const path = require('path')
+const crypto = require('crypto')
+const http = require('http')
 const { fork, spawn } = require('child_process')
 const { normalizePluginManifest } = require('../plugins/manifest')
 const { coerceConfigValue, normalizeConfigSchema } = require('../plugins/config-schema')
@@ -13,8 +15,10 @@ const MAX_PLUGIN_LOG_ENTRIES = 200
 const MAX_PLUGIN_NETWORK_REQUEST_BYTES = 64 * 1024
 const MAX_PLUGIN_NETWORK_RESPONSE_BYTES = 128 * 1024
 const MAX_PLUGIN_COMMAND_OUTPUT_BYTES = 64 * 1024
+const MAX_PLUGIN_BRIDGE_BODY_BYTES = 1024 * 1024
 const PLUGIN_SERVICE_HEALTH_TIMEOUT_MS = 3000
 const LOCAL_PLUGIN_RUNNER_PATH = path.join(__dirname, '../plugins/local-plugin-runner.js')
+const PLUGIN_BRIDGE_HOST = '127.0.0.1'
 
 const createPluginServiceKey = (pluginId, serviceId) => `${pluginId}:${serviceId}`
 
@@ -23,6 +27,59 @@ const ACTIVE_SETUP_STATUSES = new Set(['running'])
 const ACTIVE_COMMAND_STATUSES = new Set(['running'])
 
 const LOOPBACK_HEALTH_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]'])
+
+const createPluginBridgeKey = (pluginId, commandId, runId) => `${pluginId}:${commandId}:${runId}`
+
+const createPluginBridgeToken = () => crypto.randomBytes(24).toString('base64url')
+
+const createPluginBridgeRunId = () => crypto.randomBytes(12).toString('base64url')
+
+const extractBearerToken = (header = '') => {
+  const match = String(header).match(/^Bearer\s+(.+)$/i)
+  return match ? match[1] : ''
+}
+
+const safeTokenEquals = (candidate, expected) => {
+  const candidateBuffer = Buffer.from(String(candidate || ''))
+  const expectedBuffer = Buffer.from(String(expected || ''))
+  return candidateBuffer.length === expectedBuffer.length && crypto.timingSafeEqual(candidateBuffer, expectedBuffer)
+}
+
+const isJsonRequest = (request) => {
+  const contentType = String(request.headers['content-type'] || '').toLowerCase()
+  return contentType.startsWith('application/json')
+}
+
+const readJsonBody = (request) => new Promise((resolve, reject) => {
+  let body = ''
+  request.on('data', (chunk) => {
+    body += chunk
+    if (body.length > MAX_PLUGIN_BRIDGE_BODY_BYTES) {
+      request.destroy()
+      reject(new Error('Request body is too large'))
+    }
+  })
+  request.on('end', () => {
+    if (!body) {
+      resolve({})
+      return
+    }
+    try {
+      resolve(JSON.parse(body))
+    } catch (_) {
+      reject(new Error('Invalid JSON body'))
+    }
+  })
+  request.on('error', reject)
+})
+
+const sendJson = (response, statusCode, body) => {
+  response.writeHead(statusCode, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store'
+  })
+  response.end(JSON.stringify(body))
+}
 
 const createServiceHealthView = (health = {}, serviceEntry = {}) => {
   const hasConfiguredHealth = Boolean(serviceEntry.health?.url)
@@ -459,6 +516,9 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
   const serviceRuntimes = new Map()
   const setupRuntimes = new Map()
   const commandRuntimes = new Map()
+  const commandBridgeRuntimes = new Map()
+  let commandBridgeServer = null
+  let commandBridgePort = 0
 
   const getLogStore = () => {
     const logs = settingsService.get().plugins?.logs
@@ -490,6 +550,157 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
     logs.unshift(entry)
     saveLogStore(logs)
     return entry
+  }
+
+  const createPluginBridgeContext = () => {
+    const snapshot = petService.getSnapshot?.() || {}
+    const settings = snapshot.settings || {}
+    const actions = snapshot.actions || {}
+    return {
+      petName: String(settings.name || 'OpenPet'),
+      selectedPetId: String(settings.petPacks?.activePackId || 'legacy-cat'),
+      currentActionId: String(actions.defaultAction || ''),
+      personality: {
+        tone: 'friendly',
+        tags: ['companion', 'playful']
+      }
+    }
+  }
+
+  const createPluginBridgeHandlers = (plugin, commandId) => ({
+    context: async () => {
+      appendLog({ pluginId: plugin.manifest.id, commandId, level: 'info', message: 'Bridge context requested' })
+      return { ok: true, context: createPluginBridgeContext() }
+    },
+    petSay: async (payload = {}) => {
+      assertPermission(plugin.manifest, 'pet:say')
+      appendLog({ pluginId: plugin.manifest.id, commandId, level: 'info', message: 'Bridge pet.say invoked' })
+      return {
+        ok: true,
+        result: petService.say({
+          text: payload.text,
+          ttlMs: payload.ttlMs,
+          source: `plugin:${plugin.manifest.id}:bridge`
+        })
+      }
+    },
+    petAction: async (payload = {}) => {
+      assertPermission(plugin.manifest, 'pet:action')
+      const actionId = String(payload.actionId || '')
+      appendLog({
+        pluginId: plugin.manifest.id,
+        commandId,
+        level: 'info',
+        message: `Bridge pet.action invoked: ${actionId}`.slice(0, 240)
+      })
+      return {
+        ok: true,
+        result: petService.playAction({
+          actionId,
+          source: `plugin:${plugin.manifest.id}:bridge`
+        })
+      }
+    },
+    petEvent: async (payload = {}) => {
+      assertPermission(plugin.manifest, 'pet:event')
+      const eventType = String(payload.type || '')
+      appendLog({
+        pluginId: plugin.manifest.id,
+        commandId,
+        level: 'info',
+        message: `Bridge pet.event invoked: ${eventType}`.slice(0, 240)
+      })
+      return {
+        ok: true,
+        result: petService.setEvent({
+          type: payload.type,
+          message: payload.message,
+          ttlMs: payload.ttlMs,
+          source: `plugin:${plugin.manifest.id}:bridge`
+        })
+      }
+    }
+  })
+
+  const ensureCommandBridgeServer = async () => {
+    if (commandBridgeServer?.listening) return commandBridgePort
+    if (commandBridgeServer && !commandBridgeServer.listening) {
+      commandBridgeServer.removeAllListeners()
+      commandBridgeServer = null
+      commandBridgePort = 0
+    }
+
+    commandBridgeServer = http.createServer(async (request, response) => {
+      try {
+        const url = new URL(request.url, `http://${PLUGIN_BRIDGE_HOST}`)
+        const match = url.pathname.match(/^\/plugins\/bridge\/([^/]+)\/([^/]+)\/([^/]+)(\/context|\/pet\/say|\/pet\/action|\/pet\/event)$/)
+        if (!match) {
+          sendJson(response, 404, { ok: false, error: 'Not found' })
+          return
+        }
+        const [, pluginId, commandId, runId, route] = match
+        const runtimeKey = createPluginBridgeKey(pluginId, commandId, runId)
+        const runtime = commandBridgeRuntimes.get(runtimeKey)
+        if (!runtime || runtime.status !== 'running') {
+          sendJson(response, 401, { ok: false, error: 'Bridge token expired' })
+          return
+        }
+
+        const token = extractBearerToken(request.headers.authorization)
+        if (!safeTokenEquals(token, runtime.token)) {
+          appendLog({ pluginId, commandId, level: 'error', message: 'Bridge request rejected: unauthorized token' })
+          sendJson(response, 401, { ok: false, error: 'Unauthorized' })
+          return
+        }
+
+        if (route === '/context') {
+          sendJson(response, 200, await runtime.handlers.context())
+          return
+        }
+
+        if (!isJsonRequest(request)) {
+          sendJson(response, 415, { ok: false, error: 'Content-Type must be application/json' })
+          return
+        }
+
+        const payload = await readJsonBody(request)
+        if (route === '/pet/say') {
+          sendJson(response, 200, await runtime.handlers.petSay(payload))
+          return
+        }
+        if (route === '/pet/action') {
+          sendJson(response, 200, await runtime.handlers.petAction(payload))
+          return
+        }
+        if (route === '/pet/event') {
+          sendJson(response, 200, await runtime.handlers.petEvent(payload))
+          return
+        }
+        sendJson(response, 404, { ok: false, error: 'Not found' })
+      } catch (error) {
+        const statusCode = /does not have/.test(String(error.message || '')) ? 403 : 400
+        sendJson(response, statusCode, { ok: false, error: error.message || 'Bridge request failed' })
+      }
+    })
+
+    await new Promise((resolve, reject) => {
+      const onError = (error) => {
+        commandBridgeServer?.off?.('listening', onListening)
+        reject(error)
+      }
+      const onListening = () => {
+        commandBridgeServer?.off?.('error', onError)
+        const address = commandBridgeServer.address()
+        commandBridgePort = typeof address === 'object' && address ? Number(address.port) || 0 : 0
+        commandBridgeServer?.unref?.()
+        resolve()
+      }
+      commandBridgeServer.once('error', onError)
+      commandBridgeServer.once('listening', onListening)
+      commandBridgeServer.listen(0, PLUGIN_BRIDGE_HOST)
+    })
+
+    return commandBridgePort
   }
 
   const getPlugins = () => [
@@ -985,13 +1196,18 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
     }
   }
 
-  const runCommandEntryProcess = ({ plugin, commandEntry, commandId, payload, config }) => {
+  const runCommandEntryProcess = async ({ plugin, commandEntry, commandId, payload, config }) => {
     const pluginId = plugin.manifest.id
     const runtimeKey = createPluginServiceKey(pluginId, commandId)
     const existingRuntime = commandRuntimes.get(runtimeKey)
     if (ACTIVE_COMMAND_STATUSES.has(existingRuntime?.status)) throw new Error('Plugin command is already running')
     const { file, args } = parseServiceCommand(commandEntry.command)
     const cwd = resolveCommandCwd(plugin.manifest, commandEntry.cwd)
+    const bridgePort = await ensureCommandBridgeServer()
+    const bridgeRunId = createPluginBridgeRunId()
+    const bridgeToken = createPluginBridgeToken()
+    const bridgeRuntimeKey = createPluginBridgeKey(pluginId, commandId, bridgeRunId)
+    const bridgeBaseUrl = `http://${PLUGIN_BRIDGE_HOST}:${bridgePort}/plugins/bridge/${pluginId}/${commandId}/${bridgeRunId}`
     const commandContext = {
       pluginId,
       commandId,
@@ -1004,7 +1220,11 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
     const child = spawnCommandProcess(file, args, {
       cwd,
       detached: false,
-      env: createServiceProcessEnv(),
+      env: {
+        ...createServiceProcessEnv(),
+        OPENPET_BRIDGE_URL: bridgeBaseUrl,
+        OPENPET_BRIDGE_TOKEN: bridgeToken
+      },
       shell: false,
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true
@@ -1017,6 +1237,14 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
       child,
       stop: null
     }
+    commandBridgeRuntimes.set(bridgeRuntimeKey, {
+      pluginId,
+      commandId,
+      runId: bridgeRunId,
+      token: bridgeToken,
+      status: 'running',
+      handlers: createPluginBridgeHandlers(plugin, commandId)
+    })
     commandRuntimes.set(runtimeKey, runtime)
     let stdoutText = ''
     let stderrText = ''
@@ -1033,6 +1261,10 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
         settled = true
         if (timeoutId) clearTimeout(timeoutId)
         commandRuntimes.delete(runtimeKey)
+        commandBridgeRuntimes.delete(bridgeRuntimeKey)
+        if (commandBridgeServer && commandBridgeRuntimes.size === 0) {
+          commandBridgeServer.unref?.()
+        }
         callback()
       }
       runtime.stop = () => {
@@ -1457,6 +1689,12 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
     }
     for (const runtime of commandRuntimes.values()) {
       stopPluginCommandRuntime(runtime.pluginId, runtime.commandId, runtime, { log: false })
+    }
+    commandBridgeRuntimes.clear()
+    if (commandBridgeServer) {
+      commandBridgeServer.close?.()
+      commandBridgeServer = null
+      commandBridgePort = 0
     }
     return { ok: true }
   }
