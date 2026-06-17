@@ -152,7 +152,7 @@ Services are long-running local process entries managed by OpenPet.
 }
 ```
 
-OpenPet can explicitly run command and setup entries from Control Center, capture stdout/stderr snippets, show setup runtime state, explicitly start and stop services, show service runtime state, stop services on plugin disable, send stop signals on app quit, manually check declared loopback health endpoints, and attempt best-effort process-group cleanup when stopping services. Declaration-only command runs and explicitly started services receive a short-lived bridge URL/token so they can call `pet.say`, `pet.action`, `pet.event`, and fetch a bounded read-only context during the active entry run. This lets extensions build practical long-running experiences such as weather companions, personality injectors, action announcers, and pet-aware dashboards without forcing everything through the legacy JavaScript SDK. Command, setup, and service processes do not run during install or enable; services never auto-start; health checks do not run in the background; and the host spawns command, setup, and service processes without shell expansion. Hard process-tree cleanup guarantees are still future runtime work. The service model should not require a specific language, a self-contained package, or a full process sandbox.
+OpenPet can explicitly run command and setup entries from Control Center, capture stdout/stderr snippets, show setup runtime state, explicitly start and stop services, show service runtime state, stop services on plugin disable, send stop signals on app quit, manually check declared loopback health endpoints, and attempt best-effort process-group cleanup when stopping services. Declaration-only command runs and explicitly started services receive a short-lived bridge URL/token so they can call `pet.say`, `pet.action`, `pet.event`, fetch a bounded read-only context, and discover the current action catalog during the active entry run. This lets extensions build practical long-running experiences such as weather companions, personality injectors, action announcers, pet-aware dashboards, and action-selection tools without forcing everything through the legacy JavaScript SDK. Command, setup, and service processes do not run during install or enable; services never auto-start; health checks do not run in the background; and the host spawns command, setup, and service processes without shell expansion. Hard process-tree cleanup guarantees are still future runtime work. The service model should not require a specific language, a self-contained package, or a full process sandbox.
 
 ### Dashboards
 
@@ -214,11 +214,12 @@ Current command result:
 Current bridge routes:
 
 - `GET /context`
+- `GET /pet/actions`
 - `POST /pet/say`
 - `POST /pet/action`
 - `POST /pet/event`
 
-The bridge is loopback-only, token-gated, permission-checked, and valid only while the command or service entry run is active.
+The bridge is loopback-only, token-gated, permission-checked where mutation routes require it, and valid only while the command or service entry run is active.
 
 OpenPet may interpret common result keys:
 
@@ -244,6 +245,7 @@ Injected values:
 Current endpoint set:
 
 - `GET /context`
+- `GET /pet/actions`
 - `POST /pet/say`
 - `POST /pet/action`
 - `POST /pet/event`
@@ -253,6 +255,7 @@ Bridge rules:
 - the bridge exists only during an explicit declaration-only command run or an explicitly started service entry;
 - the entry must belong to an enabled, policy-allowed local extension;
 - requests must use `Authorization: Bearer <OPENPET_BRIDGE_TOKEN>`;
+- `GET /pet/actions` is read-only and returns a bounded action summary rather than sprite paths or writable config locations;
 - `pet:say`, `pet:action`, and `pet:event` permissions are enforced per route;
 - all pet mutations still flow through `PetService`;
 - setup entries, install, enable, and background health paths do not receive bridge access.
@@ -271,11 +274,16 @@ curl "$OPENPET_BRIDGE_URL/context" \
   -H "Authorization: Bearer $OPENPET_BRIDGE_TOKEN"
 ```
 
+```bash
+curl "$OPENPET_BRIDGE_URL/pet/actions" \
+  -H "Authorization: Bearer $OPENPET_BRIDGE_TOKEN"
+```
+
 Example command behavior:
 
 1. Read command context from stdin.
 2. Fetch weather using the extension's own network stack.
-3. Optionally call bridge routes such as `POST /pet/say`, `POST /pet/action`, or `POST /pet/event`.
+3. Optionally call bridge routes such as `GET /pet/actions`, `POST /pet/say`, `POST /pet/action`, or `POST /pet/event`.
 4. Write final result JSON to stdout.
 
 Example service behavior:
@@ -283,7 +291,7 @@ Example service behavior:
 1. Start only after the user presses the service start action in Control Center.
 2. Read `OPENPET_BRIDGE_URL` and `OPENPET_BRIDGE_TOKEN` from the process environment.
 3. Run the extension's own scheduler, API client, dashboard server, model workflow, or asset generator.
-4. Call bridge routes when the pet should speak, switch action, emit an event, or read bounded context.
+4. Call bridge routes when the pet should speak, switch action, emit an event, read bounded context, or discover which actions exist.
 5. Stop using the bridge as soon as OpenPet requests service stop or the process exits.
 
 ## Configuration

@@ -575,6 +575,75 @@ test('declaration-only command bridge exposes bounded read-only context', async 
   })
 })
 
+test('declaration-only command bridge exposes bounded action catalog', async () => {
+  const spawned = []
+  const child = createFakeServiceProcess()
+  const root = createDeclarationOnlyPluginDir()
+  const pluginPath = path.join(root, 'weather-declaration', 'plugin.json')
+  fs.writeFileSync(path.join(pluginPath), JSON.stringify({
+    id: 'weather-declaration',
+    name: 'Weather Declaration',
+    version: '1.0.0',
+    permissions: [],
+    entries: {
+      commands: [{ id: 'announce', title: 'Announce Weather', command: 'node ./commands/announce.js', cwd: '.' }]
+    }
+  }))
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: {
+        enabled: { 'weather-declaration': true }
+      }
+    }),
+    petService: createBridgeAwarePetService(),
+    officialPlugins: [],
+    pluginDirs: [root],
+    spawnCommandProcess: (file, args, options) => {
+      spawned.push({ file, args, options })
+      return child
+    }
+  })
+
+  const commandRun = service.runCommand('weather-declaration', 'announce')
+  await waitFor(() => spawned.length === 1)
+  const baseUrl = spawned[0].options.env.OPENPET_BRIDGE_URL
+  const token = spawned[0].options.env.OPENPET_BRIDGE_TOKEN
+  const actionsResponse = await requestBridge(`${baseUrl}/pet/actions`, {
+    token
+  })
+
+  child.stdout.write('{"ok":true}\n')
+  child.emit('exit', 0, null)
+  await commandRun
+
+  assert.deepEqual(actionsResponse.body.actions, {
+    selectedPetId: 'legacy-cat',
+    defaultAction: 'idle',
+    clickAction: 'wave',
+    currentActionId: 'idle',
+    items: [
+      {
+        id: 'idle',
+        label: 'Idle',
+        kind: 'custom',
+        loop: false,
+        frameCount: 0,
+        frameMs: 0
+      },
+      {
+        id: 'wave',
+        label: 'Wave',
+        kind: 'custom',
+        loop: false,
+        frameCount: 0,
+        frameMs: 0
+      }
+    ]
+  })
+  assert.equal('sprite' in actionsResponse.body.actions.items[0], false)
+  assert.equal('previewSprite' in actionsResponse.body.actions.items[0], false)
+})
+
 test('plugin service rejects declaration command cwd symlinks escaping the plugin directory', async () => {
   const root = createDeclarationOnlyPluginDir({ commandCwd: 'command-link' })
   const outsidePath = path.join(root, 'outside-command')
@@ -1398,6 +1467,9 @@ test('plugin service bridge rejects invalid tokens and missing permissions', asy
   const baseUrl = spawned[0].options.env.OPENPET_BRIDGE_URL
   const token = spawned[0].options.env.OPENPET_BRIDGE_TOKEN
 
+  const wrongActionsToken = await requestBridge(`${baseUrl}/pet/actions`, {
+    token: 'wrong-token'
+  })
   const wrongToken = await requestBridge(`${baseUrl}/pet/say`, {
     method: 'POST',
     token: 'wrong-token',
@@ -1411,8 +1483,62 @@ test('plugin service bridge rejects invalid tokens and missing permissions', asy
 
   child.emit('exit', 0, null)
 
+  assert.equal(wrongActionsToken.status, 401)
   assert.equal(wrongToken.status, 401)
   assert.equal(missingPermission.status, 403)
+})
+
+test('plugin service bridge exposes bounded action catalog', async () => {
+  const spawned = []
+  const child = createSlowStoppingServiceProcess()
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: createBridgeAwarePetService(),
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir()],
+    spawnServiceProcess: (file, args, options) => {
+      spawned.push({ file, args, options, child })
+      return child
+    }
+  })
+
+  await service.startService('weather-declaration', 'companion')
+  const baseUrl = spawned[0].options.env.OPENPET_BRIDGE_URL
+  const token = spawned[0].options.env.OPENPET_BRIDGE_TOKEN
+
+  const actionsResponse = await requestBridge(`${baseUrl}/pet/actions`, { token })
+
+  child.emit('exit', 0, null)
+  const expired = await requestBridge(`${baseUrl}/pet/actions`, { token })
+
+  assert.deepEqual(actionsResponse.body.actions, {
+    selectedPetId: 'legacy-cat',
+    defaultAction: 'idle',
+    clickAction: 'wave',
+    currentActionId: 'idle',
+    items: [
+      {
+        id: 'idle',
+        label: 'Idle',
+        kind: 'custom',
+        loop: false,
+        frameCount: 0,
+        frameMs: 0
+      },
+      {
+        id: 'wave',
+        label: 'Wave',
+        kind: 'custom',
+        loop: false,
+        frameCount: 0,
+        frameMs: 0
+      }
+    ]
+  })
+  assert.equal('sprite' in actionsResponse.body.actions.items[0], false)
+  assert.equal(expired.status, 401)
 })
 
 test('plugin service bridge expires when service stop is requested', async () => {

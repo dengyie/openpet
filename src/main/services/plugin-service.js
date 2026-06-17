@@ -568,10 +568,37 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
     }
   }
 
+  const createPluginBridgeActionCatalog = () => {
+    const snapshot = petService.getSnapshot?.() || {}
+    const settings = snapshot.settings || {}
+    const actions = snapshot.actions || {}
+    const items = Array.isArray(actions.actions)
+      ? actions.actions.map((action) => ({
+          id: String(action.id || ''),
+          label: String(action.label || action.id || ''),
+          kind: String(action.kind || 'custom'),
+          loop: Boolean(action.loop),
+          frameCount: Number.isFinite(Number(action.frameCount)) ? Number(action.frameCount) : 0,
+          frameMs: Number.isFinite(Number(action.frameMs)) ? Number(action.frameMs) : 0
+        }))
+      : []
+    return {
+      selectedPetId: String(settings.petPacks?.activePackId || 'legacy-cat'),
+      defaultAction: String(actions.defaultAction || ''),
+      clickAction: String(actions.clickAction || ''),
+      currentActionId: String(actions.defaultAction || ''),
+      items
+    }
+  }
+
   const createPluginBridgeHandlers = (plugin, entryId) => ({
     context: async () => {
       appendLog({ pluginId: plugin.manifest.id, commandId: entryId, level: 'info', message: 'Bridge context requested' })
       return { ok: true, context: createPluginBridgeContext() }
+    },
+    petActions: async () => {
+      appendLog({ pluginId: plugin.manifest.id, commandId: entryId, level: 'info', message: 'Bridge pet.actions requested' })
+      return { ok: true, actions: createPluginBridgeActionCatalog() }
     },
     petSay: async (payload = {}) => {
       assertPermission(plugin.manifest, 'pet:say')
@@ -635,7 +662,7 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
     pluginBridgeServer = http.createServer(async (request, response) => {
       try {
         const url = new URL(request.url, `http://${PLUGIN_BRIDGE_HOST}`)
-        const match = url.pathname.match(/^\/plugins\/bridge\/([^/]+)\/([^/]+)\/([^/]+)(\/context|\/pet\/say|\/pet\/action|\/pet\/event)$/)
+        const match = url.pathname.match(/^\/plugins\/bridge\/([^/]+)\/([^/]+)\/([^/]+)(\/context|\/pet\/actions|\/pet\/say|\/pet\/action|\/pet\/event)$/)
         if (!match) {
           sendJson(response, 404, { ok: false, error: 'Not found' })
           return
@@ -657,6 +684,10 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
 
         if (route === '/context') {
           sendJson(response, 200, await runtime.handlers.context())
+          return
+        }
+        if (route === '/pet/actions') {
+          sendJson(response, 200, await runtime.handlers.petActions())
           return
         }
 
