@@ -24,7 +24,6 @@ const DEFAULT_PLUGIN_SERVICE_HEALTH_INTERVAL_MS = 30000
 const MAX_PLUGIN_SERVICE_HEALTH_INTERVAL_MS = 300000
 const LOCAL_PLUGIN_RUNNER_PATH = path.join(__dirname, '../plugins/local-plugin-runner.js')
 const PLUGIN_BRIDGE_HOST = '127.0.0.1'
-
 const createPluginServiceKey = (pluginId, serviceId) => `${pluginId}:${serviceId}`
 
 const ACTIVE_SERVICE_STATUSES = new Set(['running', 'stopping'])
@@ -516,7 +515,7 @@ const readLocalPluginManifests = (pluginDirs = []) => {
   return plugins
 }
 
-const createPluginService = ({ settingsService, petService, aiService, fetchImpl = globalThis.fetch, serviceHealthTimeoutMs, healthCheckTimeoutMs = serviceHealthTimeoutMs ?? PLUGIN_SERVICE_HEALTH_TIMEOUT_MS, serviceStopGracePeriodMs = PLUGIN_SERVICE_STOP_GRACE_PERIOD_MS, commandProcessTimeoutMs = LOCAL_PLUGIN_COMMAND_TIMEOUT_MS, openExternal = async () => { throw new Error('Dashboard opener is not available') }, spawnServiceProcess = spawn, spawnSetupProcess = spawnServiceProcess, spawnCommandProcess = spawnServiceProcess, killServiceProcess = process.kill, signalServiceProcessTree = defaultServiceProcessTree.signalServiceProcessTree, setServiceHealthTimer = setTimeout, clearServiceHealthTimer = clearTimeout, pluginDirs = [], officialPlugins = [], getPluginBlockStatus = () => ({ blocked: false, reasons: [] }) }) => {
+const createPluginService = ({ settingsService, petService, actionService, aiService, fetchImpl = globalThis.fetch, serviceHealthTimeoutMs, healthCheckTimeoutMs = serviceHealthTimeoutMs ?? PLUGIN_SERVICE_HEALTH_TIMEOUT_MS, serviceStopGracePeriodMs = PLUGIN_SERVICE_STOP_GRACE_PERIOD_MS, commandProcessTimeoutMs = LOCAL_PLUGIN_COMMAND_TIMEOUT_MS, openExternal = async () => { throw new Error('Dashboard opener is not available') }, spawnServiceProcess = spawn, spawnSetupProcess = spawnServiceProcess, spawnCommandProcess = spawnServiceProcess, killServiceProcess = process.kill, signalServiceProcessTree = defaultServiceProcessTree.signalServiceProcessTree, setServiceHealthTimer = setTimeout, clearServiceHealthTimer = clearTimeout, pluginDirs = [], officialPlugins = [], getPluginBlockStatus = () => ({ blocked: false, reasons: [] }) }) => {
   if (!settingsService) throw new Error('settingsService is required')
   if (!petService) throw new Error('petService is required')
   const serviceRuntimes = new Map()
@@ -558,6 +557,17 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
     return entry
   }
 
+  const ensurePluginCreatorDirs = (manifest) => {
+    const baseDir = path.join(path.dirname(manifest.basePath || process.cwd()), '.openpet', manifest.id)
+    const dataDir = path.join(baseDir, 'data')
+    const cacheDir = path.join(baseDir, 'cache')
+    const logDir = path.join(baseDir, 'logs')
+    fs.mkdirSync(dataDir, { recursive: true })
+    fs.mkdirSync(cacheDir, { recursive: true })
+    fs.mkdirSync(logDir, { recursive: true })
+    return { dataDir, cacheDir, logDir }
+  }
+
   const createPluginBridgeContext = () => {
     const snapshot = petService.getSnapshot?.() || {}
     const settings = snapshot.settings || {}
@@ -577,6 +587,30 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
     context: async () => {
       appendLog({ pluginId: plugin.manifest.id, commandId, level: 'info', message: 'Bridge context requested' })
       return { ok: true, context: createPluginBridgeContext() }
+    },
+    creatorActionsRead: async () => {
+      assertPermission(plugin.manifest, 'actions:read')
+      appendLog({ pluginId: plugin.manifest.id, commandId, level: 'info', message: 'Bridge creator.actions read invoked' })
+      if (!actionService?.getPreviewConfig && !actionService?.getConfig) {
+        throw new Error('Creator action read is not available')
+      }
+      const actions = actionService?.getPreviewConfig?.()
+        || actionService?.getConfig?.()
+        || { defaultAction: '', clickAction: '', actions: [] }
+      return { ok: true, actions }
+    },
+    creatorActionsValidate: async (payload = {}) => {
+      assertPermission(plugin.manifest, 'actions:write')
+      if (!actionService?.validateCreatorActionMutation) throw new Error('Creator action validation is not available')
+      appendLog({ pluginId: plugin.manifest.id, commandId, level: 'info', message: 'Bridge creator.actions validate invoked' })
+      return { ok: true, validation: actionService.validateCreatorActionMutation(payload) }
+    },
+    creatorActionsApply: async (payload = {}) => {
+      assertPermission(plugin.manifest, 'actions:write')
+      if (!actionService?.applyCreatorActionMutation) throw new Error('Creator action apply is not available')
+      appendLog({ pluginId: plugin.manifest.id, commandId, level: 'info', message: 'Bridge creator.actions apply invoked' })
+      const actions = actionService.applyCreatorActionMutation(payload)
+      return { ok: true, actions }
     },
     petSay: async (payload = {}) => {
       assertPermission(plugin.manifest, 'pet:say')
@@ -639,7 +673,7 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
     commandBridgeServer = http.createServer(async (request, response) => {
       try {
         const url = new URL(request.url, `http://${PLUGIN_BRIDGE_HOST}`)
-        const match = url.pathname.match(/^\/plugins\/bridge\/([^/]+)\/([^/]+)\/([^/]+)(\/context|\/pet\/say|\/pet\/action|\/pet\/event)$/)
+        const match = url.pathname.match(/^\/plugins\/bridge\/([^/]+)\/([^/]+)\/([^/]+)(\/context|\/pet\/say|\/pet\/action|\/pet\/event|\/creator\/actions|\/creator\/actions\/validate|\/creator\/actions\/apply)$/)
         if (!match) {
           sendJson(response, 404, { ok: false, error: 'Not found' })
           return
@@ -664,6 +698,11 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
           return
         }
 
+        if (route === '/creator/actions') {
+          sendJson(response, 200, await runtime.handlers.creatorActionsRead())
+          return
+        }
+
         if (!isJsonRequest(request)) {
           sendJson(response, 415, { ok: false, error: 'Content-Type must be application/json' })
           return
@@ -680,6 +719,14 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
         }
         if (route === '/pet/event') {
           sendJson(response, 200, await runtime.handlers.petEvent(payload))
+          return
+        }
+        if (route === '/creator/actions/validate') {
+          sendJson(response, 200, await runtime.handlers.creatorActionsValidate(payload))
+          return
+        }
+        if (route === '/creator/actions/apply') {
+          sendJson(response, 200, await runtime.handlers.creatorActionsApply(payload))
           return
         }
         sendJson(response, 404, { ok: false, error: 'Not found' })
@@ -902,6 +949,7 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
 
   const listPlugins = () => getPlugins().map((plugin) => ({
     ...plugin.manifest,
+    profile: plugin.manifest.profile || 'runtime',
     entries: decorateEntriesWithRuntime(plugin.manifest),
     enabled: Boolean(getEnabledMap()[plugin.manifest.id]),
     runnable: typeof plugin.activate === 'function' || Boolean(plugin.mainPath) || Boolean(plugin.manifest.entries?.commands?.length),
@@ -1394,6 +1442,7 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
     const bridgeToken = createPluginBridgeToken()
     const bridgeRuntimeKey = createPluginBridgeKey(pluginId, commandId, bridgeRunId)
     const bridgeBaseUrl = `http://${PLUGIN_BRIDGE_HOST}:${bridgePort}/plugins/bridge/${pluginId}/${commandId}/${bridgeRunId}`
+    const creatorDirs = ensurePluginCreatorDirs(plugin.manifest)
     const commandContext = {
       pluginId,
       commandId,
@@ -1408,6 +1457,9 @@ const createPluginService = ({ settingsService, petService, aiService, fetchImpl
       detached: false,
       env: {
         ...createServiceProcessEnv(),
+        OPENPET_DATA_DIR: creatorDirs.dataDir,
+        OPENPET_CACHE_DIR: creatorDirs.cacheDir,
+        OPENPET_LOG_DIR: creatorDirs.logDir,
         OPENPET_BRIDGE_URL: bridgeBaseUrl,
         OPENPET_BRIDGE_TOKEN: bridgeToken
       },

@@ -271,6 +271,7 @@ const createPluginInstallService = ({ settingsService, pluginDir, getPluginBlock
         id: manifest.id,
         name: manifest.name,
         version: manifest.version,
+        profile: manifest.profile,
         description: manifest.description,
         permissions: manifest.permissions,
         network: manifest.network,

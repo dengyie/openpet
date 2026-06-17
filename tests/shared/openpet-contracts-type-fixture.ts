@@ -1,5 +1,7 @@
 import type {
   CatalogInstallSelection,
+  CreatorActionsMutationResult,
+  CreatorActionsReadResponse,
   PluginCommandRunResultViewState,
   PluginPackageReviewViewState,
   PluginSetupRunResultViewState,
@@ -89,6 +91,43 @@ const pluginCommandRunFixture = {
     message: 'Command completed'
   }
 } satisfies PluginCommandRunResultViewState
+
+const creatorActionsReadFixture = {
+  ok: true,
+  actions: {
+    defaultAction: 'idle',
+    clickAction: 'wave',
+    actions: [
+      { id: 'idle', label: 'Idle', sprite: 'file:///packs/cat/sprites/idle.png', previewSprite: 'file:///packs/cat/sprites/idle.png', frameCount: 1, frameMs: 100, frameWidth: 32, frameHeight: 32 },
+      { id: 'wave', label: 'Wave', sprite: 'file:///packs/cat/sprites/wave.png', previewSprite: 'file:///packs/cat/sprites/wave.png', frameCount: 1, frameMs: 100, frameWidth: 32, frameHeight: 32 }
+    ]
+  }
+} satisfies CreatorActionsReadResponse
+
+const creatorActionsMutationFixture = {
+  ok: true,
+  validation: {
+    ok: true,
+    errors: [],
+    warnings: [],
+    actions: {
+      defaultAction: 'idle',
+      clickAction: 'wave',
+      actions: [
+        { id: 'idle', label: 'Idle', sprite: 'file:///packs/cat/sprites/idle.png', frameCount: 1, frameMs: 100, frameWidth: 32, frameHeight: 32 },
+        { id: 'wave', label: 'Wave Updated', sprite: 'file:///packs/cat/sprites/wave.png', frameCount: 1, frameMs: 100, frameWidth: 32, frameHeight: 32 }
+      ]
+    }
+  },
+  actions: {
+    defaultAction: 'idle',
+    clickAction: 'wave',
+    actions: [
+      { id: 'idle', label: 'Idle', sprite: 'file:///packs/cat/sprites/idle.png', frameCount: 1, frameMs: 100, frameWidth: 32, frameHeight: 32 },
+      { id: 'wave', label: 'Wave Updated', sprite: 'file:///packs/cat/sprites/wave.png', frameCount: 1, frameMs: 100, frameWidth: 32, frameHeight: 32 }
+    ]
+  }
+} satisfies CreatorActionsMutationResult
 
 const releaseArchiveFixture = {
   generatedAt: '2026-06-17T00:00:00.000Z',

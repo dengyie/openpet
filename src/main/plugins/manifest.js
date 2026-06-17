@@ -5,8 +5,12 @@ const KNOWN_PLUGIN_PERMISSIONS = new Set([
   'ai:chat',
   'storage',
   'network',
-  'commands'
+  'commands',
+  'actions:read',
+  'actions:write'
 ])
+
+const KNOWN_PLUGIN_PROFILES = new Set(['runtime', 'creator-tools', 'hybrid'])
 
 const SAFE_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/
 
@@ -221,6 +225,11 @@ const normalizePluginManifest = (manifest, { source = 'local', basePath = '' } =
   const configPath = manifest.config || manifest.configSchema || ''
   const normalizedConfigPath = normalizeRelativeFilePath(configPath, manifest.config ? 'config' : 'configSchema', '.json')
 
+  const profile = manifest.profile == null ? 'runtime' : String(manifest.profile).trim()
+  if (!KNOWN_PLUGIN_PROFILES.has(profile)) {
+    throw new Error('Plugin profile must be runtime, creator-tools, or hybrid')
+  }
+
   const permissions = manifest.permissions || []
   for (const permission of permissions) {
     if (!KNOWN_PLUGIN_PERMISSIONS.has(permission)) {
@@ -238,6 +247,7 @@ const normalizePluginManifest = (manifest, { source = 'local', basePath = '' } =
     id: manifest.id,
     name: manifest.name,
     version: manifest.version,
+    profile,
     description: manifest.description || '',
     source,
     basePath,

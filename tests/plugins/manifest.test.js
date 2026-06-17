@@ -21,6 +21,7 @@ test('normalizes a plugin manifest with permissions and commands', () => {
     id: 'focus-timer',
     name: 'Focus Timer',
     version: '1.0.0',
+    profile: 'runtime',
     description: 'Focus helper',
     source: 'local',
     basePath: '/plugins/focus-timer',
@@ -119,7 +120,9 @@ test('normalizes extension manifest entries and declaration fields', () => {
     id: 'weather-morning-report',
     name: 'Weather Morning Report',
     version: '1.0.0',
+    profile: 'creator-tools',
     description: 'Weather reports, dashboard, and pet announcements.',
+    permissions: ['actions:read', 'actions:write'],
     config: 'config.schema.json',
     entries: {
       commands: [
@@ -170,8 +173,10 @@ test('normalizes extension manifest entries and declaration fields', () => {
   }, { source: 'local', basePath: '/plugins/weather-morning-report' })
 
   assert.equal(manifest.main, '')
+  assert.equal(manifest.profile, 'creator-tools')
   assert.equal(manifest.config, 'config.schema.json')
   assert.equal(manifest.configSchema, 'config.schema.json')
+  assert.deepEqual(manifest.permissions, ['actions:read', 'actions:write'])
   assert.deepEqual(manifest.entries.commands, [
     {
       id: 'announce',
@@ -216,6 +221,21 @@ test('normalizes extension manifest entries and declaration fields', () => {
     ]
   })
   assert.deepEqual(manifest.assets, ['assets/email-template.html'])
+})
+
+test('defaults plugin profile to runtime and accepts hybrid profile', () => {
+  assert.equal(normalizePluginManifest({
+    id: 'default-profile',
+    name: 'Default Profile',
+    version: '1.0.0'
+  }).profile, 'runtime')
+
+  assert.equal(normalizePluginManifest({
+    id: 'hybrid-profile',
+    name: 'Hybrid Profile',
+    version: '1.0.0',
+    profile: 'hybrid'
+  }).profile, 'hybrid')
 })
 
 test('normalizes optional plugin signature metadata', () => {
@@ -336,6 +356,15 @@ test('rejects plugin manifests with unknown permissions', () => {
     version: '1.0.0',
     permissions: ['fs:read']
   }), /Unknown plugin permission/)
+})
+
+test('rejects unknown plugin profiles', () => {
+  assert.throws(() => normalizePluginManifest({
+    id: 'bad-profile',
+    name: 'Bad Profile',
+    version: '1.0.0',
+    profile: 'desktop-authoring'
+  }), /Plugin profile must be runtime, creator-tools, or hybrid/)
 })
 
 test('rejects plugin manifests without required identity fields', () => {

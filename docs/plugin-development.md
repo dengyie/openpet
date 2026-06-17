@@ -172,7 +172,7 @@ First-version behavior should stay simple: OpenPet shows an "Open Dashboard" act
 
 OpenPet should use language-neutral context passing.
 
-Current command entries receive context on stdin and run with a minimal host environment. Declaration-only command runs now also receive a short-lived bridge URL/token pair. OpenPet does not currently inject data/cache/log paths, generated config files, or result-file paths into command processes.
+Current command entries receive context on stdin and run with a minimal host environment. Declaration-only command runs now also receive a short-lived bridge URL/token pair plus host-owned `OPENPET_DATA_DIR`, `OPENPET_CACHE_DIR`, and `OPENPET_LOG_DIR` paths. OpenPet still does not inject generated config files or result-file paths into command processes.
 
 Current standard environment variables:
 
@@ -180,16 +180,16 @@ Current standard environment variables:
 | --- | --- |
 | `OPENPET_BRIDGE_URL` | Short-lived local bridge endpoint for the active declaration-only command run. |
 | `OPENPET_BRIDGE_TOKEN` | Bearer token for the active declaration-only command bridge. |
+| `OPENPET_DATA_DIR` | Host-owned persistent data directory for the active declaration-only command run. |
+| `OPENPET_CACHE_DIR` | Host-owned cache directory for the active declaration-only command run. |
+| `OPENPET_LOG_DIR` | Host-owned log directory for the active declaration-only command run. |
 
-Reserved future variables:
+Reserved future variables only:
 
 | Variable | Purpose |
 | --- | --- |
 | `OPENPET_EXTENSION_ID` | Current extension id. |
 | `OPENPET_EXTENSION_DIR` | Installed package directory. |
-| `OPENPET_DATA_DIR` | Recommended persistent data directory. |
-| `OPENPET_CACHE_DIR` | Recommended cache directory. |
-| `OPENPET_LOG_DIR` | Recommended log directory. |
 | `OPENPET_CONFIG_PATH` | Optional generated config JSON path. |
 | `OPENPET_RESULT_PATH` | Command result JSON output path. |
 
@@ -217,6 +217,9 @@ Current bridge routes:
 - `POST /pet/say`
 - `POST /pet/action`
 - `POST /pet/event`
+- `GET /creator/actions`
+- `POST /creator/actions/validate`
+- `POST /creator/actions/apply`
 
 The bridge is loopback-only, token-gated, and valid only while the command run is active.
 
@@ -240,6 +243,9 @@ Injected values:
 
 - `OPENPET_BRIDGE_URL`
 - `OPENPET_BRIDGE_TOKEN`
+- `OPENPET_DATA_DIR`
+- `OPENPET_CACHE_DIR`
+- `OPENPET_LOG_DIR`
 
 Current endpoint set:
 
@@ -247,14 +253,18 @@ Current endpoint set:
 - `POST /pet/say`
 - `POST /pet/action`
 - `POST /pet/event`
+- `GET /creator/actions`
+- `POST /creator/actions/validate`
+- `POST /creator/actions/apply`
 
 Bridge rules:
 
 - the bridge exists only during an explicit declaration-only command run;
 - the command must belong to an enabled, policy-allowed local extension;
 - requests must use `Authorization: Bearer <OPENPET_BRIDGE_TOKEN>`;
-- `pet:say`, `pet:action`, and `pet:event` permissions are enforced per route;
+- `pet:say`, `pet:action`, `pet:event`, `actions:read`, and `actions:write` permissions are enforced per route;
 - all pet mutations still flow through `PetService`;
+- creator-tools reads and writes flow through the host action service boundary;
 - setup entries, services, install, enable, and background health paths do not receive bridge access.
 
 Example bridge requests:
@@ -268,6 +278,11 @@ curl -X POST "$OPENPET_BRIDGE_URL/pet/say" \
 
 ```bash
 curl "$OPENPET_BRIDGE_URL/context" \
+  -H "Authorization: Bearer $OPENPET_BRIDGE_TOKEN"
+```
+
+```bash
+curl "$OPENPET_BRIDGE_URL/creator/actions" \
   -H "Authorization: Bearer $OPENPET_BRIDGE_TOKEN"
 ```
 
@@ -393,7 +408,7 @@ Good extension shapes include:
 - scheduled companions that announce calendar, RSS, build, or system status;
 - dashboards for configuring extension-specific workflows.
 
-Pet action tooling should prefer package-local assets and generated outputs under `OPENPET_DATA_DIR` or a declared asset directory. Do not modify `cat_anime/` directly unless the user is intentionally working on core app assets.
+Pet action tooling should prefer package-local assets and generated outputs under `OPENPET_DATA_DIR` or a declared asset directory. Creator-tools commands should use the host bridge for bounded action reads and writes. Do not modify `cat_anime/` directly unless the user is intentionally working on core app assets.
 
 ## Packaging And Submission
 
@@ -409,7 +424,7 @@ npm run create-plugin-maintainer-approval -- plugin-submission-bundle --reviewer
 npm run validate-plugin-maintainer-approval -- plugin-submission-bundle --require-approved
 ```
 
-These commands are useful for structural validation and reviewer handoff, but some checks still reflect the legacy short-lived JavaScript SDK plugin model. The host now supports explicit setup execution, visible setup runtime status, explicit language-neutral command execution, explicit service start/stop, manual and opt-in periodic loopback service health checks, exit-confirmed cleanup for explicit setup/command/service stop flows, bounded service-side force stop, a broader process-tree cleanup fallback for explicit stop paths, and a separate maintainer approval artifact layered on top of a ready-for-review submission bundle. Approval remains human-authored and does not prove signing trust, catalog publication, runtime safety, or release readiness. Broader bridge flows and universal process-tree cleanup guarantees are still implementation gaps to reconcile with the extension boundary design when developing the next host runtime.
+These commands are useful for structural validation and reviewer handoff, but some checks still reflect the legacy short-lived JavaScript SDK plugin model. The host now supports explicit setup execution, visible setup runtime status, explicit language-neutral command execution, explicit service start/stop, manual and opt-in periodic loopback service health checks, exit-confirmed cleanup for explicit setup/command/service stop flows, bounded service-side force stop, a broader process-tree cleanup fallback for explicit stop paths, creator-tools action reads and bounded writes through the short-lived bridge, and a separate maintainer approval artifact layered on top of a ready-for-review submission bundle. Approval remains human-authored and does not prove signing trust, catalog publication, runtime safety, or release readiness. Broader bridge flows and universal process-tree cleanup guarantees are still implementation gaps to reconcile with the extension boundary design when developing the next host runtime.
 
 For a local author rehearsal:
 

@@ -59,7 +59,13 @@ const createPluginPackage = ({ root, id = 'focus-timer', version = '1.0.0', perm
   return pluginPath
 }
 
-const createExtensionDeclarationPackage = ({ root, id = 'weather-morning-report', assetPath = 'assets/email-template.html' } = {}) => {
+const createExtensionDeclarationPackage = ({
+  root,
+  id = 'weather-morning-report',
+  assetPath = 'assets/email-template.html',
+  profile = 'runtime',
+  permissions = []
+} = {}) => {
   const pluginPath = path.join(root || fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-extension-src-')), id)
   fs.mkdirSync(path.join(pluginPath, 'commands'), { recursive: true })
   fs.mkdirSync(path.join(pluginPath, 'assets'), { recursive: true })
@@ -80,7 +86,9 @@ const createExtensionDeclarationPackage = ({ root, id = 'weather-morning-report'
     id,
     name: 'Weather Morning Report',
     version: '1.0.0',
+    profile,
     description: 'Weather reports with a dashboard and pet announcements.',
+    permissions,
     config: 'config.schema.json',
     entries: {
       commands: [
@@ -158,6 +166,7 @@ test('plugin install service inspects extension declaration packages without leg
   const review = service.inspectPluginPackage(createExtensionDeclarationPackage())
 
   assert.equal(review.plugin.id, 'weather-morning-report')
+  assert.equal(review.plugin.profile, 'runtime')
   assert.equal(review.plugin.main, '')
   assert.equal(review.plugin.config, 'config.schema.json')
   assert.equal(review.plugin.configSchema, 'config.schema.json')
@@ -173,6 +182,21 @@ test('plugin install service inspects extension declaration packages without leg
     }
   ])
   assert.deepEqual(review.plugin.assets, ['assets/email-template.html'])
+})
+
+test('plugin install service surfaces creator-tools profile and action permissions in review data', () => {
+  const pluginDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-installed-creator-extensions-'))
+  const service = createPluginInstallService({ settingsService: createSettingsService(), pluginDir })
+
+  const review = service.inspectPluginPackage(createExtensionDeclarationPackage({
+    id: 'action-author',
+    profile: 'creator-tools',
+    permissions: ['actions:read', 'actions:write']
+  }))
+
+  assert.equal(review.plugin.profile, 'creator-tools')
+  assert.deepEqual(review.plugin.permissions, ['actions:read', 'actions:write'])
+  assert.deepEqual(review.permissionDiff.permissions.added, ['actions:read', 'actions:write'])
 })
 
 test('plugin install service rejects extension declarations that reference missing assets', () => {

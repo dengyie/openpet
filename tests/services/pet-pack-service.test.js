@@ -467,6 +467,33 @@ test('action service loads the active installed pet pack and uses its root for p
   assert.match(actionService.getPreviewConfig().actions[0].previewSprite, /file:\/\/.*active-cat\/sprites\/idle\.png$/)
 })
 
+test('pet pack service updates the active installed pack manifest action fields', () => {
+  const sourceDir = createTempDir('pet-pack-update-active')
+  createPetPackDirectory(sourceDir, { id: 'editable-cat', displayName: 'Editable Cat' })
+  const settingsService = createSettingsService()
+  const petPackService = createService(settingsService)
+
+  const inspection = petPackService.inspectPackDirectory(sourceDir)
+  petPackService.importPack(inspection.selectionId)
+  petPackService.setActivePack('editable-cat')
+
+  const updated = petPackService.updateActivePetPackManifest({
+    defaultAction: 'wave',
+    clickAction: 'wave',
+    actions: [
+      { id: 'idle', label: 'Idle', kind: 'idle', sprite: 'sprites/idle.png', frameCount: 1, frameMs: 100, frameWidth: 32, frameHeight: 32 },
+      { id: 'wave', label: 'Wave Updated', kind: 'greeting', sprite: 'sprites/wave.png', frameCount: 1, frameMs: 100, frameWidth: 32, frameHeight: 32 }
+    ]
+  })
+
+  const installedManifestPath = path.join(petPackService.listPacks().packs.find((pack) => pack.id === 'editable-cat').rootPath, 'pet.json')
+  const persisted = JSON.parse(fs.readFileSync(installedManifestPath, 'utf-8'))
+
+  assert.equal(updated.defaultAction, 'wave')
+  assert.equal(persisted.clickAction, 'wave')
+  assert.equal(persisted.actions.find((action) => action.id === 'wave').label, 'Wave Updated')
+})
+
 test('pet pack service rejects invalid packs before import', () => {
   const sourceDir = createTempDir('pet-pack-invalid')
   fs.mkdirSync(path.join(sourceDir, 'sprites'), { recursive: true })

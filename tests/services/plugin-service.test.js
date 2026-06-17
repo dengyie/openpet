@@ -112,7 +112,17 @@ const createRunnablePluginDir = ({ manifest = {}, source, configSchema }) => {
   return root
 }
 
-const createDeclarationOnlyPluginDir = ({ dashboardUrl = 'http://127.0.0.1:8787', commandCommand = 'node ./commands/announce.js', commandCwd = '.', serviceCommand = 'npm run service:start', serviceCwd = '.', serviceHealth, setupEntries = [] } = {}) => {
+const createDeclarationOnlyPluginDir = ({
+  dashboardUrl = 'http://127.0.0.1:8787',
+  commandCommand = 'node ./commands/announce.js',
+  commandCwd = '.',
+  serviceCommand = 'npm run service:start',
+  serviceCwd = '.',
+  serviceHealth,
+  setupEntries = [],
+  profile = 'runtime',
+  permissions = []
+} = {}) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-declaration-plugin-'))
   const pluginPath = path.join(root, 'weather-declaration')
   fs.mkdirSync(pluginPath)
@@ -120,6 +130,8 @@ const createDeclarationOnlyPluginDir = ({ dashboardUrl = 'http://127.0.0.1:8787'
     id: 'weather-declaration',
     name: 'Weather Declaration',
     version: '1.0.0',
+    profile,
+    permissions,
     entries: {
       setup: setupEntries,
       commands: [{ id: 'announce', title: 'Announce Weather', command: commandCommand, cwd: commandCwd }],
@@ -306,6 +318,7 @@ test('plugin service lists declaration-only extension entries as runnable comman
   const [plugin] = service.listPlugins()
 
   assert.equal(plugin.id, 'weather-declaration')
+  assert.equal(plugin.profile, 'runtime')
   assert.equal(plugin.enabled, true)
   assert.equal(plugin.runnable, true)
   assert.deepEqual(plugin.commands, [{ id: 'announce', title: 'Announce Weather' }])
@@ -344,6 +357,164 @@ test('plugin service lists declaration-only extension entries as runnable comman
     'Command stdout: {"ok":true,"petSay":"Bring an umbrella"}',
     'Command started'
   ])
+})
+
+test('declaration-only command entries receive creator-tools host directories in env', async () => {
+  const spawned = []
+  const child = createFakeServiceProcess()
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: createBridgeAwarePetService(),
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir({
+      profile: 'creator-tools',
+      permissions: ['actions:read']
+    })],
+    spawnCommandProcess: (file, args, options) => {
+      spawned.push({ file, args, options })
+      return child
+    }
+  })
+
+  const commandRun = service.runCommand('weather-declaration', 'announce')
+  await waitFor(() => child.listenerCount('exit') > 0)
+  child.stdout.write('{"ok":true}\n')
+  child.emit('exit', 0, null)
+  await commandRun
+
+  assert.equal(typeof spawned[0].options.env.OPENPET_DATA_DIR, 'string')
+  assert.equal(typeof spawned[0].options.env.OPENPET_CACHE_DIR, 'string')
+  assert.equal(typeof spawned[0].options.env.OPENPET_LOG_DIR, 'string')
+})
+
+test('declaration-only creator action bridge exposes action state and validation', async () => {
+  const spawned = []
+  const child = createFakeServiceProcess()
+  const actionService = {
+    getPreviewConfig: () => ({
+      defaultAction: 'idle',
+      clickAction: 'wave',
+      actions: [
+        { id: 'idle', label: 'Idle', sprite: 'file:///pets/idle.png', previewSprite: 'file:///pets/idle.png' },
+        { id: 'wave', label: 'Wave Hello', sprite: 'file:///pets/wave.png', previewSprite: 'file:///pets/wave.png' }
+      ]
+    }),
+    validateCreatorActionMutation: (payload) => ({
+      ok: true,
+      errors: [],
+      warnings: [],
+      actions: {
+        defaultAction: payload.defaultAction || 'idle',
+        clickAction: payload.clickAction || 'wave',
+        actions: [
+          { id: 'idle', label: 'Idle', sprite: 'file:///pets/idle.png' },
+          { id: 'wave', label: 'Wave Hello', sprite: 'file:///pets/wave.png' }
+        ]
+      }
+    }),
+    applyCreatorActionMutation: (payload) => ({
+      defaultAction: payload.defaultAction || 'idle',
+      clickAction: payload.clickAction || 'wave',
+      actions: [
+        { id: 'idle', label: 'Idle', sprite: 'file:///pets/idle.png' },
+        { id: 'wave', label: 'Wave Hello', sprite: 'file:///pets/wave.png' }
+      ]
+    })
+  }
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: createBridgeAwarePetService(),
+    actionService,
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir({
+      profile: 'creator-tools',
+      permissions: ['actions:read', 'actions:write']
+    })],
+    spawnCommandProcess: (file, args, options) => {
+      spawned.push({ file, args, options })
+      return child
+    }
+  })
+
+  const commandRun = service.runCommand('weather-declaration', 'announce')
+  await waitFor(() => spawned.length === 1)
+  const baseUrl = spawned[0].options.env.OPENPET_BRIDGE_URL
+  const token = spawned[0].options.env.OPENPET_BRIDGE_TOKEN
+
+  const readResponse = await requestBridge(`${baseUrl}/creator/actions`, { token })
+  const validateResponse = await requestBridge(`${baseUrl}/creator/actions/validate`, {
+    method: 'POST',
+    token,
+    body: {
+      defaultAction: 'idle',
+      clickAction: 'wave',
+      actions: [{ id: 'wave', label: 'Wave Hello', sprite: 'cat_anime/sprites/wave.png', frameCount: 12, frameMs: 90, frameWidth: 191, frameHeight: 453 }]
+    }
+  })
+  const applyResponse = await requestBridge(`${baseUrl}/creator/actions/apply`, {
+    method: 'POST',
+    token,
+    body: {
+      defaultAction: 'idle',
+      clickAction: 'wave',
+      actions: [{ id: 'wave', label: 'Wave Hello', sprite: 'cat_anime/sprites/wave.png', frameCount: 12, frameMs: 90, frameWidth: 191, frameHeight: 453 }]
+    }
+  })
+
+  child.stdout.write('{"ok":true}\n')
+  child.emit('exit', 0, null)
+  await commandRun
+
+  assert.equal(readResponse.status, 200)
+  assert.equal(readResponse.body.ok, true)
+  assert.equal(readResponse.body.actions.defaultAction, 'idle')
+  assert.equal(validateResponse.status, 200)
+  assert.equal(validateResponse.body.validation.ok, true)
+  assert.equal(applyResponse.status, 200)
+  assert.equal(applyResponse.body.actions.actions.find((action) => action.id === 'wave').label, 'Wave Hello')
+})
+
+test('declaration-only creator action bridge rejects missing permissions', async () => {
+  const spawned = []
+  const child = createFakeServiceProcess()
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: createBridgeAwarePetService(),
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir({
+      profile: 'creator-tools',
+      permissions: []
+    })],
+    spawnCommandProcess: (file, args, options) => {
+      spawned.push({ file, args, options })
+      return child
+    }
+  })
+
+  const commandRun = service.runCommand('weather-declaration', 'announce')
+  await waitFor(() => spawned.length === 1)
+  const baseUrl = spawned[0].options.env.OPENPET_BRIDGE_URL
+  const token = spawned[0].options.env.OPENPET_BRIDGE_TOKEN
+
+  const readResponse = await requestBridge(`${baseUrl}/creator/actions`, { token })
+  const writeResponse = await requestBridge(`${baseUrl}/creator/actions/apply`, {
+    method: 'POST',
+    token,
+    body: { defaultAction: 'idle' }
+  })
+
+  child.stdout.write('{"ok":true}\n')
+  child.emit('exit', 0, null)
+  await commandRun
+
+  assert.equal(readResponse.status, 403)
+  assert.equal(writeResponse.status, 403)
 })
 
 test('plugin service rejects non-zero declaration command exits', async () => {

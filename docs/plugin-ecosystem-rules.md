@@ -109,6 +109,7 @@ Commands should be allowed to use any suitable runtime. Do not require JavaScrip
 Services are long-running local process entries managed by OpenPet.
 
 OpenPet can run command and setup entries only after explicit Control Center action, record setup status/logs, start and stop declared service processes only after explicit Control Center action, apply service platform overrides, capture stdout/stderr snippets, show runtime state, manually check declared loopback health endpoints, optionally schedule host-managed periodic health checks for already running services, stop running services on disable/app quit with best-effort process-group cleanup, wait for confirmed child exit before reporting a clean stop, attempt one bounded host-side force stop if a service ignores the grace-period shutdown request, and try a host-owned process-tree cleanup path before falling back to direct child kill when process-group signalling fails. Declaration-only command runs also receive a short-lived bridge URL/token pair for bounded pet-aware actions and context reads. Explicit setup and declaration-only command cleanup now also keeps stop intent visible until child exit confirmation, but those paths remain direct-child best effort. Commands and setup do not run during install or enable, services do not auto-start, periodic health checks are opt-in and runtime-bound, and command/setup/service processes are spawned without shell expansion. Universal process-tree cleanup guarantees still remain out of scope.
+Declaration-only command runs for creator-tools also receive host-owned `OPENPET_DATA_DIR`, `OPENPET_CACHE_DIR`, and `OPENPET_LOG_DIR`, plus bridge routes for bounded action reads and writes.
 
 Services may power real local experiences: dashboards, background companions, schedulers, local model servers, voice processors, or integrations with external APIs.
 
@@ -130,14 +131,14 @@ Current declaration-only command runs receive stdin JSON context plus:
 
 - `OPENPET_BRIDGE_URL`
 - `OPENPET_BRIDGE_TOKEN`
+- `OPENPET_DATA_DIR`
+- `OPENPET_CACHE_DIR`
+- `OPENPET_LOG_DIR`
 
 Reserved future environment variables may still add:
 
 - `OPENPET_EXTENSION_ID`
 - `OPENPET_EXTENSION_DIR`
-- `OPENPET_DATA_DIR`
-- `OPENPET_CACHE_DIR`
-- `OPENPET_LOG_DIR`
 - `OPENPET_CONFIG_PATH`
 - `OPENPET_RESULT_PATH`
 - `OPENPET_BRIDGE_URL`
@@ -155,10 +156,13 @@ Submission review artifacts also stay explicit:
 
 The current local bridge stays intentionally small:
 
+- `GET /context`
 - `POST /pet/say`
 - `POST /pet/action`
 - `POST /pet/event`
-- `GET /context`
+- `GET /creator/actions`
+- `POST /creator/actions/validate`
+- `POST /creator/actions/apply`
 
 The bridge is for integration convenience. It is not a complete SDK, not a full security broker, and not a reason to block extensions from using their own local capabilities.
 

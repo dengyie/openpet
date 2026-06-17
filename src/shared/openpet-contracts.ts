@@ -431,6 +431,7 @@ export interface PluginManifestViewState {
   id: string
   name: string
   version: string
+  profile?: 'runtime' | 'creator-tools' | 'hybrid'
   description?: string
   permissions: string[]
   network?: {
@@ -483,6 +484,7 @@ export interface PluginViewState {
   id: string
   name: string
   version: string
+  profile?: 'runtime' | 'creator-tools' | 'hybrid'
   source: string
   enabled: boolean
   runnable: boolean
@@ -516,6 +518,22 @@ export interface PluginLogFilters {
   level?: string
   query?: string
   format?: 'json' | 'csv'
+}
+
+export interface CreatorActionsReadResponse {
+  ok: boolean
+  actions: ActionsConfigViewState
+}
+
+export interface CreatorActionsMutationResult {
+  ok: boolean
+  validation?: {
+    ok: boolean
+    errors: string[]
+    warnings: string[]
+    actions: ActionsConfigViewState
+  }
+  actions?: ActionsConfigViewState
 }
 
 export interface PluginMutationResult extends OkResponse {

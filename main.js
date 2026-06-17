@@ -8,6 +8,7 @@
  * 不包含：窗口创建细节、IPC 处理、设置读写、屏幕计算 —— 均在 src/main/ 中。
  */
 const { app, BrowserWindow, shell } = require('electron')
+const fs = require('fs')
 const path = require('path')
 const { IPC } = require('./src/shared/ipc-channels')
 const { clampToWorkArea, getMovementState } = require('./src/main/screen')
@@ -68,7 +69,14 @@ app.whenReady().then(() => {
     projectRoot: __dirname,
     getPetPackBlockStatus: (candidate) => catalogService?.getPetPackBlockStatus(candidate) || { blocked: false, reasons: [] }
   })
-  const actionService = createActionService({ petPackService })
+  const actionService = createActionService({
+    petPackService,
+    saveLegacyAnimations: (config) => {
+      const configPath = path.join(__dirname, 'cat_anime', 'animations.json')
+      fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`)
+      return config
+    }
+  })
   const petService = createPetService({ eventBus, settingsService, actionService })
   const secretService = createSecretService()
   const aiService = createAiService({ settingsService, secretService })
@@ -89,6 +97,7 @@ app.whenReady().then(() => {
   const pluginService = createPluginService({
     settingsService,
     petService,
+    actionService,
     petPackService,
     aiService,
     pluginDirs: [pluginDir],

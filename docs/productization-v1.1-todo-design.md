@@ -25,7 +25,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 - PetService remains the single source of truth for `say`, `action`, and event state.
 - Pet pack runtime supports legacy cat assets, OpenPet packs, Codex pet directory import, Codex pet zip import, and bundled packs.
 - Bundled pet assets are integrated without replacing the legacy `cat_anime/` structure.
-- Extension ecosystem docs now use a developer-first local extension model while current runtime/tools keep legacy JavaScript SDK compatibility, manifest validation, normalized `entries` declarations, explicit user-triggered `entries.setup` execution, `entries.commands` support through the existing JavaScript runner and explicit short-lived process execution for declaration-only local extensions, a short-lived command bridge for `pet.say` / `pet.action` / `pet.event` / read-only context, entry declaration visibility, explicit HTTP/HTTPS dashboard opening, explicit `entries.services` start/stop, manual loopback service health checks, logs, catalog, blocklist, and submission tooling.
+- Extension ecosystem docs now use a developer-first local extension model while current runtime/tools keep legacy JavaScript SDK compatibility, manifest validation, normalized `entries` declarations, explicit user-triggered `entries.setup` execution, `entries.commands` support through the existing JavaScript runner and explicit short-lived process execution for declaration-only local extensions, a short-lived command bridge for `pet.say` / `pet.action` / `pet.event` / read-only context, creator-tools action reads / validation / bounded writes for declaration-only command runs, entry declaration visibility, explicit HTTP/HTTPS dashboard opening, explicit `entries.services` start/stop, manual loopback service health checks, logs, catalog, blocklist, and submission tooling.
 - AI provider configuration and API keys remain in the main process boundary.
 - Local HTTP/MCP is loopback-only, token-gated, logged, and off by default.
 - TypeScript scaffold, Control Center view contracts, API facade, hook state boundaries, pane prop surfaces, main-process Control Center adapters for service/catalog/plugin/pet pack/About/update/actions payloads, plugin entry/dashboard/service contracts, and full release evidence archive / signed closure report contracts exist.
@@ -36,7 +36,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 - macOS signed/notarized release evidence still needs real artifact capture and archive.
 - Windows signed installer/zip smoke evidence still needs real Windows execution.
 - Packaged runtime smoke reports still need real app evidence for pet window visibility, transparent rendering, bundled pack switching, and native picker flows.
-- Extension runtime support for explicit setup execution, explicit short-lived command execution, explicit short-lived command bridge access, explicit service start/stop, manual loopback service health checks, opt-in periodic health checks for running services, and best-effort process-group cleanup now exists. Local scaffold and existing-plugin submission rehearsals now exist. External community provenance, richer bridge surfaces for authoring workflows, richer command orchestration, and hard process-tree cleanup guarantees are still future work. Dashboard entries can now be opened explicitly as external HTTP/HTTPS URLs from Control Center.
+- Extension runtime support for explicit setup execution, explicit short-lived command execution, explicit short-lived command bridge access, creator-tools action reads / validation / bounded writes, explicit service start/stop, manual loopback service health checks, opt-in periodic health checks for running services, and best-effort process-group cleanup now exists. Local scaffold and existing-plugin submission rehearsals now exist. External community provenance, broader creator asset workflows, richer command orchestration, and hard process-tree cleanup guarantees are still future work. Dashboard entries can now be opened explicitly as external HTTP/HTTPS URLs from Control Center.
 - Legacy SDK plugin secrets policy remains conservative; target extension docs require honest disclosure for extension-managed secrets and data.
 - Plugin sandbox strategy has been evaluated against SES and Electron `utilityProcess`; current recommendation is to keep the existing runner for v1.1 while documenting limits.
 - AI behavior orchestration has a Control Center decision viewer, replay, redacted diagnostics export, and clear-history controls.
@@ -1104,6 +1104,27 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 
 **Status**: completed in Phase 79. Downloaded macOS workflow evidence artifacts can now be copied into permanent archives with provenance and hashes, while release readiness remains gated by release archive and signed closure tooling.
 
+### Phase 80: Plugin creator-tools action bridge
+
+**Goal**: give declaration-only creator-tools extensions a host-mediated path for reading, validating, and applying bounded action configuration updates.
+
+**Scope**:
+
+- normalize manifest `profile` as `runtime`, `creator-tools`, or `hybrid`;
+- accept `actions:read` and `actions:write` permissions;
+- inject `OPENPET_DATA_DIR`, `OPENPET_CACHE_DIR`, and `OPENPET_LOG_DIR` into declaration-only command runs;
+- expose `GET /creator/actions`, `POST /creator/actions/validate`, and `POST /creator/actions/apply`;
+- keep validation and apply logic inside the action service boundary.
+
+**Acceptance**:
+
+- install review and runtime listing expose creator-tools profile and permissions;
+- declaration-only command runs can read current action state through the bridge;
+- bounded action mutations can be validated and applied through the host without raw filesystem writes;
+- docs keep the capability honest as a narrow host-mediated authoring path.
+
+**Status**: completed in Phase 80. Declaration-only creator-tools command runs now receive host-owned data/cache/log directories plus bridge-backed action reads, validation, and bounded writes while raw file writes and broader asset generation remain out of scope.
+
 ## 6. Priority Order
 
 | Priority | Work | Reason |
@@ -1113,6 +1134,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 | P0 | Phase 77 macOS release evidence capture | Completed; official macOS signing evidence now has a repeatable capture path, while readiness still depends on real passing evidence. |
 | P0 | Phase 78 macOS release evidence artifact | Completed; macOS release workflow uploads evidence as a maintainer artifact without mixing it into public release downloads. |
 | P0 | Phase 79 macOS release evidence archive | Completed; downloaded workflow evidence artifacts can be preserved permanently with provenance and hashes before signed closure. |
+| P1 | Phase 80 Plugin creator-tools action bridge | Completed; declaration-only creator-tools commands can read, validate, and apply bounded action configuration updates through the host bridge. |
 | P1 | Phase 40 pet pack export and provenance | Completed; keep provenance and conflict review as constraints for future catalog work. |
 | P1 | Phase 44 plugin author experience rehearsal | Completed; use the archived rehearsal as the plugin author baseline. |
 | P1 | Phase 74 Plugin maintainer approval rehearsal | Completed; submission bundles can now receive separate maintainer approval artifacts and author rehearsal now points at that human review step explicitly. |

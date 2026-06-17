@@ -617,6 +617,31 @@ const createPetPackService = ({
     }
   }
 
+  const updateActivePetPackManifest = (nextManifest = {}) => {
+    const current = getSettings()
+    const activePackId = current.activePackId
+    if (!activePackId) throw new Error('No active pet pack is selected')
+    if (activePackId === BUILT_IN_PACK_ID) {
+      throw new Error('The built-in pet pack cannot be modified through pet-pack persistence')
+    }
+    const metadata = current.installed[activePackId]
+    if (!metadata) throw new Error(`Pet pack is not installed: ${activePackId}`)
+    const targetDir = path.join(userPacksDir, activePackId)
+    if (!fs.existsSync(path.join(targetDir, 'pet.json'))) {
+      throw new Error(`Pet pack manifest is missing: ${activePackId}`)
+    }
+    const currentManifest = loadPetPackFromDirectory(targetDir).manifest
+    const nextActions = Array.isArray(nextManifest.actions) ? nextManifest.actions : currentManifest.actions
+    const manifest = {
+      ...readJsonFile(path.join(targetDir, 'pet.json')),
+      defaultAction: nextManifest.defaultAction ?? currentManifest.defaultAction,
+      clickAction: nextManifest.clickAction ?? currentManifest.clickAction,
+      actions: nextActions
+    }
+    writeJsonFile(path.join(targetDir, 'pet.json'), manifest)
+    return loadPetPackFromDirectory(targetDir).manifest
+  }
+
   const setActivePack = (packId) => {
     if (!isSafePackId(packId)) throw new Error('Pet pack id is invalid')
     const metadata = getSettings().installed[packId]
@@ -649,6 +674,7 @@ const createPetPackService = ({
     clearPendingSelection,
     importPack,
     exportPack,
+    updateActivePetPackManifest,
     setActivePack,
     removePack
   }
