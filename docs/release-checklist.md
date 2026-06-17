@@ -2,11 +2,11 @@
 
 > Purpose: keep local test builds, signed releases, and public artifacts reproducible without exposing signing credentials.
 
-Current desktop scope: macOS and Windows. macOS has a validated release baseline and repeatable codesign/notarization/Gatekeeper evidence capture; Windows has packaging/CI/update-asset/signing-policy/smoke-evidence/reporting/runbook/collector/bundle-validation/summary/archive-manifest baselines, both desktop platforms have packaged native picker/runtime smoke evidence tooling, desktop picker evidence summary/archive manifest tooling, and release-level evidence archive gates that now require the reviewed picker archive manifest. Windows must not be called release-ready until signed release evidence and real smoke tests are complete.
+Current desktop scope: macOS and Windows. macOS has a validated release baseline, repeatable codesign/notarization/Gatekeeper evidence capture, and release workflow evidence artifact upload; Windows has packaging/CI/update-asset/signing-policy/smoke-evidence/reporting/runbook/collector/bundle-validation/summary/archive-manifest baselines, both desktop platforms have packaged native picker/runtime smoke evidence tooling, desktop picker evidence summary/archive manifest tooling, and release-level evidence archive gates that now require the reviewed picker archive manifest. Windows must not be called release-ready until signed release evidence and real smoke tests are complete.
 
 | Platform | Status | Public Claim |
 |----------|--------|--------------|
-| macOS | Baseline implemented with evidence capture tooling | Release candidate path exists; official artifacts should be signed/notarized and archived with passing evidence |
+| macOS | Baseline implemented with evidence capture tooling and workflow artifact upload | Release candidate path exists; official artifacts should be signed/notarized and archived with passing evidence |
 | Windows | Packaging/CI/signing-policy/smoke-evidence/reporting/runbook/collector/bundle-validation/summary/archive-manifest and desktop picker/runtime smoke evidence tooling baselines implemented | Do not publish as supported until the Windows checklist passes |
 | Linux | Deferred | Out of current release scope |
 | Mobile | Out of scope | Not part of this desktop release track |
@@ -84,6 +84,7 @@ The app must continue to build unsigned local packages when these variables are 
 
 - Create a tag named `vX.Y.Z` or `vX.Y.Z-rc.N`.
 - Let GitHub Actions run the release workflow from the tag.
+- Download the `openpet-macos-release-evidence-<tag>` Actions artifact and preserve it with the reviewed release archive.
 - Download the generated DMG/ZIP artifacts.
 - Verify the app launches and shows the pet window.
 - Open Control Center and smoke test Pet, Actions, AI, Plugins, Service, and About.
@@ -112,7 +113,7 @@ Capture canonical macOS release evidence before building the release archive:
 npm run create-macos-release-evidence -- --app "release/mac/OpenPet.app" --notarization-text "<notarytool accepted output>" --output-dir docs/release-evidence/<release-archive>
 ```
 
-The command writes `macos-codesign.txt`, `macos-notarization.txt`, `macos-gatekeeper.txt`, `macos-release-evidence-summary.md`, and `macos-release-evidence-summary.json`. It is allowed to archive failing or pending output for review, but official readiness still requires the summary and release archive manifest to report passing signed evidence.
+The command writes `macos-codesign.txt`, `macos-notarization.txt`, `macos-gatekeeper.txt`, `macos-release-evidence-summary.md`, and `macos-release-evidence-summary.json`. The GitHub macOS release workflow uploads the same directory as `openpet-macos-release-evidence-<tag>` for maintainer review. It is allowed to archive failing or pending output for review, but official readiness still requires the summary and release archive manifest to report passing signed evidence.
 
 After all macOS packaged native picker checks are filled with concrete evidence, validate readiness:
 

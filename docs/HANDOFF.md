@@ -1,6 +1,6 @@
 # OpenPet Handoff
 
-> Last updated: 2026-06-18 | Branch: `codex/macos-release-evidence-capture-phase77`
+> Last updated: 2026-06-18 | Branch: `codex/macos-release-evidence-artifact-phase78`
 
 ## Current Snapshot
 
@@ -72,7 +72,7 @@ npm run create-macos-release-evidence -- --app release/mac/OpenPet.app --notariz
 - `scripts/run-packaged-runtime-smoke.js`, `scripts/create-packaged-runtime-smoke-report.js`, and `scripts/validate-packaged-runtime-smoke-report.js` for packaged app runtime evidence.
 - `scripts/create-desktop-picker-evidence-summary.js` and `scripts/create-desktop-picker-archive-manifest.js` for reviewed native picker evidence archive summaries and manifests.
 - `scripts/create-release-evidence-archive-manifest.js` and `scripts/create-signed-release-closure-report.js` for release-level evidence archive validation and release-claim closure.
-- `scripts/create-macos-release-evidence.js` for canonical macOS codesign/notarization/Gatekeeper evidence capture before release-level archive aggregation.
+- `scripts/create-macos-release-evidence.js` and `.github/workflows/release.yml` for canonical macOS codesign/notarization/Gatekeeper evidence capture and Actions artifact upload before release-level archive aggregation.
 - `docs/plugin-development.md`, `docs/plugin-ecosystem-rules.md`, and `docs/plugin-submission-workflow-playbook.md` for extension onboarding, maintainer approval rehearsal, remote-source rehearsal, and legacy SDK compatibility.
 - `scripts/create-openpet-plugin.js`, `scripts/create-plugin-author-rehearsal.js`, `scripts/create-plugin-real-world-submission-rehearsal.js`, `scripts/create-plugin-remote-source-submission-rehearsal.js`, `scripts/create-plugin-maintainer-approval.js`, and `scripts/validate-plugin-maintainer-approval.js` for current compatibility starter templates, existing-plugin rehearsal, remote-source rehearsal, and reviewer-path rehearsal.
 
@@ -89,4 +89,5 @@ npm run create-macos-release-evidence -- --app release/mac/OpenPet.app --notariz
 9. Use Phase 75 real-world submission rehearsal as the current existing-plugin submission baseline: `examples/plugins/weather-status` now has an archived local package -> submission bundle -> maintainer approval evidence chain, but that archive still does not prove external community provenance, signing trust, catalog publication, runtime safety, or release readiness.
 10. Use Phase 76 remote-source rehearsal as the current source-review baseline: `https://codeload.github.com/dengyie/OpenPet/zip/refs/heads/main` now has an archived HTTPS archive -> extracted plugin -> submission bundle -> maintainer approval evidence chain that records archive URL, final URL, archive SHA-256, archive size, selected plugin path, and extracted file hashes, but it still does not prove independent public community ownership, signing trust, catalog publication, runtime safety, or release readiness.
 11. Use Phase 77 macOS release evidence capture as the current signed-evidence collection path: the helper can archive `macos-codesign.txt`, `macos-notarization.txt`, `macos-gatekeeper.txt`, and Markdown/JSON summaries, but official readiness remains false until real signed, notarized, Gatekeeper-accepted evidence is present.
-12. After Phase 77, continue from real signed evidence collection, live external community submission evidence, stronger cleanup evidence on real hosts, or another high-drift service/report boundary.
+12. Use Phase 78 macOS release evidence artifact upload as the current release-workflow evidence boundary: macOS release jobs upload `openpet-macos-release-evidence-<tag>` as a maintainer artifact, while public GitHub Release assets stay limited to install/update files.
+13. After Phase 78, continue from copying real signed workflow artifacts into a permanent release archive, live external community submission evidence, stronger cleanup evidence on real hosts, or another high-drift service/report boundary.
