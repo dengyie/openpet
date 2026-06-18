@@ -61,6 +61,28 @@ node -e 'const fs=require("fs"); const p="docs/release-evidence/plugin-community
 node --test tests/scripts/create-plugin-community-source-intake-report.test.js
 ```
 
+Final verification before commit:
+
+```bash
+npm run check:syntax
+# pass: node syntax checks, typecheck, Control Center production build
+
+npm test
+# pass: 676/676
+
+npm run test:control-center
+# pass: 10/10
+
+npm run typecheck
+# pass
+
+git diff --check
+# pass
+
+node -e "JSON.parse(require('node:fs').readFileSync('docs/project-context.json','utf8')); JSON.parse(require('node:fs').readFileSync('docs/release-evidence/plugin-community-source-intake-report/2026-06-18T23-30-00Z-openpets-official/plugin-community-source-intake-report-summary.json','utf8')); JSON.parse(require('node:fs').readFileSync('docs/release-evidence/plugin-community-source-intake-report/2026-06-18T23-30-00Z-openpets-official/community-source-intake.json','utf8')); JSON.parse(require('node:fs').readFileSync('docs/release-evidence/plugin-community-source-intake-report/2026-06-18T23-30-00Z-openpets-official/community-intake-commands.json','utf8')); console.log('json ok')"
+# json ok
+```
+
 ## Outcome
 
 OpenPet now has a real public candidate-source intake archive. It demonstrates the maintainer workflow is evidence-preserving and conservative: adjacent public ecosystems can be recorded as real candidates without being misrepresented as compatible OpenPet plugin submissions.
