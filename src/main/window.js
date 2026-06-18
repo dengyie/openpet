@@ -7,24 +7,64 @@ const electron = require('electron')
 const projectRoot = path.join(__dirname, '..', '..')
 const BASE_WIDTH = 300
 const BASE_HEIGHT = 300
+const PET_BASE_SCALE = 0.5
 const CONTROL_CENTER_WIDTH = 900
 const CONTROL_CENTER_HEIGHT = 640
 
-const applyWindowScale = (petWindow, scale) => {
-  if (!petWindow || petWindow.isDestroyed()) return
-  const targetWidth = Math.round(BASE_WIDTH * Math.max(scale, 1))
-  const targetHeight = Math.round(BASE_HEIGHT * Math.max(scale, 1))
+const toFiniteNumber = (value, fallback) => (
+  Number.isFinite(Number(value)) ? Number(value) : fallback
+)
+
+const isValidWindowSize = (bounds) => (
+  Number.isFinite(bounds?.width) && Number.isFinite(bounds?.height) && bounds.width > 0 && bounds.height > 0
+)
+
+const normalizeViewportSize = (viewport = {}) => {
+  const scale = Math.max(toFiniteNumber(viewport.scale, 1), Number.EPSILON)
+  const padding = Math.max(0, Math.round(toFiniteNumber(viewport.padding, 0)))
+  const sourceWidth = toFiniteNumber(viewport.width, BASE_WIDTH)
+  const sourceHeight = toFiniteNumber(viewport.height, BASE_HEIGHT)
+  return {
+    width: Math.max(1, Math.round((sourceWidth + padding * 2) * scale)),
+    height: Math.max(1, Math.round((sourceHeight + padding * 2) * scale))
+  }
+}
+
+const resizeWindowAroundBottomCenter = (petWindow, targetWidth, targetHeight) => {
   const bounds = petWindow.getBounds()
+  if (!isValidWindowSize(bounds)) {
+    const [fallbackX, fallbackY] = typeof petWindow.getPosition === 'function' ? petWindow.getPosition() : [0, 0]
+    petWindow.setBounds({
+      x: toFiniteNumber(bounds?.x, fallbackX),
+      y: toFiniteNumber(bounds?.y, fallbackY),
+      width: targetWidth,
+      height: targetHeight
+    })
+    return
+  }
   if (targetWidth === bounds.width && targetHeight === bounds.height) return
-  const [x, y] = petWindow.getPosition()
   const deltaW = targetWidth - bounds.width
   const deltaH = targetHeight - bounds.height
   petWindow.setBounds({
-    x: x - Math.round(deltaW / 2),
-    y: y - deltaH,
+    x: bounds.x - Math.round(deltaW / 2),
+    y: bounds.y - deltaH,
     width: targetWidth,
     height: targetHeight
   })
+}
+
+const applyWindowScale = (petWindow, scale) => {
+  if (!petWindow || petWindow.isDestroyed()) return
+  const safeScale = Math.max(toFiniteNumber(scale, 1) * PET_BASE_SCALE, Number.EPSILON)
+  const targetWidth = Math.round(BASE_WIDTH * safeScale)
+  const targetHeight = Math.round(BASE_HEIGHT * safeScale)
+  resizeWindowAroundBottomCenter(petWindow, targetWidth, targetHeight)
+}
+
+const applyPetViewport = (petWindow, viewport) => {
+  if (!petWindow || petWindow.isDestroyed()) return
+  const { width, height } = normalizeViewportSize(viewport)
+  resizeWindowAroundBottomCenter(petWindow, width, height)
 }
 
 const loadPetWindow = (petWindow) => petWindow.loadFile(path.join(projectRoot, 'index.html'))
@@ -107,4 +147,4 @@ const createSettingsWindow = (petWindow, { BrowserWindow = electron.BrowserWindo
   petWindow.settingsWindow = settingsWindow
 }
 
-module.exports = { BASE_WIDTH, BASE_HEIGHT, applyWindowScale, createWindow, createSettingsWindow, loadPetWindow }
+module.exports = { BASE_WIDTH, BASE_HEIGHT, PET_BASE_SCALE, applyPetViewport, applyWindowScale, createWindow, createSettingsWindow, loadPetWindow }

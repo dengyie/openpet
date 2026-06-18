@@ -50,18 +50,16 @@
            小猫帧动画通过 div + background-image + background-position-x 实现精灵图播放，
            不再使用 img src 替换，避免频繁触发图片解码。
            --cat-direction：水平翻转（1 或 -1），由 walk.js 控制。
-           --cat-scale：缩放比例，由设置面板实时更新。
         */
         #cat {
             --cat-direction: 1;
-            --cat-scale: 1;
             position: absolute;
-            left: 50%;
-            bottom: 8px;
+            left: 0;
+            bottom: 0;
             background-repeat: no-repeat;
             background-size: auto 100%;
             background-position: left bottom;
-            transform: translateX(-50%) scaleX(var(--cat-direction)) scale(var(--cat-scale));
+            transform: scaleX(var(--cat-direction));
             transform-origin: center bottom;
             filter: drop-shadow(0 12px 14px rgba(0, 0, 0, 0.22));
             pointer-events: none;

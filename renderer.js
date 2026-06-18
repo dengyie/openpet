@@ -18,6 +18,7 @@ const catEl = document.getElementById('cat')     // 小猫元素，精灵图渲�
 const bubble = document.getElementById('bubble') // 头顶气泡
 const menu = document.getElementById('menu')     // 右键菜单容器
 const MAX_DISPLAY_SIZE = 260                     // 帧显示最大尺寸（px），超出按比例缩小
+const PET_BASE_SCALE = 0.5                       // UI 100% 对应旧版视觉大小的 50%
 
 const state = {
   // ── 动画 ──
@@ -39,11 +40,15 @@ const state = {
 
   // ── 拖拽 ──
   drag: null,            // { pointerId, offsetX, offsetY, moved } | null
+  currentLayout: null,
 
   // ── 气泡 ──
   bubbleTimer: 0,        // setTimeout id，到期后隐藏气泡
   bubbleDuration: 1300   // 气泡显示时长 ms（由设置同步）
 }
+state.scale = PET_BASE_SCALE
+
+const normalizePetScale = (scale) => Math.max((Number(scale) || 1) * PET_BASE_SCALE, Number.EPSILON)
 
 // ═══════════════════════════════════════════
 // 2. 气泡 — 在小猫头顶显示文字，定时消失
@@ -81,6 +86,61 @@ const getDisplayDimensions = (animation) => {
   return { width: Math.round(animation.frameWidth * s), height: Math.round(animation.frameHeight * s), fitScale: s }
 }
 
+const getActionViewport = (animation, dims) => {
+  const viewport = animation.viewport || { x: 0, y: 0, width: animation.frameWidth, height: animation.frameHeight, padding: 8 }
+  const fitScale = dims.fitScale || 1
+  const padding = Number(viewport.padding ?? 8)
+  return {
+    x: Math.round((Number(viewport.x) || 0) * fitScale),
+    y: Math.round((Number(viewport.y) || 0) * fitScale),
+    width: Math.max(1, Math.round((Number(viewport.width) || dims.width) * fitScale)),
+    height: Math.max(1, Math.round((Number(viewport.height) || dims.height) * fitScale)),
+    padding: Math.max(0, Math.round(padding * fitScale)),
+    scale: state.scale
+  }
+}
+
+const getScaledViewportSize = (viewport) => {
+  const padding = Math.max(0, Number(viewport?.padding) || 0)
+  const scale = Math.max(Number(viewport?.scale) || state.scale, Number.EPSILON)
+  return {
+    width: Math.max(1, Math.round(((Number(viewport?.width) || 1) + padding * 2) * scale)),
+    height: Math.max(1, Math.round(((Number(viewport?.height) || 1) + padding * 2) * scale))
+  }
+}
+
+const applyCatPositionForWindowWidth = (layout, windowWidth) => {
+  if (!layout?.viewport || !layout?.dims) return
+  const { viewport, dims } = layout
+  const catLeft = Math.round((windowWidth / 2) - ((viewport.x + viewport.width / 2) * state.scale))
+  const catBottom = Math.round((viewport.padding - (dims.height - viewport.y - viewport.height)) * state.scale)
+
+  catEl.style.left = catLeft + 'px'
+  catEl.style.bottom = catBottom + 'px'
+  layout.catLeft = catLeft
+  layout.catBottom = catBottom
+}
+
+const applyActionLayout = (animation, dims) => {
+  const viewport = getActionViewport(animation, dims)
+  state.currentLayout = { viewport, dims, catLeft: 0, catBottom: 0 }
+  applyCatPositionForWindowWidth(state.currentLayout, getScaledViewportSize(viewport).width)
+  if (menu.classList.contains('open')) applyMenuViewport()
+  else window.petAPI.setViewport?.(viewport)
+}
+
+const applySpriteGeometry = (animation, dims) => {
+  const scaledWidth = Math.max(1, Math.round(dims.width * state.scale))
+  const scaledHeight = Math.max(1, Math.round(dims.height * state.scale))
+  catEl.style.width = scaledWidth + 'px'
+  catEl.style.height = scaledHeight + 'px'
+  frameStepX = Math.round(animation.frameWidth * dims.fitScale * state.scale)
+  frameStepY = Math.round(animation.frameHeight * dims.fitScale * state.scale)
+  const atlasColumns = animation.atlas?.columns || animation.frameCount
+  const atlasRows = animation.atlas?.rows || 1
+  catEl.style.backgroundSize = `${Math.round(atlasColumns * frameStepX)}px ${Math.round(atlasRows * frameStepY)}px`
+}
+
 /**
  * 帧 tick：偏移 background-position-x 切换到下一帧。
  * 循环动作播完后从头开始；一次性动作播完后切回待机。
@@ -105,6 +165,16 @@ const renderCurrentFrame = () => {
   catEl.style.backgroundPositionY = -(frameRow * frameStepY) + 'px'
 }
 
+const freezeActionForScalePreview = () => {
+  if (state.action !== state.defaultAction) {
+    stopWalk()
+    setAction(state.defaultAction)
+  }
+  state.frameIndex = 0
+  window.clearTimeout(state.frameTimer)
+  renderCurrentFrame()
+}
+
 const scheduleFrameTick = () => {
   const a = state.animations[state.action]
   window.clearTimeout(state.frameTimer)
@@ -125,17 +195,12 @@ const setAction = (action) => {
   state.frameIndex = 0
 
   const dims = getDisplayDimensions(a)
-  catEl.style.width = dims.width + 'px'
-  catEl.style.height = dims.height + 'px'
+  applyActionLayout(a, dims)
+  applySpriteGeometry(a, dims)
   catEl.style.backgroundImage = 'url(' + a.sprite + ')'
-  frameStepX = Math.round(a.frameWidth * dims.fitScale)
-  frameStepY = Math.round(a.frameHeight * dims.fitScale)
   frameColumn = a.frameColumn || 0
   frameRow = a.frameRow || 0
   frameCount = a.frameCount
-  const atlasColumns = a.atlas?.columns || a.frameCount
-  const atlasRows = a.atlas?.rows || 1
-  catEl.style.backgroundSize = `${Math.round(atlasColumns * frameStepX)}px ${Math.round(atlasRows * frameStepY)}px`
   renderCurrentFrame()
 
   scheduleFrameTick()
@@ -272,6 +337,38 @@ const renderMenu = (actions) => {
   mkDiv(); mkBtn('散步', 'walk'); mkBtn('设置', 'settings'); mkDiv(); mkBtn('退出', 'quit')
 }
 
+const MENU_EDGE_MARGIN = 12
+
+const getMenuViewport = () => {
+  if (!state.currentLayout?.viewport) return null
+  const menuRect = menu.getBoundingClientRect()
+  const currentSize = getScaledViewportSize(state.currentLayout.viewport)
+  const targetWidth = Math.max(currentSize.width, Math.ceil(menuRect.width + MENU_EDGE_MARGIN * 2))
+  const targetHeight = Math.max(currentSize.height, Math.ceil(menuRect.height + MENU_EDGE_MARGIN * 2))
+  const scale = Math.max(state.scale, Number.EPSILON)
+  return {
+    width: Math.ceil(targetWidth / scale),
+    height: Math.ceil(targetHeight / scale),
+    padding: 0,
+    scale
+  }
+}
+
+const applyMenuViewport = () => {
+  const viewport = getMenuViewport()
+  if (!viewport) return
+  const windowSize = getScaledViewportSize(viewport)
+  applyCatPositionForWindowWidth(state.currentLayout, windowSize.width)
+  window.petAPI.setViewport?.(viewport)
+  return { viewport, windowSize }
+}
+
+const restoreActionViewport = () => {
+  if (!state.currentLayout?.viewport) return
+  applyCatPositionForWindowWidth(state.currentLayout, getScaledViewportSize(state.currentLayout.viewport).width)
+  window.petAPI.setViewport?.(state.currentLayout.viewport)
+}
+
 const applyAnimationsConfig = ({ actions, defaultAction, clickAction }) => {
   state.defaultAction = defaultAction
   state.clickAction = clickAction
@@ -280,8 +377,15 @@ const applyAnimationsConfig = ({ actions, defaultAction, clickAction }) => {
   if (state.defaultAction) setAction(state.defaultAction)
 }
 
-const hideMenu = () => menu.classList.remove('open')
-const showMenu = () => menu.classList.add('open')
+const hideMenu = () => {
+  const wasOpen = menu.classList.contains('open')
+  menu.classList.remove('open')
+  if (wasOpen) restoreActionViewport()
+}
+const showMenu = () => {
+  menu.classList.add('open')
+  applyMenuViewport()
+}
 
 /** 菜单点击统一分发 —— 根据按钮 data-action 路由到对应逻辑。 */
 const onMenuClick = (event) => {
@@ -301,7 +405,17 @@ const onMenuClick = (event) => {
 
 // 监听主进程推送的设置变更，同步到渲染状态
 window.petAPI.onSettingsChanged((s) => {
-  if (s.scale != null) catEl.style.setProperty('--cat-scale', s.scale)
+  if (s.scale != null) {
+    state.scale = normalizePetScale(s.scale)
+    const currentAction = state.animations[state.action]
+    if (currentAction) {
+      const dims = getDisplayDimensions(currentAction)
+      applyActionLayout(currentAction, dims)
+      applySpriteGeometry(currentAction, dims)
+      freezeActionForScalePreview()
+      renderCurrentFrame()
+    }
+  }
   if (s.walkSpeed != null) state.walkSpeed = s.walkSpeed
   if (s.walkDuration != null) state.walkDuration = s.walkDuration
   if (s.bubbleDuration != null) state.bubbleDuration = s.bubbleDuration

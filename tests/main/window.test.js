@@ -2,7 +2,7 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 const path = require('path')
 
-const { createWindow, loadPetWindow } = require('../../src/main/window')
+const { BASE_HEIGHT, BASE_WIDTH, PET_BASE_SCALE, applyPetViewport, applyWindowScale, createWindow, loadPetWindow } = require('../../src/main/window')
 
 const projectRoot = path.join(__dirname, '..', '..')
 const petIndexPath = path.join(projectRoot, 'index.html')
@@ -19,11 +19,19 @@ const createBrowserWindowStub = (instances) => class BrowserWindowStub {
     this.loadedFiles = []
     this.visibleOnAllWorkspaces = null
     this.position = null
+    this.destroyed = false
+    this.bounds = { x: 0, y: 0, width: options.width, height: options.height }
     instances.push(this)
   }
 
   setPosition(x, y) {
     this.position = { x, y }
+    this.bounds.x = x
+    this.bounds.y = y
+  }
+
+  setBounds(bounds) {
+    this.bounds = { ...this.bounds, ...bounds }
   }
 
   setVisibleOnAllWorkspaces(value, options) {
@@ -33,6 +41,18 @@ const createBrowserWindowStub = (instances) => class BrowserWindowStub {
   loadFile(filePath) {
     this.loadedFiles.push(filePath)
     return Promise.resolve()
+  }
+
+  getBounds() {
+    return { ...this.bounds }
+  }
+
+  getPosition() {
+    return [this.bounds.x, this.bounds.y]
+  }
+
+  isDestroyed() {
+    return this.destroyed
   }
 }
 
@@ -60,4 +80,80 @@ test('createWindow preserves automatic loading by default', () => {
   assert.deepEqual(petWindow.loadedFiles, [petIndexPath])
   assert.equal(petWindow.options.transparent, true)
   assert.equal(petWindow.options.alwaysOnTop, true)
+})
+
+test('applyWindowScale recovers a collapsed pet window back to valid default bounds', () => {
+  const instances = []
+  const petWindow = createWindow({
+    load: false,
+    BrowserWindow: createBrowserWindowStub(instances),
+    screen: createScreenStub()
+  })
+  petWindow.setBounds({ x: 40, y: 33, width: 0, height: 0 })
+
+  applyWindowScale(petWindow, 1)
+
+  assert.deepEqual(petWindow.getBounds(), {
+    x: 40,
+    y: 33,
+    width: BASE_WIDTH * PET_BASE_SCALE,
+    height: BASE_HEIGHT * PET_BASE_SCALE
+  })
+})
+
+test('applyWindowScale uses the reduced visual base size for user scale values', () => {
+  const instances = []
+  const petWindow = createWindow({
+    load: false,
+    BrowserWindow: createBrowserWindowStub(instances),
+    screen: createScreenStub()
+  })
+  petWindow.setBounds({ x: 100, y: 200, width: BASE_WIDTH, height: BASE_HEIGHT })
+
+  applyWindowScale(petWindow, 0.5)
+
+  assert.deepEqual(petWindow.getBounds(), {
+    x: 212,
+    y: 425,
+    width: 75,
+    height: 75
+  })
+})
+
+test('applyPetViewport resizes around bottom center for dynamic action bounds', () => {
+  const instances = []
+  const petWindow = createWindow({
+    load: false,
+    BrowserWindow: createBrowserWindowStub(instances),
+    screen: createScreenStub()
+  })
+  petWindow.setBounds({ x: 100, y: 200, width: 300, height: 300 })
+
+  applyPetViewport(petWindow, { width: 120, height: 180, scale: 1.5 })
+
+  assert.deepEqual(petWindow.getBounds(), {
+    x: 160,
+    y: 230,
+    width: 180,
+    height: 270
+  })
+})
+
+test('applyPetViewport can shrink dynamic action bounds below their source size', () => {
+  const instances = []
+  const petWindow = createWindow({
+    load: false,
+    BrowserWindow: createBrowserWindowStub(instances),
+    screen: createScreenStub()
+  })
+  petWindow.setBounds({ x: 100, y: 200, width: 300, height: 300 })
+
+  applyPetViewport(petWindow, { width: 120, height: 180, scale: 0.5 })
+
+  assert.deepEqual(petWindow.getBounds(), {
+    x: 220,
+    y: 410,
+    width: 60,
+    height: 90
+  })
 })

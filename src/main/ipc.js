@@ -115,7 +115,7 @@ const executeBehaviorDecision = (petService, decision) => {
 /**
  * 注册所有 IPC 处理器。接收依赖注入对象，各 handler 只通过注入的函数访问外部能力。
  */
-const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiService, behaviorOrchestratorService, pluginService, pluginInstallService, pluginGithubImportService, catalogService, localHttpService, aboutService, actionImportService, applyWindowScale,
+const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiService, behaviorOrchestratorService, pluginService, pluginInstallService, pluginGithubImportService, catalogService, localHttpService, aboutService, actionImportService, applyWindowScale, applyPetViewport = () => {},
   clampToWorkArea, getMovementState, createSettingsWindow, petMovementPolicy, dialogService = dialog, ipcMainService = ipcMain }) => {
   let pendingActionFrameSelection = null
 
@@ -158,6 +158,12 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     const win = BrowserWindow.fromWebContents(event.sender)
     if (!win) return null
     return getMovementState(win)
+  })
+
+  ipcMainService.on(IPC.PET_SET_VIEWPORT, (event, viewport) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (!win) return
+    applyPetViewport(win, viewport)
   })
 
   // 拖拽移动：直接设置窗口位置（主进程负责钳制到工作区）
