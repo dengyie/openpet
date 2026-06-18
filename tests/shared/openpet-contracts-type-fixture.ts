@@ -17,6 +17,8 @@ import type {
   MacosReleaseEvidenceArtifactArchiveManifest,
   MacosReleaseEvidenceCommand,
   MacosReleaseEvidenceSummary,
+  PackagedRuntimeSmokeEvidence,
+  PackagedRuntimeSmokeReport,
   PluginCleanupEvidenceArchiveManifest,
   PluginCleanupEvidenceChecklistReport,
   PluginCleanupEvidenceCollectorRun,
@@ -805,6 +807,167 @@ const windowsSmokeArchiveManifestFixture = {
   errors: [],
   warnings: ['summary: Pending or unsigned evidence does not prove Windows release readiness; a real Windows smoke report must pass readiness validation, and official stable releases must also pass signed Authenticode validation.']
 } satisfies WindowsSmokeArchiveManifest
+
+const packagedRuntimeSmokeEvidenceFixture = {
+  schemaVersion: 1,
+  sessionId: '2026-06-16T14-52-13-074Z-darwin-arm64',
+  generatedAt: '2026-06-16T14:52:15.961Z',
+  appPath: '/Users/mango/project/codex/OpenPet/release/mac-arm64/OpenPet.app',
+  state: {
+    launch: {
+      ok: true,
+      pid: 52549
+    },
+    window: {
+      ok: true,
+      visible: true,
+      focused: true,
+      bounds: {
+        x: 1130,
+        y: 539,
+        width: 300,
+        height: 300
+      },
+      transparent: true,
+      alwaysOnTop: true
+    },
+    renderer: {
+      ok: true,
+      bodyBackground: 'rgba(0, 0, 0, 0)',
+      htmlBackground: 'rgba(0, 0, 0, 0)',
+      transparentBackground: true,
+      sprite: {
+        visible: true,
+        width: 260,
+        height: 173,
+        backgroundImage: 'url("file:///Users/mango/project/codex/OpenPet/release/mac-arm64/OpenPet.app/Contents/Resources/app.asar/cat_anime/sprites/eat_no_bg.png")'
+      },
+      bubble: {
+        visible: true,
+        text: '喂食'
+      },
+      action: {
+        current: '',
+        firstPosition: '-780px',
+        secondPosition: '-1560px',
+        advanced: true,
+        requested: 'eat_no_bg'
+      }
+    },
+    packs: [
+      {
+        id: 'legacy-cat',
+        ok: true,
+        actionCount: 2,
+        defaultAction: 'bai_no_bg',
+        spriteVisible: true,
+        spriteSize: {
+          width: 110,
+          height: 260
+        }
+      },
+      {
+        id: 'doro',
+        ok: true,
+        actionCount: 9,
+        defaultAction: 'idle',
+        spriteVisible: true,
+        spriteSize: {
+          width: 192,
+          height: 208
+        }
+      }
+    ],
+    invalidPackage: {
+      status: 'blocked',
+      notes: 'Native picker invalid-package path requires a paired desktop picker smoke report.'
+    },
+    finalState: {
+      ok: true,
+      activePackId: 'legacy-cat'
+    }
+  },
+  screenshotPath: '/Users/mango/project/codex/OpenPet/docs/release-evidence/packaged-runtime/2026-06-16T14-52-13-074Z-darwin-arm64/screenshots/packaged-runtime.png'
+} satisfies PackagedRuntimeSmokeEvidence
+
+const packagedRuntimeSmokeReportFixture = {
+  platform: 'darwin',
+  arch: 'arm64',
+  generatedAt: '2026-06-16T14:52:13.073Z',
+  source: 'scripts/create-packaged-runtime-smoke-report.js',
+  environment: {
+    osRelease: '25.5.0',
+    machine: 'mangodeMacBook-Air.local',
+    runner: '',
+    evidence: ''
+  },
+  artifact: {
+    version: '1.0.1-rc.2',
+    releaseDir: '/Users/mango/project/codex/OpenPet/release',
+    appPath: 'mac-arm64/OpenPet.app',
+    installer: 'OpenPet-1.0.1-rc.2-mac-arm64.dmg',
+    zip: 'OpenPet-1.0.1-rc.2-mac-arm64.zip',
+    latestYml: 'latest-mac.yml',
+    files: [
+      {
+        name: 'mac-arm64/OpenPet.app',
+        size: 96
+      },
+      {
+        name: 'OpenPet-1.0.1-rc.2-mac-arm64.dmg',
+        size: 134799501
+      }
+    ],
+    signed: false,
+    signatureStatus: 'Unknown',
+    signatureEvidence: '/Users/mango/project/codex/OpenPet/release/mac-arm64/OpenPet.app: code has no resources but signature indicates they must be present'
+  },
+  fixtures: {
+    builtInPacks: {
+      'legacy-cat': 'cat_anime/',
+      doro: 'assets/pet-packs/doro/',
+      duodong: 'assets/pet-packs/duodong/',
+      chispa: 'assets/pet-packs/chispa/'
+    },
+    pluginPackage: 'Use a valid .openpet-plugin.zip fixture.',
+    petPackZip: 'Use a valid .codex-pet.zip or .openpet-pet.zip fixture.',
+    invalidPackage: 'Use a deliberately invalid plugin or pet package fixture.'
+  },
+  linkedEvidence: {
+    desktopPickerSmokeReport: '',
+    desktopPickerSmokeRunbook: '',
+    screenshots: [
+      '/Users/mango/project/codex/OpenPet/docs/release-evidence/packaged-runtime/2026-06-16T14-52-13-074Z-darwin-arm64/screenshots/packaged-runtime.png'
+    ],
+    recordings: []
+  },
+  checks: [
+    {
+      id: 'packaged-launch',
+      status: 'pass',
+      evidence: 'session 2026-06-16T14-52-13-074Z-darwin-arm64 for /Users/mango/project/codex/OpenPet/release/mac-arm64/OpenPet.app; launched with pid 52549',
+      notes: 'Packaged app launched under runtime smoke mode.'
+    },
+    {
+      id: 'pet-window-created',
+      status: 'pass',
+      evidence: 'Pet BrowserWindow visible=true bounds={"x":1130,"y":539,"width":300,"height":300}',
+      notes: 'Main process observed the packaged pet window.'
+    },
+    {
+      id: 'plugin-picker-evidence-linked',
+      status: 'pending',
+      evidence: '',
+      notes: 'Native plugin picker evidence must come from a paired desktop picker smoke report.'
+    },
+    {
+      id: 'invalid-package-feedback',
+      status: 'blocked',
+      evidence: '',
+      notes: 'Native picker invalid-package path requires a paired desktop picker smoke report.'
+    }
+  ]
+} satisfies PackagedRuntimeSmokeReport
 
 const releaseArchiveFixture = {
   generatedAt: '2026-06-17T00:00:00.000Z',

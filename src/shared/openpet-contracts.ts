@@ -1207,11 +1207,178 @@ export interface ReleaseEvidenceReportSnapshot {
   linkedEvidence?: JsonObject
 }
 
+export type PackagedRuntimeSmokeCheckStatus = 'pass' | 'fail' | 'pending' | 'blocked'
+
+export interface PackagedRuntimeSmokeValidationSummary {
+  passed: number
+  total: number
+  smokeReady?: boolean
+  officialReady?: boolean
+}
+
+export interface PackagedRuntimeSmokeValidationResult {
+  ok: boolean
+  errors: string[]
+  warnings: string[]
+  summary: PackagedRuntimeSmokeValidationSummary
+}
+
+export interface PackagedRuntimeArtifactFile {
+  name: string
+  size: number
+}
+
+export interface PackagedRuntimeArtifactSummary {
+  version: string
+  releaseDir: string
+  appPath: string
+  installer: string
+  zip: string
+  latestYml: string
+  files: PackagedRuntimeArtifactFile[]
+  signed: boolean
+  signatureStatus?: string
+  signatureEvidence?: string
+  authenticodeStatus?: string
+  authenticodeEvidence?: string
+}
+
+export interface PackagedRuntimeEnvironmentSummary {
+  osRelease: string
+  machine: string
+  runner: string
+  evidence: string
+}
+
+export interface PackagedRuntimeFixtures {
+  builtInPacks: Record<string, string>
+  pluginPackage: string
+  petPackZip: string
+  invalidPackage: string
+}
+
 export interface PackagedRuntimeLinkedEvidence {
   desktopPickerSmokeReport: string
   desktopPickerSmokeRunbook: string
   screenshots: string[]
   recordings: string[]
+}
+
+export interface PackagedRuntimeSmokeCheck {
+  id: string
+  status: PackagedRuntimeSmokeCheckStatus
+  evidence: string
+  notes: string
+}
+
+export interface PackagedRuntimeSmokeReport {
+  platform: string
+  arch: string
+  generatedAt: string
+  source: string
+  environment: PackagedRuntimeEnvironmentSummary
+  artifact: PackagedRuntimeArtifactSummary
+  fixtures: PackagedRuntimeFixtures
+  linkedEvidence: PackagedRuntimeLinkedEvidence
+  checks: PackagedRuntimeSmokeCheck[]
+}
+
+export interface PackagedRuntimeSmokeStateLaunch {
+  ok: boolean
+  pid: number
+}
+
+export interface PackagedRuntimeSmokeStateWindowBounds {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export interface PackagedRuntimeSmokeStateWindow {
+  ok: boolean
+  visible?: boolean
+  focused?: boolean
+  bounds?: PackagedRuntimeSmokeStateWindowBounds
+  transparent?: boolean
+  alwaysOnTop?: boolean
+}
+
+export interface PackagedRuntimeSmokeStateRendererSprite {
+  visible: boolean
+  width: number
+  height: number
+  backgroundImage: string
+}
+
+export interface PackagedRuntimeSmokeStateRendererBubble {
+  visible: boolean
+  text: string
+}
+
+export interface PackagedRuntimeSmokeStateRendererAction {
+  current?: string
+  firstPosition?: string
+  secondPosition?: string
+  advanced: boolean
+  requested?: string
+}
+
+export interface PackagedRuntimeSmokeStateRenderer {
+  ok: boolean
+  bodyBackground?: string
+  htmlBackground?: string
+  transparentBackground?: boolean
+  sprite?: PackagedRuntimeSmokeStateRendererSprite
+  bubble?: PackagedRuntimeSmokeStateRendererBubble
+  action?: PackagedRuntimeSmokeStateRendererAction
+}
+
+export interface PackagedRuntimeSmokeStatePackSpriteSize {
+  width: number
+  height: number
+}
+
+export interface PackagedRuntimeSmokeStatePack {
+  id: string
+  ok: boolean
+  actionCount: number
+  defaultAction?: string
+  spriteVisible?: boolean
+  spriteSize?: PackagedRuntimeSmokeStatePackSpriteSize
+  error?: string
+}
+
+export interface PackagedRuntimeSmokeStateCheckEvidence {
+  status: PackagedRuntimeSmokeCheckStatus
+  evidence?: string
+  notes?: string
+}
+
+export interface PackagedRuntimeSmokeStateFinalState {
+  ok: boolean
+  activePackId?: string
+  error?: string
+}
+
+export interface PackagedRuntimeSmokeState {
+  launch: PackagedRuntimeSmokeStateLaunch
+  window: PackagedRuntimeSmokeStateWindow
+  renderer: PackagedRuntimeSmokeStateRenderer
+  packs: PackagedRuntimeSmokeStatePack[]
+  pluginPicker?: PackagedRuntimeSmokeStateCheckEvidence
+  petPicker?: PackagedRuntimeSmokeStateCheckEvidence
+  invalidPackage?: PackagedRuntimeSmokeStateCheckEvidence
+  finalState: PackagedRuntimeSmokeStateFinalState
+}
+
+export interface PackagedRuntimeSmokeEvidence {
+  schemaVersion: number
+  sessionId: string
+  generatedAt: string
+  appPath: string
+  state: PackagedRuntimeSmokeState
+  screenshotPath?: string
 }
 
 export interface ReleaseEvidenceReportValidation {
