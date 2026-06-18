@@ -12,6 +12,9 @@ import type {
   CreatorPackManifestMutationRequest,
   CreatorPackManifestMutationResult,
   CreatorPackManifestReadResponse,
+  MacosReleaseEvidenceArtifactArchiveManifest,
+  MacosReleaseEvidenceCommand,
+  MacosReleaseEvidenceSummary,
   PluginCleanupEvidenceArchiveManifest,
   PluginCleanupEvidenceChecklistReport,
   PluginCleanupEvidenceCollectorRun,
@@ -429,6 +432,100 @@ const pluginCleanupEvidenceRunResultFixture = {
   collectorRun: pluginCleanupEvidenceCollectorRunFixture,
   manifest: pluginCleanupEvidenceArchiveManifestFixture
 } satisfies PluginCleanupEvidenceRunResult
+
+const macosReleaseEvidenceSummaryFixture = {
+  generatedAt: '2026-06-18T02:00:00.000Z',
+  ok: true,
+  releaseReady: false,
+  appPath: '/Users/mango/project/codex/OpenPet/release/mac-arm64/OpenPet.app',
+  outputDir: '/tmp/openpet-macos-release-evidence',
+  statuses: {
+    codesign: 'pending',
+    notarization: 'pass',
+    gatekeeper: 'pending'
+  },
+  files: {
+    codesign: '/tmp/openpet-macos-release-evidence/macos-codesign.txt',
+    notarization: '/tmp/openpet-macos-release-evidence/macos-notarization.txt',
+    gatekeeper: '/tmp/openpet-macos-release-evidence/macos-gatekeeper.txt',
+    markdownSummary: '/tmp/openpet-macos-release-evidence/macos-release-evidence-summary.md',
+    jsonSummary: '/tmp/openpet-macos-release-evidence/macos-release-evidence-summary.json'
+  },
+  evidenceFiles: [
+    {
+      role: 'macosCodesignEvidence',
+      path: '/tmp/openpet-macos-release-evidence/macos-codesign.txt',
+      exists: true,
+      bytes: 64,
+      sha256: '7'.repeat(64)
+    },
+    {
+      role: 'macosNotarizationEvidence',
+      path: '/tmp/openpet-macos-release-evidence/macos-notarization.txt',
+      exists: true,
+      bytes: 72,
+      sha256: '8'.repeat(64)
+    },
+    {
+      role: 'macosGatekeeperEvidence',
+      path: '/tmp/openpet-macos-release-evidence/macos-gatekeeper.txt',
+      exists: true,
+      bytes: 96,
+      sha256: '9'.repeat(64)
+    }
+  ],
+  commands: [
+    {
+      command: 'codesign',
+      args: ['--verify', '--deep', '--strict', '--verbose=2', '/Users/mango/project/codex/OpenPet/release/mac-arm64/OpenPet.app'],
+      exitCode: 0,
+      ok: true,
+      stdout: '',
+      stderr: 'OpenPet.app: valid on disk\nOpenPet.app: satisfies its Designated Requirement\n',
+      content: '$ codesign --verify --deep --strict --verbose=2 /Users/mango/project/codex/OpenPet/release/mac-arm64/OpenPet.app\nOpenPet.app: valid on disk\nOpenPet.app: satisfies its Designated Requirement\n'
+    }
+  ],
+  warnings: ['macOS evidence is archived but does not prove official signed release readiness']
+} satisfies MacosReleaseEvidenceSummary
+
+const macosReleaseEvidenceCommandFixture = macosReleaseEvidenceSummaryFixture.commands[0] satisfies MacosReleaseEvidenceCommand
+
+const macosReleaseEvidenceArtifactArchiveManifestFixture = {
+  generatedAt: '2026-06-18T03:00:00.000Z',
+  ok: true,
+  macosEvidenceReady: true,
+  archive: {
+    archiveDir: '/tmp/openpet-macos-release-evidence-archive',
+    outputPath: '/tmp/openpet-macos-release-evidence-archive/macos-release-evidence-artifact-manifest.json'
+  },
+  source: {
+    artifactDir: '/tmp/openpet-macos-release-evidence-download',
+    artifactName: 'openpet-macos-release-evidence-v1.0.1-rc.2',
+    releaseTag: 'v1.0.1-rc.2',
+    workflowRunUrl: 'https://github.com/dengyie/OpenPet/actions/runs/123'
+  },
+  files: [
+    {
+      role: 'macosCodesignEvidence',
+      fileName: 'macos-codesign.txt',
+      sourcePath: '/tmp/openpet-macos-release-evidence-download/macos-codesign.txt',
+      archivedPath: '/tmp/openpet-macos-release-evidence-archive/macos-codesign.txt',
+      bytes: 64,
+      sha256: 'a'.repeat(64),
+      status: 'pass',
+      releaseReady: true
+    },
+    {
+      role: 'macosReleaseEvidenceJsonSummary',
+      fileName: 'macos-release-evidence-summary.json',
+      sourcePath: '/tmp/openpet-macos-release-evidence-download/macos-release-evidence-summary.json',
+      archivedPath: '/tmp/openpet-macos-release-evidence-archive/macos-release-evidence-summary.json',
+      bytes: 128,
+      sha256: 'b'.repeat(64)
+    }
+  ],
+  warnings: ['macOS evidence files look passing; official release readiness still requires release archive and signed closure validation']
+} satisfies MacosReleaseEvidenceArtifactArchiveManifest
 
 const releaseArchiveFixture = {
   generatedAt: '2026-06-17T00:00:00.000Z',

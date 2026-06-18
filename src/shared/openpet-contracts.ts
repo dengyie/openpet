@@ -1032,6 +1032,68 @@ export interface MacosReleaseEvidenceFileStatus {
   file: ReleaseEvidenceArchiveFile
 }
 
+export interface MacosReleaseEvidenceCommand {
+  command: string
+  args: string[]
+  exitCode: number
+  ok: boolean
+  stdout: string
+  stderr: string
+  content: string
+}
+
+export interface MacosReleaseEvidenceSummary {
+  generatedAt: string
+  ok: boolean
+  releaseReady: boolean
+  appPath: string
+  outputDir: string
+  statuses: {
+    codesign: MacosReleaseEvidenceStatus
+    notarization: MacosReleaseEvidenceStatus
+    gatekeeper: MacosReleaseEvidenceStatus
+  }
+  files: {
+    codesign: string
+    notarization: string
+    gatekeeper: string
+    markdownSummary: string
+    jsonSummary: string
+  }
+  evidenceFiles: ReleaseEvidenceArchiveFile[]
+  commands: MacosReleaseEvidenceCommand[]
+  warnings: string[]
+}
+
+export interface MacosReleaseEvidenceArtifactArchiveFile {
+  role: string
+  fileName: string
+  sourcePath: string
+  archivedPath: string
+  bytes: number
+  sha256: string
+  status?: MacosReleaseEvidenceStatus
+  releaseReady?: boolean
+}
+
+export interface MacosReleaseEvidenceArtifactArchiveManifest {
+  generatedAt: string
+  ok: boolean
+  macosEvidenceReady: boolean
+  archive: {
+    archiveDir: string
+    outputPath: string
+  }
+  source: {
+    artifactDir: string
+    artifactName: string
+    releaseTag: string
+    workflowRunUrl: string
+  }
+  files: MacosReleaseEvidenceArtifactArchiveFile[]
+  warnings: string[]
+}
+
 export interface ReleaseEvidenceArchiveManifest {
   generatedAt: string
   requireSigned: boolean
