@@ -1,0 +1,23 @@
+{
+  "properties": [
+    {
+      "key": "backend",
+      "title": "Backend",
+      "type": "string",
+      "enum": ["fixture", "cloud", "local"],
+      "default": "fixture"
+    },
+    {
+      "key": "autoActivateAfterImport",
+      "title": "Auto activate imported pet",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "key": "servicePort",
+      "title": "Dashboard service port",
+      "type": "number",
+      "default": 8794
+    }
+  ]
+}
