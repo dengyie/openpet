@@ -26,7 +26,9 @@ import type {
   ReleaseEvidenceArchiveManifest,
   ReleaseEvidenceArchiveSummary,
   SignedReleaseClosureReport,
-  SignedReleaseClaimSummary
+  SignedReleaseClaimSummary,
+  WindowsSmokeArchiveManifest,
+  WindowsSmokeEvidenceSummary
 } from '../../src/shared/openpet-contracts'
 
 const pluginReviewFixture = {
@@ -526,6 +528,141 @@ const macosReleaseEvidenceArtifactArchiveManifestFixture = {
   ],
   warnings: ['macOS evidence files look passing; official release readiness still requires release archive and signed closure validation']
 } satisfies MacosReleaseEvidenceArtifactArchiveManifest
+
+const windowsSmokeEvidenceSummaryFixture = {
+  generatedAt: '2026-06-14T00:00:00.000Z',
+  requireSigned: true,
+  ok: true,
+  releaseReady: false,
+  evidence: {
+    evidenceDir: '/tmp/openpet-windows-smoke/windows-smoke-evidence',
+    requiredFiles: [
+      'environment.txt',
+      'authenticode.txt',
+      'process.txt',
+      'install-registry.txt',
+      'manual-checks.md',
+      'update-report-commands.md'
+    ],
+    presentFiles: [
+      {
+        file: 'environment.txt',
+        bytes: 128,
+        sha256: 'c'.repeat(64)
+      },
+      {
+        file: 'authenticode.txt',
+        bytes: 64,
+        sha256: 'd'.repeat(64)
+      }
+    ],
+    presentCount: 2,
+    requiredCount: 6,
+    signed: true
+  },
+  report: {
+    reportPath: '/tmp/openpet-windows-smoke/windows-smoke-report.json',
+    platform: 'win32',
+    arch: 'x64',
+    generatedAt: '2026-06-14T00:00:00.000Z',
+    artifact: {
+      version: '1.0.1-rc.1',
+      installer: 'OpenPet-1.0.1-rc.1-win32-x64.exe',
+      zip: 'OpenPet-1.0.1-rc.1-win32-x64.zip',
+      latestYml: 'latest.yml',
+      signed: true,
+      authenticodeStatus: 'Valid'
+    },
+    checks: {
+      total: 13,
+      present: 13,
+      counts: {
+        pass: 0,
+        fail: 0,
+        pending: 13,
+        blocked: 0
+      },
+      byStatus: {
+        pass: [],
+        fail: [],
+        pending: ['launch', 'transparent-window'],
+        blocked: []
+      }
+    },
+    structuralValidation: {
+      ok: true,
+      errors: [],
+      warnings: [],
+      summary: {
+        passed: 0,
+        total: 13,
+        smokeReady: false,
+        officialReady: false
+      }
+    },
+    readinessValidation: {
+      ok: false,
+      errors: ['launch must pass before Windows smoke readiness can be claimed'],
+      warnings: [],
+      summary: {
+        passed: 0,
+        total: 13,
+        smokeReady: false,
+        officialReady: false
+      }
+    }
+  },
+  errors: [],
+  warnings: ['Authenticode evidence is present, but pending smoke checks still cannot prove signed official readiness.']
+} satisfies WindowsSmokeEvidenceSummary
+
+const windowsSmokeArchiveManifestFixture = {
+  generatedAt: '2026-06-14T00:00:00.000Z',
+  requireSigned: true,
+  ok: true,
+  releaseReady: false,
+  archive: {
+    archiveDir: '/tmp/openpet-windows-smoke-archive',
+    outputPath: '/tmp/openpet-windows-smoke-archive/windows-smoke-archive-manifest.json'
+  },
+  files: [
+    {
+      role: 'report',
+      path: '/tmp/openpet-windows-smoke-archive/windows-smoke-report.json',
+      exists: true,
+      bytes: 2048,
+      sha256: 'e'.repeat(64)
+    },
+    {
+      role: 'summary',
+      path: '/tmp/openpet-windows-smoke-archive/windows-smoke-evidence-summary.md',
+      exists: true,
+      bytes: 1024,
+      sha256: 'f'.repeat(64)
+    }
+  ],
+  evidence: {
+    evidenceDir: '/tmp/openpet-windows-smoke-archive/windows-smoke-evidence',
+    ok: true,
+    files: windowsSmokeEvidenceSummaryFixture.evidence.presentFiles,
+    signed: true
+  },
+  summary: {
+    path: '/tmp/openpet-windows-smoke-archive/windows-smoke-evidence-summary.md',
+    format: 'markdown',
+    matchesComputedSummary: true
+  },
+  report: {
+    path: windowsSmokeEvidenceSummaryFixture.report.reportPath,
+    platform: windowsSmokeEvidenceSummaryFixture.report.platform,
+    arch: windowsSmokeEvidenceSummaryFixture.report.arch,
+    generatedAt: windowsSmokeEvidenceSummaryFixture.report.generatedAt,
+    structuralValidation: windowsSmokeEvidenceSummaryFixture.report.structuralValidation,
+    readinessValidation: windowsSmokeEvidenceSummaryFixture.report.readinessValidation
+  },
+  errors: [],
+  warnings: ['summary: Pending or unsigned evidence does not prove Windows release readiness; a real Windows smoke report must pass readiness validation, and official stable releases must also pass signed Authenticode validation.']
+} satisfies WindowsSmokeArchiveManifest
 
 const releaseArchiveFixture = {
   generatedAt: '2026-06-17T00:00:00.000Z',

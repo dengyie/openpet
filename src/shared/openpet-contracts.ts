@@ -824,6 +824,117 @@ export interface PluginCleanupEvidenceRunResult {
   manifest: PluginCleanupEvidenceArchiveManifest
 }
 
+export type WindowsSmokeCheckStatus = 'pass' | 'fail' | 'pending' | 'blocked'
+
+export interface WindowsSmokeValidationSummary {
+  passed: number
+  total: number
+  smokeReady?: boolean
+  officialReady?: boolean
+}
+
+export interface WindowsSmokeValidationResult {
+  ok: boolean
+  errors: string[]
+  warnings: string[]
+  summary: WindowsSmokeValidationSummary
+}
+
+export interface WindowsSmokeEvidenceFile {
+  file: string
+  bytes: number
+  sha256: string
+}
+
+export interface WindowsSmokeEvidenceBundleSummary {
+  evidenceDir: string
+  requiredFiles: string[]
+  presentFiles: WindowsSmokeEvidenceFile[]
+  presentCount: number
+  requiredCount: number
+  signed: boolean
+}
+
+export interface WindowsSmokeReportArtifactSummary {
+  version: string
+  installer: string
+  zip: string
+  latestYml: string
+  signed: boolean
+  authenticodeStatus: string
+}
+
+export interface WindowsSmokeReportCheckSummary {
+  total: number
+  present: number
+  counts: Record<WindowsSmokeCheckStatus, number> & Record<string, number>
+  byStatus: Record<WindowsSmokeCheckStatus, string[]> & Record<string, string[]>
+}
+
+export interface WindowsSmokeEvidenceReportSummary {
+  reportPath: string
+  platform: string
+  arch: string
+  generatedAt: string
+  artifact: WindowsSmokeReportArtifactSummary
+  checks: WindowsSmokeReportCheckSummary
+  structuralValidation: WindowsSmokeValidationResult
+  readinessValidation: WindowsSmokeValidationResult
+}
+
+export interface WindowsSmokeEvidenceReportError {
+  reportPath: string
+  error: string
+}
+
+export type WindowsSmokeEvidenceReport =
+  | WindowsSmokeEvidenceReportSummary
+  | WindowsSmokeEvidenceReportError
+
+export interface WindowsSmokeEvidenceSummary {
+  generatedAt: string
+  requireSigned: boolean
+  ok: boolean
+  releaseReady: boolean
+  evidence: WindowsSmokeEvidenceBundleSummary
+  report: WindowsSmokeEvidenceReport | null
+  errors: string[]
+  warnings: string[]
+}
+
+export interface WindowsSmokeArchiveManifest {
+  generatedAt: string
+  requireSigned: boolean
+  ok: boolean
+  releaseReady: boolean
+  archive: {
+    archiveDir: string
+    outputPath: string
+  }
+  files: ReleaseEvidenceArchiveFile[]
+  evidence: {
+    evidenceDir: string
+    ok: boolean
+    files: WindowsSmokeEvidenceFile[]
+    signed: boolean
+  }
+  summary: {
+    path: string
+    format: '' | 'markdown' | 'json'
+    matchesComputedSummary: boolean
+  }
+  report: {
+    path: string
+    platform: string
+    arch: string
+    generatedAt: string
+    structuralValidation: WindowsSmokeValidationResult
+    readinessValidation: WindowsSmokeValidationResult
+  }
+  errors: string[]
+  warnings: string[]
+}
+
 export interface CatalogPluginInstallSelection {
   kind: 'plugin'
   itemId: string
