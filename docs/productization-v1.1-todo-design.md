@@ -1421,6 +1421,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 | P1 | Phase 101 Plugin submission evidence contracts | Completed; submission bundles, maintainer approvals, existing-plugin rehearsals, remote-source rehearsals, and community-source evidence summaries now follow shared TypeScript contracts and representative fixtures. |
 | P1 | Phase 102 Plugin community-source intake evidence | Completed; a real public adjacent OpenPets source has a Phase 100 intake archive with an incompatible-package verdict, preserving provenance without claiming OpenPet compatibility. |
 | P1 | Phase 103 Plugin community intake submission bridge | Completed; compatible Phase 100 intake summaries can now enter Phase 99 through a guarded bridge while incompatible intake archives stay intake-only evidence. |
+| P1 | Phase 104 Plugin community-source discovery report | Completed; public search observations and adjacent candidates can now be archived before intake, and the current archive records `compatible-source-not-found` without claiming OpenPet plugin compatibility. |
 | P1 | Phase 40 pet pack export and provenance | Completed; keep provenance and conflict review as constraints for future catalog work. |
 | P1 | Phase 44 plugin author experience rehearsal | Completed; use the archived rehearsal as the plugin author baseline. |
 | P1 | Phase 74 Plugin maintainer approval rehearsal | Completed; submission bundles can now receive separate maintainer approval artifacts and author rehearsal now points at that human review step explicitly. |
@@ -1517,6 +1518,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 57. Phase 101 is complete; the plugin submission evidence chain now has shared TypeScript contracts and representative fixtures without changing readiness or trust boundaries.
 58. Phase 102 is complete; `alvinunreal/openpets` has a real public candidate-source intake archive, currently classified as `incompatible-package-model` rather than compatible Phase 99 submission evidence.
 59. Phase 103 is complete; compatible Phase 100 intake summaries can now be routed into Phase 99 through `create-plugin-community-source-evidence-from-intake`, while incompatible intake summaries are rejected before submission evidence generation.
+60. Phase 104 is complete; community-source discovery can now archive search observations and adjacent candidates before Phase 100 intake, with the current evidence state `compatible-source-not-found`.
 
 ## 8. Verification Contract
 
