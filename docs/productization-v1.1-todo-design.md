@@ -36,7 +36,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 - macOS signed/notarized release evidence still needs real artifact capture and archive.
 - Windows signed installer/zip smoke evidence still needs real Windows execution.
 - Packaged runtime smoke reports still need real app evidence for pet window visibility, transparent rendering, bundled pack switching, and native picker flows.
-- Extension runtime support for explicit setup execution, explicit short-lived command execution, explicit short-lived command bridge access, creator-tools action reads / validation / bounded writes, package-local frame inspection/import, user-approved picker frame inspection/import, explicit service start/stop, manual loopback service health checks, opt-in periodic health checks for running services, best-effort process-group cleanup, controlled-host cleanup evidence, cleanup evidence helper generation, cleanup evidence runner archives, cleanup evidence archive manifests, and structured plugin cleanup readiness reports with validation-first updates now exists. Local scaffold and existing-plugin submission rehearsals now exist. External community provenance, deeper pack workflows beyond active metadata, richer command orchestration, packaged app UI cleanup evidence, and hard process-tree cleanup guarantees are still future work. Dashboard entries can now be opened explicitly as external HTTP/HTTPS URLs from Control Center.
+- Extension runtime support for explicit setup execution, explicit short-lived command execution, explicit short-lived command bridge access, creator-tools action reads / validation / bounded writes, package-local frame inspection/import, user-approved picker frame inspection/import, explicit service start/stop, manual loopback service health checks, opt-in periodic health checks for running services, best-effort process-group cleanup, controlled-host cleanup evidence, cleanup evidence helper generation, cleanup evidence runner archives, packaged-app cleanup evidence runner archives, cleanup evidence archive manifests, and structured plugin cleanup readiness reports with validation-first updates now exists. Local scaffold and existing-plugin submission rehearsals now exist. External community provenance, deeper pack workflows beyond active metadata, richer command orchestration, and hard process-tree cleanup guarantees are still future work. Dashboard entries can now be opened explicitly as external HTTP/HTTPS URLs from Control Center.
 - Legacy SDK plugin secrets policy remains conservative; target extension docs require honest disclosure for extension-managed secrets and data.
 - Plugin sandbox strategy has been evaluated against SES and Electron `utilityProcess`; current recommendation is to keep the existing runner for v1.1 while documenting limits.
 - AI behavior orchestration has a Control Center decision viewer, replay, redacted diagnostics export, and clear-history controls.
@@ -1374,6 +1374,29 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 
 **Status**: completed in Phase 90. Maintainers can now run a local cleanup evidence collector chain that archives stdout/stderr/run metadata while keeping cleanup readiness report-driven.
 
+### Phase 98: Packaged app plugin cleanup evidence
+
+**Goal**: make packaged-app plugin cleanup evidence repeatable through a launched OpenPet app session instead of only local collector scripts.
+
+**Scope**:
+
+- launch a packaged OpenPet app with an explicit evidence-mode environment flag;
+- install a deterministic local cleanup fixture plugin;
+- drive setup, declaration-command, and service cleanup through the app's normal plugin services;
+- write runtime transcripts and `packaged-plugin-cleanup-runtime.json`;
+- map observed behavior into the existing cleanup evidence report without a second readiness policy;
+- archive the report, collector helper, transcripts, and manifest;
+- keep fallback and force-stop checks pending unless they are explicitly observed.
+
+**Acceptance**:
+
+- targeted runner/mapper/main-process tests cover success, failure, output collision, and conservative evidence mapping;
+- npm scripts expose packaged cleanup run and report update commands;
+- shared contracts cover packaged cleanup runtime artifacts and runner results;
+- docs state that packaged cleanup evidence covers the observed run only and does not prove universal cleanup for arbitrary descendant trees or third-party plugin behavior.
+
+**Status**: completed in Phase 98. Maintainers can now run a packaged OpenPet cleanup evidence session that maps observed setup, declaration-command, and service cleanup behavior into the existing structured report while keeping cleanup readiness report-driven.
+
 ## 6. Priority Order
 
 | Priority | Work | Reason |
@@ -1394,6 +1417,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 | P1 | Phase 88 Plugin cleanup evidence collector | Completed; maintainers can generate a POSIX helper that writes manual cleanup checklists and updater command notes without preselecting pass status. |
 | P1 | Phase 89 Plugin cleanup evidence archive manifest | Completed; report, collector, and collected evidence directories can now be hashed and validated while archive validity stays separate from cleanup readiness. |
 | P1 | Phase 90 Plugin cleanup evidence runner | Completed; maintainers can execute the collector chain into a hashed pending archive without marking checks passed. |
+| P1 | Phase 98 Packaged app plugin cleanup evidence | Completed; maintainers can launch a packaged app cleanup evidence session and map observed setup/command/service cleanup into the existing report without claiming universal cleanup guarantees. |
 | P1 | Phase 40 pet pack export and provenance | Completed; keep provenance and conflict review as constraints for future catalog work. |
 | P1 | Phase 44 plugin author experience rehearsal | Completed; use the archived rehearsal as the plugin author baseline. |
 | P1 | Phase 74 Plugin maintainer approval rehearsal | Completed; submission bundles can now receive separate maintainer approval artifacts and author rehearsal now points at that human review step explicitly. |
@@ -1484,6 +1508,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 51. Phase 88 is complete; plugin cleanup evidence helper scripts can now generate manual checklists and updater command notes without running cleanup or marking checks as passed.
 52. Phase 89 is complete; plugin cleanup evidence archive manifests can now hash report, collector, and collected evidence files while keeping archive validity separate from cleanup readiness.
 53. Phase 90 is complete; plugin cleanup evidence runner archives can now execute the conservative collector and preserve stdout/stderr/run metadata while keeping strict cleanup readiness report-driven.
+54. Phase 98 is complete; packaged app plugin cleanup evidence runner archives can now launch a built OpenPet app, drive fixture setup/command/service cleanup through real plugin services, and update the existing cleanup report without auto-claiming fallback or force-stop checks.
 
 ## 8. Verification Contract
 

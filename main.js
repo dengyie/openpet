@@ -30,6 +30,7 @@ const { createActionImportService } = require('./src/main/services/action-import
 const { createAboutService } = require('./src/main/services/about-service')
 const { createCatalogService } = require('./src/main/services/catalog-service')
 const { maybeRunPackagedRuntimeSmoke } = require('./src/main/packaged-runtime-smoke-runner')
+const { maybeRunPackagedPluginCleanupEvidence } = require('./src/main/packaged-plugin-cleanup-evidence-runner')
 const { createBasicBehaviorPlugin } = require('./src/main/plugins/official/basic-behavior')
 const packageJson = require('./package.json')
 
@@ -166,6 +167,7 @@ app.whenReady().then(() => {
     applyWindowScale(petWindow, settings.scale)
     petWindow.webContents.send(IPC.SETTINGS_CHANGED, createPetRendererSettings(settings))
     maybeRunPackagedRuntimeSmoke({ app, petWindow, petService, petPackService })
+    maybeRunPackagedPluginCleanupEvidence({ app, pluginInstallService, pluginService })
   })
   loadPetWindow(petWindow)
 

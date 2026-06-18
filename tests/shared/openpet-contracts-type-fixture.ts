@@ -18,6 +18,8 @@ import type {
   MacosReleaseEvidenceArtifactArchiveManifest,
   MacosReleaseEvidenceCommand,
   MacosReleaseEvidenceSummary,
+  PackagedPluginCleanupEvidenceRunResult,
+  PackagedPluginCleanupRuntimeArtifact,
   PackagedRuntimeSmokeEvidence,
   PackagedRuntimeSmokeReport,
   PluginCleanupEvidenceArchiveManifest,
@@ -1070,6 +1072,60 @@ const packagedRuntimeSmokeReportFixture = {
     }
   ]
 } satisfies PackagedRuntimeSmokeReport
+
+const packagedPluginCleanupRuntimeArtifactFixture = {
+  schemaVersion: 1,
+  generatedAt: '2026-06-18T19:00:00.000Z',
+  pluginId: 'openpet.cleanup-evidence-fixture',
+  hostApp: 'OpenPet.app',
+  setup: {
+    requested: true,
+    stopRequested: true,
+    exitConfirmed: true,
+    treeCleanupAttempted: false,
+    transcriptPath: '/tmp/openpet-packaged-cleanup/setup.txt'
+  },
+  command: {
+    requested: true,
+    stopRequested: true,
+    exitConfirmed: true,
+    treeCleanupAttempted: false,
+    transcriptPath: '/tmp/openpet-packaged-cleanup/command.txt'
+  },
+  service: {
+    requested: true,
+    stopRequested: true,
+    exitConfirmed: true,
+    processGroupCleanupAttempted: true,
+    treeCleanupAttempted: false,
+    forceStopAttempted: false,
+    transcriptPath: '/tmp/openpet-packaged-cleanup/service.txt'
+  },
+  logPath: '/tmp/openpet-packaged-cleanup/packaged-plugin-cleanup-logs.json'
+} satisfies PackagedPluginCleanupRuntimeArtifact
+
+const packagedPluginCleanupEvidenceRunResultFixture = {
+  ok: true,
+  archiveDir: '/tmp/openpet-packaged-cleanup',
+  reportPath: '/tmp/openpet-packaged-cleanup/plugin-cleanup-evidence-report.json',
+  collectorPath: '/tmp/openpet-packaged-cleanup/plugin-cleanup-evidence-collector.sh',
+  evidenceDir: '/tmp/openpet-packaged-cleanup/plugin-cleanup-evidence-collected',
+  manifestPath: '/tmp/openpet-packaged-cleanup/plugin-cleanup-evidence-archive-manifest.json',
+  runtimeArtifactPath: '/tmp/openpet-packaged-cleanup/packaged-plugin-cleanup-runtime.json',
+  updatedReport: pluginCleanupEvidenceChecklistFixture,
+  reportValidation: {
+    ok: true,
+    errors: [],
+    warnings: [],
+    summary: {
+      passed: 7,
+      total: 8,
+      cleanupReady: false
+    }
+  },
+  manifest: pluginCleanupEvidenceArchiveManifestFixture,
+  errors: []
+} satisfies PackagedPluginCleanupEvidenceRunResult
 
 const releaseArchiveFixture = {
   generatedAt: '2026-06-17T00:00:00.000Z',

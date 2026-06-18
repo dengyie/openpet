@@ -824,6 +824,43 @@ export interface PluginCleanupEvidenceRunResult {
   manifest: PluginCleanupEvidenceArchiveManifest
 }
 
+export interface PackagedPluginCleanupRuntimeStepEvidence {
+  requested: boolean
+  stopRequested: boolean
+  exitConfirmed: boolean
+  treeCleanupAttempted?: boolean
+  processGroupCleanupAttempted?: boolean
+  forceStopAttempted?: boolean
+  transcriptPath: string
+}
+
+export interface PackagedPluginCleanupRuntimeArtifact {
+  schemaVersion: number
+  generatedAt: string
+  pluginId: string
+  hostApp: string
+  cleanupReady?: boolean
+  error?: string
+  setup: PackagedPluginCleanupRuntimeStepEvidence
+  command: PackagedPluginCleanupRuntimeStepEvidence
+  service: PackagedPluginCleanupRuntimeStepEvidence
+  logPath?: string
+}
+
+export interface PackagedPluginCleanupEvidenceRunResult {
+  ok: boolean
+  archiveDir: string
+  reportPath: string
+  collectorPath: string
+  evidenceDir: string
+  manifestPath: string
+  runtimeArtifactPath: string
+  updatedReport: PluginCleanupEvidenceChecklistReport
+  reportValidation: PluginCleanupEvidenceValidationResult
+  manifest: PluginCleanupEvidenceArchiveManifest
+  errors: string[]
+}
+
 export type DesktopPickerSmokeCheckStatus = 'pass' | 'fail' | 'pending' | 'blocked'
 
 export interface DesktopPickerValidationSummary {
