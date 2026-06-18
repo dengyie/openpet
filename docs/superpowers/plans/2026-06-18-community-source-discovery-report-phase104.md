@@ -260,7 +260,7 @@ const validateHttpsUrl = (value, label) => {
   return parsed.toString()
 }
 
-const normalizeSearchResult = (result = {}) => ({
+const normalizeSearchResult = (result = {}, index = 0) => {
   if (!result || typeof result !== 'object' || Array.isArray(result)) {
     throw new Error(`Search result ${index + 1} must be an object`)
   }
@@ -269,14 +269,14 @@ const normalizeSearchResult = (result = {}) => ({
     throw new Error(`Search result ${index + 1} resultCount must be a non-negative integer`)
   }
   return {
-  query: result.query.trim(),
-  tool: hasText(result.tool) ? result.tool.trim() : '',
-  resultCount: result.resultCount ?? 0,
-  notes: hasText(result.notes) ? result.notes.trim() : ''
+    query: result.query.trim(),
+    tool: hasText(result.tool) ? result.tool.trim() : '',
+    resultCount: result.resultCount ?? 0,
+    notes: hasText(result.notes) ? result.notes.trim() : ''
   }
 }
 
-const normalizeCandidate = (candidate = {}) => {
+const normalizeCandidate = (candidate = {}, index = 0) => {
   if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
     throw new Error(`Candidate ${index + 1} must be an object`)
   }
