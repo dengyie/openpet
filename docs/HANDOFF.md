@@ -1,6 +1,6 @@
 # OpenPet Handoff
 
-> Last updated: 2026-06-18 | Branch: `codex/plugin-cleanup-evidence-phase86`
+> Last updated: 2026-06-18 | Branch: `codex/plugin-cleanup-evidence-updater-phase87`
 
 ## Current Snapshot
 
@@ -12,7 +12,7 @@ OpenPet is a desktop pet platform with:
 - bundled built-in packs `doro`, `duodong`, and `chispa`,
 - AI chat with secret storage in the main process,
 - AI behavior decisions with Control Center replay and redacted diagnostics,
-- developer-first local extension docs with explicit `entries.setup` execution, language-neutral explicit `entries.commands` process execution, explicit command result feedback, explicit command bridge access, creator-tools action reads / validation / bounded writes, active installed user pack metadata workflows, package-local frame inspection/import, user-approved picker frame inspection/import for declaration-only commands, explicit dashboard opening, explicit service start/stop controls, explicit loopback service health checks, host-managed periodic service health policy for running services, best-effort service process-group cleanup, exit-confirmed setup/command/service stop semantics, bounded host-side force stop for stubborn services, host-owned process-tree fallback cleanup across service/setup/declaration-command stop paths, current-host plugin cleanup evidence collection, structured plugin cleanup readiness reports, plugin submission bundles, scaffold author rehearsal, maintainer approval rehearsal records, existing-plugin real-world submission rehearsal evidence, and remote-source submission rehearsal evidence,
+- developer-first local extension docs with explicit `entries.setup` execution, language-neutral explicit `entries.commands` process execution, explicit command result feedback, explicit command bridge access, creator-tools action reads / validation / bounded writes, active installed user pack metadata workflows, package-local frame inspection/import, user-approved picker frame inspection/import for declaration-only commands, explicit dashboard opening, explicit service start/stop controls, explicit loopback service health checks, host-managed periodic service health policy for running services, best-effort service process-group cleanup, exit-confirmed setup/command/service stop semantics, bounded host-side force stop for stubborn services, host-owned process-tree fallback cleanup across service/setup/declaration-command stop paths, current-host plugin cleanup evidence collection, structured plugin cleanup readiness reports with validation-first updates, plugin submission bundles, scaffold author rehearsal, maintainer approval rehearsal records, existing-plugin real-world submission rehearsal evidence, and remote-source submission rehearsal evidence,
 - loopback-only local HTTP / MCP,
 - and a TypeScript migration baseline covering shared IPC, Control Center view contracts, the Control Center API facade, Control Center hook state boundaries, Control Center pane prop surfaces, main-process Control Center adapters for service/catalog/plugin/pet pack/About/update/actions payloads, plugin extension entry contracts, full release evidence archive / signed closure report contracts, and representative payload fixtures.
 
@@ -38,7 +38,7 @@ OpenPet is a desktop pet platform with:
 ```bash
 npm start
 npm run dev:control-center
-npm test                     # 614/614 Node tests
+npm test                     # 623/623 Node tests
 npm run test:control-center
 npm run typecheck
 npm run check:syntax
@@ -49,7 +49,8 @@ npm run create-plugin-remote-source-submission-rehearsal -- --archive-url https:
 npm run create-plugin-maintainer-approval -- <submission-bundle-dir> --reviewer "OpenPet Maintainer" --decision approved --notes "..."
 npm run validate-plugin-maintainer-approval -- <submission-bundle-dir> --require-approved
 npm run create-plugin-cleanup-evidence -- --output-dir docs/release-evidence/plugin-cleanup-evidence/<session>
-npm run create-plugin-cleanup-evidence-report -- --output docs/release-evidence/plugin-cleanup/<session>/plugin-cleanup-evidence-report.json
+npm run create-plugin-cleanup-evidence-report -- --output docs/release-evidence/plugin-cleanup-evidence/<session>/plugin-cleanup-evidence-report.json
+npm run update-plugin-cleanup-evidence-report -- docs/release-evidence/plugin-cleanup-evidence/<session>/plugin-cleanup-evidence-report.json --check service-exit-confirmed-stop --status pass --evidence-file evidence/service-stop.txt
 npm run validate-plugin-cleanup-evidence-report -- docs/release-evidence/plugin-cleanup-evidence/<session>/plugin-cleanup-evidence-report.json --allow-pending
 npm run create-packaged-runtime-smoke-report
 npm run create-packaged-runtime-smoke-runbook
@@ -103,4 +104,5 @@ npm run create-macos-release-evidence-archive -- --artifact-dir <downloaded-open
 18. Use Phase 84 creator-tools pack manifest workflow as the current pack-authoring metadata boundary: declaration-only creator-tools commands with `pack-manifest:read` / `pack-manifest:write` can read, validate, and apply active installed user pack manifest metadata through the host, while built-in pack edits, arbitrary pack targeting, action-field edits through this route, and general pet-pack writes remain future work.
 19. Use Phase 85 creator-tools picker import as the current user-approved external asset boundary: declaration-only creator-tools commands with `assets:inspect` / `assets:generate` can ask the host to open a native folder picker and inspect/import the approved frame folder without receiving the selected path or raw filesystem grants.
 20. Use Phase 86 plugin cleanup evidence as the current cleanup-evidence boundary: maintainers can run a controlled current-host cleanup fixture, archive JSON/Markdown evidence, create structured readiness reports, and validate those reports, while universal process-tree cleanup guarantees remain out of scope.
-21. After Phase 86, continue from collecting real signed workflow artifacts, live external community submission evidence, optional cleanup evidence collectors, or another high-drift service/report boundary.
+21. Use Phase 87 plugin cleanup evidence updater as the current report-filling boundary: maintainers can update cleanup report metadata and individual required checks through a validation-first CLI instead of hand-editing JSON.
+22. After Phase 87, continue from collecting real signed workflow artifacts, live external community submission evidence, optional cleanup evidence collectors, or another high-drift service/report boundary.
