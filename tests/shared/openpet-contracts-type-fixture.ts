@@ -12,6 +12,8 @@ import type {
   CreatorPackManifestMutationRequest,
   CreatorPackManifestMutationResult,
   CreatorPackManifestReadResponse,
+  PluginCleanupEvidenceChecklistReport,
+  PluginCleanupEvidenceReport,
   PluginCommandRunResultViewState,
   PluginPackageReviewViewState,
   PluginSetupRunResultViewState,
@@ -265,6 +267,62 @@ const creatorPackManifestMutationFixture = {
     provenance: creatorPackManifestMutationRequestFixture.provenance
   }
 } satisfies CreatorPackManifestMutationResult
+
+const pluginCleanupEvidenceFixture = {
+  generatedAt: '2026-06-18T10:00:00.000Z',
+  ok: true,
+  phase: 86,
+  platform: 'darwin',
+  signal: 'SIGTERM',
+  cleanupAttempted: true,
+  rootPid: 1234,
+  rootExited: true,
+  rootExitCode: 0,
+  rootSignal: '',
+  descendantPidsBefore: [1235],
+  liveDescendantPidsAfter: [],
+  descendantsExited: true,
+  claimBoundary: 'single controlled host cleanup fixture; not a universal process-tree guarantee',
+  warnings: [
+    'This evidence only covers a controlled fixture on the current host and OS.'
+  ],
+  files: {
+    json: 'docs/release-evidence/plugin-cleanup-evidence/session/plugin-cleanup-evidence.json',
+    markdown: 'docs/release-evidence/plugin-cleanup-evidence/session/plugin-cleanup-evidence.md'
+  }
+} satisfies PluginCleanupEvidenceReport
+
+const pluginCleanupEvidenceChecklistFixture = {
+  schemaVersion: 'openpet-plugin-cleanup-evidence/v1',
+  generatedAt: '2026-06-18T10:00:00.000Z',
+  source: 'scripts/create-plugin-cleanup-evidence-report.js',
+  environment: {
+    platform: 'darwin',
+    arch: 'arm64',
+    node: 'v24.0.0',
+    machine: 'cleanup-host',
+    runner: 'local terminal',
+    evidence: 'terminal transcript sha256:abc123'
+  },
+  scenario: {
+    pluginId: 'openpet.cleanup-fixture',
+    hostApp: 'OpenPet packaged app',
+    notes: 'Fixture cleanup run'
+  },
+  checks: [
+    {
+      id: 'service-exit-confirmed-stop',
+      status: 'pass',
+      evidence: 'service log and process transcript'
+    },
+    {
+      id: 'command-tree-fallback-cleanup',
+      status: 'pending',
+      evidence: '',
+      notes: 'Pending host evidence.'
+    }
+  ]
+} satisfies PluginCleanupEvidenceChecklistReport
 
 const releaseArchiveFixture = {
   generatedAt: '2026-06-17T00:00:00.000Z',

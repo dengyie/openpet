@@ -683,6 +683,55 @@ export interface PluginServiceHealthCheckResult extends OkResponse {
   runtime: PluginServiceRuntimeViewState
 }
 
+export interface PluginCleanupEvidenceReport {
+  generatedAt: string
+  ok: boolean
+  phase: number
+  platform: string
+  signal: string
+  cleanupAttempted: boolean
+  rootPid: number
+  rootExited: boolean
+  rootExitCode: number | null
+  rootSignal: string
+  descendantPidsBefore: number[]
+  liveDescendantPidsAfter: number[]
+  descendantsExited: boolean
+  claimBoundary: string
+  warnings: string[]
+  files?: {
+    json: string
+    markdown: string
+  }
+}
+
+export type PluginCleanupEvidenceCheckStatus = 'pass' | 'fail' | 'pending' | 'blocked'
+
+export interface PluginCleanupEvidenceChecklistReport {
+  schemaVersion: string
+  generatedAt: string
+  source: string
+  environment: {
+    platform: string
+    arch: string
+    node: string
+    machine: string
+    runner: string
+    evidence: string
+  }
+  scenario: {
+    pluginId: string
+    hostApp: string
+    notes: string
+  }
+  checks: Array<{
+    id: string
+    status: PluginCleanupEvidenceCheckStatus
+    evidence: string
+    notes?: string
+  }>
+}
+
 export interface CatalogPluginInstallSelection {
   kind: 'plugin'
   itemId: string

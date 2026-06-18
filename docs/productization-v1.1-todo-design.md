@@ -36,7 +36,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 - macOS signed/notarized release evidence still needs real artifact capture and archive.
 - Windows signed installer/zip smoke evidence still needs real Windows execution.
 - Packaged runtime smoke reports still need real app evidence for pet window visibility, transparent rendering, bundled pack switching, and native picker flows.
-- Extension runtime support for explicit setup execution, explicit short-lived command execution, explicit short-lived command bridge access, creator-tools action reads / validation / bounded writes, package-local frame inspection/import, user-approved picker frame inspection/import, explicit service start/stop, manual loopback service health checks, opt-in periodic health checks for running services, and best-effort process-group cleanup now exists. Local scaffold and existing-plugin submission rehearsals now exist. External community provenance, deeper pack workflows beyond active metadata, richer command orchestration, and hard process-tree cleanup guarantees are still future work. Dashboard entries can now be opened explicitly as external HTTP/HTTPS URLs from Control Center.
+- Extension runtime support for explicit setup execution, explicit short-lived command execution, explicit short-lived command bridge access, creator-tools action reads / validation / bounded writes, package-local frame inspection/import, user-approved picker frame inspection/import, explicit service start/stop, manual loopback service health checks, opt-in periodic health checks for running services, best-effort process-group cleanup, controlled-host cleanup evidence, and structured plugin cleanup readiness reports now exists. Local scaffold and existing-plugin submission rehearsals now exist. External community provenance, deeper pack workflows beyond active metadata, richer command orchestration, optional cleanup collectors, and hard process-tree cleanup guarantees are still future work. Dashboard entries can now be opened explicitly as external HTTP/HTTPS URLs from Control Center.
 - Legacy SDK plugin secrets policy remains conservative; target extension docs require honest disclosure for extension-managed secrets and data.
 - Plugin sandbox strategy has been evaluated against SES and Electron `utilityProcess`; current recommendation is to keep the existing runner for v1.1 while documenting limits.
 - AI behavior orchestration has a Control Center decision viewer, replay, redacted diagnostics export, and clear-history controls.
@@ -1249,6 +1249,32 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 
 **Status**: completed in Phase 85. Declaration-only creator-tools command runs can use host-owned native picker routes for user-approved frame inspection/import without raw filesystem grants, plugin-selected output paths, or general pet-pack writes.
 
+### Phase 86: Plugin cleanup evidence reports
+
+**Goal**: create structured and controlled-host evidence tooling for validating plugin setup, command, and service cleanup behavior without changing runtime cleanup semantics.
+
+**Scope**:
+
+- add `npm run create-plugin-cleanup-evidence`;
+- add `npm run create-plugin-cleanup-evidence-report`;
+- add `npm run validate-plugin-cleanup-evidence-report`;
+- archive one controlled macOS host cleanup fixture under `docs/release-evidence/plugin-cleanup-evidence/`;
+- require checks for exit-confirmed service/setup/command stops, service process-group cleanup, service process-tree fallback, service bounded force-stop, and setup/command process-tree fallback cleanup;
+- allow pending reports only with `--allow-pending`;
+- require evidence for every passed cleanup check;
+- keep runtime cleanup behavior, broader automatic collectors, and universal cleanup guarantees out of scope.
+
+**Acceptance**:
+
+- a controlled host fixture can generate JSON and Markdown cleanup evidence;
+- a pending report can be generated and structurally validated;
+- a completed report requires every cleanup check to pass with evidence;
+- pending reports fail readiness validation without `--allow-pending`;
+- unknown, duplicate, missing, and evidence-free passed checks are rejected;
+- docs describe this as real-host evidence tooling rather than a hard cleanup guarantee.
+
+**Status**: completed in Phase 86. Maintainers can now create controlled-host cleanup evidence artifacts and create/validate structured plugin cleanup evidence reports while broader collectors and universal cleanup guarantees remain future work.
+
 ## 6. Priority Order
 
 | Priority | Work | Reason |
@@ -1264,6 +1290,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 | P1 | Phase 83 Plugin creator-tools sprite import | Completed; declaration-only creator-tools commands can import package-local frame folders and generate sprites through the host bridge with resource limits. |
 | P1 | Phase 84 Plugin creator-tools pack manifest workflow | Completed; declaration-only creator-tools commands can read, validate, and apply bounded active installed pack manifest metadata through the host bridge. |
 | P1 | Phase 85 Plugin creator-tools user-approved picker import | Completed; declaration-only creator-tools commands can inspect/import a user-approved external frame folder through the host bridge without receiving raw filesystem grants. |
+| P1 | Phase 86 Plugin cleanup evidence reports | Completed; controlled-host cleanup evidence and structured real-host cleanup reports can now be recorded and validated without claiming universal cleanup guarantees. |
 | P1 | Phase 40 pet pack export and provenance | Completed; keep provenance and conflict review as constraints for future catalog work. |
 | P1 | Phase 44 plugin author experience rehearsal | Completed; use the archived rehearsal as the plugin author baseline. |
 | P1 | Phase 74 Plugin maintainer approval rehearsal | Completed; submission bundles can now receive separate maintainer approval artifacts and author rehearsal now points at that human review step explicitly. |
@@ -1349,6 +1376,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 46. Phase 83 is complete; declaration-only creator-tools commands can use `assets:generate` for host-mediated package-local frame import and sprite regeneration with frame/pixel limits.
 47. Phase 84 is complete; declaration-only creator-tools commands can use `pack-manifest:read` / `pack-manifest:write` for host-mediated active installed pack manifest metadata workflows without arbitrary pet-pack writes.
 48. Phase 85 is complete; declaration-only creator-tools commands can use host-owned native picker routes for user-approved frame inspection/import without receiving selected paths or raw filesystem grants.
+49. Phase 86 is complete; plugin cleanup behavior can now be captured in controlled-host evidence artifacts and structured real-host evidence reports without changing runtime cleanup guarantees.
 
 ## 8. Verification Contract
 

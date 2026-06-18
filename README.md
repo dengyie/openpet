@@ -4,7 +4,7 @@
 
 An Electron desktop pet platform with a visual Control Center, AI chat, plugins, pet packs, and local agent APIs.
 
-[![Tests](https://img.shields.io/badge/tests-602%20node%20%2B%2010%20ui-success)](./tests)
+[![Tests](https://img.shields.io/badge/tests-614%20node%20%2B%2010%20ui-success)](./tests)
 [![Build](https://img.shields.io/badge/build-passing-success)](./package.json)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Version](https://img.shields.io/badge/version-1.0.1--rc.2-blue.svg)](./package.json)
@@ -24,7 +24,7 @@ The current release track is macOS-first. Windows build and validation tooling e
 - Pet pack runtime with legacy cat support, folder import, `.codex-pet.zip` import, and native `pet.json` + `spritesheet.webp` Codex pet atlases.
 - Three bundled built-in pets: `doro`, `duodong`, and `chispa`.
 - OpenAI-compatible chat with API keys kept in the main process secret store.
-- Developer-first local extension model with current legacy SDK compatibility, explicit command/dashboard/service controls, creator-tools action, pack-manifest, package-local asset, and user-approved picker asset bridges, validation, logs, catalog install, and uninstall flow.
+- Developer-first local extension model with current legacy SDK compatibility, explicit command/dashboard/service controls, creator-tools action, pack-manifest, package-local asset, user-approved picker asset bridges, cleanup evidence tooling, validation, logs, catalog install, and uninstall flow.
 - Optional loopback-only HTTP and MCP endpoints for local tools and agents.
 - Gradual TypeScript migration baseline covering shared contracts and the Control Center API facade.
 
@@ -153,7 +153,7 @@ Extension authors should also read [plugin-ecosystem-rules.md](./docs/plugin-eco
 Current local baseline:
 
 ```bash
-npm test                     # 602/602 Node tests
+npm test                     # 614/614 Node tests
 npm run test:control-center  # 10/10 Playwright tests
 npm run typecheck            # TypeScript no-emit checks
 npm run check:syntax         # syntax + typecheck + Control Center build
