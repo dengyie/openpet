@@ -136,3 +136,11 @@ test('creator studio commands create run generate output approve and export', ()
   assert.equal(exported.json.ok, true)
   assert.equal(fs.existsSync(exported.json.bundle.path), true)
 })
+
+test('creator studio dashboard asset exists and service script is declared', () => {
+  const dashboardPath = path.join(pluginRoot, 'web', 'dashboard', 'index.html')
+  const servicePath = path.join(pluginRoot, 'service', 'studio-service.js')
+  assert.equal(fs.existsSync(dashboardPath), true)
+  assert.equal(fs.existsSync(servicePath), true)
+  assert.match(fs.readFileSync(dashboardPath, 'utf-8'), /Creator Studio/)
+})
