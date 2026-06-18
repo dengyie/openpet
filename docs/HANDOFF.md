@@ -1,6 +1,6 @@
 # OpenPet Handoff
 
-> Last updated: 2026-06-18 | Branch: `codex/phase100-community-source-intake-report`
+> Last updated: 2026-06-18 | Branch: `codex/phase102-community-source-intake-evidence`
 
 ## Current Snapshot
 
@@ -123,4 +123,5 @@ npm run create-macos-release-evidence-archive -- --artifact-dir <downloaded-open
 30. Use Phase 99 community-source submission evidence as the current community provenance boundary: maintainers can wrap a remote-source rehearsal with public source URL, submitter label, source relationship, and independence notes, while still keeping signing, publication, runtime safety, and release readiness claims out of scope.
 31. Use Phase 100 community-source intake reporting as the current candidate-source triage boundary: maintainers can now archive a public candidate source and record whether it is a compatible OpenPet `plugin.json` package before attempting the Phase 99 evidence flow.
 32. Use Phase 101 plugin submission evidence contracts as the current submission-evidence TypeScript boundary: submission bundles, maintainer approvals, existing-plugin rehearsals, remote-source rehearsals, and community-source evidence summaries now have shared contracts and representative fixtures without changing readiness or trust rules.
-33. After Phase 101, continue from collecting real signed workflow artifacts, a real independent candidate-source intake session, then a compatible live community source run through the new evidence commands, or another high-drift service/report boundary.
+33. Use Phase 102 community-source intake evidence as the current real-candidate archive boundary: `alvinunreal/openpets` is archived as a public adjacent ecosystem candidate with `incompatible-package-model`, not as a compatible OpenPet submission.
+34. After Phase 102, continue from collecting real signed workflow artifacts, finding a compatible live community source for Phase 99, or another high-drift service/report boundary.

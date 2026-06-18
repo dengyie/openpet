@@ -137,6 +137,11 @@ test('createPluginCommunitySourceIntakeReport marks compatible OpenPet plugin ca
   assert.equal(fs.existsSync(summary.files.summary), true)
   assert.equal(fs.existsSync(summary.files.intake), true)
   assert.equal(fs.existsSync(summary.files.commands), true)
+
+  const commands = JSON.parse(fs.readFileSync(summary.files.commands, 'utf-8')).commands
+  assert.ok(commands.some((command) => command.includes('create-plugin-community-source-intake-report')))
+  assert.ok(commands.some((command) => command.includes('create-plugin-community-source-submission-evidence')))
+  assert.ok(commands.some((command) => command.includes('docs/release-evidence/plugin-community-source-submission-evidence/<session>')))
 })
 
 test('createPluginCommunitySourceIntakeReport resolves archive root plugin paths inside top-level zip directories', async () => {

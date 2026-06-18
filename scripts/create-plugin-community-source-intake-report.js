@@ -204,8 +204,9 @@ const commandList = ({
   `curl -L --fail --output <archive.zip> ${shellQuote(archiveUrl)}`,
   `unzip -qq <archive.zip> -d <extract-dir>`,
   `npm run validate:plugin -- <extract-dir>/${shellQuote(pluginPath)}`,
-  `npm run create-plugin-community-source-submission-evidence -- --archive-url ${shellQuote(archiveUrl)} --plugin-path ${shellQuote(pluginPath)} --community-source-url ${shellQuote(communitySourceUrl)} --submitter ${shellQuote(submitter)} --independence-notes ${shellQuote(notes)} --output-dir ${shellQuote(outputDir)}`,
-  'Review the output. If status is ready-for-community-evidence, continue into Phase 99.'
+  `npm run create-plugin-community-source-intake-report -- --archive-url ${shellQuote(archiveUrl)} --plugin-path ${shellQuote(pluginPath)} --community-source-url ${shellQuote(communitySourceUrl)} --submitter ${shellQuote(submitter)} --notes ${shellQuote(notes)} --output-dir ${shellQuote(outputDir)}`,
+  'Review the intake output. If status is ready-for-community-evidence, continue into Phase 99 with a separate submission-evidence archive:',
+  `npm run create-plugin-community-source-submission-evidence -- --archive-url ${shellQuote(archiveUrl)} --plugin-path ${shellQuote(pluginPath)} --community-source-url ${shellQuote(communitySourceUrl)} --submitter ${shellQuote(submitter)} --independence-notes ${shellQuote(notes)} --output-dir docs/release-evidence/plugin-community-source-submission-evidence/<session>`
 ]
 
 const renderReadme = ({ generatedAt, summary, commands }) => [
