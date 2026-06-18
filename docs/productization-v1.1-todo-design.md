@@ -36,7 +36,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 - macOS signed/notarized release evidence still needs real artifact capture and archive.
 - Windows signed installer/zip smoke evidence still needs real Windows execution.
 - Packaged runtime smoke reports still need real app evidence for pet window visibility, transparent rendering, bundled pack switching, and native picker flows.
-- Extension runtime support for explicit setup execution, explicit short-lived command execution, explicit short-lived command bridge access, creator-tools action reads / validation / bounded writes, package-local frame inspection/import, user-approved picker frame inspection/import, explicit service start/stop, manual loopback service health checks, opt-in periodic health checks for running services, best-effort process-group cleanup, controlled-host cleanup evidence, cleanup evidence helper generation, and structured plugin cleanup readiness reports with validation-first updates now exists. Local scaffold and existing-plugin submission rehearsals now exist. External community provenance, deeper pack workflows beyond active metadata, richer command orchestration, packaged cleanup evidence runs, and hard process-tree cleanup guarantees are still future work. Dashboard entries can now be opened explicitly as external HTTP/HTTPS URLs from Control Center.
+- Extension runtime support for explicit setup execution, explicit short-lived command execution, explicit short-lived command bridge access, creator-tools action reads / validation / bounded writes, package-local frame inspection/import, user-approved picker frame inspection/import, explicit service start/stop, manual loopback service health checks, opt-in periodic health checks for running services, best-effort process-group cleanup, controlled-host cleanup evidence, cleanup evidence helper generation, cleanup evidence archive manifests, and structured plugin cleanup readiness reports with validation-first updates now exists. Local scaffold and existing-plugin submission rehearsals now exist. External community provenance, deeper pack workflows beyond active metadata, richer command orchestration, packaged cleanup evidence execution, and hard process-tree cleanup guarantees are still future work. Dashboard entries can now be opened explicitly as external HTTP/HTTPS URLs from Control Center.
 - Legacy SDK plugin secrets policy remains conservative; target extension docs require honest disclosure for extension-managed secrets and data.
 - Plugin sandbox strategy has been evaluated against SES and Electron `utilityProcess`; current recommendation is to keep the existing runner for v1.1 while documenting limits.
 - AI behavior orchestration has a Control Center decision viewer, replay, redacted diagnostics export, and clear-history controls.
@@ -1325,6 +1325,30 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 
 **Status**: completed in Phase 88. Maintainers can now generate a POSIX cleanup evidence helper that writes manual checklists and updater command notes without executing cleanup or marking checks as passed.
 
+### Phase 89: Plugin cleanup evidence archive manifest
+
+**Goal**: make collected plugin cleanup evidence archiveable with hashes while keeping archive validity separate from cleanup readiness.
+
+**Scope**:
+
+- add `npm run create-plugin-cleanup-evidence-archive-manifest`;
+- validate the cleanup report structurally with pending checks allowed;
+- validate cleanup readiness separately with strict required-check rules;
+- validate the Phase 88 collector keeps conservative wording and no `--status pass` shortcut;
+- require standard collected evidence files;
+- recursively hash evidence files and reject evidence symlinks;
+- keep runtime cleanup behavior and automatic packaged-app execution out of scope.
+
+**Acceptance**:
+
+- a pending archive can be valid with `ok: true` and `cleanupReady: false`;
+- an all-pass reviewed archive can set `cleanupReady: true`;
+- missing required evidence files fail archive validity;
+- misleading collector pass shortcuts fail archive validity;
+- docs describe the manifest as evidence preservation, not a cleanup guarantee.
+
+**Status**: completed in Phase 89. Maintainers can now create cleanup evidence archive manifests that hash report, collector, and collected evidence files while separating archive validity from cleanup readiness.
+
 ## 6. Priority Order
 
 | Priority | Work | Reason |
@@ -1343,6 +1367,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 | P1 | Phase 86 Plugin cleanup evidence reports | Completed; controlled-host cleanup evidence and structured real-host cleanup reports can now be recorded and validated without claiming universal cleanup guarantees. |
 | P1 | Phase 87 Plugin cleanup evidence report updater | Completed; cleanup evidence report metadata and required checks can now be filled through a validation-first CLI without hand-editing JSON. |
 | P1 | Phase 88 Plugin cleanup evidence collector | Completed; maintainers can generate a POSIX helper that writes manual cleanup checklists and updater command notes without preselecting pass status. |
+| P1 | Phase 89 Plugin cleanup evidence archive manifest | Completed; report, collector, and collected evidence directories can now be hashed and validated while archive validity stays separate from cleanup readiness. |
 | P1 | Phase 40 pet pack export and provenance | Completed; keep provenance and conflict review as constraints for future catalog work. |
 | P1 | Phase 44 plugin author experience rehearsal | Completed; use the archived rehearsal as the plugin author baseline. |
 | P1 | Phase 74 Plugin maintainer approval rehearsal | Completed; submission bundles can now receive separate maintainer approval artifacts and author rehearsal now points at that human review step explicitly. |
@@ -1431,6 +1456,7 @@ The v1.1 TODO is no longer about proving the platform can exist. It is about mak
 49. Phase 86 is complete; plugin cleanup behavior can now be captured in controlled-host evidence artifacts and structured real-host evidence reports without changing runtime cleanup guarantees.
 50. Phase 87 is complete; plugin cleanup evidence reports can now be updated through a validation-first CLI without hand-editing JSON.
 51. Phase 88 is complete; plugin cleanup evidence helper scripts can now generate manual checklists and updater command notes without running cleanup or marking checks as passed.
+52. Phase 89 is complete; plugin cleanup evidence archive manifests can now hash report, collector, and collected evidence files while keeping archive validity separate from cleanup readiness.
 
 ## 8. Verification Contract
 
