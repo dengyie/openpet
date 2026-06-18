@@ -49,6 +49,9 @@
 ## 鲁棒性评估
 
 - 参数层面拒绝 malformed JSON array 和未知 candidate status。
+- Search result 必须是对象且包含 query；`resultCount` 必须是非负整数。
+- Candidate 必须是对象且包含 HTTPS `sourceUrl`；可选 `archiveUrl` 也必须是 HTTPS。
+- 空 discovery 会被拒绝，避免生成没有搜索或候选证据的空报告。
 - 输出目录通过既有 rehearsal output-dir guard 约束，避免把证据写到任意路径。
 - 状态派生保守：只有 `ready-for-community-evidence` candidate 才能进入 `compatible-source-found` 或 `community-evidence-ready`。
 - 失败时不会产生安装、执行、信任或发布副作用。
