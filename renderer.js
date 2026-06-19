@@ -322,9 +322,9 @@ const showCursorOverlay = (assetUrl, clientX, clientY) => {
   cursorOverlay.classList.add('visible')
 }
 
-const applyPetCursorStyle = (insideFrame, point = state.lastPointerPoint) => {
+const applyPetCursorStyle = (insideCursorRegion, point = state.lastPointerPoint) => {
   const context = {
-    insideFrame,
+    insideFrame: insideCursorRegion,
     dragging: Boolean(state.drag),
     menuOpen: false
   }
@@ -344,7 +344,7 @@ const refreshMouseStateFromLastPoint = () => {
   const { clientX, clientY } = state.lastPointerPoint
   const insideFrame = isPointInsideCurrentFrame(clientX, clientY)
   const insideCursorRegion = isPointInsideCursorRegion(clientX, clientY)
-  const cursorState = applyPetCursorStyle(insideFrame, { clientX, clientY })
+  const cursorState = applyPetCursorStyle(insideCursorRegion, { clientX, clientY })
   setMousePassthrough(!insideFrame)
   maybeLogMouseDiagnostic({ clientX, clientY, screenX: clientX, screenY: clientY }, {
     insideFrame,
@@ -363,7 +363,7 @@ const updateMousePassthroughFromPoint = (event) => {
   state.lastPointerPoint = { clientX: event.clientX, clientY: event.clientY }
   const insideFrame = isPointInsideCurrentFrame(event.clientX, event.clientY)
   const insideCursorRegion = isPointInsideCursorRegion(event.clientX, event.clientY)
-  const cursorState = applyPetCursorStyle(insideFrame, state.lastPointerPoint)
+  const cursorState = applyPetCursorStyle(insideCursorRegion, state.lastPointerPoint)
   setMousePassthrough(!insideFrame)
   maybeLogMouseDiagnostic(event, {
     insideFrame,
