@@ -87,6 +87,7 @@
       "cat_anime/**/*",
       "assets/pet-packs/**/*",
       "catalog/**/*",
+      "examples/plugins/creator-studio/**/*",
       "dist/control-center/**/*",
       "src/main/**/*",
       "src/shared/**/*",

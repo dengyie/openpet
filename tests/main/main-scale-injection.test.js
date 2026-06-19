@@ -15,6 +15,7 @@ test('main forwards IPC-provided scale values to the window scaler', async () =>
   let stopAllServicesCalls = 0
   let registeredIpcDependencies = null
   let registeredPluginDependencies = null
+  let bundledPluginSyncDependencies = null
   const petWindow = {
     webContents: { on: () => {}, send: () => {} },
     isMinimized: () => false,
@@ -146,6 +147,12 @@ test('main forwards IPC-provided scale values to the window scaler', async () =>
         }
       },
       './src/main/services/plugin-install-service': { createPluginInstallService: () => ({}) },
+      './src/main/services/bundled-plugin-sync-service': {
+        syncBundledPlugins: (dependencies) => {
+          bundledPluginSyncDependencies = dependencies
+          return { synced: [{ pluginId: 'openpet.creator-studio', removed: ['stale-copy'] }] }
+        }
+      },
       './src/main/services/plugin-github-import-service': { createPluginGithubImportService: () => ({}) },
       './src/main/services/local-http-service': { createLocalHttpService: () => ({ start: async () => ({}) }) },
       './src/main/services/action-import-service': { createActionImportService: () => ({}) },
@@ -177,8 +184,11 @@ test('main forwards IPC-provided scale values to the window scaler', async () =>
     assert.deepEqual(scaleCalls, [{ targetWindow: ipcWindow, scale: 0.5 }])
     assert.equal(animationReloadCalls.length, 1)
     assert.equal(animationReloadCalls[0].petWindow, petWindow)
+    assert.equal(bundledPluginSyncDependencies.pluginDir, path.join(__dirname, '..', '.tmp-main-scale-injection', 'plugins'))
+    assert.deepEqual(bundledPluginSyncDependencies.bundledPluginDirs, [path.resolve(__dirname, '../../examples/plugins/creator-studio')])
     assert.deepEqual(appLogs.map((entry) => entry.event), [
       'app.ready',
+      'plugins.bundled.synced',
       'app.before-quit',
       'app.will-quit'
     ])
@@ -317,6 +327,9 @@ test('main still stops plugin services when lifecycle logging fails during quit'
       './src/main/services/behavior-orchestrator-service': { createBehaviorOrchestratorService: () => ({ getConfig: () => ({ enabled: false }) }) },
       './src/main/services/plugin-service': { createPluginService: () => ({ stopAllServices: () => { stopAllServicesCalls += 1 } }) },
       './src/main/services/plugin-install-service': { createPluginInstallService: () => ({}) },
+      './src/main/services/bundled-plugin-sync-service': {
+        syncBundledPlugins: () => ({ synced: [{ pluginId: 'openpet.creator-studio', removed: [] }] })
+      },
       './src/main/services/plugin-github-import-service': { createPluginGithubImportService: () => ({}) },
       './src/main/services/local-http-service': { createLocalHttpService: () => ({ start: async () => ({}) }) },
       './src/main/services/action-import-service': { createActionImportService: () => ({}) },

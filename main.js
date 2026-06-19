@@ -26,6 +26,7 @@ const { createImageGenerationModelService } = require('./src/main/services/image
 const { createBehaviorOrchestratorService } = require('./src/main/services/behavior-orchestrator-service')
 const { createPluginService } = require('./src/main/services/plugin-service')
 const { createPluginInstallService } = require('./src/main/services/plugin-install-service')
+const { syncBundledPlugins } = require('./src/main/services/bundled-plugin-sync-service')
 const { createPluginGithubImportService } = require('./src/main/services/plugin-github-import-service')
 const { createLocalHttpService } = require('./src/main/services/local-http-service')
 const { createActionImportService } = require('./src/main/services/action-import-service')
@@ -130,6 +131,29 @@ const bootstrapOpenPet = () => {
     })
   })
   const pluginDir = path.join(app.getPath('userData'), 'plugins')
+  const bundledCreatorStudioDir = path.join(__dirname, 'examples', 'plugins', 'creator-studio')
+  const bundledPluginSync = syncBundledPlugins({
+    pluginDir,
+    bundledPluginDirs: [bundledCreatorStudioDir],
+    settingsService
+  })
+  for (const syncedPlugin of bundledPluginSync.synced) {
+    try {
+      appLogService.record({
+        scope: 'plugins',
+        level: 'info',
+        actor: 'system',
+        event: 'plugins.bundled.synced',
+        message: 'Bundled plugin synchronized',
+        details: {
+          pluginId: syncedPlugin.pluginId,
+          removedCount: syncedPlugin.removed.length
+        }
+      })
+    } catch (error) {
+      console.warn(`OpenPet bundled plugin sync log unavailable: ${error.message}`)
+    }
+  }
   const pluginInstallService = createPluginInstallService({
     settingsService,
     pluginDir,

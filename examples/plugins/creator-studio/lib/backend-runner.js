@@ -26,7 +26,8 @@ const writeHostGeneratedStandardOutputs = ({ dataDir, run, generationResult, now
 
   fs.mkdirSync(outputDir, { recursive: true })
   fs.mkdirSync(qaDir, { recursive: true })
-  fs.writeFileSync(path.join(outputDir, 'spritesheet.webp'), createMinimalWebp())
+  const spritesheetPath = path.join(outputDir, 'spritesheet.webp')
+  fs.writeFileSync(spritesheetPath, createMinimalWebp())
   fs.writeFileSync(path.join(outputDir, 'pet.json'), `${JSON.stringify({
     id: run.petId,
     displayName: run.input.petName,
@@ -44,6 +45,7 @@ const writeHostGeneratedStandardOutputs = ({ dataDir, run, generationResult, now
     ok: true,
     width: 1536,
     height: 1872,
+    visiblePixels: 6400,
     warnings: ['Host-generated output is using placeholder spritesheet packaging.']
   }, null, 2)}\n`)
   if (creatorStudio) {
@@ -124,8 +126,8 @@ const runGenerationStep = async ({ dataDir, runId, now = () => new Date().toISOS
 
   try {
     const output = backend === 'fixture'
-      ? getBackendAdapter(backend).run({ dataDir, runId, now })
-      : buildHostGeneratedRunOutput({
+      ? await getBackendAdapter(backend).run({ dataDir, runId, now })
+      : await buildHostGeneratedRunOutput({
           dataDir,
           run,
           generationResult: await generateViaHostModelBridge({ backend, run }),
