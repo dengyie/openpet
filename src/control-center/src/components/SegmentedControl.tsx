@@ -1,9 +1,9 @@
-interface SegmentedOption<T extends string | number> {
+interface SegmentedOption<T extends string | number = string | number> {
   label: string
   value: T
 }
 
-interface SegmentedControlProps<T extends string | number> {
+interface SegmentedControlProps<T extends string | number = string | number> {
   label: string
   value: T
   options: SegmentedOption<T>[]

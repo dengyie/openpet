@@ -54,6 +54,7 @@
         */
         #cat {
             --cat-direction: 1;
+            --cat-scale: 1;
             position: absolute;
             left: 0;
             bottom: 0;
@@ -128,12 +129,11 @@
 
         <!-- 透明窗口下的可见自定义鼠标指针，由 renderer.js 跟随 pointer 坐标。 -->
         <img id="custom-cursor-overlay" alt="" aria-hidden="true">
-
     </main>
 
     <script src="src/shared/cursor-style.js"></script>
     <script src="src/shared/pet-hitbox.js"></script>
-    <!-- 渲染层入口（ES 模块），组装各模块并绑定事件、启动应用。 -->
+    <!-- 渲染层入口，组装各模块并绑定事件、启动应用。 -->
     <script src="renderer.js"></script>
 </body>
 </html>

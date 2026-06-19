@@ -6,6 +6,15 @@ const MENU_VERTICAL_PADDING = 12
 const MENU_ROW_HEIGHT = 30
 const MENU_DIVIDER_HEIGHT = 7
 const MENU_PLACEMENTS = ['right', 'left', 'above', 'below']
+const MENU_POSITION_ALIASES = {
+  auto: null,
+  right: 'right',
+  left: 'left',
+  above: 'above',
+  below: 'below',
+  top: 'above',
+  bottom: 'below'
+}
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max)
 
@@ -26,6 +35,24 @@ const createCandidate = ({ petBounds, menuSize, preferredPoint, placement }) => 
   if (placement === 'left') return { placement, x: petBounds.x - menuSize.width - MENU_GAP, y: centeredY }
   if (placement === 'above') return { placement, x: centeredX, y: petBounds.y - menuSize.height - MENU_GAP }
   return { placement, x: centeredX, y: petBounds.y + petBounds.height + MENU_GAP }
+}
+
+const fitsWorkArea = ({ x, y }, workArea, menuSize) => (
+  x >= workArea.x + MENU_MARGIN &&
+  y >= workArea.y + MENU_MARGIN &&
+  x + menuSize.width <= workArea.x + workArea.width - MENU_MARGIN &&
+  y + menuSize.height <= workArea.y + workArea.height - MENU_MARGIN
+)
+
+const normalizeMenuPosition = (menuPosition) => MENU_POSITION_ALIASES[String(menuPosition || 'auto')] || null
+
+const getPlacementOrder = (menuPosition) => {
+  const preferredPlacement = normalizeMenuPosition(menuPosition)
+  if (!preferredPlacement) return MENU_PLACEMENTS
+  if (preferredPlacement === 'right') return ['right', 'left', 'above', 'below']
+  if (preferredPlacement === 'left') return ['left', 'right', 'above', 'below']
+  if (preferredPlacement === 'above') return ['above', 'below', 'right', 'left']
+  return ['below', 'above', 'right', 'left']
 }
 
 const fitsPrimaryAxis = (candidate, workArea, menuSize) => {
@@ -49,7 +76,7 @@ const clampNearPet = ({ candidate, petBounds, workArea, menuSize }) => {
     )
     return {
       x: Math.round(clamp(candidate.x, minX, Math.max(minX, maxX))),
-      y: Math.round(Math.max(minY, petBounds.y + relativeY))
+      y: Math.round(clamp(petBounds.y + relativeY, minY, Math.max(minY, maxY)))
     }
   }
 
@@ -64,26 +91,38 @@ const clampNearPet = ({ candidate, petBounds, workArea, menuSize }) => {
   }
 }
 
-const choosePetContextMenuPoint = ({ petBounds, workArea, menuSize, preferredPoint }) => {
+const choosePetContextMenuPoint = ({ petBounds, workArea, menuSize, preferredPoint, menuPosition }) => {
   const safePreferredPoint = {
     x: Number.isFinite(preferredPoint?.x) ? preferredPoint.x : Math.round(petBounds.width / 2),
     y: Number.isFinite(preferredPoint?.y) ? preferredPoint.y : Math.round(petBounds.height / 2)
   }
-  const candidates = MENU_PLACEMENTS.map((placement) => createCandidate({
+  const placements = getPlacementOrder(menuPosition)
+  const candidates = placements.map((placement) => createCandidate({
     petBounds,
     menuSize,
     preferredPoint: safePreferredPoint,
     placement
   }))
-  const chosen = candidates.find((candidate) => fitsPrimaryAxis(candidate, workArea, menuSize)) || candidates[0]
+  const preferredPlacement = normalizeMenuPosition(menuPosition)
+  const preferredCandidate = preferredPlacement ? candidates[0] : null
+  const chosen = (preferredCandidate && fitsPrimaryAxis(preferredCandidate, workArea, menuSize) ? preferredCandidate : null)
+    || (!preferredPlacement ? candidates.find((candidate) => fitsPrimaryAxis(candidate, workArea, menuSize)) : null)
+    || candidates.find((candidate) => fitsWorkArea(candidate, workArea, menuSize))
+    || candidates.find((candidate) => fitsPrimaryAxis(candidate, workArea, menuSize))
+    || candidates[0]
   const screenPoint = clampNearPet({ candidate: chosen, petBounds, workArea, menuSize })
   return {
     placement: chosen.placement,
-    screenPoint
+    screenPoint,
+    windowPoint: {
+      x: screenPoint.x - petBounds.x,
+      y: screenPoint.y - petBounds.y
+    }
   }
 }
 
 module.exports = {
   choosePetContextMenuPoint,
-  estimatePetContextMenuSize
+  estimatePetContextMenuSize,
+  normalizeMenuPosition
 }

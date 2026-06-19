@@ -1,4 +1,4 @@
-import { cloneAiConfig, cloneCatalog, cloneServiceStatus, cloneSettings, defaultAboutInfo, defaultActionsConfig, defaultAiConfig, defaultPetPacks, defaultServiceStatus, defaultSettings, defaultUpdateCheck } from '../lib/defaults'
+import { cloneAiConfig, cloneCatalog, cloneImageGenerationConfig, cloneServiceStatus, cloneSettings, defaultAboutInfo, defaultActionsConfig, defaultAiConfig, defaultImageGenerationConfig, defaultPetPacks, defaultServiceStatus, defaultSettings, defaultUpdateCheck } from '../lib/defaults'
 import { stripFileExtension } from '../../../shared/cursor-library.ts'
 import type {
   ActionFrameInspectRequest,
@@ -15,6 +15,8 @@ import type {
   CatalogState,
   ControlCenterApi,
   ControlCenterSettings,
+  CustomCursorRecord,
+  ImageGenerationConfigViewState,
   JsonObject,
   PluginCommandRunResultViewState,
   PluginLogFilters,
@@ -36,6 +38,7 @@ declare global {
 interface DemoState {
   settings: ControlCenterSettings
   aiConfig: AiConfigViewState
+  imageGenerationConfig: ImageGenerationConfigViewState
   serviceStatus: ServiceStatusViewState
   catalog: CatalogState
   plugins: PluginViewState[]
@@ -340,6 +343,7 @@ const createDefaultDemoState = (): DemoState => ({
       ]
     }
   }),
+  imageGenerationConfig: cloneImageGenerationConfig(defaultImageGenerationConfig),
   serviceStatus: createDemoServiceStatus(),
   catalog: createDemoCatalog(),
   plugins: [],
@@ -355,6 +359,7 @@ const readDemoState = (): DemoState => {
     return {
       settings: cloneSettings(state.settings),
       aiConfig: cloneAiConfig(state.aiConfig),
+      imageGenerationConfig: cloneImageGenerationConfig(state.imageGenerationConfig),
       serviceStatus: cloneServiceStatus(state.serviceStatus),
       catalog: cloneCatalog(state.catalog || createDemoCatalog()),
       plugins: Array.isArray(state.plugins) ? state.plugins : [],
@@ -571,9 +576,8 @@ const demoApi: ControlCenterApi = {
     return normalizeDemoSettings(demoState.settings)
   },
   previewScale: () => {},
-  importCursor: async () => ({
-    canceled: false,
-    cursor: {
+  importCursor: async () => {
+    const cursor: CustomCursorRecord = {
       id: 'demo-cursor',
       type: 'custom',
       name: stripFileExtension('demo-cursor.png'),
@@ -587,7 +591,20 @@ const demoApi: ControlCenterApi = {
       hotspotY: 0,
       createdAt: '2026-06-19T10:00:00.000Z'
     }
-  }),
+    demoState.settings = normalizeDemoSettings({
+      ...demoState.settings,
+      selectedCursorId: cursor.id,
+      customCursors: [
+        ...demoState.settings.customCursors.filter((item) => item.id !== cursor.id),
+        cursor
+      ]
+    })
+    writeDemoState()
+    return {
+      canceled: false,
+      cursor
+    }
+  },
   getActions: async () => defaultActionsConfig,
   inspectActionFrames: async ({ actionId } = {}) => createDemoInspection(actionId),
   reinspectActionFrames: async ({ selectionId, actionId } = {}) => ({ ...createDemoInspection(actionId), selectionId: selectionId || 'demo-selection' }),
@@ -614,6 +631,73 @@ const demoApi: ControlCenterApi = {
     return { apiKeyRef: 'ai.default', hasApiKey: true }
   },
   testAiConnection: async () => ({ ok: true, reply: 'ok' }),
+  getImageGenerationConfig: async () => cloneImageGenerationConfig(demoState.imageGenerationConfig),
+  saveImageGenerationConfig: async (config) => {
+    demoState.imageGenerationConfig = cloneImageGenerationConfig({
+      ...demoState.imageGenerationConfig,
+      ...config,
+      cloud: {
+        ...demoState.imageGenerationConfig.cloud,
+        ...(config.cloud || {})
+      },
+      local: {
+        ...demoState.imageGenerationConfig.local,
+        ...(config.local || {})
+      }
+    })
+    writeDemoState()
+    return cloneImageGenerationConfig(demoState.imageGenerationConfig)
+  },
+  saveImageGenerationApiKey: async (apiKey) => {
+    const preview = apiKey ? `••••${apiKey.slice(-4)}` : ''
+    demoState.imageGenerationConfig = cloneImageGenerationConfig({
+      ...demoState.imageGenerationConfig,
+      cloud: {
+        ...demoState.imageGenerationConfig.cloud,
+        hasApiKey: Boolean(apiKey),
+        apiKeyPreview: preview
+      }
+    })
+    writeDemoState()
+    return {
+      apiKeyRef: demoState.imageGenerationConfig.cloud.apiKeyRef,
+      hasApiKey: Boolean(apiKey),
+      apiKeyPreview: preview
+    }
+  },
+  clearImageGenerationApiKey: async () => {
+    demoState.imageGenerationConfig = cloneImageGenerationConfig({
+      ...demoState.imageGenerationConfig,
+      cloud: {
+        ...demoState.imageGenerationConfig.cloud,
+        hasApiKey: false,
+        apiKeyPreview: ''
+      }
+    })
+    writeDemoState()
+    return {
+      apiKeyRef: demoState.imageGenerationConfig.cloud.apiKeyRef,
+      hasApiKey: false,
+      apiKeyPreview: ''
+    }
+  },
+  checkImageGenerationHealth: async ({ backend } = {}) => {
+    const activeBackend = backend || demoState.imageGenerationConfig.defaultBackend
+    if (activeBackend === 'cloud' && !demoState.imageGenerationConfig.cloud.hasApiKey) {
+      return {
+        ok: false,
+        backend: 'cloud',
+        code: 'missing_api_key',
+        message: 'Cloud image generation API key is missing'
+      }
+    }
+    return {
+      ok: true,
+      backend: activeBackend,
+      code: `${activeBackend}_healthy`,
+      message: 'ok'
+    }
+  },
   getAiConversation: async () => [],
   chat: async ({ message }) => {
     const decisions = Array.isArray(demoState.aiConfig.behavior?.decisions)
@@ -700,7 +784,7 @@ const demoApi: ControlCenterApi = {
     return { id: pluginId, enabled }
   },
   savePluginConfig: async (pluginId, config) => ({ id: pluginId, config }),
-  runPluginCommand: async (pluginId, commandId) => {
+  runPluginCommand: async (pluginId, commandId, payload) => {
     demoState.pluginLogs = [createDemoPluginLog(pluginId, 'Command completed', commandId), ...demoState.pluginLogs]
     writeDemoState()
     return {
@@ -711,6 +795,7 @@ const demoApi: ControlCenterApi = {
       result: {
         ok: true,
         message: 'Demo command completed',
+        ...(payload ? { payload } : {}),
         petSay: 'hello'
       }
     } satisfies PluginCommandRunResultViewState

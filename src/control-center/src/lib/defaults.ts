@@ -7,6 +7,8 @@ import type {
   CatalogState,
   ChatMessage,
   ControlCenterSettings,
+  CustomCursorSettings,
+  ImageGenerationConfigViewState,
   PetPacksViewState,
   ServiceLogEntry,
   ServiceStatusViewState,
@@ -23,11 +25,21 @@ const normalizeCursorState = (settings: Partial<ControlCenterSettings> | null | 
   normalizeCursorSettingsState(settings || {}) as Pick<ControlCenterSettings, 'selectedCursorId' | 'customCursor' | 'customCursors'>
 )
 
+export const defaultCustomCursor = {
+  enabled: false,
+  assetPath: '',
+  assetUrl: '',
+  fileName: '',
+  hotspotX: 0,
+  hotspotY: 0
+} satisfies CustomCursorSettings
+
 export const defaultSettings = {
   scale: 1,
   walkSpeed: 2,
   walkDuration: 15000,
   bubbleDuration: 1300,
+  menuPosition: 'auto',
   autoStart: false,
   selectedCursorId: SYSTEM_CURSOR_ID,
   customCursor: createDefaultRuntimeCursor(),
@@ -56,6 +68,28 @@ export const defaultAiConfig = {
   },
   hasApiKey: false
 } satisfies AiConfigViewState
+
+export const defaultImageGenerationConfig = {
+  defaultBackend: 'fixture',
+  cloud: {
+    provider: 'openai',
+    baseUrl: 'https://api.openai.com/v1',
+    model: 'gpt-image-1',
+    apiKeyRef: 'secret:model.image.openai.apiKey',
+    organization: '',
+    project: '',
+    hasApiKey: false,
+    apiKeyPreview: '',
+    apiKeyLabel: 'Image API Key'
+  },
+  local: {
+    endpoint: 'http://127.0.0.1:7860/generate',
+    healthUrl: 'http://127.0.0.1:7860/health',
+    model: 'local-pet-sprite',
+    timeoutMs: 120000,
+    maxConcurrentJobs: 1
+  }
+} satisfies ImageGenerationConfigViewState
 
 export const defaultServiceStatus = {
   config: {
@@ -138,6 +172,10 @@ export const defaultUpdateCheck = {
   message: ''
 } satisfies UpdateCheckViewState
 
+export const cloneCustomCursor = (cursor: Partial<CustomCursorSettings> | null | undefined): CustomCursorSettings => (
+  normalizeRuntimeCursor(cursor) as CustomCursorSettings
+)
+
 export const cloneSettings = (settings: Partial<ControlCenterSettings> | null | undefined): ControlCenterSettings => ({
   ...defaultSettings,
   ...(settings || {}),
@@ -147,8 +185,6 @@ export const cloneSettings = (settings: Partial<ControlCenterSettings> | null | 
     ...(settings?.home || {})
   }
 })
-
-export const cloneCustomCursor = (cursor: Partial<ControlCenterSettings['customCursor']> | null | undefined): ControlCenterSettings['customCursor'] => normalizeRuntimeCursor(cursor)
 
 export const cloneAiBehavior = (behavior: Partial<AiBehaviorConfig> | null | undefined): AiBehaviorConfig => ({
   ...defaultAiConfig.behavior,
@@ -161,6 +197,21 @@ export const cloneAiConfig = (config: Partial<AiConfigViewState> | null | undefi
   ...defaultAiConfig,
   ...(config || {}),
   behavior: cloneAiBehavior(config?.behavior)
+})
+
+export const cloneImageGenerationConfig = (
+  config: Partial<ImageGenerationConfigViewState> | null | undefined
+): ImageGenerationConfigViewState => ({
+  ...defaultImageGenerationConfig,
+  ...(config || {}),
+  cloud: {
+    ...defaultImageGenerationConfig.cloud,
+    ...(config?.cloud || {})
+  },
+  local: {
+    ...defaultImageGenerationConfig.local,
+    ...(config?.local || {})
+  }
 })
 
 export const cloneServiceStatus = (status: Partial<ServiceStatusViewState> | null | undefined): ServiceStatusViewState => ({

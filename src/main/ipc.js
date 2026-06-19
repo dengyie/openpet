@@ -6,10 +6,12 @@
  * — 依赖通过参数注入而非直接 import，避免与 window/settings/screen 模块形成硬耦合。
  * — 修改或新增 IPC 通道时，只需改这一个文件 + shared/ipc-channels.js。
  */
-const { ipcMain, BrowserWindow, app, dialog, Menu, screen } = require('electron')
+const { ipcMain, BrowserWindow, app, dialog, screen } = require('electron')
 const { IPC } = require('../shared/ipc-channels')
+const { sanitizeDetails } = require('./services/app-log-service')
 const { normalizeCursorSettingsState } = require('../shared/cursor-library')
 const { choosePetContextMenuPoint, estimatePetContextMenuSize } = require('./pet-context-menu')
+const { showPetContextMenuWindow } = require('./pet-context-menu-window')
 const {
   createActionFrameImportResult,
   createActionsMutationResult,
@@ -30,6 +32,7 @@ const createPetRendererSettings = (settings = {}) => {
     walkSpeed: settings.walkSpeed,
     walkDuration: settings.walkDuration,
     bubbleDuration: settings.bubbleDuration,
+    menuPosition: settings.menuPosition || 'auto',
     selectedCursorId: cursorState.selectedCursorId,
     customCursor: cursorState.customCursor,
     customCursors: cursorState.customCursors,
@@ -57,6 +60,7 @@ const mergePetSettingsViewIntoHostSettings = (currentSettings = {}, nextSettings
     walkSpeed: Number(nextSettings.walkSpeed ?? currentSettings.walkSpeed ?? 2),
     walkDuration: Number(nextSettings.walkDuration ?? currentSettings.walkDuration ?? 15000),
     bubbleDuration: Number(nextSettings.bubbleDuration ?? currentSettings.bubbleDuration ?? 1300),
+    menuPosition: nextSettings.menuPosition || currentSettings.menuPosition || 'auto',
     autoStart: Boolean(nextSettings.autoStart ?? currentSettings.autoStart),
     selectedCursorId: cursorState.selectedCursorId,
     customCursors: cursorState.customCursors,
@@ -137,8 +141,8 @@ const collectCustomCursorAssetPaths = (cursors = []) => (
 /**
  * 注册所有 IPC 处理器。接收依赖注入对象，各 handler 只通过注入的函数访问外部能力。
  */
-const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiService, behaviorOrchestratorService, pluginService, pluginInstallService, pluginGithubImportService, catalogService, localHttpService, aboutService, actionImportService, cursorAssetService, appLogService, applyWindowScale, applyPetViewport = () => {},
-  clampToWorkArea, getMovementState, createSettingsWindow, petMovementPolicy, browserWindowService = BrowserWindow, dialogService = dialog, ipcMainService = ipcMain, menuService = Menu, screenService = screen, appService = app }) => {
+const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiService, imageGenerationModelService, behaviorOrchestratorService, pluginService, pluginInstallService, pluginGithubImportService, catalogService, localHttpService, aboutService, actionImportService, cursorAssetService, appLogService, applyWindowScale, applyPetViewport = () => {},
+  clampToWorkArea, getMovementState, createSettingsWindow, petMovementPolicy, browserWindowService = BrowserWindow, dialogService = dialog, ipcMainService = ipcMain, screenService = screen, showContextMenuWindow = showPetContextMenuWindow }) => {
   let pendingActionFrameSelection = null
 
   const createSelectionId = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`
@@ -155,7 +159,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     try {
       appLogService?.record?.(entry)
     } catch (_) {
-      // Logging must never break user flows.
+      // Logging must never break the user action that triggered it.
     }
   }
 
@@ -168,7 +172,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
       message: 'OpenPet quit requested',
       details: { source }
     })
-    appService.quit()
+    app.quit()
   }
 
   const getPendingActionFrameSelection = (selectionId) => {
@@ -212,7 +216,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
 
   ipcMainService.on(IPC.PET_SET_VIEWPORT, (event, viewport) => {
     const win = browserWindowService.fromWebContents(event.sender)
-    if (!win) return
+    if (!win || !viewport) return
     applyPetViewport(win, viewport)
   })
 
@@ -228,18 +232,6 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
         })
       : clampToWorkArea(win, point.x, point.y)
     win.setPosition(next.x, next.y)
-  })
-
-  ipcMainService.on(IPC.PET_SET_MOUSE_PASSTHROUGH, (event, passthrough) => {
-    const win = browserWindowService.fromWebContents(event.sender)
-    if (!win || typeof win.setIgnoreMouseEvents !== 'function') return
-    if (passthrough) win.setIgnoreMouseEvents(true, { forward: true })
-    else win.setIgnoreMouseEvents(false)
-  })
-
-  ipcMainService.on(IPC.PET_RECORD_APP_LOG, (_event, entry) => {
-    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return
-    recordAppLog(entry)
   })
 
   ipcMainService.on(IPC.PET_DRAG_ENDED, (event) => {
@@ -261,6 +253,25 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
       }
     })
     sendToPetWindow(getPetWindow, IPC.SETTINGS_CHANGED, createPetRendererSettings(savedSettings))
+  })
+
+  ipcMainService.on(IPC.PET_SET_MOUSE_PASSTHROUGH, (event, passthrough) => {
+    const win = browserWindowService.fromWebContents(event.sender)
+    if (!win || typeof win.setIgnoreMouseEvents !== 'function') return
+    if (passthrough) win.setIgnoreMouseEvents(true, { forward: true })
+    else win.setIgnoreMouseEvents(false)
+  })
+
+  ipcMainService.on(IPC.PET_RECORD_APP_LOG, (_event, entry = {}) => {
+    if (!entry || typeof entry !== 'object') return
+    recordAppLog({
+      scope: 'pet-renderer',
+      level: entry.level,
+      actor: entry.actor,
+      event: entry.event,
+      message: entry.message,
+      details: sanitizeDetails(entry.details)
+    })
   })
 
   // 散步移动：增量偏移窗口，返回是否撞到边界供渲染进程决定掉头
@@ -289,6 +300,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     const bounds = win.getBounds()
     const { workArea } = screenService.getDisplayMatching(bounds)
     const menuSize = estimatePetContextMenuSize(actions)
+    const settings = petService.getSettings?.() || {}
     const requestedPoint = {
       x: Number(point.x),
       y: Number(point.y)
@@ -297,6 +309,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
       petBounds: bounds,
       workArea,
       menuSize,
+      menuPosition: settings.menuPosition,
       preferredPoint: requestedPoint
     })
     const sendMenuCommand = (payload) => sendToPetWindow(() => win, IPC.PET_MENU_COMMAND, payload)
@@ -316,7 +329,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
       level: 'info',
       actor: 'user',
       event: 'pet.menu.popup',
-      message: 'Native pet context menu popup requested',
+      message: 'Pet context menu popup requested',
       details: {
         petX: bounds.x,
         petY: bounds.y,
@@ -332,13 +345,18 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
         requestedY: requestedPoint.y,
         placement: placement.placement,
         menuX: placement.screenPoint.x,
-        menuY: placement.screenPoint.y
+        menuY: placement.screenPoint.y,
+        popupX: placement.windowPoint.x,
+        popupY: placement.windowPoint.y
       }
     })
-    menuService.buildFromTemplate(template).popup({
-      window: win,
-      x: placement.screenPoint.x,
-      y: placement.screenPoint.y
+    showContextMenuWindow({
+      BrowserWindow: browserWindowService,
+      parentWindow: win,
+      items: template,
+      point: placement.screenPoint,
+      size: menuSize,
+      onSelect: (item) => item?.click?.()
     })
     return placement
   })
@@ -459,8 +477,8 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
 
   ipcMainService.handle(IPC.PET_PACKS_LIST, () => petPackService.listPacks())
 
-  ipcMainService.handle(IPC.PET_PACKS_INSPECT_DIRECTORY, async () => {
-    const selected = await dialogService.showOpenDialog({
+  ipcMainService.handle(IPC.PET_PACKS_INSPECT_DIRECTORY, async (event) => {
+    const selected = await showOpenDialogForEvent(event, {
       title: '选择 Pet Pack 文件夹或 Codex Pet 包',
       properties: ['openFile', 'openDirectory'],
       filters: [{ name: 'Pet Pack Package', extensions: ['zip'] }]
@@ -475,11 +493,16 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
 
   ipcMainService.handle(IPC.PET_PACKS_IMPORT, (_event, payload) => {
     const result = petPackService.importPack(payload.selectionId)
-    return createPetPackMutationResult(result, petPackService.listPacks())
+    const petPacks = petPackService.listPacks()
+    if (result?.pack?.id && petPacks?.activePackId === result.pack.id) {
+      const animations = reloadAndSendAnimations(getPetWindow, petService)
+      return createPetPackMutationResult(result, petPacks, animations)
+    }
+    return createPetPackMutationResult(result, petPacks)
   })
 
-  ipcMainService.handle(IPC.PET_PACKS_EXPORT, async (_event, payload) => {
-    const selected = await dialogService.showOpenDialog({
+  ipcMainService.handle(IPC.PET_PACKS_EXPORT, async (event, payload) => {
+    const selected = await showOpenDialogForEvent(event, {
       title: '选择 Pet Pack 导出目录',
       properties: ['openDirectory', 'createDirectory']
     })
@@ -523,6 +546,20 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     const rendererSettings = createPetRendererSettings(savedSettings)
     sendToPetWindow(getPetWindow, IPC.SETTINGS_CHANGED, rendererSettings)
     applyWindowScale(getPetWindow(), savedSettings.scale)
+    recordAppLog({
+      scope: 'settings',
+      level: 'info',
+      actor: 'user',
+      event: 'settings.saved',
+      message: 'Settings saved',
+      details: {
+        grounded: Boolean(savedSettings.petBehavior?.grounded),
+        homeEnabled: Boolean(savedSettings.petBehavior?.home?.enabled),
+        homeRadius: savedSettings.petBehavior?.home?.radius || 'medium',
+        customCursorEnabled: Boolean(savedSettings.customCursor?.enabled),
+        customCursorFileName: savedSettings.customCursor?.fileName || ''
+      }
+    })
     return rendererSettings
   })
 
@@ -533,6 +570,24 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
   ipcMainService.handle(IPC.AI_SAVE_API_KEY, (_event, apiKey) => aiService.saveApiKey(apiKey))
 
   ipcMainService.handle(IPC.AI_TEST_CONNECTION, () => aiService.testConnection())
+
+  ipcMainService.handle(IPC.IMAGE_GENERATION_GET_CONFIG, () => imageGenerationModelService.getConfig())
+
+  ipcMainService.handle(IPC.IMAGE_GENERATION_SAVE_CONFIG, (_event, config) => {
+    return imageGenerationModelService.saveConfig(config)
+  })
+
+  ipcMainService.handle(IPC.IMAGE_GENERATION_SAVE_API_KEY, (_event, apiKey) => {
+    return imageGenerationModelService.saveCloudApiKey(apiKey)
+  })
+
+  ipcMainService.handle(IPC.IMAGE_GENERATION_CLEAR_API_KEY, () => {
+    return imageGenerationModelService.clearCloudApiKey()
+  })
+
+  ipcMainService.handle(IPC.IMAGE_GENERATION_CHECK_HEALTH, (_event, payload) => {
+    return imageGenerationModelService.checkHealth(payload || {})
+  })
 
   ipcMainService.handle(IPC.AI_GET_CONVERSATION, (_event, payload) => {
     return aiService.getConversation(payload?.conversationId || payload)
@@ -740,7 +795,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
 
   // 设置面板关闭：清理 settingsWindow 引用
   ipcMainService.on(IPC.SETTINGS_CLOSE, (_event) => {
-    const win = BrowserWindow.fromWebContents(_event.sender)
+    const win = browserWindowService.fromWebContents(_event.sender)
     if (win) {
       const petWindow = getPetWindow()
       if (petWindow && petWindow.settingsWindow === win) {
@@ -751,4 +806,4 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
   })
 }
 
-module.exports = { createPetRendererSettings, normalizeLocalHttpConfig, registerIpcHandlers, triggerAiSemanticAction, executeBehaviorDecision }
+module.exports = { createPetRendererSettings, normalizeLocalHttpConfig, reloadAndSendAnimations, registerIpcHandlers, triggerAiSemanticAction, executeBehaviorDecision }

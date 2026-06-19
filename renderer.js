@@ -31,9 +31,17 @@ const cursorStyle = {
 }
 const petHitbox = window.OpenPetHitbox || {
   getFrameHitbox: () => null,
-  getWindowHitbox: () => null,
+  getWindowHitbox: ({ windowWidth, windowHeight }) => ({
+    left: 0,
+    top: 0,
+    right: Math.max(0, Number(windowWidth) || 0),
+    bottom: Math.max(0, Number(windowHeight) || 0)
+  }),
   getViewportHitbox: () => null,
-  isPointInHitbox: () => false
+  isPointInHitbox: (point, hitbox) => {
+    if (!hitbox) return true
+    return point.x >= hitbox.left && point.x <= hitbox.right && point.y >= hitbox.top && point.y <= hitbox.bottom
+  }
 }
 
 const state = {
@@ -73,7 +81,6 @@ state.scale = PET_BASE_SCALE
 
 const roundNumber = (value) => Math.round((Number(value) || 0) * 100) / 100
 const normalizePetScale = (scale) => Math.max((Number(scale) || 1) * PET_BASE_SCALE, Number.EPSILON)
-
 const logPetEvent = (event, details = {}, { level = 'debug', actor = 'system', message = event } = {}) => {
   window.petAPI.recordAppLog?.({
     level,
@@ -369,7 +376,6 @@ const clearPointerHoverState = (event = {}) => {
   state.lastPointerPoint = null
   hideCursorOverlay()
   setNativeCursor('')
-  setMousePassthrough(false)
   maybeLogMouseDiagnostic({
     clientX: event.clientX ?? -1,
     clientY: event.clientY ?? -1,
@@ -378,7 +384,7 @@ const clearPointerHoverState = (event = {}) => {
   }, {
     insideFrame: false,
     insideCursorRegion: false,
-    passthrough: false,
+    passthrough: state.mousePassthrough,
     cursorApplied: false,
     cursorOverlayVisible: false,
     nativeCursor: '',
@@ -387,7 +393,6 @@ const clearPointerHoverState = (event = {}) => {
     menuOpen: false
   })
 }
-
 /**
  * 切换到指定动作，启动帧播放定时器。
  * — 动作无 sprite 时静默返回（防御性编程）。
@@ -563,17 +568,18 @@ const onPointerUp = (event) => {
   const insideCursorRegion = isPointInsideCursorRegion(event.clientX, event.clientY)
   state.drag = null
   pet.classList.remove('dragging')
+  if (wasDrag) window.petAPI.dragEnded?.()
   updateMousePassthroughFromPoint(event)
   logPetEvent('pet.pointer.up', {
     ...createPointDetails(event),
     wasClick,
+    wasDrag,
     insideFrame,
     insideCursorRegion,
     cursorOverlayVisible: state.customCursorOverlayVisible,
     nativeCursor: state.nativeCursor,
     clickAction: state.clickAction
   }, { actor: 'user', message: 'Pointer up' })
-  if (wasDrag) window.petAPI.dragEnded?.()
   if (wasClick) setAction(state.clickAction)
 }
 

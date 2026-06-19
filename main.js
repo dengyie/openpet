@@ -13,7 +13,7 @@ const path = require('path')
 const { IPC } = require('./src/shared/ipc-channels')
 const { clampToWorkArea, getMovementState } = require('./src/main/screen')
 const { applyPetViewport, applyWindowScale, createWindow, createSettingsWindow, loadPetWindow } = require('./src/main/window')
-const { createPetRendererSettings, normalizeLocalHttpConfig, registerIpcHandlers } = require('./src/main/ipc')
+const { createPetRendererSettings, normalizeLocalHttpConfig, reloadAndSendAnimations, registerIpcHandlers } = require('./src/main/ipc')
 const { configureUserDataPath } = require('./src/main/user-data-path')
 const { createEventBus } = require('./src/main/services/event-bus')
 const { createSettingsService } = require('./src/main/services/settings-service')
@@ -22,6 +22,7 @@ const { createPetPackService } = require('./src/main/services/pet-pack-service')
 const { createPetService } = require('./src/main/services/pet-service')
 const { createSecretService } = require('./src/main/services/secret-service')
 const { createAiService } = require('./src/main/services/ai-service')
+const { createImageGenerationModelService } = require('./src/main/services/image-generation-model-service')
 const { createBehaviorOrchestratorService } = require('./src/main/services/behavior-orchestrator-service')
 const { createPluginService } = require('./src/main/services/plugin-service')
 const { createPluginInstallService } = require('./src/main/services/plugin-install-service')
@@ -52,8 +53,7 @@ configureUserDataPath({ app })
 // ── 单实例锁：同一时间只允许一个宠物窗口 ──
 const canBootstrap = configureSingleInstanceLock({ app, getPetWindow })
 
-// ── 应用就绪 ──
-if (canBootstrap) app.whenReady().then(() => {
+const bootstrapOpenPet = () => {
   const { loadSettings, saveSettings, syncLoginItemSettings } = require('./src/main/settings')
   const eventBus = createEventBus()
   const settingsService = createSettingsService({
@@ -80,6 +80,7 @@ if (canBootstrap) app.whenReady().then(() => {
   const petService = createPetService({ eventBus, settingsService, actionService })
   const secretService = createSecretService()
   const aiService = createAiService({ settingsService, secretService })
+  const imageGenerationModelService = createImageGenerationModelService({ settingsService, secretService })
   const behaviorOrchestratorService = createBehaviorOrchestratorService({ settingsService })
   const localHttpService = createLocalHttpService({ petService, settingsService })
   const aboutService = createAboutService({ app, packageJson })
@@ -90,10 +91,44 @@ if (canBootstrap) app.whenReady().then(() => {
     logDir: path.join(app.getPath('userData'), 'logs')
   })
   const petMovementPolicy = createPetMovementPolicy({ screen })
+  try {
+    appLogService.record({
+      scope: 'app',
+      level: 'info',
+      actor: 'system',
+      event: 'app.ready',
+      message: 'OpenPet app services initialized'
+    })
+    console.log(`OpenPet app log: ${appLogService.logPath}`)
+  } catch (error) {
+    console.warn(`OpenPet app log unavailable: ${error.message}`)
+  }
   const actionImportService = createActionImportService({
     framesRoot: path.join(__dirname, 'cat_anime', 'flames'),
     spritesDir: path.join(__dirname, 'cat_anime', 'sprites'),
     configPath: path.join(__dirname, 'cat_anime', 'animations.json')
+  })
+  cursorAssetService.repairCursor(petService.getSettings().customCursor).then((customCursor) => {
+    const currentSettings = petService.getSettings()
+    if (customCursor.assetPath && customCursor.assetPath !== currentSettings.customCursor?.assetPath) {
+      petService.saveSettings({ ...currentSettings, customCursor })
+      appLogService.record({
+        scope: 'settings',
+        level: 'info',
+        actor: 'system',
+        event: 'settings.cursor.asset.repaired',
+        message: 'Cursor asset resized for browser compatibility',
+        details: { fileName: customCursor.fileName, enabled: customCursor.enabled }
+      })
+    }
+  }).catch((error) => {
+    appLogService.record({
+      scope: 'settings',
+      level: 'error',
+      actor: 'system',
+      event: 'settings.cursor.asset.repair.failed',
+      message: error.message
+    })
   })
   const pluginDir = path.join(app.getPath('userData'), 'plugins')
   const pluginInstallService = createPluginInstallService({
@@ -111,9 +146,11 @@ if (canBootstrap) app.whenReady().then(() => {
     actionImportService,
     petPackService,
     aiService,
+    imageGenerationModelService,
     pluginDirs: [pluginDir],
     officialPlugins: [createBasicBehaviorPlugin()],
     openExternal: (url) => shell.openExternal(url),
+    onPetPackActivated: () => reloadAndSendAnimations(getPetWindow, petService),
     selectCreatorAssetFrameFolder: async () => {
       const selected = await dialog.showOpenDialog({
         title: '选择动作帧文件夹',
@@ -124,8 +161,31 @@ if (canBootstrap) app.whenReady().then(() => {
     },
     getPluginBlockStatus: (candidate) => catalogService?.getPluginBlockStatus(candidate) || { blocked: false, reasons: [] }
   })
+  const recordLifecycleLog = (entry) => {
+    try {
+      appLogService.record(entry)
+    } catch (error) {
+      console.warn(`OpenPet lifecycle log unavailable: ${error.message}`)
+    }
+  }
   app.on('before-quit', () => {
+    recordLifecycleLog({
+      scope: 'app',
+      level: 'info',
+      actor: 'system',
+      event: 'app.before-quit',
+      message: 'OpenPet app is preparing to quit'
+    })
     pluginService.stopAllServices?.()
+  })
+  app.on('will-quit', () => {
+    recordLifecycleLog({
+      scope: 'app',
+      level: 'info',
+      actor: 'system',
+      event: 'app.will-quit',
+      message: 'OpenPet app will quit'
+    })
   })
   catalogService = createCatalogService({
     settingsService,
@@ -156,6 +216,7 @@ if (canBootstrap) app.whenReady().then(() => {
     petService,
     petPackService,
     aiService,
+    imageGenerationModelService,
     behaviorOrchestratorService,
     pluginService,
     pluginInstallService,
@@ -166,7 +227,7 @@ if (canBootstrap) app.whenReady().then(() => {
     actionImportService,
     cursorAssetService,
     appLogService,
-    applyWindowScale: (scale) => applyWindowScale(petWindow, scale),
+    applyWindowScale,
     applyPetViewport,
     clampToWorkArea,
     getMovementState,
@@ -233,6 +294,15 @@ if (canBootstrap) app.whenReady().then(() => {
       petWindow = createWindow()
     }
   })
+}
+
+// ── 应用就绪 ──
+canBootstrap.then((canStart) => {
+  if (!canStart) return null
+  return app.whenReady().then(bootstrapOpenPet)
+}).catch((error) => {
+  console.error('Failed to bootstrap OpenPet:', error)
+  app.quit()
 })
 
 app.on('window-all-closed', () => app.quit())

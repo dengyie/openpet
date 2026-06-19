@@ -4,7 +4,7 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 const crypto = require('node:crypto')
-const { spawnSync } = require('node:child_process')
+const { spawn, spawnSync } = require('node:child_process')
 
 const { normalizePluginManifest } = require('../../src/main/plugins/manifest')
 const { normalizeConfigSchema } = require('../../src/main/plugins/config-schema')
@@ -19,7 +19,7 @@ test('creator studio example manifest declares hybrid creator workflow entries',
 
   assert.equal(manifest.id, 'openpet.creator-studio')
   assert.equal(manifest.profile, 'hybrid')
-  assert.deepEqual(manifest.permissions, ['pet-pack:import', 'pet:say'])
+  assert.deepEqual(manifest.permissions, ['pet-pack:import', 'pet:say', 'model:image-generate'])
   assert.deepEqual(manifest.commands.map((command) => command.id), [
     'create-run',
     'run-step',
@@ -42,6 +42,76 @@ test('creator studio example config schema normalizes backend controls', () => {
     'servicePort'
   ])
   assert.deepEqual(schema.properties.find((field) => field.key === 'backend').enum, ['fixture', 'cloud', 'local'])
+})
+
+test('creator studio wizard drafts a custom click-triggered single-action task', () => {
+  const { draftGenerationTask } = require('../../examples/plugins/creator-studio/lib/conversation-wizard')
+
+  const draft = draftGenerationTask({
+    prompt: '给当前猫猫加一个“被摸头后害羞转圈”的动作，点击触发，风格保持一致。'
+  })
+
+  assert.equal(draft.generationTask.mode, 'single-action')
+  assert.equal(draft.generationTask.targetPet, 'current')
+  assert.equal(draft.generationTask.styleSource, 'currentPet')
+  assert.match(draft.generationTask.actions[0].actionId, /^action-[0-9a-f]{8}$/)
+  assert.equal(draft.generationTask.actions[0].name, '被摸头后害羞转圈')
+  assert.equal(draft.generationTask.actions[0].loop, false)
+  assert.equal(draft.generationTask.actions[0].frameCount, 16)
+  assert.deepEqual(draft.generationTask.actions[0].triggerProposal, {
+    type: 'click',
+    binding: 'clickAction',
+    notes: 'User requested click trigger.'
+  })
+  assert.deepEqual(draft.generationTask.questions, [])
+})
+
+test('creator studio wizard asks one trigger question for ambiguous custom actions', () => {
+  const { draftGenerationTask } = require('../../examples/plugins/creator-studio/lib/conversation-wizard')
+
+  const draft = draftGenerationTask({
+    prompt: '新增一个自定义动作：原地打滚，动作要循环。'
+  })
+
+  assert.equal(draft.generationTask.mode, 'single-action')
+  assert.equal(draft.generationTask.actions[0].name, '原地打滚')
+  assert.equal(draft.generationTask.actions[0].loop, true)
+  assert.equal(draft.generationTask.actions[0].triggerProposal.type, 'unbound')
+  assert.deepEqual(draft.generationTask.questions, [{
+    id: 'trigger',
+    question: 'How should this custom action be triggered?',
+    options: ['manual', 'click', 'random', 'state', 'event', 'unbound']
+  }])
+})
+
+test('creator studio wizard does not treat legacy pet prompts as action tasks', () => {
+  const { shouldDraftGenerationTask } = require('../../examples/plugins/creator-studio/lib/conversation-wizard')
+
+  assert.equal(shouldDraftGenerationTask({ prompt: 'A small mint helper cat' }), false)
+  assert.equal(shouldDraftGenerationTask({ prompt: '帮我做一只软乎乎的橘猫桌宠' }), false)
+  assert.equal(shouldDraftGenerationTask({ prompt: '新增一个动作，但是按旧版流程创建', mode: 'legacy' }), false)
+  assert.equal(shouldDraftGenerationTask({ prompt: '生成一只完整的新桌宠', mode: 'full-pet' }), false)
+  assert.equal(shouldDraftGenerationTask({ prompt: '新增一个自定义动作：原地打滚，动作要循环。' }), true)
+  assert.equal(shouldDraftGenerationTask({ prompt: 'A custom action that waves on click', mode: 'single-action' }), true)
+})
+
+test('creator studio generation task validation rejects unsafe trigger proposals', () => {
+  const { normalizeGenerationTask } = require('../../examples/plugins/creator-studio/lib/generation-task')
+
+  assert.throws(
+    () => normalizeGenerationTask({
+      mode: 'single-action',
+      targetPet: 'current',
+      styleSource: 'currentPet',
+      actions: [{
+        actionId: 'bad-action',
+        name: 'Bad Action',
+        motionPrompt: 'Move around',
+        triggerProposal: { type: 'shell' }
+      }]
+    }),
+    /trigger type is invalid/
+  )
 })
 
 test('creator studio run store creates and advances durable run state', () => {
@@ -67,8 +137,41 @@ test('creator studio run store creates and advances durable run state', () => {
 
   assert.equal(run.status, 'draft')
   assert.equal(readRun({ dataDir, runId: run.runId }).input.petName, 'Sprout Cat')
+  assert.deepEqual(run.backendStatus, {
+    backend: 'fixture',
+    state: 'idle',
+    message: '',
+    updatedAt: '2026-06-19T00:00:00.000Z'
+  })
   assert.equal(updated.status, 'prepared')
   assert.equal(updated.currentStep, 'prepare')
+})
+
+test('creator studio run store persists conversational generation tasks', () => {
+  const { createRun, readRun } = require('../../examples/plugins/creator-studio/lib/run-store')
+  const { draftGenerationTask } = require('../../examples/plugins/creator-studio/lib/conversation-wizard')
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-task-'))
+  const draft = draftGenerationTask({
+    prompt: '给当前猫猫加一个“被摸头后害羞转圈”的动作，点击触发，风格保持一致。'
+  })
+
+  const run = createRun({
+    dataDir,
+    input: {
+      petName: 'Task Cat',
+      prompt: draft.originalPrompt,
+      backend: 'fixture',
+      generationTask: draft.generationTask,
+      originalPrompt: draft.originalPrompt
+    },
+    now: () => '2026-06-19T00:00:00.000Z'
+  })
+  const persisted = readRun({ dataDir, runId: run.runId })
+
+  assert.equal(persisted.input.originalPrompt, draft.originalPrompt)
+  assert.equal(persisted.generationTask.actions[0].name, '被摸头后害羞转圈')
+  assert.equal(persisted.generationTask.actions[0].triggerProposal.type, 'click')
+  assert.equal(fs.existsSync(path.join(dataDir, 'runs', run.runId, 'inputs', 'generation-task.json')), true)
 })
 
 test('creator studio run store keeps same-name same-day runs separate', () => {
@@ -99,50 +202,437 @@ test('creator studio run store keeps same-name same-day runs separate', () => {
   assert.equal(fs.readFileSync(path.join(dataDir, 'runs', second.runId, 'inputs', 'prompt.md'), 'utf-8'), 'Second concept\n')
 })
 
-test('creator studio fake hatch pet creates valid codex output and bundle', () => {
-  const { createRun } = require('../../examples/plugins/creator-studio/lib/run-store')
-  const { generateFixturePetOutput } = require('../../examples/plugins/creator-studio/lib/fake-hatch-pet')
+test('creator studio run store lists runs and persists append-only logs', () => {
+  const { appendRunLog, createRun, listRuns, readRunLogs } = require('../../examples/plugins/creator-studio/lib/run-store')
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-run-list-'))
+
+  const first = createRun({
+    dataDir,
+    input: { petName: 'First Cat', prompt: 'First prompt', backend: 'fixture' },
+    now: () => '2026-06-19T00:00:00.000Z'
+  })
+  const second = createRun({
+    dataDir,
+    input: { petName: 'Second Cat', prompt: 'Second prompt', backend: 'fixture' },
+    now: () => '2026-06-19T00:02:00.000Z'
+  })
+  appendRunLog({
+    dataDir,
+    runId: second.runId,
+    level: 'info',
+    event: 'generate.start',
+    message: 'Generation started',
+    now: () => '2026-06-19T00:03:00.000Z'
+  })
+
+  assert.deepEqual(listRuns({ dataDir }).map((run) => run.runId), [second.runId, first.runId])
+  assert.deepEqual(readRunLogs({ dataDir, runId: second.runId }), [{
+    timestamp: '2026-06-19T00:03:00.000Z',
+    level: 'info',
+    event: 'generate.start',
+    message: 'Generation started',
+    data: {}
+  }])
+})
+
+test('creator studio run store resolves latest run by workflow status', () => {
+  const { createRun, resolveRunId, updateRunStatus } = require('../../examples/plugins/creator-studio/lib/run-store')
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-resolve-run-'))
+
+  const oldRun = createRun({
+    dataDir,
+    input: { petName: 'Old Cat', prompt: 'Old prompt', backend: 'fixture' },
+    now: () => '2026-06-19T00:00:00.000Z'
+  })
+  const latestRun = createRun({
+    dataDir,
+    input: { petName: 'Latest Cat', prompt: 'Latest prompt', backend: 'fixture' },
+    now: () => '2026-06-19T00:01:00.000Z'
+  })
+  updateRunStatus({
+    dataDir,
+    runId: oldRun.runId,
+    status: 'ready_for_review',
+    now: () => '2026-06-19T00:02:00.000Z'
+  })
+  updateRunStatus({
+    dataDir,
+    runId: latestRun.runId,
+    status: 'ready_for_review',
+    now: () => '2026-06-19T00:03:00.000Z'
+  })
+
+  assert.equal(resolveRunId({
+    dataDir,
+    statuses: ['ready_for_review'],
+    description: 'ready_for_review'
+  }), latestRun.runId)
+  assert.equal(resolveRunId({
+    dataDir,
+    runId: oldRun.runId,
+    statuses: ['ready_for_review']
+  }), oldRun.runId)
+  assert.throws(
+    () => resolveRunId({ dataDir, statuses: ['approved'], description: 'approved' }),
+    /No approved run found/
+  )
+})
+
+test('creator studio backend runner generates fixture output through the selected adapter', async () => {
+  const { createRun, readRunLogs } = require('../../examples/plugins/creator-studio/lib/run-store')
+  const { draftGenerationTask } = require('../../examples/plugins/creator-studio/lib/conversation-wizard')
+  const { runGenerationStep } = require('../../examples/plugins/creator-studio/lib/backend-runner')
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-output-'))
+  const draft = draftGenerationTask({
+    prompt: '给当前猫猫加一个“被摸头后害羞转圈”的动作，点击触发，风格保持一致。'
+  })
   const run = createRun({
     dataDir,
-    input: { petName: 'Sprout Cat', prompt: 'A small mint helper cat', backend: 'fixture' },
+    input: {
+      petName: 'Sprout Cat',
+      prompt: draft.originalPrompt,
+      backend: 'fixture',
+      generationTask: draft.generationTask,
+      originalPrompt: draft.originalPrompt
+    },
     now: () => '2026-06-19T00:00:00.000Z'
   })
 
-  const output = generateFixturePetOutput({ dataDir, runId: run.runId })
+  const output = await runGenerationStep({ dataDir, runId: run.runId })
   const manifest = JSON.parse(fs.readFileSync(path.join(output.outputDir, 'pet.json'), 'utf-8'))
+  const actionQa = JSON.parse(fs.readFileSync(path.join(dataDir, 'runs', run.runId, 'qa', 'action-generation-task.json'), 'utf-8'))
   const bundleHash = crypto.createHash('sha256').update(fs.readFileSync(output.bundlePath)).digest('hex')
 
   assert.equal(manifest.id, run.petId)
   assert.equal(manifest.spritesheetPath, 'spritesheet.webp')
+  assert.equal(manifest.creatorStudio.mode, 'single-action')
+  assert.equal(manifest.creatorStudio.actions[0].name, '被摸头后害羞转圈')
+  assert.equal(actionQa.ok, true)
+  assert.equal(actionQa.actions[0].triggerProposal.type, 'click')
   assert.equal(fs.existsSync(path.join(output.outputDir, 'spritesheet.webp')), true)
   assert.equal(fs.existsSync(output.bundlePath), true)
   assert.equal(output.sha256, bundleHash)
+  assert.equal(output.run.backendStatus.state, 'ready')
+  assert.equal(output.run.backendStatus.backend, 'fixture')
+  assert.deepEqual(readRunLogs({ dataDir, runId: run.runId }).map((entry) => entry.event), [
+    'generate.start',
+    'generate.complete'
+  ])
 })
 
-const runCreatorCommand = ({ command, dataDir, payload = {}, env = {} }) => {
-  const result = spawnSync(process.execPath, [path.join(pluginRoot, 'commands', `${command}.js`)], {
-    input: `${JSON.stringify({
+test('creator studio backend runner records unavailable cloud backend without fixture fallback', async () => {
+  const { createRun, readRun, readRunLogs } = require('../../examples/plugins/creator-studio/lib/run-store')
+  const { runGenerationStep } = require('../../examples/plugins/creator-studio/lib/backend-runner')
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-cloud-'))
+  const run = createRun({
+    dataDir,
+    input: { petName: 'Cloud Cat', prompt: 'A cloud generated cat', backend: 'cloud' },
+    now: () => '2026-06-19T00:00:00.000Z'
+  })
+
+  await assert.rejects(
+    runGenerationStep({ dataDir, runId: run.runId }),
+    /Cloud backend is not configured/
+  )
+  const failed = readRun({ dataDir, runId: run.runId })
+  assert.equal(failed.status, 'failed')
+  assert.equal(failed.currentStep, 'generate')
+  assert.equal(failed.backendStatus.backend, 'cloud')
+  assert.equal(failed.backendStatus.state, 'not_configured')
+  assert.match(failed.error, /Cloud backend is not configured/)
+  assert.equal(fs.existsSync(path.join(dataDir, 'runs', run.runId, 'outputs', 'pet.json')), false)
+  assert.deepEqual(readRunLogs({ dataDir, runId: run.runId }).map((entry) => entry.event), [
+    'generate.start',
+    'generate.failed'
+  ])
+})
+
+const createCommandInput = ({ command, payload = {}, config = {} }) => `${JSON.stringify({
       pluginId: 'openpet.creator-studio',
       commandId: command,
       payload,
-      config: { backend: 'fixture', autoActivateAfterImport: true },
+      config: { backend: 'fixture', autoActivateAfterImport: true, ...config },
       paths: { extensionDir: pluginRoot }
-    })}\n`,
+    })}\n`
+
+const createCommandEnv = ({ dataDir, env = {} }) => ({
+  ...process.env,
+  OPENPET_DATA_DIR: dataDir,
+  OPENPET_CACHE_DIR: path.join(dataDir, 'cache'),
+  OPENPET_LOG_DIR: path.join(dataDir, 'logs'),
+  ...env
+})
+
+const parseCommandJson = (stdout) => JSON.parse(stdout.trim().split(/\r?\n/).filter(Boolean).at(-1))
+
+const runCreatorCommand = ({ command, dataDir, payload = {}, config = {}, env = {} }) => {
+  const result = spawnSync(process.execPath, [path.join(pluginRoot, 'commands', `${command}.js`)], {
+    input: createCommandInput({ command, payload, config }),
     env: {
-      ...process.env,
-      OPENPET_DATA_DIR: dataDir,
-      OPENPET_CACHE_DIR: path.join(dataDir, 'cache'),
-      OPENPET_LOG_DIR: path.join(dataDir, 'logs'),
-      ...env
+      ...createCommandEnv({ dataDir, env })
     },
     encoding: 'utf-8'
   })
   return {
     ...result,
-    json: JSON.parse(result.stdout.trim().split(/\r?\n/).filter(Boolean).at(-1))
+    json: parseCommandJson(result.stdout)
   }
 }
+
+const runCreatorCommandAsync = ({ command, dataDir, payload = {}, config = {}, env = {} }) => new Promise((resolve, reject) => {
+  const child = spawn(process.execPath, [path.join(pluginRoot, 'commands', `${command}.js`)], {
+    env: createCommandEnv({ dataDir, env }),
+    stdio: ['pipe', 'pipe', 'pipe']
+  })
+  let stdout = ''
+  let stderr = ''
+  child.stdout.on('data', (chunk) => { stdout += chunk })
+  child.stderr.on('data', (chunk) => { stderr += chunk })
+  child.on('error', reject)
+  child.on('close', (status, signal) => {
+    try {
+      resolve({ status, signal, stdout, stderr, json: parseCommandJson(stdout) })
+    } catch (error) {
+      reject(error)
+    }
+  })
+  child.stdin.end(createCommandInput({ command, payload, config }))
+})
+
+test('creator studio run-step command fails unavailable local backend with persisted run state', () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-local-command-'))
+
+  const created = runCreatorCommand({
+    command: 'create-run',
+    dataDir,
+    payload: { petName: 'Local Cat', prompt: 'A local generated cat', backend: 'local' },
+    config: { backend: 'local' }
+  })
+  const generated = runCreatorCommand({
+    command: 'run-step',
+    dataDir,
+    payload: { runId: created.json.run.runId },
+    config: { backend: 'local' }
+  })
+  const run = JSON.parse(fs.readFileSync(path.join(dataDir, 'runs', created.json.run.runId, 'run.json'), 'utf-8'))
+
+  assert.equal(created.status, 0)
+  assert.equal(generated.status, 1)
+  assert.equal(generated.json.ok, false)
+  assert.match(generated.json.error, /Local backend is not configured/)
+  assert.equal(run.status, 'failed')
+  assert.equal(run.backendStatus.backend, 'local')
+  assert.equal(run.backendStatus.state, 'not_configured')
+})
+
+test('creator studio run-step command uses host bridge for local backend generation when available', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-local-bridge-'))
+  const requests = []
+  const created = runCreatorCommand({
+    command: 'create-run',
+    dataDir,
+    payload: { petName: 'Local Cat', prompt: 'A local generated cat', backend: 'local' },
+    config: { backend: 'local' }
+  })
+  const bridgeServer = require('node:http').createServer((request, response) => {
+    let body = ''
+    request.on('data', (chunk) => { body += chunk })
+    request.on('end', () => {
+      const payload = body ? JSON.parse(body) : {}
+      requests.push({ method: request.method, url: request.url, payload })
+      response.writeHead(200, {
+        'Content-Type': 'application/json',
+        Connection: 'close'
+      })
+      if (request.url.endsWith('/creator/model-image-generate')) {
+        response.end(JSON.stringify({
+          ok: true,
+          result: {
+            ok: true,
+            backend: 'local',
+            model: 'local-pet-sprite',
+            generatedAt: '2026-06-19T00:00:00.000Z',
+            outputs: [{
+              dataRelativePath: `runs/${created.json.run.runId}/frames/base/0001.png`,
+              mimeType: 'image/png',
+              sha256: 'local-bridge-sha'
+            }]
+          }
+        }))
+        return
+      }
+      if (request.url.endsWith('/creator/model-health-check')) {
+        response.end(JSON.stringify({
+          ok: true,
+          result: {
+            ok: true,
+            backend: 'local',
+            code: 'endpoint_healthy',
+            message: 'Local endpoint is reachable'
+          }
+        }))
+        return
+      }
+      response.end(JSON.stringify({
+        ok: true,
+        config: {
+          defaultBackend: 'local',
+          cloud: {
+            provider: 'openai',
+            baseUrl: 'https://api.openai.com/v1',
+            model: 'gpt-image-1',
+            apiKeyRef: 'secret:model.image.openai.apiKey',
+            hasApiKey: false,
+            apiKeyPreview: '',
+            apiKeyLabel: 'Image API Key'
+          },
+          local: {
+            endpoint: 'http://127.0.0.1:7860/generate',
+            healthUrl: 'http://127.0.0.1:7860/health',
+            model: 'local-pet-sprite',
+            timeoutMs: 120000,
+            maxConcurrentJobs: 1
+          }
+        }
+      }))
+    })
+  })
+  await new Promise((resolve) => bridgeServer.listen(0, '127.0.0.1', resolve))
+  const port = bridgeServer.address().port
+
+  try {
+    const generated = await runCreatorCommandAsync({
+      command: 'run-step',
+      dataDir,
+      payload: { runId: created.json.run.runId },
+      config: { backend: 'local' },
+      env: {
+        OPENPET_BRIDGE_URL: `http://127.0.0.1:${port}`,
+        OPENPET_BRIDGE_TOKEN: 'bridge-token'
+      }
+    })
+    const run = JSON.parse(fs.readFileSync(path.join(dataDir, 'runs', created.json.run.runId, 'run.json'), 'utf-8'))
+
+    assert.equal(created.status, 0)
+    assert.equal(generated.status, 0)
+    assert.equal(generated.json.ok, true)
+    assert.equal(generated.json.run.backendStatus.backend, 'local')
+    assert.equal(generated.json.run.backendStatus.state, 'ready')
+    assert.equal(run.status, 'ready_for_review')
+    assert.equal(run.backendStatus.state, 'ready')
+    assert.equal(run.artifacts.generatedImage.outputs[0].dataRelativePath, `runs/${created.json.run.runId}/frames/base/0001.png`)
+    assert.deepEqual(requests.map((entry) => entry.url), ['/creator/model-image-generate'])
+  } finally {
+    bridgeServer.closeAllConnections?.()
+    await new Promise((resolve) => bridgeServer.close(resolve))
+  }
+})
+
+test('creator studio host-bridged local run can be approved and exported as a standard pet bundle', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-local-export-'))
+  const created = runCreatorCommand({
+    command: 'create-run',
+    dataDir,
+    payload: { petName: 'Local Export Cat', prompt: 'A local generated export cat', backend: 'local' },
+    config: { backend: 'local' }
+  })
+  const bridgeServer = require('node:http').createServer((request, response) => {
+    let body = ''
+    request.on('data', (chunk) => { body += chunk })
+    request.on('end', () => {
+      response.writeHead(200, {
+        'Content-Type': 'application/json',
+        Connection: 'close'
+      })
+      response.end(JSON.stringify({
+        ok: true,
+        result: {
+          ok: true,
+          backend: 'local',
+          model: 'local-pet-sprite',
+          generatedAt: '2026-06-19T00:00:00.000Z',
+          outputs: [{
+            dataRelativePath: `runs/${created.json.run.runId}/frames/base/0001.png`,
+            mimeType: 'image/png',
+            sha256: 'local-export-sha'
+          }]
+        }
+      }))
+      void body
+    })
+  })
+  await new Promise((resolve) => bridgeServer.listen(0, '127.0.0.1', resolve))
+  const port = bridgeServer.address().port
+
+  try {
+    const generated = await runCreatorCommandAsync({
+      command: 'run-step',
+      dataDir,
+      payload: { runId: created.json.run.runId },
+      config: { backend: 'local' },
+      env: {
+        OPENPET_BRIDGE_URL: `http://127.0.0.1:${port}`,
+        OPENPET_BRIDGE_TOKEN: 'bridge-token'
+      }
+    })
+    const approved = runCreatorCommand({
+      command: 'approve-run',
+      dataDir,
+      payload: { runId: created.json.run.runId }
+    })
+    const exported = runCreatorCommand({
+      command: 'export-bundle',
+      dataDir,
+      payload: { runId: created.json.run.runId }
+    })
+
+    assert.equal(generated.status, 0)
+    assert.equal(approved.status, 0)
+    assert.equal(exported.status, 0)
+    assert.equal(fs.existsSync(exported.json.bundle.path), true)
+    assert.match(exported.json.bundle.path, /\.codex-pet\.zip$/)
+  } finally {
+    bridgeServer.closeAllConnections?.()
+    await new Promise((resolve) => bridgeServer.close(resolve))
+  }
+})
+
+test('creator studio create-run command drafts a generation task from a conversation prompt', () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-create-task-'))
+
+  const created = runCreatorCommand({
+    command: 'create-run',
+    dataDir,
+    payload: {
+      petName: 'Prompt Cat',
+      prompt: '新增一个自定义动作：原地打滚，动作要循环。'
+    }
+  })
+
+  assert.equal(created.status, 0)
+  assert.equal(created.json.run.generationTask.mode, 'single-action')
+  assert.equal(created.json.run.generationTask.actions[0].name, '原地打滚')
+  assert.equal(created.json.run.generationTask.questions[0].id, 'trigger')
+})
+
+test('creator studio create-run command keeps legacy pet prompts as plain runs', () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-legacy-prompt-'))
+
+  const created = runCreatorCommand({
+    command: 'create-run',
+    dataDir,
+    payload: {
+      petName: 'Sprout Cat',
+      prompt: 'A small mint helper cat'
+    }
+  })
+
+  assert.equal(created.status, 0)
+  assert.equal(created.json.run.input.prompt, 'A small mint helper cat')
+  assert.equal(created.json.run.input.originalPrompt, undefined)
+  assert.equal(created.json.run.generationTask, undefined)
+  assert.equal(fs.existsSync(path.join(dataDir, 'runs', created.json.run.runId, 'inputs', 'generation-task.json')), false)
+})
 
 test('creator studio commands create run generate output approve and export', () => {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-commands-'))
@@ -179,10 +669,76 @@ test('creator studio commands create run generate output approve and export', ()
   assert.equal(fs.existsSync(exported.json.bundle.path), true)
 })
 
+test('creator studio commands infer latest run for generic plugin button flow', () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-button-flow-'))
+
+  const created = runCreatorCommand({
+    command: 'create-run',
+    dataDir,
+    payload: { petName: 'Button Cat', prompt: 'A button generated cat' }
+  })
+  const generated = runCreatorCommand({
+    command: 'run-step',
+    dataDir
+  })
+  const approved = runCreatorCommand({
+    command: 'approve-run',
+    dataDir
+  })
+  const exported = runCreatorCommand({
+    command: 'export-bundle',
+    dataDir
+  })
+
+  assert.equal(created.status, 0)
+  assert.equal(generated.status, 0)
+  assert.equal(approved.status, 0)
+  assert.equal(exported.status, 0)
+  assert.equal(generated.json.run.runId, created.json.run.runId)
+  assert.equal(approved.json.run.status, 'approved')
+  assert.equal(exported.json.ok, true)
+  assert.equal(fs.existsSync(exported.json.bundle.path), true)
+})
+
 test('creator studio dashboard asset exists and service script is declared', () => {
   const dashboardPath = path.join(pluginRoot, 'web', 'dashboard', 'index.html')
   const servicePath = path.join(pluginRoot, 'service', 'studio-service.js')
   assert.equal(fs.existsSync(dashboardPath), true)
   assert.equal(fs.existsSync(servicePath), true)
   assert.match(fs.readFileSync(dashboardPath, 'utf-8'), /Creator Studio/)
+})
+
+test('creator studio service exposes run detail and logs for dashboard clients', async () => {
+  const { appendRunLog, createRun } = require('../../examples/plugins/creator-studio/lib/run-store')
+  const { createCreatorStudioServer } = require('../../examples/plugins/creator-studio/service/studio-service')
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-service-'))
+  const dashboardPath = path.join(pluginRoot, 'web', 'dashboard', 'index.html')
+  const run = createRun({
+    dataDir,
+    input: { petName: 'Service Cat', prompt: 'Visible in dashboard', backend: 'fixture' },
+    now: () => '2026-06-19T00:00:00.000Z'
+  })
+  appendRunLog({
+    dataDir,
+    runId: run.runId,
+    level: 'info',
+    event: 'run.created',
+    message: 'Run created',
+    now: () => '2026-06-19T00:01:00.000Z'
+  })
+  const server = createCreatorStudioServer({ dataDir, dashboardPath })
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const port = server.address().port
+
+  try {
+    const detail = await fetch(`http://127.0.0.1:${port}/api/runs/${run.runId}`).then((response) => response.json())
+    const logs = await fetch(`http://127.0.0.1:${port}/api/runs/${run.runId}/logs`).then((response) => response.json())
+
+    assert.equal(detail.ok, true)
+    assert.equal(detail.run.runId, run.runId)
+    assert.equal(logs.ok, true)
+    assert.deepEqual(logs.logs.map((entry) => entry.event), ['run.created'])
+  } finally {
+    await new Promise((resolve) => server.close(resolve))
+  }
 })

@@ -3,6 +3,7 @@ const assert = require('node:assert/strict')
 const fs = require('fs')
 const os = require('os')
 const path = require('path')
+const crypto = require('crypto')
 const { EventEmitter } = require('events')
 const http = require('http')
 const { PassThrough } = require('stream')
@@ -11,6 +12,7 @@ const sharp = require('sharp')
 const { createPluginService } = require('../../src/main/services/plugin-service')
 const { createActionImportService } = require('../../src/main/services/action-import-service')
 const { createPetPackService } = require('../../src/main/services/pet-pack-service')
+const { createMinimalWebp } = require('../../examples/plugins/creator-studio/lib/fake-hatch-pet')
 
 const createSettingsService = (initialSettings = {}) => {
   let current = {
@@ -269,16 +271,7 @@ const requestBridge = (url, { method = 'GET', token, body } = {}) => new Promise
 
 const createMinimalCodexPetOutput = (root, manifest = {}) => {
   fs.mkdirSync(root, { recursive: true })
-  const buffer = Buffer.alloc(30)
-  buffer.write('RIFF', 0, 'ascii')
-  buffer.writeUInt32LE(22, 4)
-  buffer.write('WEBP', 8, 'ascii')
-  buffer.write('VP8X', 12, 'ascii')
-  buffer.writeUInt32LE(10, 16)
-  buffer.writeUInt8(0, 20)
-  buffer.writeUIntLE(1536 - 1, 24, 3)
-  buffer.writeUIntLE(1872 - 1, 27, 3)
-  fs.writeFileSync(path.join(root, 'spritesheet.webp'), buffer)
+  fs.writeFileSync(path.join(root, 'spritesheet.webp'), createMinimalWebp())
   fs.writeFileSync(path.join(root, 'pet.json'), JSON.stringify({
     id: manifest.id || 'creator-studio-cat',
     displayName: manifest.displayName || 'Creator Studio Cat',
@@ -582,6 +575,124 @@ test('declaration-only creator action bridge rejects missing permissions', async
   assert.equal(writeResponse.status, 403)
 })
 
+test('declaration-only creator model bridge exposes settings, health, and host-owned generation', async () => {
+  const spawned = []
+  const child = createFakeServiceProcess()
+  const root = createDeclarationOnlyPluginDir({
+    profile: 'creator-tools',
+    permissions: ['model:image-generate']
+  })
+  const bridgeCalls = []
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: createBridgeAwarePetService(),
+    imageGenerationModelService: {
+      getConfig: () => ({
+        defaultBackend: 'cloud',
+        cloud: {
+          provider: 'openai',
+          baseUrl: 'https://api.openai.com/v1',
+          model: 'gpt-image-1',
+          apiKeyRef: 'secret:model.image.openai.apiKey',
+          hasApiKey: true,
+          apiKeyPreview: '••••1234',
+          apiKeyLabel: 'Image API Key'
+        },
+        local: {
+          endpoint: 'http://127.0.0.1:7860/generate',
+          healthUrl: 'http://127.0.0.1:7860/health',
+          model: 'local-pet-sprite',
+          timeoutMs: 120000,
+          maxConcurrentJobs: 1
+        }
+      }),
+      checkHealth: async (payload) => {
+        bridgeCalls.push(['checkHealth', payload])
+        return {
+          ok: true,
+          backend: payload?.backend || 'cloud',
+          code: 'provider_healthy',
+          message: 'Cloud provider is reachable'
+        }
+      },
+      generateImage: async (payload) => {
+        bridgeCalls.push(['generateImage', payload])
+        return {
+          ok: true,
+          backend: payload.backend || 'cloud',
+          model: 'gpt-image-1',
+          generatedAt: '2026-06-19T00:00:00.000Z',
+          outputs: [{
+            dataRelativePath: `${payload.output.dataRelativeDir}/0001.png`,
+            mimeType: 'image/png',
+            sha256: 'abc123'
+          }]
+        }
+      }
+    },
+    officialPlugins: [],
+    pluginDirs: [root],
+    spawnCommandProcess: (file, args, options) => {
+      spawned.push({ file, args, options })
+      return child
+    }
+  })
+
+  const commandRun = service.runCommand('weather-declaration', 'announce')
+  await waitFor(() => spawned.length === 1)
+  const baseUrl = spawned[0].options.env.OPENPET_BRIDGE_URL
+  const token = spawned[0].options.env.OPENPET_BRIDGE_TOKEN
+
+  const settingsResponse = await requestBridge(`${baseUrl}/creator/model-settings`, { token })
+  const healthResponse = await requestBridge(`${baseUrl}/creator/model-health-check`, {
+    method: 'POST',
+    token,
+    body: { backend: 'local' }
+  })
+  const generateResponse = await requestBridge(`${baseUrl}/creator/model-image-generate`, {
+    method: 'POST',
+    token,
+    body: {
+      backend: 'local',
+      prompt: 'small mint helper cat, transparent background',
+      output: {
+        dataDir: '/tmp/should-be-ignored',
+        dataRelativeDir: 'runs/demo-run/frames/base'
+      },
+      constraints: {
+        width: 1024,
+        height: 1024,
+        transparent: true
+      }
+    }
+  })
+
+  child.stdout.write('{"ok":true}\n')
+  child.emit('exit', 0, null)
+  await commandRun
+
+  assert.equal(settingsResponse.status, 200)
+  assert.equal(settingsResponse.body.ok, true)
+  assert.equal(settingsResponse.body.config.defaultBackend, 'cloud')
+  assert.equal(settingsResponse.body.config.cloud.apiKeyPreview, '••••1234')
+
+  assert.equal(healthResponse.status, 200)
+  assert.equal(healthResponse.body.ok, true)
+  assert.equal(healthResponse.body.result.backend, 'local')
+
+  assert.equal(generateResponse.status, 200)
+  assert.equal(generateResponse.body.ok, true)
+  assert.equal(generateResponse.body.result.outputs[0].dataRelativePath, 'runs/demo-run/frames/base/0001.png')
+
+  assert.deepEqual(bridgeCalls[0], ['checkHealth', { backend: 'local' }])
+  assert.equal(bridgeCalls[1][0], 'generateImage')
+  assert.equal(bridgeCalls[1][1].backend, 'local')
+  assert.equal(bridgeCalls[1][1].output.dataRelativeDir, 'runs/demo-run/frames/base')
+  assert.match(bridgeCalls[1][1].output.dataDir, /\.openpet\/weather-declaration\/data$/)
+})
+
 test('declaration-only creator pack manifest bridge reads validates and applies active pack metadata', async () => {
   const spawned = []
   const child = createFakeServiceProcess()
@@ -839,6 +950,7 @@ test('declaration-only pet pack bridge inspects imports and activates approved p
   const spawned = []
   const child = createFakeServiceProcess()
   let capturedDataDir = ''
+  const activatedPacks = []
   const settingsService = createSettingsService({
     plugins: { enabled: { 'weather-declaration': true } },
     petPacks: { activePackId: 'legacy-cat', installed: {} }
@@ -859,6 +971,7 @@ test('declaration-only pet pack bridge inspects imports and activates approved p
       profile: 'hybrid',
       permissions: ['pet-pack:import']
     })],
+    onPetPackActivated: (event) => activatedPacks.push(event),
     spawnCommandProcess: (file, args, options) => {
       capturedDataDir = options.env.OPENPET_DATA_DIR
       spawned.push({ file, args, options })
@@ -899,6 +1012,8 @@ test('declaration-only pet pack bridge inspects imports and activates approved p
   assert.equal(importResponse.body.imported.pack.id, 'creator-studio-cat')
   assert.equal(importResponse.body.activated.activePackId, 'creator-studio-cat')
   assert.equal(settingsService.get().petPacks.activePackId, 'creator-studio-cat')
+  assert.equal(activatedPacks.length, 1)
+  assert.equal(activatedPacks[0].packId, 'creator-studio-cat')
 })
 
 test('declaration-only pet pack bridge does not expose arbitrary activation route', async () => {
@@ -1030,6 +1145,87 @@ test('creator studio example imports approved fixture pet through host bridge', 
   assert.equal(importResult.result.run.importStatus, 'imported')
   assert.equal(settingsService.get().petPacks.activePackId, 'sprout-cat')
   assert.equal(fs.existsSync(path.join(userPacksDir, 'sprout-cat', 'pet.json')), true)
+})
+
+test('creator studio example imports approved host-bridged local pet through host bridge', async () => {
+  const settingsService = createSettingsService({
+    plugins: { enabled: { 'openpet.creator-studio': true } },
+    petPacks: { activePackId: 'legacy-cat', installed: {} }
+  })
+  const userPacksDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-local-import-'))
+  const petPackService = createPetPackService({
+    settingsService,
+    userPacksDir,
+    projectRoot: '/app/openpet',
+    loadLegacyAnimations: () => ({ defaultAction: 'idle', clickAction: 'idle', actions: [] }),
+    now: () => new Date('2026-06-19T00:00:00.000Z')
+  })
+  const service = createPluginService({
+    settingsService,
+    petService: createBridgeAwarePetService(),
+    petPackService,
+    imageGenerationModelService: {
+      getConfig: () => ({
+        defaultBackend: 'local',
+        cloud: {
+          provider: 'openai',
+          baseUrl: 'https://api.openai.com/v1',
+          model: 'gpt-image-1',
+          apiKeyRef: 'secret:model.image.openai.apiKey',
+          hasApiKey: false,
+          apiKeyPreview: '',
+          apiKeyLabel: 'Image API Key'
+        },
+        local: {
+          endpoint: 'http://127.0.0.1:7860/generate',
+          healthUrl: 'http://127.0.0.1:7860/health',
+          model: 'local-pet-sprite',
+          timeoutMs: 120000,
+          maxConcurrentJobs: 1
+        }
+      }),
+      checkHealth: async ({ backend } = {}) => ({
+        ok: true,
+        backend: backend || 'local',
+        code: 'endpoint_healthy',
+        message: 'Local endpoint is reachable'
+      }),
+      generateImage: async ({ backend, output }) => {
+        const targetPath = path.join(output.dataDir, output.dataRelativeDir, '0001.png')
+        fs.mkdirSync(path.dirname(targetPath), { recursive: true })
+        fs.writeFileSync(targetPath, Buffer.from('host-generated-png'))
+        return {
+          ok: true,
+          backend: backend || 'local',
+          model: 'local-pet-sprite',
+          generatedAt: '2026-06-19T00:00:00.000Z',
+          outputs: [{
+            dataRelativePath: `${output.dataRelativeDir}/0001.png`,
+            mimeType: 'image/png',
+            sha256: crypto.createHash('sha256').update(fs.readFileSync(targetPath)).digest('hex')
+          }]
+        }
+      }
+    },
+    officialPlugins: [],
+    pluginDirs: [path.resolve(__dirname, '../../examples/plugins')]
+  })
+
+  const createResult = await service.runCommand('openpet.creator-studio', 'create-run', {
+    petName: 'Local Sprout Cat',
+    prompt: 'A small mint helper cat',
+    backend: 'local'
+  })
+  const runId = createResult.result.run.runId
+  await service.runCommand('openpet.creator-studio', 'run-step', { runId })
+  await service.runCommand('openpet.creator-studio', 'approve-run', { runId })
+  const importResult = await service.runCommand('openpet.creator-studio', 'import-approved-pet', { runId, activate: true })
+
+  assert.equal(importResult.ok, true)
+  assert.equal(importResult.result.ok, true)
+  assert.equal(importResult.result.run.importStatus, 'imported')
+  assert.equal(settingsService.get().petPacks.activePackId, 'local-sprout-cat')
+  assert.equal(fs.existsSync(path.join(userPacksDir, 'local-sprout-cat', 'pet.json')), true)
 })
 
 test('declaration-only creator asset inspection bridge rejects missing permissions', async () => {
@@ -1960,6 +2156,31 @@ test('plugin service rejects non-zero declaration command exits', async () => {
   assert.deepEqual(service.getLogs().map((entry) => entry.message).slice(0, 3), [
     'Plugin command exited with code 7',
     'Command stderr: boom',
+    'Command started'
+  ])
+})
+
+test('plugin service surfaces structured command errors from declaration stdout', async () => {
+  const child = createFakeServiceProcess()
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir()],
+    spawnCommandProcess: () => child
+  })
+
+  const commandRun = service.runCommand('weather-declaration', 'announce')
+  await waitFor(() => child.stdout.listenerCount('data') > 0)
+  child.stdout.write('{"ok":false,"error":"runId is required"}\n')
+  child.emit('exit', 1, null)
+
+  await assert.rejects(commandRun, /runId is required/)
+  assert.deepEqual(service.getLogs().map((entry) => entry.message).slice(0, 3), [
+    'runId is required',
+    'Command stdout: {"ok":false,"error":"runId is required"}',
     'Command started'
   ])
 })

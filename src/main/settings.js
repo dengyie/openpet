@@ -22,6 +22,7 @@ const defaultSettings = {
   walkSpeed: 2,          // 散步速度（px/frame，可选 1/2/3）
   walkDuration: 15000,   // 散步自动停止时长（ms）
   bubbleDuration: 1300,  // 气泡显示时长（ms）
+  menuPosition: 'auto',  // 右键菜单相对宠物位置：auto/right/left/above/below
   autoStart: false,      // 是否开机自启
   selectedCursorId: SYSTEM_CURSOR_ID,
   customCursor: createDefaultCursorSettings(),
@@ -49,6 +50,26 @@ const defaultSettings = {
       decisions: []
     },
     conversations: {}
+  },
+  models: {
+    imageGeneration: {
+      defaultBackend: 'fixture',
+      cloud: {
+        provider: 'openai',
+        baseUrl: 'https://api.openai.com/v1',
+        model: 'gpt-image-1',
+        apiKeyRef: 'secret:model.image.openai.apiKey',
+        organization: '',
+        project: ''
+      },
+      local: {
+        endpoint: 'http://127.0.0.1:7860/generate',
+        healthUrl: 'http://127.0.0.1:7860/health',
+        model: 'local-pet-sprite',
+        timeoutMs: 120000,
+        maxConcurrentJobs: 1
+      }
+    }
   },
   plugins: {
     enabled: {
@@ -104,6 +125,22 @@ const mergeSettings = (settings = {}) => ({
       anchor: isPlainObject(settings.petBehavior?.home?.anchor)
         ? settings.petBehavior.home.anchor
         : defaultSettings.petBehavior.home.anchor
+    }
+  },
+  models: {
+    ...defaultSettings.models,
+    ...(isPlainObject(settings.models) ? settings.models : {}),
+    imageGeneration: {
+      ...defaultSettings.models.imageGeneration,
+      ...(isPlainObject(settings.models?.imageGeneration) ? settings.models.imageGeneration : {}),
+      cloud: {
+        ...defaultSettings.models.imageGeneration.cloud,
+        ...(isPlainObject(settings.models?.imageGeneration?.cloud) ? settings.models.imageGeneration.cloud : {})
+      },
+      local: {
+        ...defaultSettings.models.imageGeneration.local,
+        ...(isPlainObject(settings.models?.imageGeneration?.local) ? settings.models.imageGeneration.local : {})
+      }
     }
   },
   plugins: {

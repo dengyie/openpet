@@ -47,7 +47,8 @@ const createElement = (id = '') => ({
   closest() { return null }
 })
 
-const createRendererHarness = async ({ insideFrame = true } = {}) => {
+const createRendererHarness = async ({ insideFrame = true, includeHitbox = true } = {}) => {
+  const hitboxResults = Array.isArray(insideFrame) ? insideFrame.slice() : null
   const elements = {
     pet: createElement('pet'),
     cat: createElement('cat'),
@@ -69,12 +70,16 @@ const createRendererHarness = async ({ insideFrame = true } = {}) => {
       innerWidth: 300,
       innerHeight: 300,
       OpenPetCursorStyle: require('../src/shared/cursor-style'),
-      OpenPetHitbox: {
-        getFrameHitbox: () => ({ left: 0, top: 0, right: 300, bottom: 300 }),
-        getWindowHitbox: () => ({ left: 0, top: 0, right: 300, bottom: 300 }),
-        getViewportHitbox: () => ({ left: 0, top: 0, right: 300, bottom: 300 }),
-        isPointInHitbox: () => insideFrame
-      },
+      ...(includeHitbox
+        ? {
+            OpenPetHitbox: {
+              getFrameHitbox: () => ({ left: 0, top: 0, right: 300, bottom: 300 }),
+              getWindowHitbox: () => ({ left: 0, top: 0, right: 300, bottom: 300 }),
+              getViewportHitbox: () => ({ left: 0, top: 0, right: 300, bottom: 300 }),
+              isPointInHitbox: () => hitboxResults ? hitboxResults.shift() ?? hitboxResults.at(-1) ?? false : insideFrame
+            }
+          }
+        : {}),
       clearTimeout: () => {},
       addEventListener: () => {},
       setInterval: () => 0,
@@ -89,7 +94,7 @@ const createRendererHarness = async ({ insideFrame = true } = {}) => {
           ]
         }),
         setViewport: () => {},
-        setMousePassthrough: () => {},
+        setMousePassthrough: (passthrough) => logs.push({ event: 'pet:test:set-mouse-passthrough', passthrough }),
         recordAppLog: (entry) => logs.push(entry),
         onSettingsChanged: (callback) => { callbacks.settings = callback },
         onPetSay: () => {},
@@ -109,30 +114,19 @@ const createRendererHarness = async ({ insideFrame = true } = {}) => {
   vm.runInNewContext(rendererSource, context, { filename: 'renderer.js' })
   await Promise.resolve()
   await Promise.resolve()
-  return { callbacks, context, elements, logs }
+  return { callbacks, elements, logs, context }
 }
 
 const dispatch = (element, eventName, event) => {
   for (const listener of element.listeners[eventName] || []) listener(event)
 }
 
-test('custom cursor applies native CSS cursor inside the clickable pet region without DOM overlay', async () => {
+test('custom cursor uses native CSS cursor inside the clickable pet region without drawing an overlay', async () => {
   const { callbacks, context, elements, logs } = await createRendererHarness({ insideFrame: true })
 
-  callbacks.settings({
-    customCursor: {
-      enabled: true,
-      assetUrl: 'file:///cursor.png',
-      assetPath: '/cursor.png',
-      fileName: 'cursor.png',
-      hotspotX: 4,
-      hotspotY: 6
-    }
-  })
+  callbacks.settings({ customCursor: { enabled: true, assetUrl: 'file:///cursor.png', assetPath: '/cursor.png', fileName: 'cursor.png', hotspotX: 4, hotspotY: 6 } })
   dispatch(elements.pet, 'pointermove', { clientX: 24.3, clientY: 88.6, screenX: 1024.3, screenY: 768.6 })
 
-  assert.equal(elements['custom-cursor-overlay'].src, '')
-  assert.equal(elements['custom-cursor-overlay'].style.transform, undefined)
   assert.equal(elements['custom-cursor-overlay'].classList.contains('visible'), false)
   assert.equal(elements.pet.style.values.cursor, 'url("file:///cursor.png") 4 6, auto')
   assert.equal(elements.pet.style.priorities.cursor, 'important')
@@ -140,11 +134,11 @@ test('custom cursor applies native CSS cursor inside the clickable pet region wi
   assert.equal(context.document.body.style.priorities.cursor, 'important')
   assert.equal(context.document.documentElement.style.values.cursor, 'url("file:///cursor.png") 4 6, auto')
   assert.equal(context.document.documentElement.style.priorities.cursor, 'important')
+  assert.equal(elements.pet.style.cursor, 'url("file:///cursor.png") 4 6, auto')
   assert.equal(logs.at(-1).details.cursorOverlayVisible, false)
-  assert.equal(logs.at(-1).details.nativeCursor, 'url("file:///cursor.png") 4 6, auto')
 })
 
-test('custom cursor clears outside the clickable pet region', async () => {
+test('custom cursor overlay hides outside the clickable pet region', async () => {
   const { callbacks, elements, logs } = await createRendererHarness({ insideFrame: false })
 
   callbacks.settings({ customCursor: { enabled: true, assetUrl: 'file:///cursor.png', assetPath: '/cursor.png', fileName: 'cursor.png' } })
@@ -155,7 +149,17 @@ test('custom cursor clears outside the clickable pet region', async () => {
   assert.equal(logs.at(-1).details.cursorOverlayVisible, false)
 })
 
-test('custom cursor clears when the pointer leaves the pet surface', async () => {
+test('pet remains clickable when the optional hitbox helper is unavailable', async () => {
+  const { elements, logs } = await createRendererHarness({ includeHitbox: false })
+
+  dispatch(elements.pet, 'pointermove', { clientX: 24.3, clientY: 88.6, screenX: 1024.3, screenY: 768.6 })
+
+  const passthroughCalls = logs.filter((entry) => entry.event === 'pet:test:set-mouse-passthrough')
+  assert.equal(passthroughCalls.some((entry) => entry.passthrough), false)
+  assert.equal(logs.at(-1).details.passthrough, false)
+})
+
+test('custom cursor overlay clears when the pointer leaves the pet surface', async () => {
   const { callbacks, elements } = await createRendererHarness({ insideFrame: true })
 
   callbacks.settings({ customCursor: { enabled: true, assetUrl: 'file:///cursor.png', assetPath: '/cursor.png', fileName: 'cursor.png' } })
@@ -168,4 +172,24 @@ test('custom cursor clears when the pointer leaves the pet surface', async () =>
 
   assert.equal(elements['custom-cursor-overlay'].classList.contains('visible'), false)
   assert.equal(elements.pet.style.cursor, '')
+})
+
+test('pointer leave does not cancel passthrough while hovering transparent pet padding', async () => {
+  const { elements, logs } = await createRendererHarness({ insideFrame: [false, true] })
+
+  dispatch(elements.pet, 'pointermove', { clientX: 1, clientY: 1, screenX: 1001, screenY: 701 })
+  dispatch(elements.pet, 'pointerleave', { clientX: -1, clientY: -1, screenX: 999, screenY: 699 })
+
+  const passthroughCalls = logs.filter((entry) => entry.event === 'pet:test:set-mouse-passthrough')
+  assert.deepEqual(passthroughCalls.map((entry) => entry.passthrough), [true])
+})
+
+test('pointer movement back over the visible pet restores click handling after passthrough', async () => {
+  const { elements, logs } = await createRendererHarness({ insideFrame: [false, false, true, true] })
+
+  dispatch(elements.pet, 'pointermove', { clientX: 1, clientY: 1, screenX: 1001, screenY: 701 })
+  dispatch(elements.pet, 'pointermove', { clientX: 140, clientY: 140, screenX: 1140, screenY: 840 })
+
+  const passthroughCalls = logs.filter((entry) => entry.event === 'pet:test:set-mouse-passthrough')
+  assert.deepEqual(passthroughCalls.map((entry) => entry.passthrough), [true, false])
 })

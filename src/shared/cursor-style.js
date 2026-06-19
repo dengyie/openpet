@@ -28,7 +28,7 @@
 
   return {
     createCustomCursorCss,
-    resolvePetCursorStyle,
-    resolvePetCursorOverlayState
+    resolvePetCursorOverlayState,
+    resolvePetCursorStyle
   }
 })

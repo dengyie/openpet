@@ -47,6 +47,9 @@ test.describe('Control Center smoke', () => {
     await page.getByRole('button', { name: '快' }).click()
     await expect(page.getByRole('group', { name: '散步速度' }).getByRole('button', { name: '快' })).toHaveClass(/active/)
 
+    await page.getByRole('button', { name: '上方' }).click()
+    await expect(page.getByRole('group', { name: '菜单位置' }).getByRole('button', { name: '上方' })).toHaveClass(/active/)
+
     await page.getByRole('button', { name: 'About' }).click()
     await page.getByRole('button', { name: '检查更新' }).click()
     await expect(page.locator('.readonly-row', { hasText: '更新状态' })).toContainText('Update feed is not configured.')
@@ -63,12 +66,14 @@ test.describe('Control Center smoke', () => {
       input.dispatchEvent(new Event('change', { bubbles: true }))
     })
     await page.getByRole('button', { name: '快' }).click()
+    await page.getByRole('button', { name: '左侧' }).click()
     await page.getByRole('button', { name: '保存', exact: true }).click()
 
     await expect(page.locator('.status-line')).toContainText('原始大小 135%')
     await page.getByRole('button', { name: '还原' }).click()
     await expect(scale).toHaveValue('135')
     await expect(page.getByRole('group', { name: '散步速度' }).getByRole('button', { name: '快' })).toHaveClass(/active/)
+    await expect(page.getByRole('group', { name: '菜单位置' }).getByRole('button', { name: '左侧' })).toHaveClass(/active/)
   })
 
   test('configures a custom pet hover cursor in the redesigned cursor library', async ({ page }) => {
@@ -139,25 +144,68 @@ test.describe('Control Center smoke', () => {
     await page.goto('/')
     await page.getByRole('button', { name: 'AI' }).click()
 
-    await page.getByLabel('Base URL').fill('https://ai.example.test/v1')
-    await page.getByLabel('Model').fill('openpet-test-model')
+    await page.getByRole('textbox', { name: 'Base URL', exact: true }).fill('https://ai.example.test/v1')
+    await page.getByRole('textbox', { name: 'Model', exact: true }).fill('openpet-test-model')
     await page.getByLabel('System Prompt').fill('Stay tiny, helpful, and local-first.')
     await page.getByRole('button', { name: '保存', exact: true }).click()
     await expect(page.locator('.status-line')).toContainText('AI 配置已保存')
 
-    const apiKeyInput = page.locator('.field-row', { hasText: 'API Key' }).locator('input[type="password"]')
+    const apiKeyRow = page.locator('.field-row').filter({ has: page.getByText('API Key', { exact: true }) })
+    const apiKeyInput = page.getByPlaceholder('输入 API Key')
     await apiKeyInput.fill('sk-demo-secret')
-    await page.getByRole('button', { name: '保存密钥' }).click()
+    await apiKeyRow.getByRole('button', { name: '保存密钥' }).click()
     await expect(page.locator('.status-line')).toContainText('API Key 已保存')
-    await expect(apiKeyInput).toHaveValue('')
-    await expect(page.locator('.field-row', { hasText: 'API Key' })).toContainText('已保存')
+    await expect(apiKeyRow).toContainText('已保存')
 
     await page.reload()
     await page.getByRole('button', { name: 'AI' }).click()
-    await expect(page.getByLabel('Base URL')).toHaveValue('https://ai.example.test/v1')
-    await expect(page.getByLabel('Model')).toHaveValue('openpet-test-model')
+    await expect(page.getByRole('textbox', { name: 'Base URL', exact: true })).toHaveValue('https://ai.example.test/v1')
+    await expect(page.getByRole('textbox', { name: 'Model', exact: true })).toHaveValue('openpet-test-model')
     await expect(page.getByLabel('System Prompt')).toHaveValue('Stay tiny, helpful, and local-first.')
-    await expect(page.locator('.field-row', { hasText: 'API Key' })).toContainText('已保存')
+    await expect(page.locator('.field-row').filter({ has: page.getByText('API Key', { exact: true }) })).toContainText('已保存')
+  })
+
+  test('persists image generation config and supports key health actions in the demo API', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: 'AI' }).click()
+
+    await page.getByLabel('图片默认后端').selectOption('cloud')
+    await page.getByLabel('图片 Base URL').fill('https://image.example.test/v1')
+    await page.getByLabel('图片 Model').fill('openpet-image-test')
+    await page.getByLabel('本地 Endpoint').fill('http://127.0.0.1:9999/generate')
+    await page.getByLabel('本地 Health URL').fill('http://127.0.0.1:9999/health')
+    await page.getByLabel('本地模型').fill('local-sprite-test')
+    await page.getByRole('button', { name: '保存图片配置' }).click()
+    await expect(page.locator('.status-line')).toContainText('图片生成配置已保存')
+
+    const imageApiKeyRow = page.locator('.field-row', { hasText: '图片 API Key' })
+    const imageApiKeyInput = imageApiKeyRow.locator('input[type="password"]')
+    await imageApiKeyInput.fill('sk-image-demo-1234')
+    await page.getByRole('button', { name: '保存图片密钥' }).click()
+    await expect(page.locator('.status-line')).toContainText('图片 API Key 已保存')
+    await expect(imageApiKeyInput).toHaveValue('')
+    await expect(imageApiKeyRow).toContainText('已保存')
+    await expect(imageApiKeyRow).toContainText('••••1234')
+
+    await page.getByRole('button', { name: '检查图片健康' }).click()
+    await expect(page.locator('.status-line')).toContainText('图片模型健康检查通过')
+
+    await page.getByRole('button', { name: '清除图片密钥' }).click()
+    await expect(page.locator('.status-line')).toContainText('图片 API Key 已清除')
+    await expect(imageApiKeyRow).toContainText('未保存')
+
+    await page.getByRole('button', { name: '检查图片健康' }).click()
+    await expect(page.locator('.status-line')).toContainText('Cloud image generation API key is missing')
+
+    await page.reload()
+    await page.getByRole('button', { name: 'AI' }).click()
+    await expect(page.getByLabel('图片默认后端')).toHaveValue('cloud')
+    await expect(page.getByLabel('图片 Base URL')).toHaveValue('https://image.example.test/v1')
+    await expect(page.getByLabel('图片 Model')).toHaveValue('openpet-image-test')
+    await expect(page.getByLabel('本地 Endpoint')).toHaveValue('http://127.0.0.1:9999/generate')
+    await expect(page.getByLabel('本地 Health URL')).toHaveValue('http://127.0.0.1:9999/health')
+    await expect(page.getByLabel('本地模型')).toHaveValue('local-sprite-test')
+    await expect(page.locator('.field-row', { hasText: '图片 API Key' })).toContainText('未保存')
   })
 
   test('shows AI behavior decisions and supports replay and clearing diagnostics', async ({ page }) => {

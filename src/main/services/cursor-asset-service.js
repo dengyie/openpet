@@ -11,6 +11,7 @@ const {
 } = require('../../shared/cursor-library')
 
 const SUPPORTED_CURSOR_EXTENSIONS = new Set(['.png', '.webp'])
+const BROWSER_SAFE_CURSOR_SIZE = 64
 
 const createDefaultCursorSettings = () => createDefaultRuntimeCursor()
 
@@ -27,6 +28,21 @@ const createCursorAssetService = ({ cursorDir }) => {
     return relativePath && !relativePath.startsWith('..') && !path.isAbsolute(relativePath)
   }
 
+  const writeBrowserSafeBitmap = async ({ sourceBuffer, hash, originalFileName }) => {
+    fs.mkdirSync(cursorDir, { recursive: true })
+    const assetPath = path.join(cursorDir, `${hash}.png`)
+    await sharp(sourceBuffer)
+      .resize(BROWSER_SAFE_CURSOR_SIZE, BROWSER_SAFE_CURSOR_SIZE, { fit: 'inside', withoutEnlargement: true })
+      .png()
+      .toFile(assetPath)
+    return {
+      enabled: true,
+      assetPath,
+      assetUrl: pathToFileURL(assetPath).href,
+      fileName: originalFileName
+    }
+  }
+
   const importCursor = async (sourcePath) => {
     const ext = path.extname(sourcePath || '').toLowerCase()
     if (!SUPPORTED_CURSOR_EXTENSIONS.has(ext)) {
@@ -36,32 +52,49 @@ const createCursorAssetService = ({ cursorDir }) => {
     if (!stat.isFile()) throw new Error('Cursor source must be a file')
     if (stat.size > CUSTOM_CURSOR_MAX_BYTES) throw new Error('Cursor image must be 500KB or smaller')
 
-    const hash = crypto.createHash('sha256').update(fs.readFileSync(sourcePath)).digest('hex').slice(0, 16)
-    fs.mkdirSync(cursorDir, { recursive: true })
-    const assetPath = path.join(cursorDir, `${hash}${ext}`)
-    fs.copyFileSync(sourcePath, assetPath)
-
-    let width = 0
-    let height = 0
-    if (ext === '.png' || ext === '.webp') {
-      const metadata = await sharp(sourcePath).metadata()
-      width = Number(metadata.width || 0)
-      height = Number(metadata.height || 0)
-    }
+    const sourceBuffer = fs.readFileSync(sourcePath)
+    const hash = crypto.createHash('sha256').update(sourceBuffer).digest('hex').slice(0, 16)
+    const repaired = await writeBrowserSafeBitmap({
+      sourceBuffer,
+      hash,
+      originalFileName: path.basename(sourcePath)
+    })
+    const metadata = await sharp(repaired.assetPath).metadata()
+    const repairedStat = fs.statSync(repaired.assetPath)
 
     return {
       id: `cursor-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       type: 'custom',
       name: stripFileExtension(path.basename(sourcePath)) || '未命名指针',
-      assetPath,
-      assetUrl: pathToFileURL(assetPath).href,
-      fileName: path.basename(sourcePath),
-      width,
-      height,
-      byteSize: stat.size,
+      assetPath: repaired.assetPath,
+      assetUrl: repaired.assetUrl,
+      fileName: repaired.fileName,
+      width: Number(metadata.width || 0),
+      height: Number(metadata.height || 0),
+      byteSize: Number(repairedStat.size || 0),
       hotspotX: 0,
       hotspotY: 0,
       createdAt: new Date().toISOString()
+    }
+  }
+
+  const repairCursor = async (cursor) => {
+    const normalized = normalizeCustomCursor(cursor)
+    if (!normalized.enabled || !normalized.assetPath || !fs.existsSync(normalized.assetPath)) return normalized
+    const metadata = await sharp(normalized.assetPath).metadata()
+    if ((metadata.width || 0) <= BROWSER_SAFE_CURSOR_SIZE && (metadata.height || 0) <= BROWSER_SAFE_CURSOR_SIZE) return normalized
+    const sourceBuffer = fs.readFileSync(normalized.assetPath)
+    const hash = crypto.createHash('sha256').update(sourceBuffer).digest('hex').slice(0, 16)
+    const repaired = await writeBrowserSafeBitmap({
+      sourceBuffer,
+      hash: `${hash}-cursor64`,
+      originalFileName: normalized.fileName || path.basename(normalized.assetPath)
+    })
+    return {
+      ...normalized,
+      assetPath: repaired.assetPath,
+      assetUrl: repaired.assetUrl,
+      fileName: repaired.fileName || normalized.fileName
     }
   }
 
@@ -76,10 +109,11 @@ const createCursorAssetService = ({ cursorDir }) => {
     }
   }
 
-  return { importCursor, deleteAssets }
+  return { importCursor, repairCursor, deleteAssets }
 }
 
 module.exports = {
+  BROWSER_SAFE_CURSOR_SIZE,
   SUPPORTED_CURSOR_EXTENSIONS,
   createCursorAssetService,
   createDefaultCursorSettings,

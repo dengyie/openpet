@@ -567,7 +567,7 @@ const readLocalPluginManifests = (pluginDirs = []) => {
   return plugins
 }
 
-const createPluginService = ({ settingsService, petService, actionService, actionImportService, petPackService, aiService, fetchImpl = globalThis.fetch, serviceHealthTimeoutMs, healthCheckTimeoutMs = serviceHealthTimeoutMs ?? PLUGIN_SERVICE_HEALTH_TIMEOUT_MS, serviceStopGracePeriodMs = PLUGIN_SERVICE_STOP_GRACE_PERIOD_MS, commandProcessTimeoutMs = LOCAL_PLUGIN_COMMAND_TIMEOUT_MS, openExternal = async () => { throw new Error('Dashboard opener is not available') }, selectCreatorAssetFrameFolder = async () => { throw new Error('Creator asset folder picker is not available') }, spawnServiceProcess = spawn, spawnSetupProcess = spawnServiceProcess, spawnCommandProcess = spawnServiceProcess, killServiceProcess = process.kill, signalServiceProcessTree = defaultServiceProcessTree.signalServiceProcessTree, setServiceHealthTimer = setTimeout, clearServiceHealthTimer = clearTimeout, pluginDirs = [], officialPlugins = [], getPluginBlockStatus = () => ({ blocked: false, reasons: [] }) }) => {
+const createPluginService = ({ settingsService, petService, actionService, actionImportService, petPackService, aiService, imageGenerationModelService, fetchImpl = globalThis.fetch, serviceHealthTimeoutMs, healthCheckTimeoutMs = serviceHealthTimeoutMs ?? PLUGIN_SERVICE_HEALTH_TIMEOUT_MS, serviceStopGracePeriodMs = PLUGIN_SERVICE_STOP_GRACE_PERIOD_MS, commandProcessTimeoutMs = LOCAL_PLUGIN_COMMAND_TIMEOUT_MS, openExternal = async () => { throw new Error('Dashboard opener is not available') }, selectCreatorAssetFrameFolder = async () => { throw new Error('Creator asset folder picker is not available') }, onPetPackActivated = () => {}, spawnServiceProcess = spawn, spawnSetupProcess = spawnServiceProcess, spawnCommandProcess = spawnServiceProcess, killServiceProcess = process.kill, signalServiceProcessTree = defaultServiceProcessTree.signalServiceProcessTree, setServiceHealthTimer = setTimeout, clearServiceHealthTimer = clearTimeout, pluginDirs = [], officialPlugins = [], getPluginBlockStatus = () => ({ blocked: false, reasons: [] }) }) => {
   if (!settingsService) throw new Error('settingsService is required')
   if (!petService) throw new Error('petService is required')
   const serviceRuntimes = new Map()
@@ -834,7 +834,43 @@ const createPluginService = ({ settingsService, petService, actionService, actio
       const activated = payload.activate && imported?.pack?.id && petPackService?.setActivePack
         ? petPackService.setActivePack(imported.pack.id)
         : null
+      if (activated) {
+        onPetPackActivated({
+          pluginId: plugin.manifest.id,
+          commandId,
+          packId: imported.pack.id,
+          imported,
+          activated
+        })
+      }
       return { ok: true, imported, activated }
+    },
+    creatorModelSettingsRead: async () => {
+      assertPermission(plugin.manifest, 'model:image-generate')
+      if (!imageGenerationModelService?.getConfig) throw new Error('Creator model settings are not available')
+      appendLog({ pluginId: plugin.manifest.id, commandId, level: 'info', message: 'Bridge creator.model-settings read invoked' })
+      return { ok: true, config: imageGenerationModelService.getConfig() }
+    },
+    creatorModelHealthCheck: async (payload = {}) => {
+      assertPermission(plugin.manifest, 'model:image-generate')
+      if (!imageGenerationModelService?.checkHealth) throw new Error('Creator model health check is not available')
+      appendLog({ pluginId: plugin.manifest.id, commandId, level: 'info', message: 'Bridge creator.model-health-check invoked' })
+      return { ok: true, result: await imageGenerationModelService.checkHealth(payload) }
+    },
+    creatorModelImageGenerate: async (payload = {}) => {
+      assertPermission(plugin.manifest, 'model:image-generate')
+      if (!imageGenerationModelService?.generateImage) throw new Error('Creator model image generation is not available')
+      appendLog({ pluginId: plugin.manifest.id, commandId, level: 'info', message: 'Bridge creator.model-image-generate invoked' })
+      return {
+        ok: true,
+        result: await imageGenerationModelService.generateImage({
+          ...payload,
+          output: {
+            ...(payload.output || {}),
+            dataDir: ensurePluginCreatorDirs(plugin.manifest).dataDir
+          }
+        })
+      }
     },
     petSay: async (payload = {}) => {
       assertPermission(plugin.manifest, 'pet:say')
@@ -897,7 +933,7 @@ const createPluginService = ({ settingsService, petService, actionService, actio
     commandBridgeServer = http.createServer(async (request, response) => {
       try {
         const url = new URL(request.url, `http://${PLUGIN_BRIDGE_HOST}`)
-        const match = url.pathname.match(/^\/plugins\/bridge\/([^/]+)\/([^/]+)\/([^/]+)(\/context|\/pet\/say|\/pet\/action|\/pet\/event|\/creator\/actions|\/creator\/actions\/validate|\/creator\/actions\/apply|\/creator\/pack-manifest|\/creator\/pack-manifest\/validate|\/creator\/pack-manifest\/apply|\/creator\/assets\/inspect-frames|\/creator\/assets\/import-frames|\/creator\/assets\/pick-frames\/inspect|\/creator\/assets\/pick-frames\/import|\/creator\/pet-pack\/inspect-output|\/creator\/pet-pack\/import-output)$/)
+        const match = url.pathname.match(/^\/plugins\/bridge\/([^/]+)\/([^/]+)\/([^/]+)(\/context|\/pet\/say|\/pet\/action|\/pet\/event|\/creator\/actions|\/creator\/actions\/validate|\/creator\/actions\/apply|\/creator\/pack-manifest|\/creator\/pack-manifest\/validate|\/creator\/pack-manifest\/apply|\/creator\/assets\/inspect-frames|\/creator\/assets\/import-frames|\/creator\/assets\/pick-frames\/inspect|\/creator\/assets\/pick-frames\/import|\/creator\/pet-pack\/inspect-output|\/creator\/pet-pack\/import-output|\/creator\/model-settings|\/creator\/model-health-check|\/creator\/model-image-generate)$/)
         if (!match) {
           sendJson(response, 404, { ok: false, error: 'Not found' })
           return
@@ -928,6 +964,10 @@ const createPluginService = ({ settingsService, petService, actionService, actio
         }
         if (route === '/creator/pack-manifest') {
           sendJson(response, 200, await runtime.handlers.creatorPackManifestRead())
+          return
+        }
+        if (route === '/creator/model-settings') {
+          sendJson(response, 200, await runtime.handlers.creatorModelSettingsRead())
           return
         }
 
@@ -987,6 +1027,14 @@ const createPluginService = ({ settingsService, petService, actionService, actio
         }
         if (route === '/creator/pet-pack/import-output') {
           sendJson(response, 200, await runtime.handlers.creatorPetPackImportOutput(payload))
+          return
+        }
+        if (route === '/creator/model-health-check') {
+          sendJson(response, 200, await runtime.handlers.creatorModelHealthCheck(payload))
+          return
+        }
+        if (route === '/creator/model-image-generate') {
+          sendJson(response, 200, await runtime.handlers.creatorModelImageGenerate(payload))
           return
         }
         sendJson(response, 404, { ok: false, error: 'Not found' })
@@ -1823,7 +1871,12 @@ const createPluginService = ({ settingsService, petService, actionService, actio
             return
           }
           if (exitCode !== 0 || signal) {
-            reject(new Error(signal ? `Plugin command exited with signal ${signal}` : `Plugin command exited with code ${exitCode ?? 'unknown'}`))
+            const parsedResult = readCommandResult(stdoutText)
+            const parsedError = parsedResult && typeof parsedResult === 'object' && typeof parsedResult.error === 'string'
+              ? parsedResult.error.trim()
+              : ''
+            const message = parsedError || (signal ? `Plugin command exited with signal ${signal}` : `Plugin command exited with code ${exitCode ?? 'unknown'}`)
+            reject(new Error(message))
             return
           }
           const parsedResult = readCommandResult(stdoutText)

@@ -5,8 +5,21 @@ const os = require('node:os')
 const path = require('node:path')
 
 const { getLegacyPetAnimations, loadPetPackFromDirectory, loadLegacyPetPack } = require('../../src/main/pet-pack/loader')
+const { createMinimalWebp: createFixtureWebp } = require('../../examples/plugins/creator-studio/lib/fake-hatch-pet')
 
-const createMinimalWebp = ({ width, height }) => {
+const WRONG_SIZE_WEBP = Buffer.from(
+  'UklGRmYBAABXRUJQVlA4IFoBAAAQJQCdASqAAaABPm02mkmkIyKhIAgAgA2JaW7hd2Ee3AAAFZu14uTkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk4UAAD+/w2D/90GWcNNv//6tD/1aH/q0P27AAAAAAAAAAAAAAAAAAAAAAAA',
+  'base64'
+)
+
+const TRANSPARENT_FIXTURE_ATLAS_WEBP = Buffer.from([
+  'UklGRpgAAABXRUJQVlA4TIsAAAAv/8XTEQcQEREAUKT//ymi/6n//e9///vf//73',
+  'v//973//+9///ve///3vf//73//+97///e9///vf//73v//973//+9///ve///3',
+  'vf//73//+97///e9///vf//73v//973//+9///ve///3vf//73//+97///e9///',
+  'vf//73v//973//+9///q8CAA=='
+].join(''), 'base64')
+
+const createWebpHeader = ({ width, height }) => {
   const riffSize = 22
   const buffer = Buffer.alloc(30)
   buffer.write('RIFF', 0, 'ascii')
@@ -17,6 +30,18 @@ const createMinimalWebp = ({ width, height }) => {
   buffer.writeUInt8(0, 20)
   buffer.writeUIntLE(width - 1, 24, 3)
   buffer.writeUIntLE(height - 1, 27, 3)
+  return buffer
+}
+
+const createTruncatedVp8WebpHeader = ({ width, height }) => {
+  const buffer = Buffer.alloc(30)
+  buffer.write('RIFF', 0, 'ascii')
+  buffer.writeUInt32LE(22, 4)
+  buffer.write('WEBP', 8, 'ascii')
+  buffer.write('VP8 ', 12, 'ascii')
+  buffer.writeUInt32LE(10, 16)
+  buffer.writeUInt16LE(width, 26)
+  buffer.writeUInt16LE(height, 28)
   return buffer
 }
 
@@ -43,7 +68,7 @@ test('loads and normalizes a pet pack manifest from a directory', () => {
 
 test('loads a Codex-compatible pet manifest from a directory', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-codex-pet-'))
-  fs.writeFileSync(path.join(root, 'spritesheet.webp'), createMinimalWebp({ width: 1536, height: 1872 }))
+  fs.writeFileSync(path.join(root, 'spritesheet.webp'), createFixtureWebp())
   fs.writeFileSync(path.join(root, 'pet.json'), JSON.stringify({
     id: 'codex-cat',
     displayName: 'Codex Cat',
@@ -103,7 +128,7 @@ test('rejects Codex pet manifests with unsafe spritesheet paths', () => {
 
 test('rejects Codex pet atlases with unexpected dimensions', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-codex-pet-size-'))
-  fs.writeFileSync(path.join(root, 'spritesheet.webp'), createMinimalWebp({ width: 384, height: 416 }))
+  fs.writeFileSync(path.join(root, 'spritesheet.webp'), WRONG_SIZE_WEBP)
   fs.writeFileSync(path.join(root, 'pet.json'), JSON.stringify({
     id: 'codex-cat',
     displayName: 'Codex Cat',
@@ -113,6 +138,51 @@ test('rejects Codex pet atlases with unexpected dimensions', () => {
   assert.throws(
     () => loadPetPackFromDirectory(root),
     /Codex pet atlas must be 1536x1872/
+  )
+})
+
+test('rejects Codex pet atlases without image data', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-codex-pet-empty-webp-'))
+  fs.writeFileSync(path.join(root, 'spritesheet.webp'), createWebpHeader({ width: 1536, height: 1872 }))
+  fs.writeFileSync(path.join(root, 'pet.json'), JSON.stringify({
+    id: 'codex-cat',
+    displayName: 'Codex Cat',
+    spritesheetPath: 'spritesheet.webp'
+  }))
+
+  assert.throws(
+    () => loadPetPackFromDirectory(root),
+    /Codex pet atlas WebP image data could not be read/
+  )
+})
+
+test('rejects Codex pet atlases with truncated VP8 image data', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-codex-pet-truncated-vp8-'))
+  fs.writeFileSync(path.join(root, 'spritesheet.webp'), createTruncatedVp8WebpHeader({ width: 1536, height: 1872 }))
+  fs.writeFileSync(path.join(root, 'pet.json'), JSON.stringify({
+    id: 'codex-cat',
+    displayName: 'Codex Cat',
+    spritesheetPath: 'spritesheet.webp'
+  }))
+
+  assert.throws(
+    () => loadPetPackFromDirectory(root),
+    /Codex pet atlas WebP image data could not be read/
+  )
+})
+
+test('rejects Codex pet atlases that contain no visible pixels', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-codex-pet-transparent-'))
+  fs.writeFileSync(path.join(root, 'spritesheet.webp'), TRANSPARENT_FIXTURE_ATLAS_WEBP)
+  fs.writeFileSync(path.join(root, 'pet.json'), JSON.stringify({
+    id: 'codex-cat',
+    displayName: 'Codex Cat',
+    spritesheetPath: 'spritesheet.webp'
+  }))
+
+  assert.throws(
+    () => loadPetPackFromDirectory(root),
+    /Codex pet atlas must contain visible pixels/
   )
 })
 

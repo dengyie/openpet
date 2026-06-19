@@ -2,7 +2,9 @@
 
 Creator Studio is a hybrid OpenPet extension that demonstrates the end-to-end pet creation workflow planned for hatch-pet style generation.
 
-The first implementation uses a deterministic fixture backend. It creates a valid `codex-pet` output, moves the run through review, then imports the approved output through OpenPet's host-owned pet-pack bridge.
+The first implementation uses a deterministic fixture backend by default. It creates a valid `codex-pet` output, moves the run through review, then imports the approved output through OpenPet's host-owned pet-pack bridge.
+
+`cloud` and `local` backend choices use the same adapter boundary, but now rely on the short-lived OpenPet host model bridge. If host model settings or the bridge are unavailable, the run still fails explicitly instead of silently falling back to fixture output.
 
 Current commands:
 
@@ -12,4 +14,4 @@ Current commands:
 - `import-approved-pet`: ask OpenPet to inspect and import the approved output.
 - `export-bundle`: return the generated `.codex-pet.zip` output details.
 
-Future backend adapters can replace the fixture generator without changing the run workspace contract.
+Future backend adapters can replace the unavailable cloud/local stubs without changing the run workspace contract.

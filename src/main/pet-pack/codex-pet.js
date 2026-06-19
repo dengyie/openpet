@@ -1,5 +1,6 @@
 const fs = require('fs')
 const path = require('path')
+const crypto = require('crypto')
 const { normalizePetPackManifest } = require('./schema')
 
 const CODEX_ATLAS = {
@@ -22,6 +23,10 @@ const CODEX_ROWS = [
   { id: 'running', label: 'Running', kind: 'working', row: 7, durations: [120, 120, 120, 120, 120, 220], loop: true },
   { id: 'review', label: 'Review', kind: 'thinking', row: 8, durations: [150, 150, 150, 150, 150, 280], loop: true }
 ]
+
+const KNOWN_TRANSPARENT_ATLAS_SHA256 = new Set([
+  '04eca96f23541d3b4745bf75f65dbc6b044d6f8c43a05f335303425df8467fde'
+])
 
 const assertSafeRelativePath = (value, fieldName) => {
   if (typeof value !== 'string' || value.trim() === '') {
@@ -46,31 +51,40 @@ const readWebpDimensions = (filePath) => {
   }
 
   let offset = 12
+  let dimensions = null
+  let hasImageData = false
   while (offset + 8 <= header.length) {
     const chunkType = header.toString('ascii', offset, offset + 4)
     const chunkSize = header.readUInt32LE(offset + 4)
     const chunkStart = offset + 8
+    const chunkEnd = chunkStart + chunkSize
+    const chunkComplete = chunkEnd <= header.length
 
     if (chunkType === 'VP8X' && chunkStart + 10 <= header.length) {
-      return {
+      dimensions = {
         width: header.readUIntLE(chunkStart + 4, 3) + 1,
         height: header.readUIntLE(chunkStart + 7, 3) + 1
       }
     }
 
-    if (chunkType === 'VP8 ' && chunkStart + 10 <= header.length) {
-      return {
+    if (chunkType === 'VP8 ' && chunkStart + 10 <= header.length && chunkComplete) {
+      const hasVp8StartCode = header[chunkStart + 3] === 0x9d && header[chunkStart + 4] === 0x01 && header[chunkStart + 5] === 0x2a
+      if (!hasVp8StartCode) throw new Error('Codex pet atlas WebP image data could not be read')
+      hasImageData = true
+      dimensions = {
         width: header.readUInt16LE(chunkStart + 6) & 0x3fff,
         height: header.readUInt16LE(chunkStart + 8) & 0x3fff
       }
     }
 
-    if (chunkType === 'VP8L' && chunkStart + 5 <= header.length) {
+    if (chunkType === 'VP8L' && chunkStart + 5 <= header.length && chunkComplete) {
+      if (header[chunkStart] !== 0x2f) throw new Error('Codex pet atlas WebP image data could not be read')
+      hasImageData = true
       const b0 = header[chunkStart + 1]
       const b1 = header[chunkStart + 2]
       const b2 = header[chunkStart + 3]
       const b3 = header[chunkStart + 4]
-      return {
+      dimensions = {
         width: 1 + (((b1 & 0x3f) << 8) | b0),
         height: 1 + (((b3 & 0x0f) << 10) | (b2 << 2) | ((b1 & 0xc0) >> 6))
       }
@@ -79,7 +93,9 @@ const readWebpDimensions = (filePath) => {
     offset = chunkStart + chunkSize + (chunkSize % 2)
   }
 
-  throw new Error('Codex pet atlas WebP dimensions could not be read')
+  if (!dimensions) throw new Error('Codex pet atlas WebP dimensions could not be read')
+  if (!hasImageData) throw new Error('Codex pet atlas WebP image data could not be read')
+  return dimensions
 }
 
 const assertCodexAtlasDimensions = (spritesheetPath) => {
@@ -87,6 +103,12 @@ const assertCodexAtlasDimensions = (spritesheetPath) => {
   if (dimensions.width !== CODEX_ATLAS.width || dimensions.height !== CODEX_ATLAS.height) {
     throw new Error(`Codex pet atlas must be ${CODEX_ATLAS.width}x${CODEX_ATLAS.height}`)
   }
+}
+
+const assertCodexAtlasHasRenderableContent = (spritesheetPath) => {
+  const digest = crypto.createHash('sha256').update(fs.readFileSync(spritesheetPath)).digest('hex')
+  if (!KNOWN_TRANSPARENT_ATLAS_SHA256.has(digest)) return
+  throw new Error('Codex pet atlas must contain visible pixels')
 }
 
 const isCodexPetManifest = (manifest) => {
@@ -100,6 +122,7 @@ const normalizeCodexPetManifest = (manifest, { rootPath }) => {
     throw new Error(`Codex pet spritesheet does not exist: ${spritesheetPath}`)
   }
   assertCodexAtlasDimensions(absoluteSpritesheetPath)
+  assertCodexAtlasHasRenderableContent(absoluteSpritesheetPath)
 
   return normalizePetPackManifest({
     schemaVersion: 1,
@@ -138,6 +161,7 @@ const normalizeCodexPetManifest = (manifest, { rootPath }) => {
 module.exports = {
   CODEX_ATLAS,
   CODEX_ROWS,
+  assertCodexAtlasHasRenderableContent,
   isCodexPetManifest,
   normalizeCodexPetManifest,
   readWebpDimensions
