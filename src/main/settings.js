@@ -49,6 +49,26 @@ const defaultSettings = {
     },
     conversations: {}
   },
+  models: {
+    imageGeneration: {
+      defaultBackend: 'fixture',
+      cloud: {
+        provider: 'openai',
+        baseUrl: 'https://api.openai.com/v1',
+        model: 'gpt-image-1',
+        apiKeyRef: 'secret:model.image.openai.apiKey',
+        organization: '',
+        project: ''
+      },
+      local: {
+        endpoint: 'http://127.0.0.1:7860/generate',
+        healthUrl: 'http://127.0.0.1:7860/health',
+        model: 'local-pet-sprite',
+        timeoutMs: 120000,
+        maxConcurrentJobs: 1
+      }
+    }
+  },
   plugins: {
     enabled: {
       'official.basic-behavior': true

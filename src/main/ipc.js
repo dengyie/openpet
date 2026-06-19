@@ -510,6 +510,24 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
 
   ipcMainService.handle(IPC.AI_TEST_CONNECTION, () => aiService.testConnection())
 
+  ipcMainService.handle(IPC.IMAGE_GENERATION_GET_CONFIG, () => imageGenerationModelService.getConfig())
+
+  ipcMainService.handle(IPC.IMAGE_GENERATION_SAVE_CONFIG, (_event, config) => {
+    return imageGenerationModelService.saveConfig(config)
+  })
+
+  ipcMainService.handle(IPC.IMAGE_GENERATION_SAVE_API_KEY, (_event, apiKey) => {
+    return imageGenerationModelService.saveCloudApiKey(apiKey)
+  })
+
+  ipcMainService.handle(IPC.IMAGE_GENERATION_CLEAR_API_KEY, () => {
+    return imageGenerationModelService.clearCloudApiKey()
+  })
+
+  ipcMainService.handle(IPC.IMAGE_GENERATION_CHECK_HEALTH, (_event, payload) => {
+    return imageGenerationModelService.checkHealth(payload || {})
+  })
+
   ipcMainService.handle(IPC.AI_GET_CONVERSATION, (_event, payload) => {
     return aiService.getConversation(payload?.conversationId || payload)
   })

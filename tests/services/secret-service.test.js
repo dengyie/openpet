@@ -33,3 +33,14 @@ test('secret service persists secrets with private file permissions when possibl
     assert.equal(mode, 0o600)
   }
 })
+
+test('secret service can delete stored secrets', () => {
+  const storePath = createTempStore()
+  const service = createSecretService({ storePath })
+
+  service.setSecret({ id: 'model.image.openai.apiKey', value: 'sk-test', label: 'Image API Key' })
+  service.deleteSecret('model.image.openai.apiKey')
+
+  assert.equal(service.getSecretValue('model.image.openai.apiKey'), '')
+  assert.deepEqual(service.listSecretRefs(), [])
+})

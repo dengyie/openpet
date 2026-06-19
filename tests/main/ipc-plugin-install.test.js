@@ -269,6 +269,82 @@ test('about handlers return stable info and update check view shapes', async () 
   })
 })
 
+test('image generation handlers delegate to the model service', async () => {
+  const ipcMain = createIpcMainStub()
+  const calls = []
+
+  registerIpcHandlers({
+    ...createRequiredServices({
+      pluginInstallService: {
+        inspectPluginPackage: () => ({}),
+        clearPendingSelection: () => ({ ok: true }),
+        installPlugin: () => ({ ok: true }),
+        updatePlugin: () => ({ ok: true }),
+        uninstallPlugin: () => ({ ok: true })
+      },
+      pluginService: { listPlugins: () => [] },
+      dialogService: {
+        showOpenDialog: async () => ({ canceled: true, filePaths: [] })
+      }
+    }),
+    imageGenerationModelService: {
+      getConfig: () => {
+        calls.push(['getConfig'])
+        return { defaultBackend: 'fixture' }
+      },
+      saveConfig: (config) => {
+        calls.push(['saveConfig', config])
+        return { defaultBackend: config.defaultBackend }
+      },
+      saveCloudApiKey: (apiKey) => {
+        calls.push(['saveCloudApiKey', apiKey])
+        return { apiKeyRef: 'secret:model.image.openai.apiKey', hasApiKey: true, apiKeyPreview: '••••1234' }
+      },
+      clearCloudApiKey: () => {
+        calls.push(['clearCloudApiKey'])
+        return { apiKeyRef: 'secret:model.image.openai.apiKey', hasApiKey: false, apiKeyPreview: '' }
+      },
+      checkHealth: (payload) => {
+        calls.push(['checkHealth', payload])
+        return { ok: true, backend: payload.backend || 'fixture', code: 'fixture_ready', message: 'ok' }
+      }
+    },
+    ipcMainService: ipcMain
+  })
+
+  const config = await ipcMain.handlers.get(IPC.IMAGE_GENERATION_GET_CONFIG)()
+  const saved = await ipcMain.handlers.get(IPC.IMAGE_GENERATION_SAVE_CONFIG)(null, { defaultBackend: 'local' })
+  const savedApiKey = await ipcMain.handlers.get(IPC.IMAGE_GENERATION_SAVE_API_KEY)(null, 'sk-demo-1234')
+  const clearedApiKey = await ipcMain.handlers.get(IPC.IMAGE_GENERATION_CLEAR_API_KEY)()
+  const health = await ipcMain.handlers.get(IPC.IMAGE_GENERATION_CHECK_HEALTH)(null, { backend: 'cloud' })
+
+  assert.deepEqual(config, { defaultBackend: 'fixture' })
+  assert.deepEqual(saved, { defaultBackend: 'local' })
+  assert.deepEqual(savedApiKey, {
+    apiKeyRef: 'secret:model.image.openai.apiKey',
+    hasApiKey: true,
+    apiKeyPreview: '••••1234'
+  })
+  assert.deepEqual(clearedApiKey, {
+    apiKeyRef: 'secret:model.image.openai.apiKey',
+    hasApiKey: false,
+    apiKeyPreview: ''
+  })
+  assert.deepEqual(health, {
+    ok: true,
+    backend: 'cloud',
+    code: 'fixture_ready',
+    message: 'ok'
+  })
+  assert.deepEqual(calls, [
+    ['getConfig'],
+    ['saveConfig', { defaultBackend: 'local' }],
+    ['saveCloudApiKey', 'sk-demo-1234'],
+    ['clearCloudApiKey'],
+    ['checkHealth', { backend: 'cloud' }]
+  ])
+})
+
 test('action mutation handlers return contract-shaped results and refreshed animations', async () => {
   const ipcMain = createIpcMainStub()
   const animations = {

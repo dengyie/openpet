@@ -1648,6 +1648,80 @@ export interface AiConnectionTestResult {
   reply: string
 }
 
+export interface ImageGenerationCloudConfigViewState {
+  provider: string
+  baseUrl: string
+  model: string
+  apiKeyRef: string
+  organization: string
+  project: string
+  hasApiKey: boolean
+  apiKeyPreview: string
+  apiKeyLabel: string
+}
+
+export interface ImageGenerationLocalConfigViewState {
+  endpoint: string
+  healthUrl: string
+  model: string
+  timeoutMs: number
+  maxConcurrentJobs: number
+}
+
+export interface ImageGenerationConfigViewState {
+  defaultBackend: 'fixture' | 'cloud' | 'local'
+  cloud: ImageGenerationCloudConfigViewState
+  local: ImageGenerationLocalConfigViewState
+}
+
+export interface ImageGenerationSaveApiKeyResult {
+  apiKeyRef: string
+  hasApiKey: boolean
+  apiKeyPreview: string
+}
+
+export interface ImageGenerationHealthCheckResult {
+  ok: boolean
+  backend: 'fixture' | 'cloud' | 'local'
+  code: string
+  message: string
+}
+
+export interface ImageGenerationHealthCheckRequest {
+  backend?: 'fixture' | 'cloud' | 'local'
+}
+
+export interface ImageGenerationOutputRef {
+  dataRelativePath: string
+  mimeType: string
+  sha256: string
+}
+
+export interface ImageGenerationRequest {
+  backend?: 'fixture' | 'cloud' | 'local'
+  prompt: string
+  output: {
+    dataDir?: string
+    dataRelativeDir: string
+  }
+  constraints: {
+    width: number
+    height: number
+    transparent: boolean
+  }
+}
+
+export interface ImageGenerationResult {
+  ok: boolean
+  backend: 'fixture' | 'cloud' | 'local'
+  model: string
+  generatedAt?: string
+  outputs: ImageGenerationOutputRef[]
+  usage?: {
+    estimatedCostUsd?: number
+  }
+}
+
 export interface AiChatRequest {
   conversationId: string
   message: string
@@ -2082,6 +2156,11 @@ export interface ControlCenterApi {
   saveAiConfig: (config: Partial<AiConfigViewState>) => Promise<AiConfigViewState>
   saveAiApiKey: (apiKey: string) => Promise<AiSaveApiKeyResult>
   testAiConnection: () => Promise<AiConnectionTestResult>
+  getImageGenerationConfig: () => Promise<ImageGenerationConfigViewState>
+  saveImageGenerationConfig: (config: Partial<ImageGenerationConfigViewState>) => Promise<ImageGenerationConfigViewState>
+  saveImageGenerationApiKey: (apiKey: string) => Promise<ImageGenerationSaveApiKeyResult>
+  clearImageGenerationApiKey: () => Promise<ImageGenerationSaveApiKeyResult>
+  checkImageGenerationHealth: (payload?: ImageGenerationHealthCheckRequest) => Promise<ImageGenerationHealthCheckResult>
   getAiConversation: (conversationId: string) => Promise<ChatMessage[]>
   chat: (payload: AiChatRequest) => Promise<AiChatResponse>
   getAiBehavior: () => Promise<AiBehaviorConfig>
