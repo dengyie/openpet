@@ -76,7 +76,7 @@ const clampNearPet = ({ candidate, petBounds, workArea, menuSize }) => {
     )
     return {
       x: Math.round(clamp(candidate.x, minX, Math.max(minX, maxX))),
-      y: Math.round(Math.max(minY, petBounds.y + relativeY))
+      y: Math.round(clamp(petBounds.y + relativeY, minY, Math.max(minY, maxY)))
     }
   }
 
