@@ -7,30 +7,22 @@ const sharp = require('sharp')
 const SUPPORTED_CURSOR_EXTENSIONS = new Set(['.png', '.webp', '.cur'])
 const BROWSER_SAFE_CURSOR_SIZE = 64
 
-const createDefaultCursorSettings = () => ({
-  enabled: false,
-  assetPath: '',
-  assetUrl: '',
-  fileName: ''
-})
+const createDefaultCursorSettings = () => createDefaultRuntimeCursor()
 
-const normalizeCustomCursor = (cursor) => {
-  if (!cursor || typeof cursor !== 'object' || Array.isArray(cursor)) return createDefaultCursorSettings()
-  const assetPath = typeof cursor.assetPath === 'string' ? cursor.assetPath : ''
-  const assetUrl = typeof cursor.assetUrl === 'string' ? cursor.assetUrl : ''
-  const fileName = typeof cursor.fileName === 'string' ? cursor.fileName : ''
-  return {
-    enabled: Boolean(cursor.enabled && assetPath && assetUrl),
-    assetPath,
-    assetUrl,
-    fileName
-  }
-}
+const normalizeCustomCursor = (cursor) => normalizeRuntimeCursor(cursor)
 
 const isBitmapCursor = (filePath) => ['.png', '.webp'].includes(path.extname(filePath || '').toLowerCase())
 
 const createCursorAssetService = ({ cursorDir }) => {
   if (!cursorDir) throw new Error('cursorDir is required')
+  const managedRoot = path.resolve(cursorDir)
+
+  const isManagedAssetPath = (assetPath) => {
+    if (typeof assetPath !== 'string' || !assetPath) return false
+    const resolvedPath = path.resolve(assetPath)
+    const relativePath = path.relative(managedRoot, resolvedPath)
+    return relativePath && !relativePath.startsWith('..') && !path.isAbsolute(relativePath)
+  }
 
   const writeBrowserSafeBitmap = async ({ sourceBuffer, hash, originalFileName }) => {
     fs.mkdirSync(cursorDir, { recursive: true })
@@ -50,10 +42,11 @@ const createCursorAssetService = ({ cursorDir }) => {
   const importCursor = async (sourcePath) => {
     const ext = path.extname(sourcePath || '').toLowerCase()
     if (!SUPPORTED_CURSOR_EXTENSIONS.has(ext)) {
-      throw new Error('Cursor image must be a .png, .webp, or .cur file')
+      throw new Error('Cursor image must be a .png or .webp file')
     }
     const stat = fs.statSync(sourcePath)
     if (!stat.isFile()) throw new Error('Cursor source must be a file')
+    if (stat.size > CUSTOM_CURSOR_MAX_BYTES) throw new Error('Cursor image must be 500KB or smaller')
 
     const sourceBuffer = fs.readFileSync(sourcePath)
     const hash = crypto.createHash('sha256').update(sourceBuffer).digest('hex').slice(0, 16)

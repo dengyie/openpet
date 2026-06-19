@@ -40,6 +40,11 @@ const createPetRendererSettings = (settings = {}) => ({
 const mergePetSettingsViewIntoHostSettings = (currentSettings = {}, nextSettings = {}) => {
   const currentHome = currentSettings.petBehavior?.home || {}
   const nextHome = nextSettings.home || {}
+  const cursorState = normalizeCursorSettingsState({
+    selectedCursorId: nextSettings.selectedCursorId ?? currentSettings.selectedCursorId,
+    customCursors: nextSettings.customCursors ?? currentSettings.customCursors,
+    customCursor: nextSettings.customCursor ?? currentSettings.customCursor
+  })
 
   return {
     ...currentSettings,
@@ -48,6 +53,9 @@ const mergePetSettingsViewIntoHostSettings = (currentSettings = {}, nextSettings
     walkDuration: Number(nextSettings.walkDuration ?? currentSettings.walkDuration ?? 15000),
     bubbleDuration: Number(nextSettings.bubbleDuration ?? currentSettings.bubbleDuration ?? 1300),
     autoStart: Boolean(nextSettings.autoStart ?? currentSettings.autoStart),
+    selectedCursorId: cursorState.selectedCursorId,
+    customCursors: cursorState.customCursors,
+    customCursor: cursorState.customCursor,
     petBehavior: {
       ...(currentSettings.petBehavior || {}),
       grounded: Boolean(nextSettings.grounded),
@@ -115,11 +123,17 @@ const executeBehaviorDecision = (petService, decision) => {
   return decision
 }
 
+const collectCustomCursorAssetPaths = (cursors = []) => (
+  (Array.isArray(cursors) ? cursors : [])
+    .map((cursor) => (typeof cursor?.assetPath === 'string' ? cursor.assetPath : ''))
+    .filter(Boolean)
+)
+
 /**
  * 注册所有 IPC 处理器。接收依赖注入对象，各 handler 只通过注入的函数访问外部能力。
  */
 const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiService, behaviorOrchestratorService, pluginService, pluginInstallService, pluginGithubImportService, catalogService, localHttpService, aboutService, actionImportService, cursorAssetService, appLogService, applyWindowScale, applyPetViewport = () => {},
-  clampToWorkArea, getMovementState, createSettingsWindow, petMovementPolicy, browserWindowService = BrowserWindow, dialogService = dialog, ipcMainService = ipcMain }) => {
+  clampToWorkArea, getMovementState, createSettingsWindow, petMovementPolicy, browserWindowService = BrowserWindow, dialogService = dialog, ipcMainService = ipcMain, menuService = Menu, screenService = screen }) => {
   let pendingActionFrameSelection = null
 
   const createSelectionId = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`
@@ -331,7 +345,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
       const selected = await showOpenDialogForEvent(event, {
         title: '选择自定义鼠标指针图片',
         properties: ['openFile'],
-        filters: [{ name: 'Cursor Images', extensions: ['png', 'webp', 'cur'] }]
+        filters: [{ name: 'Cursor Images', extensions: ['png', 'webp'] }]
       })
       if (selected.canceled || !selected.filePaths[0]) {
         recordAppLog({
@@ -470,10 +484,11 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
   // 设置面板点击"保存"：持久化并通知宠物窗口应用变更
   ipcMainService.handle(IPC.SETTINGS_SAVE, (_event, settings) => {
     const petWindow = getPetWindow()
+    const previousSettings = petService.getSettings()
     const nextSettings = mergePetSettingsViewIntoHostSettings(petService.getSettings(), settings)
     if (petMovementPolicy && petWindow && !petWindow.isDestroyed()) {
       const behavior = petMovementPolicy.normalizePetBehaviorSettings(nextSettings.petBehavior)
-      const currentBehavior = petMovementPolicy.normalizePetBehaviorSettings(petService.getSettings().petBehavior)
+      const currentBehavior = petMovementPolicy.normalizePetBehaviorSettings(previousSettings.petBehavior)
       const needsInitialHomeAnchor = behavior.home.enabled && !behavior.home.anchor
       if (needsInitialHomeAnchor || (!currentBehavior.home.enabled && behavior.home.enabled)) {
         behavior.home.anchor = petMovementPolicy.createHomeAnchorFromWindow({ windowBounds: petWindow.getBounds() })
@@ -482,6 +497,10 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     }
 
     const savedSettings = petService.saveSettings(nextSettings)
+    const previousAssetPaths = new Set(collectCustomCursorAssetPaths(previousSettings.customCursors))
+    const nextAssetPaths = new Set(collectCustomCursorAssetPaths(savedSettings.customCursors))
+    const orphanedAssetPaths = Array.from(previousAssetPaths).filter((assetPath) => !nextAssetPaths.has(assetPath))
+    if (orphanedAssetPaths.length > 0) cursorAssetService?.deleteAssets?.(orphanedAssetPaths)
     const rendererSettings = createPetRendererSettings(savedSettings)
     sendToPetWindow(getPetWindow, IPC.SETTINGS_CHANGED, rendererSettings)
     applyWindowScale(getPetWindow(), savedSettings.scale)
