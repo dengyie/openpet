@@ -80,10 +80,8 @@ const state = {
 }
 state.scale = PET_BASE_SCALE
 
-const normalizePetScale = (scale) => Math.max((Number(scale) || 1) * PET_BASE_SCALE, Number.EPSILON)
-
 const roundNumber = (value) => Math.round((Number(value) || 0) * 100) / 100
-
+const normalizePetScale = (scale) => Math.max((Number(scale) || 1) * PET_BASE_SCALE, Number.EPSILON)
 const logPetEvent = (event, details = {}, { level = 'debug', actor = 'system', message = event } = {}) => {
   window.petAPI.recordAppLog?.({
     level,
@@ -376,6 +374,28 @@ const updateMousePassthroughFromPoint = (event) => {
   })
 }
 
+const clearPointerHoverState = (event = {}) => {
+  state.lastPointerPoint = null
+  hideCursorOverlay()
+  setNativeCursor('')
+  setMousePassthrough(false)
+  maybeLogMouseDiagnostic({
+    clientX: event.clientX ?? -1,
+    clientY: event.clientY ?? -1,
+    screenX: event.screenX ?? -1,
+    screenY: event.screenY ?? -1
+  }, {
+    insideFrame: false,
+    insideCursorRegion: false,
+    passthrough: false,
+    cursorApplied: false,
+    cursorOverlayVisible: false,
+    nativeCursor: '',
+    customCursorEnabled: Boolean(state.customCursor.enabled),
+    dragging: Boolean(state.drag),
+    menuOpen: menu.classList.contains('open')
+  })
+}
 /**
  * 切换到指定动作，启动帧播放定时器。
  * — 动作无 sprite 时静默返回（防御性编程）。
@@ -673,7 +693,7 @@ const getMenuViewport = () => {
 
 const applyMenuViewport = () => {
   const viewport = getMenuViewport()
-  if (!viewport) return
+  if (!viewport) return null
   const windowSize = getScaledViewportSize(viewport)
   applyCatPositionForWindowWidth(state.currentLayout, windowSize.width)
   const menuRect = menu.getBoundingClientRect()
@@ -806,10 +826,11 @@ pet.addEventListener('pointerdown', onPointerDown)
 pet.addEventListener('pointermove', updateMousePassthroughFromPoint)
 pet.addEventListener('pointermove', onPointerMove)
 pet.addEventListener('pointerup', onPointerUp)
+pet.addEventListener('pointerleave', clearPointerHoverState)
 pet.addEventListener('dblclick', toggleWalk)
 pet.addEventListener('contextmenu', (e) => { e.preventDefault(); showMenu() })
 menu.addEventListener('click', onMenuClick)
-window.addEventListener('blur', hideMenu)  // 窗口失焦时自动关闭菜单
+window.addEventListener('blur', () => { hideMenu(); clearPointerHoverState() })  // 窗口失焦时自动关闭菜单并清理 hover 态
 
 /**
  * 启动流程：

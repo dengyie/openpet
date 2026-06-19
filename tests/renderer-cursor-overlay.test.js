@@ -144,3 +144,18 @@ test('pet remains clickable when the optional hitbox helper is unavailable', asy
   assert.equal(passthroughCalls.some((entry) => entry.passthrough), false)
   assert.equal(logs.at(-1).details.passthrough, false)
 })
+
+test('custom cursor overlay clears when the pointer leaves the pet surface', async () => {
+  const { callbacks, elements } = await createRendererHarness({ insideFrame: true })
+
+  callbacks.settings({ customCursor: { enabled: true, assetUrl: 'file:///cursor.png', assetPath: '/cursor.png', fileName: 'cursor.png' } })
+  dispatch(elements.pet, 'pointermove', { clientX: 24.3, clientY: 88.6, screenX: 1024.3, screenY: 768.6 })
+
+  assert.equal(elements['custom-cursor-overlay'].classList.contains('visible'), true)
+  assert.equal(elements.pet.style.cursor, 'none')
+
+  dispatch(elements.pet, 'pointerleave', { clientX: 301, clientY: 301, screenX: 1301, screenY: 901 })
+
+  assert.equal(elements['custom-cursor-overlay'].classList.contains('visible'), false)
+  assert.equal(elements.pet.style.cursor, '')
+})
