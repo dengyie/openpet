@@ -67,6 +67,12 @@ test('creator studio run store creates and advances durable run state', () => {
 
   assert.equal(run.status, 'draft')
   assert.equal(readRun({ dataDir, runId: run.runId }).input.petName, 'Sprout Cat')
+  assert.deepEqual(run.backendStatus, {
+    backend: 'fixture',
+    state: 'idle',
+    message: '',
+    updatedAt: '2026-06-19T00:00:00.000Z'
+  })
   assert.equal(updated.status, 'prepared')
   assert.equal(updated.currentStep, 'prepare')
 })
@@ -99,9 +105,42 @@ test('creator studio run store keeps same-name same-day runs separate', () => {
   assert.equal(fs.readFileSync(path.join(dataDir, 'runs', second.runId, 'inputs', 'prompt.md'), 'utf-8'), 'Second concept\n')
 })
 
-test('creator studio fake hatch pet creates valid codex output and bundle', () => {
-  const { createRun } = require('../../examples/plugins/creator-studio/lib/run-store')
-  const { generateFixturePetOutput } = require('../../examples/plugins/creator-studio/lib/fake-hatch-pet')
+test('creator studio run store lists runs and persists append-only logs', () => {
+  const { appendRunLog, createRun, listRuns, readRunLogs } = require('../../examples/plugins/creator-studio/lib/run-store')
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-run-list-'))
+
+  const first = createRun({
+    dataDir,
+    input: { petName: 'First Cat', prompt: 'First prompt', backend: 'fixture' },
+    now: () => '2026-06-19T00:00:00.000Z'
+  })
+  const second = createRun({
+    dataDir,
+    input: { petName: 'Second Cat', prompt: 'Second prompt', backend: 'fixture' },
+    now: () => '2026-06-19T00:02:00.000Z'
+  })
+  appendRunLog({
+    dataDir,
+    runId: second.runId,
+    level: 'info',
+    event: 'generate.start',
+    message: 'Generation started',
+    now: () => '2026-06-19T00:03:00.000Z'
+  })
+
+  assert.deepEqual(listRuns({ dataDir }).map((run) => run.runId), [second.runId, first.runId])
+  assert.deepEqual(readRunLogs({ dataDir, runId: second.runId }), [{
+    timestamp: '2026-06-19T00:03:00.000Z',
+    level: 'info',
+    event: 'generate.start',
+    message: 'Generation started',
+    data: {}
+  }])
+})
+
+test('creator studio backend runner generates fixture output through the selected adapter', () => {
+  const { createRun, readRunLogs } = require('../../examples/plugins/creator-studio/lib/run-store')
+  const { runGenerationStep } = require('../../examples/plugins/creator-studio/lib/backend-runner')
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-output-'))
   const run = createRun({
     dataDir,
@@ -109,7 +148,7 @@ test('creator studio fake hatch pet creates valid codex output and bundle', () =
     now: () => '2026-06-19T00:00:00.000Z'
   })
 
-  const output = generateFixturePetOutput({ dataDir, runId: run.runId })
+  const output = runGenerationStep({ dataDir, runId: run.runId })
   const manifest = JSON.parse(fs.readFileSync(path.join(output.outputDir, 'pet.json'), 'utf-8'))
   const bundleHash = crypto.createHash('sha256').update(fs.readFileSync(output.bundlePath)).digest('hex')
 
@@ -118,15 +157,48 @@ test('creator studio fake hatch pet creates valid codex output and bundle', () =
   assert.equal(fs.existsSync(path.join(output.outputDir, 'spritesheet.webp')), true)
   assert.equal(fs.existsSync(output.bundlePath), true)
   assert.equal(output.sha256, bundleHash)
+  assert.equal(output.run.backendStatus.state, 'ready')
+  assert.equal(output.run.backendStatus.backend, 'fixture')
+  assert.deepEqual(readRunLogs({ dataDir, runId: run.runId }).map((entry) => entry.event), [
+    'generate.start',
+    'generate.complete'
+  ])
 })
 
-const runCreatorCommand = ({ command, dataDir, payload = {}, env = {} }) => {
+test('creator studio backend runner records unavailable cloud backend without fixture fallback', () => {
+  const { createRun, readRun, readRunLogs } = require('../../examples/plugins/creator-studio/lib/run-store')
+  const { runGenerationStep } = require('../../examples/plugins/creator-studio/lib/backend-runner')
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-cloud-'))
+  const run = createRun({
+    dataDir,
+    input: { petName: 'Cloud Cat', prompt: 'A cloud generated cat', backend: 'cloud' },
+    now: () => '2026-06-19T00:00:00.000Z'
+  })
+
+  assert.throws(
+    () => runGenerationStep({ dataDir, runId: run.runId }),
+    /Cloud backend is not configured/
+  )
+  const failed = readRun({ dataDir, runId: run.runId })
+  assert.equal(failed.status, 'failed')
+  assert.equal(failed.currentStep, 'generate')
+  assert.equal(failed.backendStatus.backend, 'cloud')
+  assert.equal(failed.backendStatus.state, 'not_configured')
+  assert.match(failed.error, /Cloud backend is not configured/)
+  assert.equal(fs.existsSync(path.join(dataDir, 'runs', run.runId, 'outputs', 'pet.json')), false)
+  assert.deepEqual(readRunLogs({ dataDir, runId: run.runId }).map((entry) => entry.event), [
+    'generate.start',
+    'generate.failed'
+  ])
+})
+
+const runCreatorCommand = ({ command, dataDir, payload = {}, config = {}, env = {} }) => {
   const result = spawnSync(process.execPath, [path.join(pluginRoot, 'commands', `${command}.js`)], {
     input: `${JSON.stringify({
       pluginId: 'openpet.creator-studio',
       commandId: command,
       payload,
-      config: { backend: 'fixture', autoActivateAfterImport: true },
+      config: { backend: 'fixture', autoActivateAfterImport: true, ...config },
       paths: { extensionDir: pluginRoot }
     })}\n`,
     env: {
@@ -143,6 +215,32 @@ const runCreatorCommand = ({ command, dataDir, payload = {}, env = {} }) => {
     json: JSON.parse(result.stdout.trim().split(/\r?\n/).filter(Boolean).at(-1))
   }
 }
+
+test('creator studio run-step command fails unavailable local backend with persisted run state', () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-local-command-'))
+
+  const created = runCreatorCommand({
+    command: 'create-run',
+    dataDir,
+    payload: { petName: 'Local Cat', prompt: 'A local generated cat', backend: 'local' },
+    config: { backend: 'local' }
+  })
+  const generated = runCreatorCommand({
+    command: 'run-step',
+    dataDir,
+    payload: { runId: created.json.run.runId },
+    config: { backend: 'local' }
+  })
+  const run = JSON.parse(fs.readFileSync(path.join(dataDir, 'runs', created.json.run.runId, 'run.json'), 'utf-8'))
+
+  assert.equal(created.status, 0)
+  assert.equal(generated.status, 1)
+  assert.equal(generated.json.ok, false)
+  assert.match(generated.json.error, /Local backend is not configured/)
+  assert.equal(run.status, 'failed')
+  assert.equal(run.backendStatus.backend, 'local')
+  assert.equal(run.backendStatus.state, 'not_configured')
+})
 
 test('creator studio commands create run generate output approve and export', () => {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-commands-'))
@@ -185,4 +283,39 @@ test('creator studio dashboard asset exists and service script is declared', () 
   assert.equal(fs.existsSync(dashboardPath), true)
   assert.equal(fs.existsSync(servicePath), true)
   assert.match(fs.readFileSync(dashboardPath, 'utf-8'), /Creator Studio/)
+})
+
+test('creator studio service exposes run detail and logs for dashboard clients', async () => {
+  const { appendRunLog, createRun } = require('../../examples/plugins/creator-studio/lib/run-store')
+  const { createCreatorStudioServer } = require('../../examples/plugins/creator-studio/service/studio-service')
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-service-'))
+  const dashboardPath = path.join(pluginRoot, 'web', 'dashboard', 'index.html')
+  const run = createRun({
+    dataDir,
+    input: { petName: 'Service Cat', prompt: 'Visible in dashboard', backend: 'fixture' },
+    now: () => '2026-06-19T00:00:00.000Z'
+  })
+  appendRunLog({
+    dataDir,
+    runId: run.runId,
+    level: 'info',
+    event: 'run.created',
+    message: 'Run created',
+    now: () => '2026-06-19T00:01:00.000Z'
+  })
+  const server = createCreatorStudioServer({ dataDir, dashboardPath })
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const port = server.address().port
+
+  try {
+    const detail = await fetch(`http://127.0.0.1:${port}/api/runs/${run.runId}`).then((response) => response.json())
+    const logs = await fetch(`http://127.0.0.1:${port}/api/runs/${run.runId}/logs`).then((response) => response.json())
+
+    assert.equal(detail.ok, true)
+    assert.equal(detail.run.runId, run.runId)
+    assert.equal(logs.ok, true)
+    assert.deepEqual(logs.logs.map((entry) => entry.event), ['run.created'])
+  } finally {
+    await new Promise((resolve) => server.close(resolve))
+  }
 })

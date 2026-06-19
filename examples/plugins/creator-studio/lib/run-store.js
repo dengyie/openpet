@@ -21,6 +21,8 @@ const getRunDir = ({ dataDir, runId }) => {
 
 const getRunPath = ({ dataDir, runId }) => path.join(getRunDir({ dataDir, runId }), 'run.json')
 
+const getRunLogPath = ({ dataDir, runId }) => path.join(getRunDir({ dataDir, runId }), 'logs', 'events.jsonl')
+
 const writeJson = (filePath, value) => fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`)
 
 const readJson = (filePath) => JSON.parse(fs.readFileSync(filePath, 'utf-8'))
@@ -69,6 +71,12 @@ const createRun = ({ dataDir, input = {}, now = () => new Date().toISOString() }
       prompt: String(input.prompt || ''),
       backend: input.backend || 'fixture'
     },
+    backendStatus: {
+      backend: input.backend || 'fixture',
+      state: 'idle',
+      message: '',
+      updatedAt: timestamp
+    },
     artifacts: {},
     jobs: [],
     reviewStatus: 'pending',
@@ -82,6 +90,45 @@ const createRun = ({ dataDir, input = {}, now = () => new Date().toISOString() }
 }
 
 const readRun = ({ dataDir, runId }) => readJson(getRunPath({ dataDir, runId }))
+
+const listRuns = ({ dataDir }) => {
+  const runsDir = getRunsDir(dataDir)
+  if (!dataDir || !fs.existsSync(runsDir)) return []
+  return fs.readdirSync(runsDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => {
+      try {
+        return readRun({ dataDir, runId: entry.name })
+      } catch (_) {
+        return null
+      }
+    })
+    .filter(Boolean)
+    .sort((left, right) => String(right.createdAt || '').localeCompare(String(left.createdAt || '')))
+}
+
+const appendRunLog = ({ dataDir, runId, level = 'info', event, message = '', data = {}, now = () => new Date().toISOString() }) => {
+  const logPath = getRunLogPath({ dataDir, runId })
+  ensureDirectory(path.dirname(logPath))
+  const entry = {
+    timestamp: now(),
+    level: String(level || 'info'),
+    event: String(event || 'event'),
+    message: String(message || ''),
+    data: data && typeof data === 'object' && !Array.isArray(data) ? data : {}
+  }
+  fs.appendFileSync(logPath, `${JSON.stringify(entry)}\n`)
+  return entry
+}
+
+const readRunLogs = ({ dataDir, runId }) => {
+  const logPath = getRunLogPath({ dataDir, runId })
+  if (!fs.existsSync(logPath)) return []
+  return fs.readFileSync(logPath, 'utf-8')
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((line) => JSON.parse(line))
+}
 
 const writeRun = ({ dataDir, run }) => {
   writeJson(getRunPath({ dataDir, runId: run.runId }), run)
@@ -102,8 +149,11 @@ const updateRunStatus = ({ dataDir, runId, status, patch = {}, now = () => new D
 }
 
 module.exports = {
+  appendRunLog,
   createRun,
   getRunDir,
+  listRuns,
+  readRunLogs,
   readRun,
   updateRunStatus,
   writeRun
