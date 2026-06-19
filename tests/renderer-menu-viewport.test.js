@@ -36,15 +36,25 @@ const createElement = (id = '', rect = { width: 0, height: 0 }) => ({
   listeners: {},
   getBoundingClientRect: () => rect,
   setPointerCapture() {},
-  closest() { return null }
+  closest(selector) { return selector === '#menu' && id === 'menu' ? this : null }
 })
 
-const dispatch = (element, eventName, event = {}) => {
-  for (const listener of element.listeners[eventName] || []) listener(event)
+const dispatch = async (element, eventName, event = {}) => {
+  for (const listener of element.listeners[eventName] || []) await listener(event)
 }
+
+const px = (value) => Number(String(value || '').replace('px', ''))
+
+const rectsOverlap = (a, b) => (
+  a.left < b.right &&
+  a.right > b.left &&
+  a.top < b.bottom &&
+  a.bottom > b.top
+)
 
 const createRendererHarness = async () => {
   const viewportCalls = []
+  let getBoundsCalls = 0
   const callbacks = {}
   const elements = {
     pet: createElement('pet'),
@@ -90,7 +100,10 @@ const createRendererHarness = async () => {
         onPetSay: () => {},
         onPetAction: () => {},
         onAnimationsChanged: () => {},
-        getBounds: async () => ({ x: 0, y: 0, width: 58, height: 58 }),
+        getBounds: async () => {
+          getBoundsCalls += 1
+          return { x: 0, y: 0, width: 58, height: 58 }
+        },
         getMovementState: async () => ({}),
         moveBy: async () => ({}),
         setPosition: () => {},
@@ -104,7 +117,7 @@ const createRendererHarness = async () => {
   vm.runInNewContext(rendererSource, context, { filename: 'renderer.js' })
   await Promise.resolve()
   await Promise.resolve()
-  return { callbacks, elements, viewportCalls }
+  return { callbacks, elements, getBoundsCalls: () => getBoundsCalls, viewportCalls }
 }
 
 test('opening the menu expands the pet viewport enough to avoid clipping', async () => {
@@ -118,8 +131,58 @@ test('opening the menu expands the pet viewport enough to avoid clipping', async
   assert.equal(menuViewport.scale, initialViewport.scale)
   assert.equal((menuViewport.width + menuViewport.padding * 2) * menuViewport.scale >= 204, true)
   assert.equal((menuViewport.height + menuViewport.padding * 2) * menuViewport.scale >= 284, true)
-  assert.equal(elements.cat.style.left, '77px')
+  assert.equal(px(elements.cat.style.left) > px(elements.cat.style.width), true)
   assert.equal(elements.cat.style.bottom, initialViewport.padding * initialViewport.scale + 'px')
+})
+
+test('opening the menu places it away from the pet instead of covering it', async () => {
+  const { elements, viewportCalls } = await createRendererHarness()
+
+  await dispatch(elements.pet, 'contextmenu', { preventDefault() {} })
+
+  const menuViewport = viewportCalls.at(-1)
+  const windowWidth = (menuViewport.width + menuViewport.padding * 2) * menuViewport.scale
+  const windowHeight = (menuViewport.height + menuViewport.padding * 2) * menuViewport.scale
+  const menuRect = {
+    left: px(elements.menu.style.left),
+    top: px(elements.menu.style.top),
+    right: px(elements.menu.style.left) + 180,
+    bottom: px(elements.menu.style.top) + 260
+  }
+  const catRect = {
+    left: px(elements.cat.style.left),
+    top: windowHeight - px(elements.cat.style.bottom) - 50,
+    right: px(elements.cat.style.left) + 50,
+    bottom: windowHeight - px(elements.cat.style.bottom)
+  }
+
+  assert.equal(Number.isFinite(menuRect.left), true)
+  assert.equal(Number.isFinite(menuRect.top), true)
+  assert.equal(menuRect.left >= 12, true)
+  assert.equal(menuRect.top >= 12, true)
+  assert.equal(menuRect.right <= windowWidth - 12, true)
+  assert.equal(rectsOverlap(menuRect, catRect), false)
+})
+
+test('clicking outside the open menu closes it without starting a pet drag', async () => {
+  const { elements, getBoundsCalls, viewportCalls } = await createRendererHarness()
+  const initialViewport = viewportCalls.at(-1)
+
+  await dispatch(elements.pet, 'contextmenu', { preventDefault() {} })
+  await dispatch(elements.pet, 'pointerdown', {
+    button: 0,
+    target: elements.pet,
+    preventDefault() {},
+    pointerId: 1,
+    clientX: 8,
+    clientY: 8,
+    screenX: 8,
+    screenY: 8
+  })
+
+  assert.equal(elements.menu.classList.contains('open'), false)
+  assert.deepEqual(viewportCalls.at(-1), initialViewport)
+  assert.equal(getBoundsCalls(), 0)
 })
 
 test('closing the menu restores the current action viewport', async () => {

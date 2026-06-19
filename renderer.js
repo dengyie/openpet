@@ -287,7 +287,11 @@ const toggleWalk = async () => {
  */
 const onPointerDown = async (event) => {
   if (event.button !== 0 || event.target.closest('#menu')) return
-  hideMenu()
+  if (menu.classList.contains('open')) {
+    event.preventDefault?.()
+    hideMenu()
+    return
+  }
   const bounds = await window.petAPI.getBounds()
   state.drag = {
     pointerId: event.pointerId,
@@ -338,13 +342,76 @@ const renderMenu = (actions) => {
 }
 
 const MENU_EDGE_MARGIN = 12
+const MENU_PET_GAP = 12
+
+const rectsOverlap = (a, b) => (
+  a.left < b.right &&
+  a.right > b.left &&
+  a.top < b.bottom &&
+  a.bottom > b.top
+)
+
+const getCatRectForWindow = (layout, windowSize) => {
+  if (!layout?.dims) return null
+  const width = Math.max(1, Math.round(layout.dims.width * state.scale))
+  const height = Math.max(1, Math.round(layout.dims.height * state.scale))
+  const left = layout.catLeft
+  const bottom = layout.catBottom
+  return {
+    left,
+    top: windowSize.height - bottom - height,
+    right: left + width,
+    bottom: windowSize.height - bottom,
+    width,
+    height
+  }
+}
+
+const clampMenuPosition = (candidate, menuSize, windowSize) => ({
+  left: Math.min(Math.max(MENU_EDGE_MARGIN, Math.round(candidate.left)), Math.max(MENU_EDGE_MARGIN, windowSize.width - menuSize.width - MENU_EDGE_MARGIN)),
+  top: Math.min(Math.max(MENU_EDGE_MARGIN, Math.round(candidate.top)), Math.max(MENU_EDGE_MARGIN, windowSize.height - menuSize.height - MENU_EDGE_MARGIN))
+})
+
+const chooseMenuPosition = (menuSize, windowSize) => {
+  const catRect = getCatRectForWindow(state.currentLayout, windowSize)
+  if (!catRect) return { left: windowSize.width - menuSize.width - MENU_EDGE_MARGIN, top: windowSize.height - menuSize.height - MENU_EDGE_MARGIN }
+  const verticalCenterTop = catRect.top + (catRect.height - menuSize.height) / 2
+  const horizontalCenterLeft = catRect.left + (catRect.width - menuSize.width) / 2
+  const candidates = [
+    { left: catRect.right + MENU_PET_GAP, top: verticalCenterTop },
+    { left: catRect.left - menuSize.width - MENU_PET_GAP, top: verticalCenterTop },
+    { left: horizontalCenterLeft, top: catRect.top - menuSize.height - MENU_PET_GAP },
+    { left: horizontalCenterLeft, top: catRect.bottom + MENU_PET_GAP },
+    { left: windowSize.width - menuSize.width - MENU_EDGE_MARGIN, top: MENU_EDGE_MARGIN },
+    { left: MENU_EDGE_MARGIN, top: MENU_EDGE_MARGIN }
+  ]
+  for (const candidate of candidates) {
+    const position = clampMenuPosition(candidate, menuSize, windowSize)
+    const menuRect = {
+      left: position.left,
+      top: position.top,
+      right: position.left + menuSize.width,
+      bottom: position.top + menuSize.height
+    }
+    if (!rectsOverlap(menuRect, catRect)) return position
+  }
+  return clampMenuPosition(candidates[0], menuSize, windowSize)
+}
 
 const getMenuViewport = () => {
   if (!state.currentLayout?.viewport) return null
   const menuRect = menu.getBoundingClientRect()
+  const menuSize = {
+    width: Math.ceil(menuRect.width),
+    height: Math.ceil(menuRect.height)
+  }
   const currentSize = getScaledViewportSize(state.currentLayout.viewport)
-  const targetWidth = Math.max(currentSize.width, Math.ceil(menuRect.width + MENU_EDGE_MARGIN * 2))
-  const targetHeight = Math.max(currentSize.height, Math.ceil(menuRect.height + MENU_EDGE_MARGIN * 2))
+  const catSize = {
+    width: Math.max(1, Math.round(state.currentLayout.dims.width * state.scale)),
+    height: Math.max(1, Math.round(state.currentLayout.dims.height * state.scale))
+  }
+  const targetWidth = Math.max(currentSize.width, Math.ceil(catSize.width + (menuSize.width + MENU_PET_GAP + MENU_EDGE_MARGIN) * 2))
+  const targetHeight = Math.max(currentSize.height, Math.ceil(menuSize.height + MENU_EDGE_MARGIN * 2))
   const scale = Math.max(state.scale, Number.EPSILON)
   return {
     width: Math.ceil(targetWidth / scale),
@@ -359,12 +426,25 @@ const applyMenuViewport = () => {
   if (!viewport) return
   const windowSize = getScaledViewportSize(viewport)
   applyCatPositionForWindowWidth(state.currentLayout, windowSize.width)
+  const menuRect = menu.getBoundingClientRect()
+  const menuPosition = chooseMenuPosition({
+    width: Math.ceil(menuRect.width),
+    height: Math.ceil(menuRect.height)
+  }, windowSize)
+  menu.style.left = menuPosition.left + 'px'
+  menu.style.top = menuPosition.top + 'px'
+  menu.style.right = 'auto'
+  menu.style.bottom = 'auto'
   window.petAPI.setViewport?.(viewport)
   return { viewport, windowSize }
 }
 
 const restoreActionViewport = () => {
   if (!state.currentLayout?.viewport) return
+  menu.style.left = ''
+  menu.style.top = ''
+  menu.style.right = ''
+  menu.style.bottom = ''
   applyCatPositionForWindowWidth(state.currentLayout, getScaledViewportSize(state.currentLayout.viewport).width)
   window.petAPI.setViewport?.(state.currentLayout.viewport)
 }
