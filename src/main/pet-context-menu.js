@@ -142,7 +142,11 @@ const choosePetContextMenuPoint = ({ petBounds, workArea, menuSize, preferredPoi
   const screenPoint = clampCrossAxisNearPet({ candidate: chosen, petBounds, workArea, menuSize })
   return {
     placement: chosen.placement,
-    screenPoint
+    screenPoint,
+    windowPoint: {
+      x: screenPoint.x - petBounds.x,
+      y: screenPoint.y - petBounds.y
+    }
   }
 }
 

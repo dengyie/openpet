@@ -6,7 +6,7 @@
  * — 依赖通过参数注入而非直接 import，避免与 window/settings/screen 模块形成硬耦合。
  * — 修改或新增 IPC 通道时，只需改这一个文件 + shared/ipc-channels.js。
  */
-const { ipcMain, BrowserWindow, app, dialog, Menu, screen } = require('electron')
+const { ipcMain, BrowserWindow, app, dialog, screen } = require('electron')
 const { IPC } = require('../shared/ipc-channels')
 const { sanitizeDetails } = require('./services/app-log-service')
 const {
