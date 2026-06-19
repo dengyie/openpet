@@ -10,9 +10,9 @@ interface NumericOption {
   value: number
 }
 
-interface StringOption {
+interface StringOption<T extends string = string> {
   label: string
-  value: string
+  value: T
 }
 
 export const tabs: ControlCenterTab[] = [
@@ -48,4 +48,12 @@ export const homeRadiusOptions: StringOption[] = [
   { label: '小', value: 'small' },
   { label: '中', value: 'medium' },
   { label: '大', value: 'large' }
+]
+
+export const menuPositionOptions: StringOption[] = [
+  { label: '自动', value: 'auto' },
+  { label: '右侧', value: 'right' },
+  { label: '左侧', value: 'left' },
+  { label: '上方', value: 'above' },
+  { label: '下方', value: 'below' }
 ]

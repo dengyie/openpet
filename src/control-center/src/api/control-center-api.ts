@@ -569,7 +569,7 @@ const demoApi: ControlCenterApi = {
       customCursor: {
         enabled: true,
         assetPath: '/demo/cursors/demo-cursor.png',
-        assetUrl: 'file:///demo/cursors/demo-cursor.png',
+        assetUrl: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path fill="%23212529" d="M4 3l9.8 20.4 2.6-7.3 7.6 5 2-3-7.6-5 6.5-4.3z"/><path fill="%23ffffff" d="M6.2 5.8l7.7 16 2.4-6.8 7 4.6.8-1.1-7-4.6 5.8-3.8z"/></svg>',
         fileName: 'demo-cursor.png'
       }
     })

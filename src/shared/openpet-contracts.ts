@@ -9,11 +9,11 @@ export interface ControlCenterSettings {
   walkSpeed: number
   walkDuration: number
   bubbleDuration: number
+  menuPosition: 'auto' | 'right' | 'left' | 'above' | 'below'
   autoStart: boolean
   customCursor: CustomCursorSettings
   grounded: boolean
   home: ControlCenterPetHomeSettings
-  customCursor: CustomCursorSettings
 }
 
 export interface CustomCursorSettings {
@@ -34,18 +34,6 @@ export interface ControlCenterPetHomeSettings {
   enabled: boolean
   radius: PetHomeRadius
   hasAnchor: boolean
-}
-
-export interface CustomCursorSettings {
-  enabled: boolean
-  assetPath: string
-  assetUrl: string
-  fileName: string
-}
-
-export interface CursorImportResult {
-  canceled: boolean
-  cursor?: CustomCursorSettings
 }
 
 export interface AiBehaviorRule {

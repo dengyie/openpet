@@ -47,6 +47,9 @@ test.describe('Control Center smoke', () => {
     await page.getByRole('button', { name: '快' }).click()
     await expect(page.getByRole('group', { name: '散步速度' }).getByRole('button', { name: '快' })).toHaveClass(/active/)
 
+    await page.getByRole('button', { name: '上方' }).click()
+    await expect(page.getByRole('group', { name: '菜单位置' }).getByRole('button', { name: '上方' })).toHaveClass(/active/)
+
     await page.getByRole('button', { name: 'About' }).click()
     await page.getByRole('button', { name: '检查更新' }).click()
     await expect(page.locator('.readonly-row', { hasText: '更新状态' })).toContainText('Update feed is not configured.')
@@ -63,25 +66,31 @@ test.describe('Control Center smoke', () => {
       input.dispatchEvent(new Event('change', { bubbles: true }))
     })
     await page.getByRole('button', { name: '快' }).click()
+    await page.getByRole('button', { name: '左侧' }).click()
     await page.getByRole('button', { name: '保存', exact: true }).click()
 
     await expect(page.locator('.status-line')).toContainText('原始大小 135%')
     await page.getByRole('button', { name: '还原' }).click()
     await expect(scale).toHaveValue('135')
     await expect(page.getByRole('group', { name: '散步速度' }).getByRole('button', { name: '快' })).toHaveClass(/active/)
+    await expect(page.getByRole('group', { name: '菜单位置' }).getByRole('button', { name: '左侧' })).toHaveClass(/active/)
   })
 
   test('configures a custom pet hover cursor in the demo API session', async ({ page }) => {
     await page.goto('/')
 
-    await expect(page.getByText('未选择')).toBeVisible()
+    await expect(page.locator('.field-row', { hasText: '自定义鼠标指针' })).toHaveCount(1)
+    await expect(page.locator('.cursor-preview-card')).toHaveCount(1)
+    await expect(page.locator('.cursor-preview-card')).toContainText('未选择指针')
+
     await page.getByRole('button', { name: '选择图片' }).click()
-    await expect(page.locator('.field-row', { hasText: '自定义鼠标指针' })).toContainText('demo-cursor.png')
+    await expect(page.locator('.cursor-preview-card')).toContainText('demo-cursor.png')
+    await expect(page.locator('.cursor-preview-surface img')).toHaveAttribute('src', /data:image\/svg\+xml/)
     await expect(page.getByRole('switch', { name: '启用自定义鼠标指针' })).toHaveAttribute('aria-checked', 'true')
     await expect(page.locator('.status-line')).toContainText('已选择并启用鼠标指针')
 
     await page.getByRole('button', { name: '清除' }).click()
-    await expect(page.locator('.field-row', { hasText: '自定义鼠标指针' })).toContainText('未选择')
+    await expect(page.locator('.cursor-preview-card')).toContainText('未选择指针')
     await expect(page.getByRole('switch', { name: '启用自定义鼠标指针' })).toBeDisabled()
   })
 
@@ -112,27 +121,6 @@ test.describe('Control Center smoke', () => {
     await expect(home).toBeDisabled()
     await expect(home).toHaveAttribute('aria-checked', 'false')
     await expect(page.getByRole('group', { name: '活动范围' }).getByRole('button', { name: '中' })).toBeDisabled()
-  })
-
-  test('configures a custom pet hover cursor in the demo API session', async ({ page }) => {
-    await page.goto('/')
-
-    const customCursorRow = page.locator('.field-row', { hasText: '自定义鼠标指针' })
-    await expect(customCursorRow).toContainText('未选择')
-    await expect(customCursorRow.getByRole('switch', { name: '启用自定义鼠标指针' })).toBeDisabled()
-
-    await customCursorRow.getByRole('button', { name: '选择图片' }).click()
-    await expect(customCursorRow).toContainText('demo-cursor.png')
-    await expect(customCursorRow.getByRole('switch', { name: '启用自定义鼠标指针' })).toHaveAttribute('aria-checked', 'true')
-    await page.reload()
-
-    const reloadedCursorRow = page.locator('.field-row', { hasText: '自定义鼠标指针' })
-    await expect(reloadedCursorRow).toContainText('demo-cursor.png')
-    await expect(reloadedCursorRow.getByRole('switch', { name: '启用自定义鼠标指针' })).toHaveAttribute('aria-checked', 'true')
-
-    await reloadedCursorRow.getByRole('button', { name: '清除' }).click()
-    await expect(reloadedCursorRow).toContainText('未选择')
-    await expect(reloadedCursorRow.getByRole('switch', { name: '启用自定义鼠标指针' })).toBeDisabled()
   })
 
   test('persists AI config and clears API key drafts with the demo API', async ({ page }) => {

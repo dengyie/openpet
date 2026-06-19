@@ -6,9 +6,10 @@
  * — 依赖通过参数注入而非直接 import，避免与 window/settings/screen 模块形成硬耦合。
  * — 修改或新增 IPC 通道时，只需改这一个文件 + shared/ipc-channels.js。
  */
-const { ipcMain, BrowserWindow, app, dialog } = require('electron')
+const { ipcMain, BrowserWindow, app, dialog, Menu, screen } = require('electron')
 const { IPC } = require('../shared/ipc-channels')
 const { sanitizeDetails } = require('./services/app-log-service')
+const { choosePetContextMenuPoint, estimatePetContextMenuSize } = require('./pet-context-menu')
 const {
   createActionFrameImportResult,
   createActionsMutationResult,
@@ -27,14 +28,14 @@ const createPetRendererSettings = (settings = {}) => ({
   walkSpeed: settings.walkSpeed,
   walkDuration: settings.walkDuration,
   bubbleDuration: settings.bubbleDuration,
+  menuPosition: settings.menuPosition || 'auto',
   customCursor: settings.customCursor,
   grounded: Boolean(settings.petBehavior?.grounded),
   home: {
     enabled: Boolean(settings.petBehavior?.home?.enabled),
     radius: settings.petBehavior?.home?.radius || 'medium',
     hasAnchor: Boolean(settings.petBehavior?.home?.anchor)
-  },
-  customCursor: settings.customCursor
+  }
 })
 
 const mergePetSettingsViewIntoHostSettings = (currentSettings = {}, nextSettings = {}) => {
@@ -47,6 +48,7 @@ const mergePetSettingsViewIntoHostSettings = (currentSettings = {}, nextSettings
     walkSpeed: Number(nextSettings.walkSpeed ?? currentSettings.walkSpeed ?? 2),
     walkDuration: Number(nextSettings.walkDuration ?? currentSettings.walkDuration ?? 15000),
     bubbleDuration: Number(nextSettings.bubbleDuration ?? currentSettings.bubbleDuration ?? 1300),
+    menuPosition: nextSettings.menuPosition || currentSettings.menuPosition || 'auto',
     autoStart: Boolean(nextSettings.autoStart ?? currentSettings.autoStart),
     petBehavior: {
       ...(currentSettings.petBehavior || {}),
@@ -119,7 +121,7 @@ const executeBehaviorDecision = (petService, decision) => {
  * 注册所有 IPC 处理器。接收依赖注入对象，各 handler 只通过注入的函数访问外部能力。
  */
 const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiService, behaviorOrchestratorService, pluginService, pluginInstallService, pluginGithubImportService, catalogService, localHttpService, aboutService, actionImportService, cursorAssetService, appLogService, applyWindowScale, applyPetViewport = () => {},
-  clampToWorkArea, getMovementState, createSettingsWindow, petMovementPolicy, browserWindowService = BrowserWindow, dialogService = dialog, ipcMainService = ipcMain }) => {
+  clampToWorkArea, getMovementState, createSettingsWindow, petMovementPolicy, browserWindowService = BrowserWindow, dialogService = dialog, ipcMainService = ipcMain, menuService = Menu, screenService = screen }) => {
   let pendingActionFrameSelection = null
 
   const createSelectionId = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`
@@ -199,18 +201,6 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     win.setPosition(next.x, next.y)
   })
 
-  ipcMainService.on(IPC.PET_SET_MOUSE_PASSTHROUGH, (event, passthrough) => {
-    const win = browserWindowService.fromWebContents(event.sender)
-    if (!win || typeof win.setIgnoreMouseEvents !== 'function') return
-    if (passthrough) win.setIgnoreMouseEvents(true, { forward: true })
-    else win.setIgnoreMouseEvents(false)
-  })
-
-  ipcMainService.on(IPC.PET_RECORD_APP_LOG, (_event, entry) => {
-    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return
-    recordAppLog(entry)
-  })
-
   ipcMainService.on(IPC.PET_DRAG_ENDED, (event) => {
     if (!petMovementPolicy) return
     const win = browserWindowService.fromWebContents(event.sender)
@@ -269,6 +259,44 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
 
   // 右键菜单"退出"
   ipcMainService.on(IPC.PET_QUIT, () => app.quit())
+
+  ipcMainService.handle(IPC.PET_SHOW_CONTEXT_MENU, (event, point = {}) => {
+    const win = browserWindowService.fromWebContents(event.sender)
+    if (!win || win.isDestroyed()) return null
+    const actions = petService.getAnimations()?.actions || []
+    const bounds = win.getBounds()
+    const { workArea } = screenService.getDisplayMatching(bounds)
+    const menuSize = estimatePetContextMenuSize(actions)
+    const settings = petService.getSettings?.() || {}
+    const placement = choosePetContextMenuPoint({
+      petBounds: bounds,
+      workArea,
+      menuSize,
+      menuPosition: settings.menuPosition,
+      preferredPoint: {
+        x: Number(point.x),
+        y: Number(point.y)
+      }
+    })
+    const sendMenuCommand = (payload) => sendToPetWindow(() => win, IPC.PET_MENU_COMMAND, payload)
+    const template = [
+      ...actions.map((action) => ({
+        label: action.label || action.id,
+        click: () => sendMenuCommand({ command: 'action', actionId: action.id })
+      })),
+      { type: 'separator' },
+      { label: '散步', click: () => sendMenuCommand({ command: 'walk' }) },
+      { label: '设置', click: () => createSettingsWindow(win) },
+      { type: 'separator' },
+      { label: '退出', click: () => app.quit() }
+    ]
+    menuService.buildFromTemplate(template).popup({
+      window: win,
+      x: placement.popupPoint.x,
+      y: placement.popupPoint.y
+    })
+    return placement
+  })
 
   // 右键菜单"设置"：打开设置面板
   ipcMainService.on(IPC.SETTINGS_OPEN, () => {

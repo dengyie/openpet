@@ -16,7 +16,6 @@
 const pet = document.getElementById('pet')       // 主容器，承载所有指针事件
 const catEl = document.getElementById('cat')     // 小猫元素，精灵图渲染目标
 const bubble = document.getElementById('bubble') // 头顶气泡
-const menu = document.getElementById('menu')     // 右键菜单容器
 const cursorOverlay = document.getElementById('custom-cursor-overlay') || {
   style: {},
   classList: { add() {}, remove() {}, contains() { return false } },
@@ -201,8 +200,7 @@ const applyActionLayout = (animation, dims) => {
   const viewport = getActionViewport(animation, dims)
   state.currentLayout = { viewport, dims, catLeft: 0, catBottom: 0 }
   applyCatPositionForWindowWidth(state.currentLayout, getScaledViewportSize(viewport).width)
-  if (menu.classList.contains('open')) applyMenuViewport()
-  else window.petAPI.setViewport?.(viewport)
+  window.petAPI.setViewport?.(viewport)
 }
 
 const applySpriteGeometry = (animation, dims) => {
@@ -268,7 +266,7 @@ const setMousePassthrough = (passthrough) => {
 }
 
 const isPointInsideCurrentFrame = (clientX, clientY) => {
-  if (state.drag || menu.classList.contains('open')) return true
+  if (state.drag) return true
   const animation = state.animations[state.action]
   const layout = state.currentLayout
   if (!animation || !layout) return true
@@ -284,7 +282,7 @@ const isPointInsideCurrentFrame = (clientX, clientY) => {
 }
 
 const isPointInsideCursorRegion = (clientX, clientY) => {
-  if (state.drag || menu.classList.contains('open')) return true
+  if (state.drag) return true
   const hitbox = petHitbox.getWindowHitbox({
     windowWidth: window.innerWidth,
     windowHeight: window.innerHeight
@@ -322,7 +320,7 @@ const applyPetCursorStyle = (insideFrame, point = state.lastPointerPoint) => {
   const context = {
     insideFrame,
     dragging: Boolean(state.drag),
-    menuOpen: menu.classList.contains('open')
+    menuOpen: false
   }
   const overlayState = cursorStyle.resolvePetCursorOverlayState(state.customCursor, context)
   const fallbackCursor = cursorStyle.resolvePetCursorStyle(state.customCursor, context)
@@ -351,7 +349,7 @@ const refreshMouseStateFromLastPoint = () => {
     nativeCursor: state.nativeCursor,
     customCursorEnabled: Boolean(state.customCursor.enabled),
     dragging: Boolean(state.drag),
-    menuOpen: menu.classList.contains('open')
+    menuOpen: false
   })
 }
 
@@ -370,7 +368,7 @@ const updateMousePassthroughFromPoint = (event) => {
     nativeCursor: state.nativeCursor,
     customCursorEnabled: Boolean(state.customCursor.enabled),
     dragging: Boolean(state.drag),
-    menuOpen: menu.classList.contains('open')
+    menuOpen: false
   })
 }
 
@@ -393,7 +391,7 @@ const clearPointerHoverState = (event = {}) => {
     nativeCursor: '',
     customCursorEnabled: Boolean(state.customCursor.enabled),
     dragging: Boolean(state.drag),
-    menuOpen: menu.classList.contains('open')
+    menuOpen: false
   })
 }
 /**
@@ -524,15 +522,10 @@ const toggleWalk = async () => {
 
 /**
  * pointerdown：记录鼠标相对窗口偏移，进入拖拽状态。
- * 忽略右键（button !== 0）和菜单区域点击。
+ * 忽略右键（button !== 0）。
  */
 const onPointerDown = async (event) => {
-  if (event.button !== 0 || event.target.closest('#menu')) return
-  if (menu.classList.contains('open')) {
-    event.preventDefault?.()
-    hideMenu()
-    return
-  }
+  if (event.button !== 0) return
   const bounds = await window.petAPI.getBounds()
   const insideFrame = isPointInsideCurrentFrame(event.clientX, event.clientY)
   const insideCursorRegion = isPointInsideCursorRegion(event.clientX, event.clientY)
@@ -592,178 +585,32 @@ const onPointerUp = (event) => {
 }
 
 // ═══════════════════════════════════════════
-// 6. 右键菜单 — 动态生成 + 点击分发
+// 6. 右键菜单 — 主进程原生菜单 + 命令分发
 // ═══════════════════════════════════════════
-
-/**
- * 根据动作列表构建菜单 DOM：
- *   动作按钮 … | 分隔线 | 散步 设置 | 分隔线 | 退出
- */
-const renderMenu = (actions) => {
-  menu.textContent = ''
-  actions.forEach((a) => {
-    const b = document.createElement('button')
-    b.type = 'button'; b.dataset.action = a.id; b.textContent = a.label
-    menu.appendChild(b)
-  })
-  const mkDiv = () => { const d = document.createElement('div'); d.className = 'divider'; menu.appendChild(d) }
-  const mkBtn = (label, action) => { const b = document.createElement('button'); b.type = 'button'; b.dataset.action = action; b.textContent = label; menu.appendChild(b) }
-  mkDiv(); mkBtn('散步', 'walk'); mkBtn('设置', 'settings'); mkDiv(); mkBtn('退出', 'quit')
-}
-
-const MENU_EDGE_MARGIN = 12
-const MENU_PET_GAP = 12
-
-const rectsOverlap = (a, b) => (
-  a.left < b.right &&
-  a.right > b.left &&
-  a.top < b.bottom &&
-  a.bottom > b.top
-)
-
-const getCatRectForWindow = (layout, windowSize) => {
-  if (!layout?.dims) return null
-  const width = Math.max(1, Math.round(layout.dims.width * state.scale))
-  const height = Math.max(1, Math.round(layout.dims.height * state.scale))
-  const left = layout.catLeft
-  const bottom = layout.catBottom
-  return {
-    left,
-    top: windowSize.height - bottom - height,
-    right: left + width,
-    bottom: windowSize.height - bottom,
-    width,
-    height
-  }
-}
-
-const clampMenuPosition = (candidate, menuSize, windowSize) => ({
-  left: Math.min(Math.max(MENU_EDGE_MARGIN, Math.round(candidate.left)), Math.max(MENU_EDGE_MARGIN, windowSize.width - menuSize.width - MENU_EDGE_MARGIN)),
-  top: Math.min(Math.max(MENU_EDGE_MARGIN, Math.round(candidate.top)), Math.max(MENU_EDGE_MARGIN, windowSize.height - menuSize.height - MENU_EDGE_MARGIN))
-})
-
-const chooseMenuPosition = (menuSize, windowSize) => {
-  const catRect = getCatRectForWindow(state.currentLayout, windowSize)
-  if (!catRect) return { left: windowSize.width - menuSize.width - MENU_EDGE_MARGIN, top: windowSize.height - menuSize.height - MENU_EDGE_MARGIN }
-  const verticalCenterTop = catRect.top + (catRect.height - menuSize.height) / 2
-  const horizontalCenterLeft = catRect.left + (catRect.width - menuSize.width) / 2
-  const candidates = [
-    { left: catRect.right + MENU_PET_GAP, top: verticalCenterTop },
-    { left: catRect.left - menuSize.width - MENU_PET_GAP, top: verticalCenterTop },
-    { left: horizontalCenterLeft, top: catRect.top - menuSize.height - MENU_PET_GAP },
-    { left: horizontalCenterLeft, top: catRect.bottom + MENU_PET_GAP },
-    { left: windowSize.width - menuSize.width - MENU_EDGE_MARGIN, top: MENU_EDGE_MARGIN },
-    { left: MENU_EDGE_MARGIN, top: MENU_EDGE_MARGIN }
-  ]
-  for (const candidate of candidates) {
-    const position = clampMenuPosition(candidate, menuSize, windowSize)
-    const menuRect = {
-      left: position.left,
-      top: position.top,
-      right: position.left + menuSize.width,
-      bottom: position.top + menuSize.height
-    }
-    if (!rectsOverlap(menuRect, catRect)) return position
-  }
-  return clampMenuPosition(candidates[0], menuSize, windowSize)
-}
-
-const getMenuViewport = () => {
-  if (!state.currentLayout?.viewport) return null
-  const menuRect = menu.getBoundingClientRect()
-  const menuSize = {
-    width: Math.ceil(menuRect.width),
-    height: Math.ceil(menuRect.height)
-  }
-  const currentSize = getScaledViewportSize(state.currentLayout.viewport)
-  const catSize = {
-    width: Math.max(1, Math.round(state.currentLayout.dims.width * state.scale)),
-    height: Math.max(1, Math.round(state.currentLayout.dims.height * state.scale))
-  }
-  const targetWidth = Math.max(currentSize.width, Math.ceil(catSize.width + (menuSize.width + MENU_PET_GAP + MENU_EDGE_MARGIN) * 2))
-  const targetHeight = Math.max(currentSize.height, Math.ceil(menuSize.height + MENU_EDGE_MARGIN * 2))
-  const scale = Math.max(state.scale, Number.EPSILON)
-  return {
-    width: Math.ceil(targetWidth / scale),
-    height: Math.ceil(targetHeight / scale),
-    padding: 0,
-    scale
-  }
-}
-
-const applyMenuViewport = () => {
-  const viewport = getMenuViewport()
-  if (!viewport) return null
-  const windowSize = getScaledViewportSize(viewport)
-  applyCatPositionForWindowWidth(state.currentLayout, windowSize.width)
-  const menuRect = menu.getBoundingClientRect()
-  const menuPosition = chooseMenuPosition({
-    width: Math.ceil(menuRect.width),
-    height: Math.ceil(menuRect.height)
-  }, windowSize)
-  menu.style.left = menuPosition.left + 'px'
-  menu.style.top = menuPosition.top + 'px'
-  menu.style.right = 'auto'
-  menu.style.bottom = 'auto'
-  window.petAPI.setViewport?.(viewport)
-  return { viewport, windowSize }
-}
-
-const restoreActionViewport = () => {
-  if (!state.currentLayout?.viewport) return
-  menu.style.left = ''
-  menu.style.top = ''
-  menu.style.right = ''
-  menu.style.bottom = ''
-  applyCatPositionForWindowWidth(state.currentLayout, getScaledViewportSize(state.currentLayout.viewport).width)
-  window.petAPI.setViewport?.(state.currentLayout.viewport)
-}
 
 const applyAnimationsConfig = ({ actions, defaultAction, clickAction }) => {
   state.defaultAction = defaultAction
   state.clickAction = clickAction
   state.animations = Object.fromEntries(actions.map((a) => [a.id, a]))
-  renderMenu(actions)
   if (state.defaultAction) setAction(state.defaultAction)
 }
 
-const hideMenu = () => {
-  const wasOpen = menu.classList.contains('open')
-  menu.classList.remove('open')
-  if (wasOpen) restoreActionViewport()
-  refreshMouseStateFromLastPoint()
-  if (wasOpen) {
-    logPetEvent('pet.menu.closed', {}, { level: 'info', actor: 'user', message: 'Pet menu closed' })
-  }
-}
-const showMenu = () => {
+const showContextMenu = (event) => {
+  event.preventDefault()
   setMousePassthrough(false)
   applyPetCursorStyle(false)
-  menu.classList.add('open')
-  const menuViewport = applyMenuViewport()
-  logPetEvent('pet.menu.opened', {
-    menuWidth: Math.round(menu.getBoundingClientRect().width),
-    menuHeight: Math.round(menu.getBoundingClientRect().height),
-    viewportWidth: menuViewport?.viewport.width,
-    viewportHeight: menuViewport?.viewport.height,
-    windowWidth: menuViewport?.windowSize.width,
-    windowHeight: menuViewport?.windowSize.height
-  }, { level: 'info', actor: 'user', message: 'Pet menu opened' })
+  window.petAPI.showContextMenu?.({ x: event.clientX, y: event.clientY })
 }
 
-/** 菜单点击统一分发 —— 根据按钮 data-action 路由到对应逻辑。 */
-const onMenuClick = (event) => {
-  const btn = event.target.closest('button')
-  if (!btn) return
-  const action = btn.dataset.action
-  hideMenu()
+const runMenuCommand = (payload) => {
   logPetEvent('pet.menu.action.selected', {
-    selectedAction: action
+    selectedAction: payload?.command === 'action' ? payload.actionId : payload?.command
   }, { level: 'info', actor: 'user', message: 'Pet menu action selected' })
-  if (action === 'quit') window.petAPI.quit()
-  else if (action === 'walk') toggleWalk()
-  else if (action === 'settings') window.petAPI.openSettings()
-  else { stopWalk(); setAction(action) }
+  if (payload?.command === 'walk') toggleWalk()
+  else if (payload?.command === 'action' && payload.actionId) {
+    stopWalk()
+    setAction(payload.actionId)
+  }
 }
 
 // ═══════════════════════════════════════════
@@ -821,6 +668,8 @@ window.petAPI.onAnimationsChanged((config) => {
   if (config?.actions) applyAnimationsConfig(config)
 })
 
+window.petAPI.onPetMenuCommand?.(runMenuCommand)
+
 // DOM 事件绑定
 pet.addEventListener('pointerdown', onPointerDown)
 pet.addEventListener('pointermove', updateMousePassthroughFromPoint)
@@ -828,14 +677,13 @@ pet.addEventListener('pointermove', onPointerMove)
 pet.addEventListener('pointerup', onPointerUp)
 pet.addEventListener('pointerleave', clearPointerHoverState)
 pet.addEventListener('dblclick', toggleWalk)
-pet.addEventListener('contextmenu', (e) => { e.preventDefault(); showMenu() })
-menu.addEventListener('click', onMenuClick)
-window.addEventListener('blur', () => { hideMenu(); clearPointerHoverState() })  // 窗口失焦时自动关闭菜单并清理 hover 态
+pet.addEventListener('contextmenu', showContextMenu)
+window.addEventListener('blur', () => { clearPointerHoverState() })  // 窗口失焦时清理 hover 态
 
 /**
  * 启动流程：
  * 1. 从主进程获取动作配置
- * 2. 构建菜单
+ * 2. 缓存动作表供菜单命令使用
  * 3. 播放待机动画
  * 4. 启动散步 tick 循环（40ms ≈ 25fps）
  */

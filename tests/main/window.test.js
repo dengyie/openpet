@@ -1,11 +1,11 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
 const path = require('path')
-
-const { BASE_HEIGHT, BASE_WIDTH, PET_BASE_SCALE, applyPetViewport, applyWindowScale, createWindow, loadPetWindow } = require('../../src/main/window')
+const Module = require('module')
 
 const projectRoot = path.join(__dirname, '..', '..')
 const petIndexPath = path.join(projectRoot, 'index.html')
+const windowModulePath = require.resolve('../../src/main/window')
 
 const createScreenStub = () => ({
   getPrimaryDisplay: () => ({
@@ -56,8 +56,24 @@ const createBrowserWindowStub = (instances) => class BrowserWindowStub {
   }
 }
 
+const loadWindowModule = (electronStub = {}) => {
+  delete require.cache[windowModulePath]
+  const originalLoad = Module._load
+  Module._load = function patchedLoad(request, parent, isMain) {
+    if (request === 'electron') return electronStub
+    return originalLoad.call(this, request, parent, isMain)
+  }
+
+  try {
+    return require(windowModulePath)
+  } finally {
+    Module._load = originalLoad
+  }
+}
+
 test('createWindow can defer loading so callers register lifecycle handlers first', () => {
   const instances = []
+  const { createWindow, loadPetWindow } = loadWindowModule()
   const petWindow = createWindow({
     load: false,
     BrowserWindow: createBrowserWindowStub(instances),
@@ -72,6 +88,7 @@ test('createWindow can defer loading so callers register lifecycle handlers firs
 
 test('createWindow preserves automatic loading by default', () => {
   const instances = []
+  const { createWindow } = loadWindowModule()
   const petWindow = createWindow({
     BrowserWindow: createBrowserWindowStub(instances),
     screen: createScreenStub()
@@ -84,6 +101,7 @@ test('createWindow preserves automatic loading by default', () => {
 
 test('applyWindowScale recovers a collapsed pet window back to valid default bounds', () => {
   const instances = []
+  const { BASE_HEIGHT, BASE_WIDTH, PET_BASE_SCALE, applyWindowScale, createWindow } = loadWindowModule()
   const petWindow = createWindow({
     load: false,
     BrowserWindow: createBrowserWindowStub(instances),
@@ -103,6 +121,7 @@ test('applyWindowScale recovers a collapsed pet window back to valid default bou
 
 test('applyWindowScale uses the reduced visual base size for user scale values', () => {
   const instances = []
+  const { BASE_HEIGHT, BASE_WIDTH, applyWindowScale, createWindow } = loadWindowModule()
   const petWindow = createWindow({
     load: false,
     BrowserWindow: createBrowserWindowStub(instances),
@@ -122,6 +141,7 @@ test('applyWindowScale uses the reduced visual base size for user scale values',
 
 test('applyPetViewport resizes around bottom center for dynamic action bounds', () => {
   const instances = []
+  const { applyPetViewport, createWindow } = loadWindowModule()
   const petWindow = createWindow({
     load: false,
     BrowserWindow: createBrowserWindowStub(instances),
@@ -141,6 +161,7 @@ test('applyPetViewport resizes around bottom center for dynamic action bounds', 
 
 test('applyPetViewport can shrink dynamic action bounds below their source size', () => {
   const instances = []
+  const { applyPetViewport, createWindow } = loadWindowModule()
   const petWindow = createWindow({
     load: false,
     BrowserWindow: createBrowserWindowStub(instances),

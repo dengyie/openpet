@@ -34,8 +34,6 @@ const { createAboutService } = require('./src/main/services/about-service')
 const { createCatalogService } = require('./src/main/services/catalog-service')
 const { createPetMovementPolicy } = require('./src/main/pet-movement-policy')
 const { configureSingleInstanceLock } = require('./src/main/single-instance')
-const { createCursorAssetService } = require('./src/main/services/cursor-asset-service')
-const { createAppLogService } = require('./src/main/services/app-log-service')
 const { maybeRunPackagedRuntimeSmoke } = require('./src/main/packaged-runtime-smoke-runner')
 const { maybeRunPackagedPluginCleanupEvidence } = require('./src/main/packaged-plugin-cleanup-evidence-runner')
 const { createBasicBehaviorPlugin } = require('./src/main/plugins/official/basic-behavior')
@@ -91,9 +89,6 @@ if (canBootstrap) app.whenReady().then(() => {
     logDir: path.join(app.getPath('userData'), 'logs')
   })
   const petMovementPolicy = createPetMovementPolicy({ screen })
-  const appLogService = createAppLogService({
-    logDir: path.join(app.getPath('userData'), 'logs')
-  })
   try {
     appLogService.record({
       scope: 'app',
@@ -110,9 +105,6 @@ if (canBootstrap) app.whenReady().then(() => {
     framesRoot: path.join(__dirname, 'cat_anime', 'flames'),
     spritesDir: path.join(__dirname, 'cat_anime', 'sprites'),
     configPath: path.join(__dirname, 'cat_anime', 'animations.json')
-  })
-  const cursorAssetService = createCursorAssetService({
-    cursorDir: path.join(app.getPath('userData'), 'cursors')
   })
   cursorAssetService.repairCursor(petService.getSettings().customCursor).then((customCursor) => {
     const currentSettings = petService.getSettings()
@@ -206,7 +198,7 @@ if (canBootstrap) app.whenReady().then(() => {
     actionImportService,
     cursorAssetService,
     appLogService,
-    applyWindowScale: (scale) => applyWindowScale(petWindow, scale),
+    applyWindowScale,
     applyPetViewport,
     clampToWorkArea,
     getMovementState,

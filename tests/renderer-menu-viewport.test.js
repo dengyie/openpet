@@ -43,24 +43,16 @@ const dispatch = async (element, eventName, event = {}) => {
   for (const listener of element.listeners[eventName] || []) await listener(event)
 }
 
-const px = (value) => Number(String(value || '').replace('px', ''))
-
-const rectsOverlap = (a, b) => (
-  a.left < b.right &&
-  a.right > b.left &&
-  a.top < b.bottom &&
-  a.bottom > b.top
-)
-
 const createRendererHarness = async () => {
   const viewportCalls = []
+  const contextMenuRequests = []
+  const mousePassthroughCalls = []
   let getBoundsCalls = 0
   const callbacks = {}
   const elements = {
     pet: createElement('pet'),
     cat: createElement('cat'),
     bubble: createElement('bubble'),
-    menu: createElement('menu', { width: 180, height: 260 }),
     'custom-cursor-overlay': createElement('custom-cursor-overlay')
   }
   const context = {
@@ -94,12 +86,13 @@ const createRendererHarness = async () => {
           ]
         }),
         setViewport: (viewport) => viewportCalls.push(viewport),
-        setMousePassthrough: () => {},
+        setMousePassthrough: (passthrough) => mousePassthroughCalls.push(passthrough),
         recordAppLog: () => {},
         onSettingsChanged: () => {},
         onPetSay: () => {},
         onPetAction: () => {},
         onAnimationsChanged: () => {},
+        showContextMenu: (point) => contextMenuRequests.push(point),
         getBounds: async () => {
           getBoundsCalls += 1
           return { x: 0, y: 0, width: 58, height: 58 }
@@ -117,82 +110,62 @@ const createRendererHarness = async () => {
   vm.runInNewContext(rendererSource, context, { filename: 'renderer.js' })
   await Promise.resolve()
   await Promise.resolve()
-  return { callbacks, elements, getBoundsCalls: () => getBoundsCalls, viewportCalls }
+  return { callbacks, contextMenuRequests, elements, getBoundsCalls: () => getBoundsCalls, mousePassthroughCalls, viewportCalls }
 }
 
-test('opening the menu expands the pet viewport enough to avoid clipping', async () => {
-  const { elements, viewportCalls } = await createRendererHarness()
+test('right-click delegates menu placement to the native main-process menu', async () => {
+  const { contextMenuRequests, elements, mousePassthroughCalls, viewportCalls } = await createRendererHarness()
   const initialViewport = viewportCalls.at(-1)
+  let prevented = false
 
-  dispatch(elements.pet, 'contextmenu', { preventDefault() {} })
-
-  const menuViewport = viewportCalls.at(-1)
-  assert.notDeepEqual(menuViewport, initialViewport)
-  assert.equal(menuViewport.scale, initialViewport.scale)
-  assert.equal((menuViewport.width + menuViewport.padding * 2) * menuViewport.scale >= 204, true)
-  assert.equal((menuViewport.height + menuViewport.padding * 2) * menuViewport.scale >= 284, true)
-  assert.equal(px(elements.cat.style.left) > px(elements.cat.style.width), true)
-  assert.equal(elements.cat.style.bottom, initialViewport.padding * initialViewport.scale + 'px')
-})
-
-test('opening the menu places it away from the pet instead of covering it', async () => {
-  const { elements, viewportCalls } = await createRendererHarness()
-
-  await dispatch(elements.pet, 'contextmenu', { preventDefault() {} })
-
-  const menuViewport = viewportCalls.at(-1)
-  const windowWidth = (menuViewport.width + menuViewport.padding * 2) * menuViewport.scale
-  const windowHeight = (menuViewport.height + menuViewport.padding * 2) * menuViewport.scale
-  const menuRect = {
-    left: px(elements.menu.style.left),
-    top: px(elements.menu.style.top),
-    right: px(elements.menu.style.left) + 180,
-    bottom: px(elements.menu.style.top) + 260
-  }
-  const catRect = {
-    left: px(elements.cat.style.left),
-    top: windowHeight - px(elements.cat.style.bottom) - 50,
-    right: px(elements.cat.style.left) + 50,
-    bottom: windowHeight - px(elements.cat.style.bottom)
-  }
-
-  assert.equal(Number.isFinite(menuRect.left), true)
-  assert.equal(Number.isFinite(menuRect.top), true)
-  assert.equal(menuRect.left >= 12, true)
-  assert.equal(menuRect.top >= 12, true)
-  assert.equal(menuRect.right <= windowWidth - 12, true)
-  assert.equal(rectsOverlap(menuRect, catRect), false)
-})
-
-test('clicking outside the open menu closes it without starting a pet drag', async () => {
-  const { elements, getBoundsCalls, viewportCalls } = await createRendererHarness()
-  const initialViewport = viewportCalls.at(-1)
-
-  await dispatch(elements.pet, 'contextmenu', { preventDefault() {} })
-  await dispatch(elements.pet, 'pointerdown', {
-    button: 0,
-    target: elements.pet,
-    preventDefault() {},
-    pointerId: 1,
-    clientX: 8,
-    clientY: 8,
-    screenX: 8,
-    screenY: 8
+  await dispatch(elements.pet, 'contextmenu', {
+    clientX: 12,
+    clientY: 18,
+    preventDefault() { prevented = true }
   })
 
-  assert.equal(elements.menu.classList.contains('open'), false)
+  assert.equal(prevented, true)
+  assert.equal(contextMenuRequests.length, 1)
+  assert.equal(contextMenuRequests[0].x, 12)
+  assert.equal(contextMenuRequests[0].y, 18)
   assert.deepEqual(viewportCalls.at(-1), initialViewport)
-  assert.equal(getBoundsCalls(), 0)
+  assert.notEqual(mousePassthroughCalls.at(-1), true)
 })
 
-test('closing the menu restores the current action viewport', async () => {
+test('right-clicking the pet does not resize or offset the current action viewport', async () => {
+  const { contextMenuRequests, elements, viewportCalls } = await createRendererHarness()
+  const initialViewport = viewportCalls.at(-1)
+  const initialCatLeft = elements.cat.style.left
+  const initialCatBottom = elements.cat.style.bottom
+
+  await dispatch(elements.pet, 'contextmenu', {
+    clientX: 24,
+    clientY: 30,
+    preventDefault() {}
+  })
+
+  assert.equal(contextMenuRequests.length, 1)
+  assert.equal(contextMenuRequests[0].x, 24)
+  assert.equal(contextMenuRequests[0].y, 30)
+  assert.deepEqual(viewportCalls.at(-1), initialViewport)
+  assert.equal(elements.cat.style.left, initialCatLeft)
+  assert.equal(elements.cat.style.bottom, initialCatBottom)
+})
+
+test('native menu blur leaves the current action viewport intact', async () => {
   const { callbacks, elements, viewportCalls } = await createRendererHarness()
   const initialViewport = viewportCalls.at(-1)
+  const initialCatLeft = elements.cat.style.left
+  const initialCatBottom = elements.cat.style.bottom
 
-  dispatch(elements.pet, 'contextmenu', { preventDefault() {} })
+  await dispatch(elements.pet, 'contextmenu', {
+    clientX: 14,
+    clientY: 16,
+    preventDefault() {}
+  })
   callbacks.blur()
 
   assert.deepEqual(viewportCalls.at(-1), initialViewport)
-  assert.equal(elements.cat.style.left, '4px')
-  assert.equal(elements.cat.style.bottom, '4px')
+  assert.equal(elements.cat.style.left, initialCatLeft)
+  assert.equal(elements.cat.style.bottom, initialCatBottom)
 })
