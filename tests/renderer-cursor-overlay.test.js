@@ -184,7 +184,7 @@ test('pet remains clickable when the optional hitbox helper is unavailable', asy
   assert.equal(logs.at(-1).details.passthrough, false)
 })
 
-test('custom cursor overlay clears when the pointer leaves the pet surface', async () => {
+test('custom cursor style survives transient pointerleave events from transparent window edges', async () => {
   const { callbacks, elements } = await createRendererHarness({ insideFrame: true })
 
   callbacks.settings({ customCursor: { enabled: true, assetUrl: 'file:///cursor.png', assetPath: '/cursor.png', fileName: 'cursor.png' } })
@@ -196,7 +196,7 @@ test('custom cursor overlay clears when the pointer leaves the pet surface', asy
   dispatch(elements.pet, 'pointerleave', { clientX: 301, clientY: 301, screenX: 1301, screenY: 901 })
 
   assert.equal(elements['custom-cursor-overlay'].classList.contains('visible'), false)
-  assert.equal(elements.pet.style.cursor, '')
+  assert.equal(elements.pet.style.cursor, 'url("file:///cursor.png") 0 0, auto')
 })
 
 test('pointer leave does not cancel passthrough while hovering transparent pet padding', async () => {
