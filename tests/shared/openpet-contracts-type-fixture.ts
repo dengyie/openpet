@@ -57,6 +57,12 @@ const controlCenterSettingsFixture = {
     enabled: true,
     radius: 'medium',
     hasAnchor: true
+  },
+  customCursor: {
+    enabled: false,
+    assetPath: '',
+    assetUrl: '',
+    fileName: ''
   }
 } satisfies ControlCenterSettings
 
