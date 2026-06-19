@@ -47,8 +47,11 @@ const createElement = (id = '') => ({
   closest() { return null }
 })
 
-const createRendererHarness = async ({ insideFrame = true, includeHitbox = true } = {}) => {
+const createRendererHarness = async ({ insideFrame = true, insideCursorRegion, includeHitbox = true } = {}) => {
   const hitboxResults = Array.isArray(insideFrame) ? insideFrame.slice() : null
+  const cursorRegionResults = insideCursorRegion === undefined
+    ? null
+    : Array.isArray(insideCursorRegion) ? insideCursorRegion.slice() : null
   const elements = {
     pet: createElement('pet'),
     cat: createElement('cat'),
@@ -74,9 +77,17 @@ const createRendererHarness = async ({ insideFrame = true, includeHitbox = true 
         ? {
             OpenPetHitbox: {
               getFrameHitbox: () => ({ left: 0, top: 0, right: 300, bottom: 300 }),
-              getWindowHitbox: () => ({ left: 0, top: 0, right: 300, bottom: 300 }),
-              getViewportHitbox: () => ({ left: 0, top: 0, right: 300, bottom: 300 }),
-              isPointInHitbox: () => hitboxResults ? hitboxResults.shift() ?? hitboxResults.at(-1) ?? false : insideFrame
+              getWindowHitbox: () => ({ left: 0, top: 0, right: 300, bottom: 300, type: 'window' }),
+              getViewportHitbox: () => ({ left: 0, top: 0, right: 300, bottom: 300, type: 'viewport' }),
+              isPointInHitbox: (_point, hitbox) => {
+                if (hitbox?.type === 'window') {
+                  if (insideCursorRegion === undefined) {
+                    return hitboxResults ? hitboxResults.shift() ?? hitboxResults.at(-1) ?? false : insideFrame
+                  }
+                  return cursorRegionResults ? cursorRegionResults.shift() ?? cursorRegionResults.at(-1) ?? false : insideCursorRegion
+                }
+                return hitboxResults ? hitboxResults.shift() ?? hitboxResults.at(-1) ?? false : insideFrame
+              }
             }
           }
         : {}),
@@ -147,6 +158,20 @@ test('custom cursor overlay hides outside the clickable pet region', async () =>
   assert.equal(elements['custom-cursor-overlay'].classList.contains('visible'), false)
   assert.equal(elements.pet.style.cursor, '')
   assert.equal(logs.at(-1).details.cursorOverlayVisible, false)
+})
+
+test('custom cursor stays active in the pet cursor region without expanding click handling', async () => {
+  const { callbacks, elements, logs } = await createRendererHarness({ insideFrame: false, insideCursorRegion: true })
+
+  callbacks.settings({ customCursor: { enabled: true, assetUrl: 'file:///cursor.png', assetPath: '/cursor.png', fileName: 'cursor.png' } })
+  dispatch(elements.pet, 'pointermove', { clientX: 0.2, clientY: 78.5, screenX: 1250.2, screenY: 782.5 })
+
+  const passthroughCalls = logs.filter((entry) => entry.event === 'pet:test:set-mouse-passthrough')
+  assert.equal(elements.pet.style.cursor, 'url("file:///cursor.png") 0 0, auto')
+  assert.equal(logs.at(-1).details.insideFrame, false)
+  assert.equal(logs.at(-1).details.insideCursorRegion, true)
+  assert.equal(logs.at(-1).details.cursorApplied, true)
+  assert.deepEqual(passthroughCalls.map((entry) => entry.passthrough), [true])
 })
 
 test('pet remains clickable when the optional hitbox helper is unavailable', async () => {
