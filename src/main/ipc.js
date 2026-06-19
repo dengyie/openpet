@@ -120,7 +120,7 @@ const executeBehaviorDecision = (petService, decision) => {
 /**
  * 注册所有 IPC 处理器。接收依赖注入对象，各 handler 只通过注入的函数访问外部能力。
  */
-const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiService, behaviorOrchestratorService, pluginService, pluginInstallService, pluginGithubImportService, catalogService, localHttpService, aboutService, actionImportService, cursorAssetService, appLogService, applyWindowScale, applyPetViewport = () => {},
+const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiService, imageGenerationModelService, behaviorOrchestratorService, pluginService, pluginInstallService, pluginGithubImportService, catalogService, localHttpService, aboutService, actionImportService, cursorAssetService, appLogService, applyWindowScale, applyPetViewport = () => {},
   clampToWorkArea, getMovementState, createSettingsWindow, petMovementPolicy, browserWindowService = BrowserWindow, dialogService = dialog, ipcMainService = ipcMain, menuService = Menu, screenService = screen }) => {
   let pendingActionFrameSelection = null
 
@@ -497,6 +497,24 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
   ipcMainService.handle(IPC.AI_SAVE_API_KEY, (_event, apiKey) => aiService.saveApiKey(apiKey))
 
   ipcMainService.handle(IPC.AI_TEST_CONNECTION, () => aiService.testConnection())
+
+  ipcMainService.handle(IPC.IMAGE_GENERATION_GET_CONFIG, () => imageGenerationModelService.getConfig())
+
+  ipcMainService.handle(IPC.IMAGE_GENERATION_SAVE_CONFIG, (_event, config) => {
+    return imageGenerationModelService.saveConfig(config)
+  })
+
+  ipcMainService.handle(IPC.IMAGE_GENERATION_SAVE_API_KEY, (_event, apiKey) => {
+    return imageGenerationModelService.saveCloudApiKey(apiKey)
+  })
+
+  ipcMainService.handle(IPC.IMAGE_GENERATION_CLEAR_API_KEY, () => {
+    return imageGenerationModelService.clearCloudApiKey()
+  })
+
+  ipcMainService.handle(IPC.IMAGE_GENERATION_CHECK_HEALTH, (_event, payload) => {
+    return imageGenerationModelService.checkHealth(payload || {})
+  })
 
   ipcMainService.handle(IPC.AI_GET_CONVERSATION, (_event, payload) => {
     return aiService.getConversation(payload?.conversationId || payload)

@@ -1,5 +1,6 @@
 const fs = require('fs')
 const path = require('path')
+const { normalizeGenerationTask } = require('./generation-task')
 
 const SAFE_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/
 
@@ -48,6 +49,8 @@ const createRun = ({ dataDir, input = {}, now = () => new Date().toISOString() }
   const timestamp = now()
   const petName = String(input.petName || 'Creator Studio Pet').trim() || 'Creator Studio Pet'
   const petId = slugify(input.petId || petName)
+  const originalPrompt = input.originalPrompt == null ? '' : String(input.originalPrompt).trim()
+  const generationTask = input.generationTask ? normalizeGenerationTask(input.generationTask) : null
   const baseRunId = `${timestamp.slice(0, 10)}-${petId}`.replace(/[^a-zA-Z0-9_-]/g, '-')
   const { runId, runDir } = createUniqueRunDirectory({ dataDir, baseRunId })
   ensureDirectory(path.join(runDir, 'inputs', 'references'))
@@ -69,8 +72,10 @@ const createRun = ({ dataDir, input = {}, now = () => new Date().toISOString() }
     input: {
       petName,
       prompt: String(input.prompt || ''),
-      backend: input.backend || 'fixture'
+      backend: input.backend || 'fixture',
+      ...(originalPrompt ? { originalPrompt } : {})
     },
+    ...(generationTask ? { generationTask } : {}),
     backendStatus: {
       backend: input.backend || 'fixture',
       state: 'idle',
@@ -86,6 +91,7 @@ const createRun = ({ dataDir, input = {}, now = () => new Date().toISOString() }
   writeJson(getRunPath({ dataDir, runId }), run)
   fs.writeFileSync(path.join(runDir, 'inputs', 'prompt.md'), `${run.input.prompt}\n`)
   writeJson(path.join(runDir, 'inputs', 'config.json'), run.input)
+  if (generationTask) writeJson(path.join(runDir, 'inputs', 'generation-task.json'), generationTask)
   return run
 }
 

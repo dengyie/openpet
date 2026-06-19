@@ -8,6 +8,7 @@ import type {
   ChatMessage,
   ControlCenterSettings,
   CustomCursorSettings,
+  ImageGenerationConfigViewState,
   PetPacksViewState,
   ServiceLogEntry,
   ServiceStatusViewState,
@@ -53,6 +54,28 @@ export const defaultAiConfig = {
   },
   hasApiKey: false
 } satisfies AiConfigViewState
+
+export const defaultImageGenerationConfig = {
+  defaultBackend: 'fixture',
+  cloud: {
+    provider: 'openai',
+    baseUrl: 'https://api.openai.com/v1',
+    model: 'gpt-image-1',
+    apiKeyRef: 'secret:model.image.openai.apiKey',
+    organization: '',
+    project: '',
+    hasApiKey: false,
+    apiKeyPreview: '',
+    apiKeyLabel: 'Image API Key'
+  },
+  local: {
+    endpoint: 'http://127.0.0.1:7860/generate',
+    healthUrl: 'http://127.0.0.1:7860/health',
+    model: 'local-pet-sprite',
+    timeoutMs: 120000,
+    maxConcurrentJobs: 1
+  }
+} satisfies ImageGenerationConfigViewState
 
 export const defaultServiceStatus = {
   config: {
@@ -162,6 +185,21 @@ export const cloneAiConfig = (config: Partial<AiConfigViewState> | null | undefi
   ...defaultAiConfig,
   ...(config || {}),
   behavior: cloneAiBehavior(config?.behavior)
+})
+
+export const cloneImageGenerationConfig = (
+  config: Partial<ImageGenerationConfigViewState> | null | undefined
+): ImageGenerationConfigViewState => ({
+  ...defaultImageGenerationConfig,
+  ...(config || {}),
+  cloud: {
+    ...defaultImageGenerationConfig.cloud,
+    ...(config?.cloud || {})
+  },
+  local: {
+    ...defaultImageGenerationConfig.local,
+    ...(config?.local || {})
+  }
 })
 
 export const cloneServiceStatus = (status: Partial<ServiceStatusViewState> | null | undefined): ServiceStatusViewState => ({
