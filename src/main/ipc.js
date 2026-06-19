@@ -545,7 +545,6 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     if (orphanedAssetPaths.length > 0) cursorAssetService?.deleteAssets?.(orphanedAssetPaths)
     const rendererSettings = createPetRendererSettings(savedSettings)
     sendToPetWindow(getPetWindow, IPC.SETTINGS_CHANGED, rendererSettings)
-    applyWindowScale(getPetWindow(), savedSettings.scale)
     recordAppLog({
       scope: 'settings',
       level: 'info',
@@ -789,7 +788,6 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
   // 设置面板拖动滑块：实时预览缩放（不持久化）
   ipcMainService.on(IPC.SETTINGS_PREVIEW_SCALE, (_event, scale) => {
     petService.previewSettings({ scale })
-    applyWindowScale(getPetWindow(), scale)
     sendToPetWindow(getPetWindow, IPC.SETTINGS_CHANGED, { scale })
   })
 
