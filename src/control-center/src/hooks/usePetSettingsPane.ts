@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { controlCenterAPI as api } from '../api/control-center-api'
 import { cloneSettings, defaultSettings } from '../lib/defaults'
 import { messageFromError } from '../lib/errors'
+import { shouldRestoreScalePreview } from '../lib/pet-scale-preview'
 import {
   SYSTEM_CURSOR_ID,
   listCursorOptions,
@@ -63,10 +64,16 @@ export function usePetSettingsPane() {
   }, [])
 
   useEffect(() => {
-    const restorePreview = () => api.previewScale(originalRef.current.scale)
+    const restorePreview = () => {
+      if (!shouldRestoreScalePreview({
+        currentScale: settings.scale,
+        originalScale: originalRef.current.scale
+      })) return
+      api.previewScale(originalRef.current.scale)
+    }
     window.addEventListener('beforeunload', restorePreview)
     return () => window.removeEventListener('beforeunload', restorePreview)
-  }, [])
+  }, [settings.scale])
 
   const cursorOptions = useMemo<CursorOption[]>(
     () => listCursorOptions(settings.customCursors) as CursorOption[],
