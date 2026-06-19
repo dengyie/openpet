@@ -1,4 +1,4 @@
-import { cloneAiConfig, cloneCatalog, cloneServiceStatus, cloneSettings, defaultAboutInfo, defaultActionsConfig, defaultAiConfig, defaultPetPacks, defaultServiceStatus, defaultSettings, defaultUpdateCheck } from '../lib/defaults'
+import { cloneAiConfig, cloneCatalog, cloneImageGenerationConfig, cloneServiceStatus, cloneSettings, defaultAboutInfo, defaultActionsConfig, defaultAiConfig, defaultImageGenerationConfig, defaultPetPacks, defaultServiceStatus, defaultSettings, defaultUpdateCheck } from '../lib/defaults'
 import type {
   ActionFrameInspectRequest,
   ActionFrameInspectionResult,
@@ -14,6 +14,7 @@ import type {
   CatalogState,
   ControlCenterApi,
   ControlCenterSettings,
+  ImageGenerationConfigViewState,
   JsonObject,
   PluginCommandRunResultViewState,
   PluginLogFilters,
@@ -35,6 +36,7 @@ declare global {
 interface DemoState {
   settings: ControlCenterSettings
   aiConfig: AiConfigViewState
+  imageGenerationConfig: ImageGenerationConfigViewState
   serviceStatus: ServiceStatusViewState
   catalog: CatalogState
   plugins: PluginViewState[]
@@ -339,6 +341,7 @@ const createDefaultDemoState = (): DemoState => ({
       ]
     }
   }),
+  imageGenerationConfig: cloneImageGenerationConfig(defaultImageGenerationConfig),
   serviceStatus: createDemoServiceStatus(),
   catalog: createDemoCatalog(),
   plugins: [],
@@ -354,6 +357,7 @@ const readDemoState = (): DemoState => {
     return {
       settings: cloneSettings(state.settings),
       aiConfig: cloneAiConfig(state.aiConfig),
+      imageGenerationConfig: cloneImageGenerationConfig(state.imageGenerationConfig),
       serviceStatus: cloneServiceStatus(state.serviceStatus),
       catalog: cloneCatalog(state.catalog || createDemoCatalog()),
       plugins: Array.isArray(state.plugins) ? state.plugins : [],
@@ -573,6 +577,73 @@ const demoApi: ControlCenterApi = {
     return { apiKeyRef: 'ai.default', hasApiKey: true }
   },
   testAiConnection: async () => ({ ok: true, reply: 'ok' }),
+  getImageGenerationConfig: async () => cloneImageGenerationConfig(demoState.imageGenerationConfig),
+  saveImageGenerationConfig: async (config) => {
+    demoState.imageGenerationConfig = cloneImageGenerationConfig({
+      ...demoState.imageGenerationConfig,
+      ...config,
+      cloud: {
+        ...demoState.imageGenerationConfig.cloud,
+        ...(config.cloud || {})
+      },
+      local: {
+        ...demoState.imageGenerationConfig.local,
+        ...(config.local || {})
+      }
+    })
+    writeDemoState()
+    return cloneImageGenerationConfig(demoState.imageGenerationConfig)
+  },
+  saveImageGenerationApiKey: async (apiKey) => {
+    const preview = apiKey ? `••••${apiKey.slice(-4)}` : ''
+    demoState.imageGenerationConfig = cloneImageGenerationConfig({
+      ...demoState.imageGenerationConfig,
+      cloud: {
+        ...demoState.imageGenerationConfig.cloud,
+        hasApiKey: Boolean(apiKey),
+        apiKeyPreview: preview
+      }
+    })
+    writeDemoState()
+    return {
+      apiKeyRef: demoState.imageGenerationConfig.cloud.apiKeyRef,
+      hasApiKey: Boolean(apiKey),
+      apiKeyPreview: preview
+    }
+  },
+  clearImageGenerationApiKey: async () => {
+    demoState.imageGenerationConfig = cloneImageGenerationConfig({
+      ...demoState.imageGenerationConfig,
+      cloud: {
+        ...demoState.imageGenerationConfig.cloud,
+        hasApiKey: false,
+        apiKeyPreview: ''
+      }
+    })
+    writeDemoState()
+    return {
+      apiKeyRef: demoState.imageGenerationConfig.cloud.apiKeyRef,
+      hasApiKey: false,
+      apiKeyPreview: ''
+    }
+  },
+  checkImageGenerationHealth: async ({ backend } = {}) => {
+    const activeBackend = backend || demoState.imageGenerationConfig.defaultBackend
+    if (activeBackend === 'cloud' && !demoState.imageGenerationConfig.cloud.hasApiKey) {
+      return {
+        ok: false,
+        backend: 'cloud',
+        code: 'missing_api_key',
+        message: 'Cloud image generation API key is missing'
+      }
+    }
+    return {
+      ok: true,
+      backend: activeBackend,
+      code: `${activeBackend}_healthy`,
+      message: 'ok'
+    }
+  },
   getAiConversation: async () => [],
   chat: async ({ message }) => {
     const decisions = Array.isArray(demoState.aiConfig.behavior?.decisions)

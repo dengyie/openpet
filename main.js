@@ -22,6 +22,7 @@ const { createPetPackService } = require('./src/main/services/pet-pack-service')
 const { createPetService } = require('./src/main/services/pet-service')
 const { createSecretService } = require('./src/main/services/secret-service')
 const { createAiService } = require('./src/main/services/ai-service')
+const { createImageGenerationModelService } = require('./src/main/services/image-generation-model-service')
 const { createBehaviorOrchestratorService } = require('./src/main/services/behavior-orchestrator-service')
 const { createPluginService } = require('./src/main/services/plugin-service')
 const { createPluginInstallService } = require('./src/main/services/plugin-install-service')
@@ -82,6 +83,7 @@ app.whenReady().then(() => {
   const petService = createPetService({ eventBus, settingsService, actionService })
   const secretService = createSecretService()
   const aiService = createAiService({ settingsService, secretService })
+  const imageGenerationModelService = createImageGenerationModelService({ settingsService, secretService })
   const behaviorOrchestratorService = createBehaviorOrchestratorService({ settingsService })
   const localHttpService = createLocalHttpService({ petService, settingsService })
   const aboutService = createAboutService({ app, packageJson })
@@ -150,6 +152,7 @@ app.whenReady().then(() => {
     petService,
     petPackService,
     aiService,
+    imageGenerationModelService,
     behaviorOrchestratorService,
     pluginService,
     pluginInstallService,
