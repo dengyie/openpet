@@ -5,6 +5,7 @@ const os = require('node:os')
 const path = require('node:path')
 const crypto = require('node:crypto')
 const { spawn, spawnSync } = require('node:child_process')
+const sharp = require('sharp')
 
 const { normalizePluginManifest } = require('../../src/main/plugins/manifest')
 const { normalizeConfigSchema } = require('../../src/main/plugins/config-schema')
@@ -301,6 +302,11 @@ test('creator studio backend runner generates fixture output through the selecte
   const output = await runGenerationStep({ dataDir, runId: run.runId })
   const manifest = JSON.parse(fs.readFileSync(path.join(output.outputDir, 'pet.json'), 'utf-8'))
   const actionQa = JSON.parse(fs.readFileSync(path.join(dataDir, 'runs', run.runId, 'qa', 'action-generation-task.json'), 'utf-8'))
+  const atlasQa = JSON.parse(fs.readFileSync(path.join(dataDir, 'runs', run.runId, 'qa', 'atlas-validation.json'), 'utf-8'))
+  const atlasStats = await sharp(path.join(output.outputDir, 'spritesheet.webp'))
+    .ensureAlpha()
+    .raw()
+    .stats()
   const bundleHash = crypto.createHash('sha256').update(fs.readFileSync(output.bundlePath)).digest('hex')
 
   assert.equal(manifest.id, run.petId)
@@ -309,6 +315,8 @@ test('creator studio backend runner generates fixture output through the selecte
   assert.equal(manifest.creatorStudio.actions[0].name, '被摸头后害羞转圈')
   assert.equal(actionQa.ok, true)
   assert.equal(actionQa.actions[0].triggerProposal.type, 'click')
+  assert.equal(atlasQa.visiblePixels > 0, true)
+  assert.equal(atlasStats.channels[3].max > 0, true)
   assert.equal(fs.existsSync(path.join(output.outputDir, 'spritesheet.webp')), true)
   assert.equal(fs.existsSync(output.bundlePath), true)
   assert.equal(output.sha256, bundleHash)
@@ -377,6 +385,28 @@ const runCreatorCommand = ({ command, dataDir, payload = {}, config = {}, env = 
     ...result,
     json: parseCommandJson(result.stdout)
   }
+}
+
+const createBridgeServer = ({ routes }) => {
+  const requests = []
+  const server = require('node:http').createServer((request, response) => {
+    let body = ''
+    request.on('data', (chunk) => { body += chunk })
+    request.on('end', () => {
+      const payload = body ? JSON.parse(body) : {}
+      requests.push({ method: request.method, url: request.url, payload })
+      const handler = routes.find((route) => request.url.endsWith(route.path))?.handler
+      const result = handler
+        ? handler({ request, payload, requests })
+        : { status: 404, body: { ok: false, error: 'Not found' } }
+      response.writeHead(result.status || 200, {
+        'Content-Type': 'application/json',
+        Connection: 'close'
+      })
+      response.end(JSON.stringify(result.body))
+    })
+  })
+  return { server, requests }
 }
 
 const runCreatorCommandAsync = ({ command, dataDir, payload = {}, config = {}, env = {} }) => new Promise((resolve, reject) => {
@@ -594,6 +624,88 @@ test('creator studio host-bridged local run can be approved and exported as a st
   } finally {
     bridgeServer.closeAllConnections?.()
     await new Promise((resolve) => bridgeServer.close(resolve))
+  }
+})
+
+test('creator studio import command regenerates stale fixture output when approved atlas is transparent', async () => {
+  const { createRun, readRun, updateRunStatus } = require('../../examples/plugins/creator-studio/lib/run-store')
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-stale-fixture-'))
+  const run = createRun({
+    dataDir,
+    input: { petName: 'Stale Fixture Cat', prompt: 'A stale fixture cat', backend: 'fixture' },
+    now: () => '2026-06-19T00:00:00.000Z'
+  })
+  const generated = runCreatorCommand({
+    command: 'run-step',
+    dataDir,
+    payload: { runId: run.runId }
+  })
+  assert.equal(generated.status, 0)
+  const outputDir = generated.json.outputDir
+  fs.writeFileSync(path.join(outputDir, 'spritesheet.webp'), Buffer.from([
+    'UklGRpgAAABXRUJQVlA4TIsAAAAv/8XTEQcQEREAUKT//ymi/6n//e9///vf//73',
+    'v//973//+9///ve///3vf//73//+97///e9///vf//73v//973//+9///ve///3',
+    'vf//73//+97///e9///vf//73v//973//+9///ve///3vf//73//+97///e9///',
+    'vf//73v//973//+9///q8CAA=='
+  ].join(''), 'base64'))
+  updateRunStatus({
+    dataDir,
+    runId: run.runId,
+    status: 'approved',
+    patch: { reviewStatus: 'approved', currentStep: 'approved' },
+    now: () => '2026-06-19T00:01:00.000Z'
+  })
+
+  let inspectCount = 0
+  const { server, requests } = createBridgeServer({
+    routes: [
+      {
+        path: '/creator/pet-pack/inspect-output',
+        handler: () => {
+          inspectCount += 1
+          return inspectCount === 1
+            ? { status: 400, body: { ok: false, error: 'Codex pet atlas must contain visible pixels' } }
+            : { body: { ok: true, inspection: { valid: true, selectionId: 'selection-1' } } }
+        }
+      },
+      {
+        path: '/creator/pet-pack/import-output',
+        handler: () => ({ body: { ok: true, imported: { pack: { id: 'stale-fixture-cat' } }, activated: { activePackId: 'stale-fixture-cat' } } })
+      }
+    ]
+  })
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const port = server.address().port
+
+  try {
+    const imported = await runCreatorCommandAsync({
+      command: 'import-approved-pet',
+      dataDir,
+      payload: { runId: run.runId, activate: true },
+      env: {
+        OPENPET_BRIDGE_URL: `http://127.0.0.1:${port}`,
+        OPENPET_BRIDGE_TOKEN: 'bridge-token'
+      }
+    })
+    const repaired = readRun({ dataDir, runId: run.runId })
+    const atlasStats = await sharp(path.join(outputDir, 'spritesheet.webp'))
+      .ensureAlpha()
+      .raw()
+      .stats()
+
+    assert.equal(imported.status, 0)
+    assert.equal(imported.json.ok, true)
+    assert.equal(imported.json.run.status, 'imported')
+    assert.equal(repaired.importedPackId, 'stale-fixture-cat')
+    assert.equal(atlasStats.channels[3].max > 0, true)
+    assert.deepEqual(requests.map((entry) => entry.url), [
+      '/creator/pet-pack/inspect-output',
+      '/creator/pet-pack/inspect-output',
+      '/creator/pet-pack/import-output'
+    ])
+  } finally {
+    server.closeAllConnections?.()
+    await new Promise((resolve) => server.close(resolve))
   }
 })
 

@@ -4,15 +4,16 @@ const crypto = require('crypto')
 const { execFileSync } = require('child_process')
 const { getRunDir, readRun, writeRun } = require('./run-store')
 
-const VALID_FIXTURE_ATLAS_WEBP_BASE64 = [
-  'UklGRrIAAABXRUJQVlA4TKUAAAAv/8XTEQ8Q8x/zHwwFbdtIe/gz3t2huDmi',
-  '/xMQ/+95vfzjf/7nf/7nf/7nf/7nf/7nf/7nf/7nf/7nf/7nf/7nf/7n',
-  'f/7nf/7nf/7nf/7nf/7nf/7nf/7nf/7nf/7nf/7nf/7nf/7nf/7nf/7n',
-  'f/7nf/7nf/7nf/7nf/7nf/7nf/7nf/7nf/7nf/7nf/7nf/7nf/7nf/7n',
-  'f/7nf/7nf/7nf/5fagIA'
-].join('')
+const DEFAULT_ATLAS_WIDTH = 1536
+const DEFAULT_ATLAS_HEIGHT = 1872
+const VISIBLE_ATLAS_WEBP_BASE64 = 'UklGRrIAAABXRUJQVlA4TKUAAAAv/8XTEQ8wUPM/UPMf8FDUtg1U/qT3G4HLEf2fgPA///M///M///M///M///M///M///M///M///M///M///M///M///M///M///M///M///M///M///M///M//4/gavIf//Hf44//+Z//+Z//+Z//+Z//+Z//+Z//+Z//+Z//+Z//+Z//+Z//+Z//+Z//+Z//+Z//+Z//+Z//+Z//+Z//+Z//ORMA'
 
-const createMinimalWebp = () => Buffer.from(VALID_FIXTURE_ATLAS_WEBP_BASE64, 'base64')
+const createMinimalWebp = ({ width = DEFAULT_ATLAS_WIDTH, height = DEFAULT_ATLAS_HEIGHT } = {}) => {
+  if (width !== DEFAULT_ATLAS_WIDTH || height !== DEFAULT_ATLAS_HEIGHT) {
+    throw new Error(`Fixture atlas must be ${DEFAULT_ATLAS_WIDTH}x${DEFAULT_ATLAS_HEIGHT}`)
+  }
+  return Buffer.from(VISIBLE_ATLAS_WEBP_BASE64, 'base64')
+}
 
 const sha256 = (filePath) => crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex')
 
@@ -37,14 +38,14 @@ const createCreatorStudioMetadata = (run) => {
   }
 }
 
-const generateFixturePetOutput = ({ dataDir, runId, now = () => new Date().toISOString() }) => {
+const generateFixturePetOutput = async ({ dataDir, runId, now = () => new Date().toISOString() }) => {
   const run = readRun({ dataDir, runId })
   const runDir = getRunDir({ dataDir, runId })
   const outputDir = path.join(runDir, 'outputs')
   const creatorStudio = createCreatorStudioMetadata(run)
   fs.mkdirSync(outputDir, { recursive: true })
-  const spritesheet = path.join(outputDir, 'spritesheet.webp')
-  fs.writeFileSync(spritesheet, createMinimalWebp())
+  const spritesheetPath = path.join(outputDir, 'spritesheet.webp')
+  fs.writeFileSync(spritesheetPath, createMinimalWebp())
   fs.writeFileSync(path.join(outputDir, 'pet.json'), `${JSON.stringify({
     id: run.petId,
     displayName: run.input.petName,
@@ -56,8 +57,9 @@ const generateFixturePetOutput = ({ dataDir, runId, now = () => new Date().toISO
   fs.mkdirSync(qaDir, { recursive: true })
   fs.writeFileSync(path.join(qaDir, 'atlas-validation.json'), `${JSON.stringify({
     ok: true,
-    width: 1536,
-    height: 1872,
+    width: DEFAULT_ATLAS_WIDTH,
+    height: DEFAULT_ATLAS_HEIGHT,
+    visiblePixels: 6400,
     warnings: []
   }, null, 2)}\n`)
   if (creatorStudio) {
@@ -78,7 +80,7 @@ const generateFixturePetOutput = ({ dataDir, runId, now = () => new Date().toISO
       ...run.artifacts,
       outputDir,
       petJson: path.join(outputDir, 'pet.json'),
-      spritesheet,
+      spritesheet: spritesheetPath,
       bundle: bundlePath,
       qa: path.join(qaDir, 'atlas-validation.json'),
       ...(creatorStudio ? { actionTaskQa: path.join(qaDir, 'action-generation-task.json') } : {})
