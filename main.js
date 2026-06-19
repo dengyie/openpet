@@ -154,6 +154,7 @@ if (canBootstrap) app.whenReady().then(() => {
     actionImportService,
     petPackService,
     aiService,
+    imageGenerationModelService,
     pluginDirs: [pluginDir],
     officialPlugins: [createBasicBehaviorPlugin()],
     openExternal: (url) => shell.openExternal(url),
