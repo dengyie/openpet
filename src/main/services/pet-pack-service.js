@@ -286,6 +286,12 @@ const createPetPackService = ({
 
   const getBuiltInPack = () => createBuiltInPack({ projectRoot, loadLegacyAnimations })
 
+  const resetActivePackToBuiltIn = () => {
+    const current = getSettings()
+    if (current.activePackId === BUILT_IN_PACK_ID) return current
+    return savePetPackSettings({ ...current, activePackId: BUILT_IN_PACK_ID })
+  }
+
   const listBundledPacks = () => listBundledPackRoots(bundledPacksDir).map((packRoot) => {
     const pack = loadPetPackFromDirectory(packRoot)
     validatePackFiles(pack)
@@ -340,13 +346,24 @@ const createPetPackService = ({
         return loadInstalledPack(petPackSettings.activePackId)
       } catch (error) {
         console.error('Failed to load active pet pack:', error.message)
+        resetActivePackToBuiltIn()
       }
     }
     return getBuiltInPack()
   }
 
   const listPacks = () => {
-    const petPackSettings = getSettings()
+    let petPackSettings = getSettings()
+    if (petPackSettings.activePackId && petPackSettings.activePackId !== BUILT_IN_PACK_ID && !getBundledPack(petPackSettings.activePackId)) {
+      try {
+        const metadata = petPackSettings.installed[petPackSettings.activePackId]
+        assertPackAllowed({ id: petPackSettings.activePackId, packageHash: metadata?.packageHash || '', sourceSha256: metadata?.sourcePackageHash || '' })
+        loadInstalledPack(petPackSettings.activePackId)
+      } catch (error) {
+        console.error('Failed to load active pet pack:', error.message)
+        petPackSettings = resetActivePackToBuiltIn()
+      }
+    }
     const builtInPack = getBuiltInPack()
     const packs = [{
       ...createPackSummary(builtInPack, { active: petPackSettings.activePackId === BUILT_IN_PACK_ID }),
