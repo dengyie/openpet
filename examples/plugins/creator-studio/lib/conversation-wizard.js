@@ -20,7 +20,7 @@ const inferActionName = (prompt) => {
   if (quoted) return quoted
   const custom = firstMatch(prompt, [/自定义动作[:：]\s*([^，。,.]+)/, /动作[:：]\s*([^，。,.]+)/])
   if (custom) return custom
-  const addAction = firstMatch(prompt, /(?:加一个|新增一个|添加一个)([^，。,.]+?)(?:的动作|动作)/)
+  const addAction = firstMatch(prompt, [/(?:加一个|新增一个|添加一个)([^，。,.]+?)(?:的动作|动作)/])
   if (addAction) return addAction
   return '自定义动作'
 }
