@@ -44,6 +44,65 @@ test('creator studio example config schema normalizes backend controls', () => {
   assert.deepEqual(schema.properties.find((field) => field.key === 'backend').enum, ['fixture', 'cloud', 'local'])
 })
 
+test('creator studio wizard drafts a custom click-triggered single-action task', () => {
+  const { draftGenerationTask } = require('../../examples/plugins/creator-studio/lib/conversation-wizard')
+
+  const draft = draftGenerationTask({
+    prompt: '给当前猫猫加一个“被摸头后害羞转圈”的动作，点击触发，风格保持一致。'
+  })
+
+  assert.equal(draft.generationTask.mode, 'single-action')
+  assert.equal(draft.generationTask.targetPet, 'current')
+  assert.equal(draft.generationTask.styleSource, 'currentPet')
+  assert.match(draft.generationTask.actions[0].actionId, /^action-[0-9a-f]{8}$/)
+  assert.equal(draft.generationTask.actions[0].name, '被摸头后害羞转圈')
+  assert.equal(draft.generationTask.actions[0].loop, false)
+  assert.equal(draft.generationTask.actions[0].frameCount, 16)
+  assert.deepEqual(draft.generationTask.actions[0].triggerProposal, {
+    type: 'click',
+    binding: 'clickAction',
+    notes: 'User requested click trigger.'
+  })
+  assert.deepEqual(draft.generationTask.questions, [])
+})
+
+test('creator studio wizard asks one trigger question for ambiguous custom actions', () => {
+  const { draftGenerationTask } = require('../../examples/plugins/creator-studio/lib/conversation-wizard')
+
+  const draft = draftGenerationTask({
+    prompt: '新增一个自定义动作：原地打滚，动作要循环。'
+  })
+
+  assert.equal(draft.generationTask.mode, 'single-action')
+  assert.equal(draft.generationTask.actions[0].name, '原地打滚')
+  assert.equal(draft.generationTask.actions[0].loop, true)
+  assert.equal(draft.generationTask.actions[0].triggerProposal.type, 'unbound')
+  assert.deepEqual(draft.generationTask.questions, [{
+    id: 'trigger',
+    question: 'How should this custom action be triggered?',
+    options: ['manual', 'click', 'random', 'state', 'event', 'unbound']
+  }])
+})
+
+test('creator studio generation task validation rejects unsafe trigger proposals', () => {
+  const { normalizeGenerationTask } = require('../../examples/plugins/creator-studio/lib/generation-task')
+
+  assert.throws(
+    () => normalizeGenerationTask({
+      mode: 'single-action',
+      targetPet: 'current',
+      styleSource: 'currentPet',
+      actions: [{
+        actionId: 'bad-action',
+        name: 'Bad Action',
+        motionPrompt: 'Move around',
+        triggerProposal: { type: 'shell' }
+      }]
+    }),
+    /trigger type is invalid/
+  )
+})
+
 test('creator studio run store creates and advances durable run state', () => {
   const { createRun, readRun, updateRunStatus } = require('../../examples/plugins/creator-studio/lib/run-store')
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-test-'))
