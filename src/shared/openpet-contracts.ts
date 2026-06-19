@@ -12,6 +12,7 @@ export interface ControlCenterSettings {
   autoStart: boolean
   grounded: boolean
   home: ControlCenterPetHomeSettings
+  customCursor: CustomCursorSettings
 }
 
 export type PetHomeRadius = 'small' | 'medium' | 'large'
@@ -20,6 +21,18 @@ export interface ControlCenterPetHomeSettings {
   enabled: boolean
   radius: PetHomeRadius
   hasAnchor: boolean
+}
+
+export interface CustomCursorSettings {
+  enabled: boolean
+  assetPath: string
+  assetUrl: string
+  fileName: string
+}
+
+export interface CursorImportResult {
+  canceled: boolean
+  cursor?: CustomCursorSettings
 }
 
 export interface AiBehaviorRule {
@@ -2036,6 +2049,7 @@ export interface ControlCenterApi {
   getSettings: () => Promise<ControlCenterSettings>
   saveSettings: (settings: Partial<ControlCenterSettings>) => Promise<ControlCenterSettings>
   previewScale: (scale: number) => void
+  importCursor: () => Promise<CursorImportResult>
   getActions: () => Promise<ActionsConfigViewState>
   inspectActionFrames: (payload?: ActionFrameInspectRequest) => Promise<ActionFrameInspectionResult>
   reinspectActionFrames: (payload?: ActionFrameReinspectRequest) => Promise<ActionFrameInspectionResult>

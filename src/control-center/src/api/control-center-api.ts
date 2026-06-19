@@ -563,6 +563,22 @@ const demoApi: ControlCenterApi = {
     writeDemoState()
     return normalizeDemoSettings(demoState.settings)
   },
+  importCursor: async () => {
+    demoState.settings = normalizeDemoSettings({
+      ...demoState.settings,
+      customCursor: {
+        enabled: true,
+        assetPath: '/demo/cursors/demo-cursor.png',
+        assetUrl: 'file:///demo/cursors/demo-cursor.png',
+        fileName: 'demo-cursor.png'
+      }
+    })
+    writeDemoState()
+    return {
+      canceled: false,
+      cursor: { ...demoState.settings.customCursor }
+    }
+  },
   previewScale: () => {},
   getActions: async () => defaultActionsConfig,
   inspectActionFrames: async ({ actionId } = {}) => createDemoInspection(actionId),

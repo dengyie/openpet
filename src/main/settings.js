@@ -8,6 +8,7 @@
 const fs = require('fs')
 const path = require('path')
 const { app } = require('electron')
+const { createDefaultCursorSettings, normalizeCustomCursor } = require('./services/cursor-asset-service')
 
 // 设置保存在 Electron 用户数据目录，卸载重装后仍然保留。
 const settingsPath = path.join(app.getPath('userData'), 'settings.json')
@@ -29,6 +30,7 @@ const defaultSettings = {
       anchor: null
     }
   },
+  customCursor: createDefaultCursorSettings(),
   ai: {
     enabled: false,
     provider: 'openai-compatible',
@@ -100,6 +102,7 @@ const mergeSettings = (settings = {}) => ({
         : defaultSettings.petBehavior.home.anchor
     }
   },
+  customCursor: normalizeCustomCursor(settings.customCursor),
   plugins: {
     ...defaultSettings.plugins,
     ...(settings.plugins || {}),

@@ -102,13 +102,15 @@ const createRendererHarness = async () => {
 }
 
 test('scale changes freeze the pet on the default action instead of continuing an animation', async () => {
-  const { activeTimers, callbacks, elements } = await createRendererHarness()
+  const { activeTimers, callbacks, elements, logs } = await createRendererHarness()
 
   callbacks.action({ actionId: 'waving' })
   assert.ok([...activeTimers.values()].includes(100))
 
   callbacks.settings({ scale: 0.5 })
 
+  const actionEvents = logs.filter((entry) => entry.event === 'pet.action.changed')
+  assert.equal(actionEvents.at(-1).details.nextAction, 'idle')
   assert.equal(elements.cat.style.width, '25px')
   assert.equal(elements.cat.style.height, '25px')
   assert.equal(elements.cat.style.backgroundImage, 'url(idle.png)')

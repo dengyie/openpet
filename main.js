@@ -32,6 +32,8 @@ const { createAboutService } = require('./src/main/services/about-service')
 const { createCatalogService } = require('./src/main/services/catalog-service')
 const { createPetMovementPolicy } = require('./src/main/pet-movement-policy')
 const { configureSingleInstanceLock } = require('./src/main/single-instance')
+const { createCursorAssetService } = require('./src/main/services/cursor-asset-service')
+const { createAppLogService } = require('./src/main/services/app-log-service')
 const { maybeRunPackagedRuntimeSmoke } = require('./src/main/packaged-runtime-smoke-runner')
 const { maybeRunPackagedPluginCleanupEvidence } = require('./src/main/packaged-plugin-cleanup-evidence-runner')
 const { createBasicBehaviorPlugin } = require('./src/main/plugins/official/basic-behavior')
@@ -81,10 +83,50 @@ if (canBootstrap) app.whenReady().then(() => {
   const localHttpService = createLocalHttpService({ petService, settingsService })
   const aboutService = createAboutService({ app, packageJson })
   const petMovementPolicy = createPetMovementPolicy({ screen })
+  const appLogService = createAppLogService({
+    logDir: path.join(app.getPath('userData'), 'logs')
+  })
+  try {
+    appLogService.record({
+      scope: 'app',
+      level: 'info',
+      actor: 'system',
+      event: 'app.ready',
+      message: 'OpenPet app services initialized'
+    })
+    console.log(`OpenPet app log: ${appLogService.logPath}`)
+  } catch (error) {
+    console.warn(`OpenPet app log unavailable: ${error.message}`)
+  }
   const actionImportService = createActionImportService({
     framesRoot: path.join(__dirname, 'cat_anime', 'flames'),
     spritesDir: path.join(__dirname, 'cat_anime', 'sprites'),
     configPath: path.join(__dirname, 'cat_anime', 'animations.json')
+  })
+  const cursorAssetService = createCursorAssetService({
+    cursorDir: path.join(app.getPath('userData'), 'cursors')
+  })
+  cursorAssetService.repairCursor(petService.getSettings().customCursor).then((customCursor) => {
+    const currentSettings = petService.getSettings()
+    if (customCursor.assetPath && customCursor.assetPath !== currentSettings.customCursor?.assetPath) {
+      petService.saveSettings({ ...currentSettings, customCursor })
+      appLogService.record({
+        scope: 'settings',
+        level: 'info',
+        actor: 'system',
+        event: 'settings.cursor.asset.repaired',
+        message: 'Cursor asset resized for browser compatibility',
+        details: { fileName: customCursor.fileName, enabled: customCursor.enabled }
+      })
+    }
+  }).catch((error) => {
+    appLogService.record({
+      scope: 'settings',
+      level: 'error',
+      actor: 'system',
+      event: 'settings.cursor.asset.repair.failed',
+      message: error.message
+    })
   })
   const pluginDir = path.join(app.getPath('userData'), 'plugins')
   const pluginInstallService = createPluginInstallService({
@@ -154,6 +196,8 @@ if (canBootstrap) app.whenReady().then(() => {
     localHttpService,
     aboutService,
     actionImportService,
+    cursorAssetService,
+    appLogService,
     applyWindowScale: (scale) => applyWindowScale(petWindow, scale),
     applyPetViewport,
     clampToWorkArea,
