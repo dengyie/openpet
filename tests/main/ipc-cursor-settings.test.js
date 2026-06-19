@@ -19,8 +19,15 @@ const createIpcMainStub = () => {
   }
 }
 
-const createRequiredServices = ({ ipcMainService, petService, cursorAssetService, dialogService }) => ({
-  getPetWindow: () => null,
+const createRequiredServices = ({
+  ipcMainService,
+  petService,
+  cursorAssetService,
+  dialogService,
+  getPetWindow = () => null,
+  applyWindowScale = () => {}
+}) => ({
+  getPetWindow,
   petService,
   petPackService: {
     listPacks: () => [],
@@ -84,7 +91,7 @@ const createRequiredServices = ({ ipcMainService, petService, cursorAssetService
   },
   cursorAssetService,
   appLogService: { record: () => {} },
-  applyWindowScale: () => {},
+  applyWindowScale,
   applyPetViewport: () => {},
   clampToWorkArea: (_win, x, y) => ({ x, y }),
   getMovementState: () => null,
@@ -218,4 +225,114 @@ test('settings:import-cursor only offers PNG and WEBP files in the picker', asyn
 
   assert.deepEqual(result, { canceled: true })
   assert.deepEqual(dialogOptions.filters, [{ name: 'Cursor Images', extensions: ['png', 'webp'] }])
+})
+
+test('settings:preview-scale lets the renderer drive viewport resizing', () => {
+  const ipcMain = createIpcMainStub()
+  const previews = []
+  const scaleCalls = []
+  const sentMessages = []
+  const petWindow = {
+    isDestroyed: () => false,
+    webContents: {
+      send: (channel, payload) => sentMessages.push({ channel, payload })
+    }
+  }
+
+  registerIpcHandlers(createRequiredServices({
+    ipcMainService: ipcMain,
+    getPetWindow: () => petWindow,
+    applyWindowScale: (targetWindow, scale) => scaleCalls.push({ targetWindow, scale }),
+    petService: {
+      onSay: () => {},
+      onAction: () => {},
+      onEvent: () => {},
+      getAnimations: () => ({ actions: [] }),
+      getPreviewAnimations: () => ({ actions: [] }),
+      reloadAnimations: () => ({ actions: [] }),
+      previewSettings: (settings) => previews.push(settings),
+      getSettings: () => ({}),
+      saveSettings: (settings) => settings,
+      say: (payload) => payload,
+      playAction: (payload) => payload,
+      setEvent: (payload) => payload
+    },
+    cursorAssetService: {}
+  }))
+
+  ipcMain.listeners.get(IPC.SETTINGS_PREVIEW_SCALE)(null, 1.25)
+
+  assert.deepEqual(previews, [{ scale: 1.25 }])
+  assert.deepEqual(scaleCalls, [])
+  assert.deepEqual(sentMessages, [{ channel: IPC.SETTINGS_CHANGED, payload: { scale: 1.25 } }])
+})
+
+test('settings:save lets the renderer apply saved scale through the active viewport', async () => {
+  const ipcMain = createIpcMainStub()
+  const scaleCalls = []
+  const sentMessages = []
+  const petWindow = {
+    isDestroyed: () => false,
+    getBounds: () => ({ x: 0, y: 0, width: 150, height: 150 }),
+    webContents: {
+      send: (channel, payload) => sentMessages.push({ channel, payload })
+    }
+  }
+  let currentSettings = {
+    scale: 1,
+    walkSpeed: 2,
+    walkDuration: 15000,
+    bubbleDuration: 1300,
+    menuPosition: 'auto',
+    autoStart: false,
+    selectedCursorId: 'system',
+    customCursor: {
+      enabled: false,
+      assetPath: '',
+      assetUrl: '',
+      fileName: '',
+      hotspotX: 0,
+      hotspotY: 0
+    },
+    customCursors: [],
+    petBehavior: {
+      grounded: false,
+      home: {
+        enabled: false,
+        radius: 'medium',
+        anchor: null
+      }
+    }
+  }
+
+  registerIpcHandlers(createRequiredServices({
+    ipcMainService: ipcMain,
+    getPetWindow: () => petWindow,
+    applyWindowScale: (targetWindow, scale) => scaleCalls.push({ targetWindow, scale }),
+    petService: {
+      onSay: () => {},
+      onAction: () => {},
+      onEvent: () => {},
+      getAnimations: () => ({ actions: [] }),
+      getPreviewAnimations: () => ({ actions: [] }),
+      reloadAnimations: () => ({ actions: [] }),
+      previewSettings: () => {},
+      getSettings: () => currentSettings,
+      saveSettings: (settings) => {
+        currentSettings = settings
+        return currentSettings
+      },
+      say: (payload) => payload,
+      playAction: (payload) => payload,
+      setEvent: (payload) => payload
+    },
+    cursorAssetService: {}
+  }))
+
+  const result = await ipcMain.handlers.get(IPC.SETTINGS_SAVE)(null, { scale: 1.25 })
+
+  assert.equal(result.scale, 1.25)
+  assert.deepEqual(scaleCalls, [])
+  assert.equal(sentMessages.at(-1).channel, IPC.SETTINGS_CHANGED)
+  assert.equal(sentMessages.at(-1).payload.scale, 1.25)
 })

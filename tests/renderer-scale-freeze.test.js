@@ -32,6 +32,7 @@ const createElement = (id = '') => ({
 })
 
 const createRendererHarness = async () => {
+  const viewportCalls = []
   const elements = {
     pet: createElement('pet'),
     cat: createElement('cat'),
@@ -77,7 +78,7 @@ const createRendererHarness = async () => {
             { id: 'waving', label: 'Waving', loop: false, sprite: 'waving.png', frameWidth: 100, frameHeight: 100, frameCount: 4, frameMs: 100 }
           ]
         }),
-        setViewport: () => {},
+        setViewport: (viewport) => viewportCalls.push(viewport),
         setMousePassthrough: () => {},
         recordAppLog: (entry) => logs.push(entry),
         onSettingsChanged: (callback) => { callbacks.settings = callback },
@@ -98,7 +99,7 @@ const createRendererHarness = async () => {
   vm.runInNewContext(rendererSource, context, { filename: 'renderer.js' })
   await Promise.resolve()
   await Promise.resolve()
-  return { activeTimers, callbacks, elements, logs }
+  return { activeTimers, callbacks, elements, logs, viewportCalls }
 }
 
 test('scale changes freeze the pet on the default action instead of continuing an animation', async () => {
@@ -117,4 +118,17 @@ test('scale changes freeze the pet on the default action instead of continuing a
   assert.equal(elements.cat.style.backgroundPositionX, '0px')
   assert.equal(elements.cat.style.backgroundPositionY, '0px')
   assert.equal([...activeTimers.values()].includes(100), false)
+})
+
+test('scale preview sends one viewport resize after freezing to the default action', async () => {
+  const { callbacks, viewportCalls } = await createRendererHarness()
+
+  callbacks.action({ actionId: 'waving' })
+  const callsBeforeScale = viewportCalls.length
+
+  callbacks.settings({ scale: 0.5 })
+
+  const scaleViewportCalls = viewportCalls.slice(callsBeforeScale)
+  assert.equal(scaleViewportCalls.length, 1)
+  assert.equal(scaleViewportCalls[0].scale, 0.25)
 })
