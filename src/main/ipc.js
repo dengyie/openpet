@@ -292,8 +292,8 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     ]
     menuService.buildFromTemplate(template).popup({
       window: win,
-      x: placement.popupPoint.x,
-      y: placement.popupPoint.y
+      x: placement.screenPoint.x,
+      y: placement.screenPoint.y
     })
     return placement
   })
