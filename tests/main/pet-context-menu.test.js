@@ -54,7 +54,7 @@ test('choosePetContextMenuPoint falls back from a preferred placement when it wo
   assert.equal(point.placement, 'below')
 })
 
-test('choosePetContextMenuPoint keeps tall menus close to the pet near the screen edge', () => {
+test('choosePetContextMenuPoint keeps tall side menus inside the work area near the bottom edge', () => {
   const point = choosePetContextMenuPoint({
     petBounds: { x: 1000, y: 720, width: 150, height: 150 },
     workArea: { x: 0, y: 0, width: 1440, height: 900 },
@@ -65,10 +65,12 @@ test('choosePetContextMenuPoint keeps tall menus close to the pet near the scree
 
   assert.equal(point.placement, 'right')
   assert.equal(point.screenPoint.x, 1162)
-  assert.equal(Math.abs(point.screenPoint.y - 720), 75)
+  assert.equal(point.screenPoint.y, 472)
+  assert.equal(point.screenPoint.y + 420, 892)
+  assert.equal(point.windowPoint.x > 150, true)
 })
 
-test('choosePetContextMenuPoint keeps auto-positioned tall menus close to the pet', () => {
+test('choosePetContextMenuPoint keeps auto-positioned tall side menus inside the work area', () => {
   const point = choosePetContextMenuPoint({
     petBounds: { x: 1000, y: 720, width: 150, height: 150 },
     workArea: { x: 0, y: 0, width: 1440, height: 900 },
@@ -79,7 +81,9 @@ test('choosePetContextMenuPoint keeps auto-positioned tall menus close to the pe
 
   assert.equal(point.placement, 'right')
   assert.equal(point.screenPoint.x, 1162)
-  assert.equal(Math.abs(point.screenPoint.y - 720), 75)
+  assert.equal(point.screenPoint.y, 472)
+  assert.equal(point.screenPoint.y + 420, 892)
+  assert.equal(point.windowPoint.x > 150, true)
 })
 
 test('estimatePetContextMenuSize scales with action count but keeps stable bounds', () => {
