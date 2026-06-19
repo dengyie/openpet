@@ -136,6 +136,33 @@ test('creator studio run store creates and advances durable run state', () => {
   assert.equal(updated.currentStep, 'prepare')
 })
 
+test('creator studio run store persists conversational generation tasks', () => {
+  const { createRun, readRun } = require('../../examples/plugins/creator-studio/lib/run-store')
+  const { draftGenerationTask } = require('../../examples/plugins/creator-studio/lib/conversation-wizard')
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-task-'))
+  const draft = draftGenerationTask({
+    prompt: '给当前猫猫加一个“被摸头后害羞转圈”的动作，点击触发，风格保持一致。'
+  })
+
+  const run = createRun({
+    dataDir,
+    input: {
+      petName: 'Task Cat',
+      prompt: draft.originalPrompt,
+      backend: 'fixture',
+      generationTask: draft.generationTask,
+      originalPrompt: draft.originalPrompt
+    },
+    now: () => '2026-06-19T00:00:00.000Z'
+  })
+  const persisted = readRun({ dataDir, runId: run.runId })
+
+  assert.equal(persisted.input.originalPrompt, draft.originalPrompt)
+  assert.equal(persisted.generationTask.actions[0].name, '被摸头后害羞转圈')
+  assert.equal(persisted.generationTask.actions[0].triggerProposal.type, 'click')
+  assert.equal(fs.existsSync(path.join(dataDir, 'runs', run.runId, 'inputs', 'generation-task.json')), true)
+})
+
 test('creator studio run store keeps same-name same-day runs separate', () => {
   const { createRun } = require('../../examples/plugins/creator-studio/lib/run-store')
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-collisions-'))
@@ -299,6 +326,24 @@ test('creator studio run-step command fails unavailable local backend with persi
   assert.equal(run.status, 'failed')
   assert.equal(run.backendStatus.backend, 'local')
   assert.equal(run.backendStatus.state, 'not_configured')
+})
+
+test('creator studio create-run command drafts a generation task from a conversation prompt', () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-create-task-'))
+
+  const created = runCreatorCommand({
+    command: 'create-run',
+    dataDir,
+    payload: {
+      petName: 'Prompt Cat',
+      prompt: '新增一个自定义动作：原地打滚，动作要循环。'
+    }
+  })
+
+  assert.equal(created.status, 0)
+  assert.equal(created.json.run.generationTask.mode, 'single-action')
+  assert.equal(created.json.run.generationTask.actions[0].name, '原地打滚')
+  assert.equal(created.json.run.generationTask.questions[0].id, 'trigger')
 })
 
 test('creator studio commands create run generate output approve and export', () => {
