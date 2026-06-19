@@ -2,21 +2,31 @@ import type {
   AiBehaviorConfig,
   AiBehaviorResult,
   AiConfigViewState,
-  ChatMessage
+  ChatMessage,
+  ImageGenerationConfigViewState
 } from '../../../shared/openpet-contracts'
 import { Toggle } from '../components/Toggle'
+import { defaultImageGenerationConfig } from '../lib/defaults'
 
 export interface AiPaneProps {
   config: AiConfigViewState
+  imageGenerationConfig: ImageGenerationConfigViewState
   onChange: (partial: Partial<AiConfigViewState>) => void
+  onChangeImageGeneration: (partial: Partial<ImageGenerationConfigViewState>) => void
   onSave: () => void | Promise<void>
   onSaveApiKey: () => void | Promise<void>
   onTest: () => void | Promise<void>
+  onSaveImageGeneration: () => void | Promise<void>
+  onSaveImageGenerationApiKey: () => void | Promise<void>
+  onClearImageGenerationApiKey: () => void | Promise<void>
+  onCheckImageGenerationHealth: () => void | Promise<void>
   onSendChat: () => void | Promise<void>
   saving: boolean
   status: string
   apiKeyDraft: string
   setApiKeyDraft: (value: string) => void
+  imageApiKeyDraft: string
+  setImageApiKeyDraft: (value: string) => void
   chatDraft: string
   setChatDraft: (value: string) => void
   chatMessages: ChatMessage[]
@@ -40,15 +50,23 @@ export interface AiPaneProps {
 
 export function AiPane({
   config,
+  imageGenerationConfig = defaultImageGenerationConfig,
   onChange,
+  onChangeImageGeneration,
   onSave,
   onSaveApiKey,
   onTest,
+  onSaveImageGeneration,
+  onSaveImageGenerationApiKey,
+  onClearImageGenerationApiKey,
+  onCheckImageGenerationHealth,
   onSendChat,
   saving,
   status,
   apiKeyDraft,
   setApiKeyDraft,
+  imageApiKeyDraft,
+  setImageApiKeyDraft,
   chatDraft,
   setChatDraft,
   chatMessages,
@@ -148,6 +166,122 @@ export function AiPane({
             className="text-input textarea"
             value={config.systemPrompt}
             onChange={(event) => onChange({ systemPrompt: event.target.value })}
+          />
+        </label>
+      </div>
+
+      <div className="section">
+        <div className="field-row">
+          <div>
+            <div className="field-label">Image Generation</div>
+            <div className="field-note">Creator Studio 主机模型设置</div>
+          </div>
+          <div className="inline-action">
+            <button type="button" className="ghost" onClick={onCheckImageGenerationHealth} disabled={saving}>
+              检查图片健康
+            </button>
+            <button type="button" className="primary" onClick={onSaveImageGeneration} disabled={saving}>
+              保存图片配置
+            </button>
+          </div>
+        </div>
+
+        <label className="field-row">
+          <span className="field-label">图片默认后端</span>
+          <select
+            aria-label="图片默认后端"
+            className="text-input"
+            value={imageGenerationConfig.defaultBackend}
+            onChange={(event) => onChangeImageGeneration({ defaultBackend: event.target.value as ImageGenerationConfigViewState['defaultBackend'] })}
+          >
+            <option value="fixture">fixture</option>
+            <option value="cloud">cloud</option>
+            <option value="local">local</option>
+          </select>
+        </label>
+
+        <label className="field-row">
+          <span className="field-label">图片 Base URL</span>
+          <input
+            aria-label="图片 Base URL"
+            className="text-input"
+            value={imageGenerationConfig.cloud.baseUrl}
+            onChange={(event) => onChangeImageGeneration({
+              cloud: { ...imageGenerationConfig.cloud, baseUrl: event.target.value }
+            })}
+          />
+        </label>
+
+        <label className="field-row">
+          <span className="field-label">图片 Model</span>
+          <input
+            aria-label="图片 Model"
+            className="text-input"
+            value={imageGenerationConfig.cloud.model}
+            onChange={(event) => onChangeImageGeneration({
+              cloud: { ...imageGenerationConfig.cloud, model: event.target.value }
+            })}
+          />
+        </label>
+
+        <div className="field-row">
+          <div>
+            <div className="field-label">图片 API Key</div>
+            <div className="field-note">
+              {imageGenerationConfig.cloud.hasApiKey ? '已保存' : '未保存'}
+              {imageGenerationConfig.cloud.apiKeyPreview ? ` · ${imageGenerationConfig.cloud.apiKeyPreview}` : ''}
+            </div>
+          </div>
+          <div className="inline-action">
+            <input
+              className="text-input"
+              type="password"
+              value={imageApiKeyDraft}
+              placeholder={imageGenerationConfig.cloud.hasApiKey ? '输入新密钥覆盖' : '输入图片 API Key'}
+              onChange={(event) => setImageApiKeyDraft(event.target.value)}
+            />
+            <button type="button" className="ghost" onClick={onSaveImageGenerationApiKey} disabled={!imageApiKeyDraft || saving}>
+              保存图片密钥
+            </button>
+            <button type="button" className="danger-text" onClick={onClearImageGenerationApiKey} disabled={saving || !imageGenerationConfig.cloud.hasApiKey}>
+              清除图片密钥
+            </button>
+          </div>
+        </div>
+
+        <label className="field-row">
+          <span className="field-label">本地 Endpoint</span>
+          <input
+            aria-label="本地 Endpoint"
+            className="text-input"
+            value={imageGenerationConfig.local.endpoint}
+            onChange={(event) => onChangeImageGeneration({
+              local: { ...imageGenerationConfig.local, endpoint: event.target.value }
+            })}
+          />
+        </label>
+
+        <label className="field-row">
+          <span className="field-label">本地 Health URL</span>
+          <input
+            aria-label="本地 Health URL"
+            className="text-input"
+            value={imageGenerationConfig.local.healthUrl}
+            onChange={(event) => onChangeImageGeneration({
+              local: { ...imageGenerationConfig.local, healthUrl: event.target.value }
+            })}
+          />
+        </label>
+
+        <label className="field-row">
+          <span className="field-label">本地模型</span>
+          <input
+            aria-label="本地模型"
+            className="text-input"
+            value={imageGenerationConfig.local.model}
+            onChange={(event) => onChangeImageGeneration({
+              local: { ...imageGenerationConfig.local, model: event.target.value }
+            })}
           />
         </label>
       </div>

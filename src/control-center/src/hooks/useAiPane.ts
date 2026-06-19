@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react'
 import { controlCenterAPI as api } from '../api/control-center-api'
-import { cloneAiBehavior, cloneAiConfig, cloneChatMessages, defaultAiConfig } from '../lib/defaults'
+import {
+  cloneAiBehavior,
+  cloneAiConfig,
+  cloneChatMessages,
+  cloneImageGenerationConfig,
+  defaultAiConfig,
+  defaultImageGenerationConfig
+} from '../lib/defaults'
 import { downloadTextFile } from '../lib/download'
 import { messageFromError } from '../lib/errors'
 import type {
@@ -8,7 +15,8 @@ import type {
   AiBehaviorResult,
   AiBehaviorRule,
   AiConfigViewState,
-  ChatMessage
+  ChatMessage,
+  ImageGenerationConfigViewState
 } from '../../../shared/openpet-contracts'
 import type { AiPaneProps } from '../panes/AiPane'
 
@@ -22,7 +30,9 @@ export function useAiPane() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [config, setConfig] = useState<AiConfigViewState>(defaultAiConfig)
+  const [imageGenerationConfig, setImageGenerationConfig] = useState<ImageGenerationConfigViewState>(defaultImageGenerationConfig)
   const [apiKeyDraft, setApiKeyDraft] = useState('')
+  const [imageApiKeyDraft, setImageApiKeyDraft] = useState('')
   const [status, setStatus] = useState('')
   const [chatDraft, setChatDraft] = useState('')
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
@@ -38,11 +48,13 @@ export function useAiPane() {
     let mounted = true
     Promise.all([
       api.getAiConfig(),
+      api.getImageGenerationConfig(),
       api.getAiConversation('control-center'),
       api.getAiBehavior()
-    ]).then(([loadedConfig, loadedChatMessages, loadedBehavior]) => {
+    ]).then(([loadedConfig, loadedImageGenerationConfig, loadedChatMessages, loadedBehavior]) => {
       if (!mounted) return
       setConfig(cloneAiConfig(loadedConfig))
+      setImageGenerationConfig(cloneImageGenerationConfig(loadedImageGenerationConfig))
       setChatMessages(cloneChatMessages(loadedChatMessages))
       const nextBehavior = cloneAiBehavior(loadedBehavior || loadedConfig?.behavior)
       setBehavior(nextBehavior)
@@ -67,6 +79,20 @@ export function useAiPane() {
       setStatus('AI 配置已保存')
     } catch (error) {
       setStatus(messageFromError(error, '保存失败'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const onSaveImageGeneration = async () => {
+    setSaving(true)
+    setStatus('')
+    try {
+      const savedConfig = cloneImageGenerationConfig(await api.saveImageGenerationConfig(imageGenerationConfig))
+      setImageGenerationConfig(savedConfig)
+      setStatus('图片生成配置已保存')
+    } catch (error) {
+      setStatus(messageFromError(error, '图片生成配置保存失败'))
     } finally {
       setSaving(false)
     }
@@ -163,6 +189,63 @@ export function useAiPane() {
     }
   }
 
+  const onSaveImageGenerationApiKey = async () => {
+    setSaving(true)
+    setStatus('')
+    try {
+      const result = await api.saveImageGenerationApiKey(imageApiKeyDraft)
+      setImageGenerationConfig((current) => ({
+        ...current,
+        cloud: {
+          ...current.cloud,
+          hasApiKey: result.hasApiKey,
+          apiKeyPreview: result.apiKeyPreview
+        }
+      }))
+      setImageApiKeyDraft('')
+      setStatus('图片 API Key 已保存')
+    } catch (error) {
+      setStatus(messageFromError(error, '图片 API Key 保存失败'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const onClearImageGenerationApiKey = async () => {
+    setSaving(true)
+    setStatus('')
+    try {
+      const result = await api.clearImageGenerationApiKey()
+      setImageGenerationConfig((current) => ({
+        ...current,
+        cloud: {
+          ...current.cloud,
+          hasApiKey: result.hasApiKey,
+          apiKeyPreview: result.apiKeyPreview
+        }
+      }))
+      setImageApiKeyDraft('')
+      setStatus('图片 API Key 已清除')
+    } catch (error) {
+      setStatus(messageFromError(error, '图片 API Key 清除失败'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const onCheckImageGenerationHealth = async () => {
+    setSaving(true)
+    setStatus('')
+    try {
+      const result = await api.checkImageGenerationHealth({ backend: imageGenerationConfig.defaultBackend })
+      setStatus(result.ok ? '图片模型健康检查通过' : (result.message || '图片模型健康检查失败'))
+    } catch (error) {
+      setStatus(messageFromError(error, '图片模型健康检查失败'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const onTest = async () => {
     setSaving(true)
     setStatus('测试中')
@@ -206,10 +289,13 @@ export function useAiPane() {
 
   const paneProps = {
     config,
+    imageGenerationConfig,
     saving,
     status,
     apiKeyDraft,
     setApiKeyDraft,
+    imageApiKeyDraft,
+    setImageApiKeyDraft,
     chatDraft,
     setChatDraft,
     chatMessages,
@@ -225,9 +311,25 @@ export function useAiPane() {
     setBehaviorRulesText,
     onChangeBehavior: (partial: Partial<AiBehaviorConfig>) => setBehavior({ ...behavior, ...partial }),
     onChange: (partial: Partial<AiConfigViewState>) => setConfig({ ...config, ...partial }),
+    onChangeImageGeneration: (partial: Partial<ImageGenerationConfigViewState>) => setImageGenerationConfig((current) => cloneImageGenerationConfig({
+      ...current,
+      ...partial,
+      cloud: {
+        ...current.cloud,
+        ...(partial.cloud || {})
+      },
+      local: {
+        ...current.local,
+        ...(partial.local || {})
+      }
+    })),
     onSave,
+    onSaveImageGeneration,
     onSaveBehavior,
     onSaveApiKey,
+    onSaveImageGenerationApiKey,
+    onClearImageGenerationApiKey,
+    onCheckImageGenerationHealth,
     onTest,
     onDryRunBehavior,
     onReplayBehaviorDecision,
