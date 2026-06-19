@@ -245,10 +245,16 @@ const renderCurrentFrame = () => {
 const freezeActionForScalePreview = () => {
   if (state.action !== state.defaultAction) {
     stopWalk()
-    setAction(state.defaultAction)
+    setAction(state.defaultAction, { scheduleFrame: false })
+    return
   }
+  const currentAction = state.animations[state.action]
+  if (!currentAction) return
   state.frameIndex = 0
   window.clearTimeout(state.frameTimer)
+  const dims = getDisplayDimensions(currentAction)
+  applyActionLayout(currentAction, dims)
+  applySpriteGeometry(currentAction, dims)
   renderCurrentFrame()
 }
 
@@ -384,7 +390,7 @@ const updateMousePassthroughFromPoint = (event) => {
  * — 点击动作（非待机）会先停止散步防止窗口移动干扰。
  * @param {string} action 动作 id
  */
-const setAction = (action) => {
+const setAction = (action, options = {}) => {
   const a = state.animations[action]
   if (!a?.sprite) {
     logPetEvent('pet.action.ignored', {
@@ -409,7 +415,8 @@ const setAction = (action) => {
   setMousePassthrough(false)
   refreshMouseStateFromLastPoint()
 
-  scheduleFrameTick()
+  if (options.scheduleFrame === false) window.clearTimeout(state.frameTimer)
+  else scheduleFrameTick()
 
   // 点击触发的非待机动作 → 停步 + 显示动作名
   if (action === state.clickAction && action !== state.defaultAction) {
@@ -743,14 +750,7 @@ const runMenuCommand = (payload) => {
 window.petAPI.onSettingsChanged((s) => {
   if (s.scale != null) {
     state.scale = normalizePetScale(s.scale)
-    const currentAction = state.animations[state.action]
-    if (currentAction) {
-      const dims = getDisplayDimensions(currentAction)
-      applyActionLayout(currentAction, dims)
-      applySpriteGeometry(currentAction, dims)
-      freezeActionForScalePreview()
-      renderCurrentFrame()
-    }
+    freezeActionForScalePreview()
   }
   if (s.walkSpeed != null) state.walkSpeed = s.walkSpeed
   if (s.walkDuration != null) state.walkDuration = s.walkDuration
