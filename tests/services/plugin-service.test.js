@@ -12,6 +12,7 @@ const sharp = require('sharp')
 const { createPluginService } = require('../../src/main/services/plugin-service')
 const { createActionImportService } = require('../../src/main/services/action-import-service')
 const { createPetPackService } = require('../../src/main/services/pet-pack-service')
+const { createMinimalWebp } = require('../../examples/plugins/creator-studio/lib/fake-hatch-pet')
 
 const createSettingsService = (initialSettings = {}) => {
   let current = {
@@ -270,16 +271,7 @@ const requestBridge = (url, { method = 'GET', token, body } = {}) => new Promise
 
 const createMinimalCodexPetOutput = (root, manifest = {}) => {
   fs.mkdirSync(root, { recursive: true })
-  const buffer = Buffer.alloc(30)
-  buffer.write('RIFF', 0, 'ascii')
-  buffer.writeUInt32LE(22, 4)
-  buffer.write('WEBP', 8, 'ascii')
-  buffer.write('VP8X', 12, 'ascii')
-  buffer.writeUInt32LE(10, 16)
-  buffer.writeUInt8(0, 20)
-  buffer.writeUIntLE(1536 - 1, 24, 3)
-  buffer.writeUIntLE(1872 - 1, 27, 3)
-  fs.writeFileSync(path.join(root, 'spritesheet.webp'), buffer)
+  fs.writeFileSync(path.join(root, 'spritesheet.webp'), createMinimalWebp())
   fs.writeFileSync(path.join(root, 'pet.json'), JSON.stringify({
     id: manifest.id || 'creator-studio-cat',
     displayName: manifest.displayName || 'Creator Studio Cat',

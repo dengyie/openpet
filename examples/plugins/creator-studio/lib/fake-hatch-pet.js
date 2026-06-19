@@ -4,18 +4,14 @@ const crypto = require('crypto')
 const { execFileSync } = require('child_process')
 const { getRunDir, readRun, writeRun } = require('./run-store')
 
-const createMinimalWebp = ({ width = 1536, height = 1872 } = {}) => {
-  const buffer = Buffer.alloc(30)
-  buffer.write('RIFF', 0, 'ascii')
-  buffer.writeUInt32LE(22, 4)
-  buffer.write('WEBP', 8, 'ascii')
-  buffer.write('VP8X', 12, 'ascii')
-  buffer.writeUInt32LE(10, 16)
-  buffer.writeUInt8(0, 20)
-  buffer.writeUIntLE(width - 1, 24, 3)
-  buffer.writeUIntLE(height - 1, 27, 3)
-  return buffer
-}
+const VALID_FIXTURE_ATLAS_WEBP_BASE64 = [
+  'UklGRpgAAABXRUJQVlA4TIsAAAAv/8XTEQcQEREAUKT//ymi/6n//e9///vf//73',
+  'v//973//+9///ve///3vf//73//+97///e9///vf//73v//973//+9///ve///3',
+  'vf//73//+97///e9///vf//73v//973//+9///ve///3vf//73//+97///e9///',
+  'vf//73v//973//+9///q8CAA=='
+].join('')
+
+const createMinimalWebp = () => Buffer.from(VALID_FIXTURE_ATLAS_WEBP_BASE64, 'base64')
 
 const sha256 = (filePath) => crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex')
 

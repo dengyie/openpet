@@ -8,6 +8,7 @@ const { execFileSync } = require('node:child_process')
 
 const { createActionService } = require('../../src/main/services/action-service')
 const { BUILT_IN_PACK_ID, createPetPackService } = require('../../src/main/services/pet-pack-service')
+const { createMinimalWebp: createFixtureWebp } = require('../../examples/plugins/creator-studio/lib/fake-hatch-pet')
 
 const createSettingsService = (initialSettings = {}) => {
   let settings = {
@@ -29,6 +30,11 @@ const createSettingsService = (initialSettings = {}) => {
 const createTempDir = (name) => fs.mkdtempSync(path.join(os.tmpdir(), `openpet-${name}-`))
 
 const sha256 = (filePath) => crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex')
+
+const FIXTURE_ATLAS_WEBP = Buffer.from(
+  'UklGRkIUAABXRUJQVlA4IDYUAACwXwKdASoABlAHPm02mUmkIqKhIAgAgA2JaW7hd2EbQAoMdOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ychvAAP7+Wb/0l0t5H//9ZX//zK//+ZX+8mbIAApNAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==',
+  'base64'
+)
 
 const createPetPackDirectory = (root, manifest = {}) => {
   fs.mkdirSync(path.join(root, 'sprites'), { recursive: true })
@@ -55,6 +61,7 @@ const createPetPackDirectory = (root, manifest = {}) => {
 }
 
 const createMinimalWebp = ({ width, height }) => {
+  if (width === 1536 && height === 1872) return createFixtureWebp()
   const buffer = Buffer.alloc(30)
   buffer.write('RIFF', 0, 'ascii')
   buffer.writeUInt32LE(22, 4)
@@ -751,4 +758,44 @@ test('pet pack service removes non-active installed packs', () => {
 
   assert.equal(result.petPacks.installed['removable-cat'], undefined)
   assert.equal(settingsService.get().petPacks.installed['removable-cat'], undefined)
+})
+
+test('pet pack service self-heals invalid active installed packs to the built-in pack', () => {
+  const settingsService = createSettingsService({
+    petPacks: {
+      activePackId: 'broken-cat',
+      installed: {
+        'broken-cat': { id: 'broken-cat', displayName: 'Broken Cat', version: '1.0.0' }
+      }
+    }
+  })
+  const service = createService(settingsService)
+
+  const activePack = service.getActivePetPack()
+  const listed = service.listPacks()
+
+  assert.equal(activePack.manifest.id, BUILT_IN_PACK_ID)
+  assert.equal(settingsService.get().petPacks.activePackId, BUILT_IN_PACK_ID)
+  assert.equal(listed.activePackId, BUILT_IN_PACK_ID)
+  assert.equal(listed.packs.find((pack) => pack.id === BUILT_IN_PACK_ID).active, true)
+  assert.equal(listed.packs.find((pack) => pack.id === 'broken-cat').active, false)
+})
+
+test('pet pack service self-heals invalid active installed packs when listing packs', () => {
+  const settingsService = createSettingsService({
+    petPacks: {
+      activePackId: 'broken-cat',
+      installed: {
+        'broken-cat': { id: 'broken-cat', displayName: 'Broken Cat', version: '1.0.0' }
+      }
+    }
+  })
+  const service = createService(settingsService)
+
+  const listed = service.listPacks()
+
+  assert.equal(settingsService.get().petPacks.activePackId, BUILT_IN_PACK_ID)
+  assert.equal(listed.activePackId, BUILT_IN_PACK_ID)
+  assert.equal(listed.packs.find((pack) => pack.id === BUILT_IN_PACK_ID).active, true)
+  assert.equal(listed.packs.find((pack) => pack.id === 'broken-cat').active, false)
 })

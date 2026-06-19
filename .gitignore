@@ -10,5 +10,6 @@ build/*
 /release/
 playwright-report/
 test-results/
+examples/plugins/.openpet/
 .DS_Store
 npm-debug.log*

@@ -154,6 +154,18 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     }
   }
 
+  const requestAppQuit = (source) => {
+    recordAppLog({
+      scope: 'app',
+      level: 'info',
+      actor: 'user',
+      event: 'app.quit.requested',
+      message: 'OpenPet quit requested',
+      details: { source }
+    })
+    app.quit()
+  }
+
   const getPendingActionFrameSelection = (selectionId) => {
     if (!pendingActionFrameSelection || pendingActionFrameSelection.id !== selectionId) {
       throw new Error('Selected frame folder is no longer available')
@@ -282,7 +294,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
   })
 
   // 右键菜单"退出"
-  ipcMainService.on(IPC.PET_QUIT, () => app.quit())
+  ipcMainService.on(IPC.PET_QUIT, () => requestAppQuit('pet-renderer'))
 
   ipcMainService.handle(IPC.PET_SHOW_CONTEXT_MENU, (event, point = {}) => {
     const win = BrowserWindow.fromWebContents(event.sender)
@@ -313,7 +325,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
       { label: '散步', click: () => sendMenuCommand({ command: 'walk' }) },
       { label: '设置', click: () => createSettingsWindow(win) },
       { type: 'separator' },
-      { label: '退出', click: () => app.quit() }
+      { label: '退出', click: () => requestAppQuit('pet-context-menu') }
     ]
     const contextMenu = menuService.buildFromTemplate(template)
     contextMenu.popup({

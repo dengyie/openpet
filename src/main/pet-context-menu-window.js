@@ -127,8 +127,8 @@ const showPetContextMenuWindow = ({
   })
 
   menuWindow.webContents.on('will-navigate', (event, url) => {
-    if (!url.startsWith('openpet-menu://')) return
     event.preventDefault()
+    if (!url.startsWith('openpet-menu://')) return
     if (url.startsWith('openpet-menu://select/')) {
       const rawIndex = decodeURIComponent(url.slice('openpet-menu://select/'.length))
       const item = items[Number(rawIndex)]

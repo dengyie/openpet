@@ -204,3 +204,37 @@ test('pet context menu opens a positioned menu window and sends action commands 
     payload: { command: 'action', actionId: 'waving' }
   }])
 })
+
+test('pet quit records the user intent before quitting the app', () => {
+  const ipcMain = createIpcMainStub()
+  const logs = []
+  let quitCalls = 0
+  const { registerIpcHandlers } = loadIpcWithElectron({
+    ipcMain,
+    BrowserWindow: { fromWebContents: () => null },
+    app: { quit: () => { quitCalls += 1 } },
+    dialog: {},
+    Menu: {},
+    screen: {
+      getDisplayMatching: () => ({ workArea: { x: 0, y: 0, width: 900, height: 700 } })
+    }
+  })
+
+  registerIpcHandlers({
+    ...createRequiredServices(),
+    ipcMainService: ipcMain,
+    appLogService: { record: (entry) => logs.push(entry) }
+  })
+
+  ipcMain.listeners.get(IPC.PET_QUIT)()
+
+  assert.equal(quitCalls, 1)
+  assert.deepEqual(logs.at(-1), {
+    scope: 'app',
+    level: 'info',
+    actor: 'user',
+    event: 'app.quit.requested',
+    message: 'OpenPet quit requested',
+    details: { source: 'pet-renderer' }
+  })
+})
