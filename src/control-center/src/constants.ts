@@ -10,6 +10,11 @@ interface NumericOption {
   value: number
 }
 
+interface StringOption<T extends string = string> {
+  label: string
+  value: T
+}
+
 export const tabs: ControlCenterTab[] = [
   { id: 'pet', label: 'Pet' },
   { id: 'actions', label: 'Actions' },
@@ -37,4 +42,12 @@ export const bubbleDurationOptions: NumericOption[] = [
   { label: '短', value: 800 },
   { label: '中', value: 1300 },
   { label: '长', value: 2000 }
+]
+
+export const menuPositionOptions: StringOption[] = [
+  { label: '自动', value: 'auto' },
+  { label: '右侧', value: 'right' },
+  { label: '左侧', value: 'left' },
+  { label: '上方', value: 'above' },
+  { label: '下方', value: 'below' }
 ]

@@ -16,7 +16,6 @@
 const pet = document.getElementById('pet')       // 主容器，承载所有指针事件
 const catEl = document.getElementById('cat')     // 小猫元素，精灵图渲染目标
 const bubble = document.getElementById('bubble') // 头顶气泡
-const menu = document.getElementById('menu')     // 右键菜单容器
 const MAX_DISPLAY_SIZE = 260                     // 帧显示最大尺寸（px），超出按比例缩小
 
 const state = {
@@ -218,11 +217,10 @@ const toggleWalk = async () => {
 
 /**
  * pointerdown：记录鼠标相对窗口偏移，进入拖拽状态。
- * 忽略右键（button !== 0）和菜单区域点击。
+ * 忽略右键（button !== 0）。
  */
 const onPointerDown = async (event) => {
-  if (event.button !== 0 || event.target.closest('#menu')) return
-  hideMenu()
+  if (event.button !== 0) return
   const bounds = await window.petAPI.getBounds()
   state.drag = {
     pointerId: event.pointerId,
@@ -251,46 +249,27 @@ const onPointerUp = (event) => {
 }
 
 // ═══════════════════════════════════════════
-// 6. 右键菜单 — 动态生成 + 点击分发
+// 6. 右键菜单 — 主进程原生菜单 + 命令分发
 // ═══════════════════════════════════════════
-
-/**
- * 根据动作列表构建菜单 DOM：
- *   动作按钮 … | 分隔线 | 散步 设置 | 分隔线 | 退出
- */
-const renderMenu = (actions) => {
-  menu.textContent = ''
-  actions.forEach((a) => {
-    const b = document.createElement('button')
-    b.type = 'button'; b.dataset.action = a.id; b.textContent = a.label
-    menu.appendChild(b)
-  })
-  const mkDiv = () => { const d = document.createElement('div'); d.className = 'divider'; menu.appendChild(d) }
-  const mkBtn = (label, action) => { const b = document.createElement('button'); b.type = 'button'; b.dataset.action = action; b.textContent = label; menu.appendChild(b) }
-  mkDiv(); mkBtn('散步', 'walk'); mkBtn('设置', 'settings'); mkDiv(); mkBtn('退出', 'quit')
-}
 
 const applyAnimationsConfig = ({ actions, defaultAction, clickAction }) => {
   state.defaultAction = defaultAction
   state.clickAction = clickAction
   state.animations = Object.fromEntries(actions.map((a) => [a.id, a]))
-  renderMenu(actions)
   if (state.defaultAction) setAction(state.defaultAction)
 }
 
-const hideMenu = () => menu.classList.remove('open')
-const showMenu = () => menu.classList.add('open')
+const showContextMenu = (event) => {
+  event.preventDefault()
+  window.petAPI.showContextMenu?.({ x: event.clientX, y: event.clientY })
+}
 
-/** 菜单点击统一分发 —— 根据按钮 data-action 路由到对应逻辑。 */
-const onMenuClick = (event) => {
-  const btn = event.target.closest('button')
-  if (!btn) return
-  const action = btn.dataset.action
-  hideMenu()
-  if (action === 'quit') window.petAPI.quit()
-  else if (action === 'walk') toggleWalk()
-  else if (action === 'settings') window.petAPI.openSettings()
-  else { stopWalk(); setAction(action) }
+const runMenuCommand = (payload) => {
+  if (payload?.command === 'walk') toggleWalk()
+  else if (payload?.command === 'action' && payload.actionId) {
+    stopWalk()
+    setAction(payload.actionId)
+  }
 }
 
 // ═══════════════════════════════════════════
@@ -320,19 +299,19 @@ window.petAPI.onAnimationsChanged((config) => {
   if (config?.actions) applyAnimationsConfig(config)
 })
 
+window.petAPI.onPetMenuCommand?.(runMenuCommand)
+
 // DOM 事件绑定
 pet.addEventListener('pointerdown', onPointerDown)
 pet.addEventListener('pointermove', onPointerMove)
 pet.addEventListener('pointerup', onPointerUp)
 pet.addEventListener('dblclick', toggleWalk)
-pet.addEventListener('contextmenu', (e) => { e.preventDefault(); showMenu() })
-menu.addEventListener('click', onMenuClick)
-window.addEventListener('blur', hideMenu)  // 窗口失焦时自动关闭菜单
+pet.addEventListener('contextmenu', showContextMenu)
 
 /**
  * 启动流程：
  * 1. 从主进程获取动作配置
- * 2. 构建菜单
+ * 2. 缓存动作表供菜单命令使用
  * 3. 播放待机动画
  * 4. 启动散步 tick 循环（40ms ≈ 25fps）
  */

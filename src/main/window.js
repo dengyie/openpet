@@ -12,19 +12,27 @@ const CONTROL_CENTER_HEIGHT = 640
 
 const applyWindowScale = (petWindow, scale) => {
   if (!petWindow || petWindow.isDestroyed()) return
-  const targetWidth = Math.round(BASE_WIDTH * Math.max(scale, 1))
-  const targetHeight = Math.round(BASE_HEIGHT * Math.max(scale, 1))
-  const bounds = petWindow.getBounds()
+  const normalizedScale = Number.isFinite(scale) && scale > 0 ? scale : 1
+  const targetWidth = Math.max(1, Math.round(BASE_WIDTH * normalizedScale))
+  const targetHeight = Math.max(1, Math.round(BASE_HEIGHT * normalizedScale))
+  const bounds = typeof petWindow.getContentBounds === 'function'
+    ? petWindow.getContentBounds()
+    : petWindow.getBounds()
   if (targetWidth === bounds.width && targetHeight === bounds.height) return
   const [x, y] = petWindow.getPosition()
   const deltaW = targetWidth - bounds.width
   const deltaH = targetHeight - bounds.height
-  petWindow.setBounds({
+  const nextBounds = {
     x: x - Math.round(deltaW / 2),
     y: y - deltaH,
     width: targetWidth,
     height: targetHeight
-  })
+  }
+  if (typeof petWindow.setContentBounds === 'function') {
+    petWindow.setContentBounds(nextBounds)
+  } else {
+    petWindow.setBounds(nextBounds)
+  }
 }
 
 const loadPetWindow = (petWindow) => petWindow.loadFile(path.join(projectRoot, 'index.html'))

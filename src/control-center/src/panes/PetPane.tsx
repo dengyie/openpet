@@ -1,7 +1,7 @@
 import type { ControlCenterSettings } from '../../../shared/openpet-contracts'
 import { SegmentedControl } from '../components/SegmentedControl'
 import { Toggle } from '../components/Toggle'
-import { bubbleDurationOptions, speedOptions, walkDurationOptions } from '../constants'
+import { bubbleDurationOptions, menuPositionOptions, speedOptions, walkDurationOptions } from '../constants'
 
 export interface PetPaneProps {
   settings: ControlCenterSettings
@@ -67,6 +67,12 @@ export function PetPane({ settings, originalSettings, status, onChange, onSave, 
           value={settings.bubbleDuration}
           options={bubbleDurationOptions}
           onChange={(bubbleDuration) => onChange({ bubbleDuration })}
+        />
+        <SegmentedControl
+          label="菜单位置"
+          value={settings.menuPosition}
+          options={menuPositionOptions}
+          onChange={(menuPosition) => onChange({ menuPosition: menuPosition as ControlCenterSettings['menuPosition'] })}
         />
 
         <div className="field-row">

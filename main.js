@@ -158,7 +158,7 @@ app.whenReady().then(() => {
     localHttpService,
     aboutService,
     actionImportService,
-    applyWindowScale: (scale) => applyWindowScale(petWindow, scale),
+    applyWindowScale,
     clampToWorkArea,
     getMovementState,
     createSettingsWindow: () => createSettingsWindow(petWindow)

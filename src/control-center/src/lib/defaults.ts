@@ -18,6 +18,7 @@ export const defaultSettings = {
   walkSpeed: 2,
   walkDuration: 15000,
   bubbleDuration: 1300,
+  menuPosition: 'auto',
   autoStart: false
 } satisfies ControlCenterSettings
 
