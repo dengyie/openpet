@@ -2049,6 +2049,7 @@ export interface ControlCenterApi {
   getSettings: () => Promise<ControlCenterSettings>
   saveSettings: (settings: Partial<ControlCenterSettings>) => Promise<ControlCenterSettings>
   previewScale: (scale: number) => void
+  importCursor: () => Promise<CursorImportResult>
   getActions: () => Promise<ActionsConfigViewState>
   inspectActionFrames: (payload?: ActionFrameInspectRequest) => Promise<ActionFrameInspectionResult>
   reinspectActionFrames: (payload?: ActionFrameReinspectRequest) => Promise<ActionFrameInspectionResult>
