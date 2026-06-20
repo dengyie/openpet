@@ -604,7 +604,10 @@ const onPointerUp = (event) => {
     nativeCursor: state.nativeCursor,
     clickAction: state.clickAction
   }, { actor: 'user', message: 'Pointer up' })
-  if (wasClick) setAction(state.clickAction)
+  if (wasClick) {
+    if (state.walking) toggleWalk()
+    else setAction(state.clickAction)
+  }
 }
 
 // ═══════════════════════════════════════════

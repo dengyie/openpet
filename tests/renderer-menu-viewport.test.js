@@ -56,6 +56,7 @@ const createRendererHarness = async () => {
   const viewportCalls = []
   let getBoundsCalls = 0
   const callbacks = {}
+  const logs = []
   const elements = {
     pet: createElement('pet'),
     cat: createElement('cat'),
@@ -78,7 +79,7 @@ const createRendererHarness = async () => {
         getFrameHitbox: () => ({ left: 0, top: 0, right: 58, bottom: 58 }),
         getWindowHitbox: () => ({ left: 0, top: 0, right: 58, bottom: 58 }),
         getViewportHitbox: () => ({ left: 0, top: 0, right: 58, bottom: 58 }),
-        isPointInHitbox: () => true
+        isPointInHitbox: () => insideFrame
       },
       clearTimeout: () => {},
       addEventListener(eventName, callback) { callbacks[eventName] = callback },
@@ -200,4 +201,26 @@ test('closing the menu restores the current action viewport', async () => {
   assert.deepEqual(viewportCalls.at(-1), initialViewport)
   assert.equal(elements.cat.style.left, '4px')
   assert.equal(elements.cat.style.bottom, '4px')
+})
+
+test('single-click stops an active walk without waiting for the walk timer', async () => {
+  const { elements, logs } = await createRendererHarness()
+
+  await dispatch(elements.pet, 'dblclick')
+  await dispatch(elements.pet, 'pointerdown', { button: 0, pointerId: 1, clientX: 24, clientY: 30, screenX: 1024, screenY: 768 })
+  await dispatch(elements.pet, 'pointerup', { pointerId: 1, clientX: 24, clientY: 30, screenX: 1024, screenY: 768 })
+
+  const walkStates = logs
+    .filter((entry) => entry.event === 'pet.walk.toggled')
+    .map((entry) => entry.details.walking)
+  assert.deepEqual(walkStates, [true, false])
+})
+
+test('walking keeps mouse handling enabled so the context menu remains reachable', async () => {
+  const { elements, mousePassthroughCalls } = await createRendererHarness({ insideFrame: false })
+
+  await dispatch(elements.pet, 'dblclick')
+  await dispatch(elements.pet, 'pointermove', { clientX: 1, clientY: 1, screenX: 1001, screenY: 701 })
+
+  assert.deepEqual(mousePassthroughCalls, [])
 })
