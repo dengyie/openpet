@@ -276,7 +276,7 @@ test('pointer down does not flash the active custom cursor back to the system cu
   assert.equal(elements['custom-cursor-overlay'].classList.contains('visible'), true)
 })
 
-test('unfocused pet window uses native custom cursor instead of DOM overlay to avoid double cursors', async () => {
+test('unfocused pet window keeps the DOM custom cursor visible over the pet frame', async () => {
   const { callbacks, context, elements, logs } = await createRendererHarness({
     insideFrame: true,
     hasFocus: false
@@ -285,12 +285,13 @@ test('unfocused pet window uses native custom cursor instead of DOM overlay to a
   callbacks.settings({ customCursor: { enabled: true, assetUrl: 'file:///cursor.png', assetPath: '/cursor.png', fileName: 'cursor.png', hotspotX: 4, hotspotY: 6 } })
   dispatch(elements.pet, 'pointermove', { clientX: 24.3, clientY: 88.6, screenX: 1024.3, screenY: 768.6 })
 
-  assert.equal(elements['custom-cursor-overlay'].classList.contains('visible'), false)
-  assert.equal(elements.pet.style.cursor, 'url("file:///cursor.png") 4 6, auto')
-  assert.equal(context.document.body.style.cursor, 'url("file:///cursor.png") 4 6, auto')
-  assert.equal(context.document.documentElement.style.cursor, 'url("file:///cursor.png") 4 6, auto')
-  assert.equal(logs.at(-1).details.cursorOverlayVisible, false)
-  assert.equal(logs.at(-1).details.nativeCursor, 'url("file:///cursor.png") 4 6, auto')
+  assert.equal(elements['custom-cursor-overlay'].classList.contains('visible'), true)
+  assert.equal(elements['custom-cursor-overlay'].style.transform, 'translate3d(20px, 83px, 0)')
+  assert.equal(elements.pet.style.cursor, 'none')
+  assert.equal(context.document.body.style.cursor, 'none')
+  assert.equal(context.document.documentElement.style.cursor, 'none')
+  assert.equal(logs.at(-1).details.cursorOverlayVisible, true)
+  assert.equal(logs.at(-1).details.nativeCursor, 'none')
   assert.equal(logs.at(-1).details.windowFocused, false)
 })
 
