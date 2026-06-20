@@ -119,8 +119,12 @@ const bootstrapOpenPet = () => {
   })
   cursorAssetService.repairCursor(petService.getSettings().customCursor).then((customCursor) => {
     const currentSettings = petService.getSettings()
-    if (customCursor.assetPath && customCursor.assetPath !== currentSettings.customCursor?.assetPath) {
-      petService.saveSettings({ ...currentSettings, customCursor })
+    if (customCursor.assetPath && hasCursorRepairChanged(currentSettings.customCursor, customCursor)) {
+      petService.saveSettings({
+        ...currentSettings,
+        customCursor,
+        customCursors: applyCursorRepairToCollection(currentSettings.customCursors, customCursor)
+      })
       appLogService.record({
         scope: 'settings',
         level: 'info',

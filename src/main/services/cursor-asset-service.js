@@ -6,6 +6,7 @@ const sharp = require('sharp')
 
 const SUPPORTED_CURSOR_EXTENSIONS = new Set(['.png', '.webp', '.cur'])
 const BROWSER_SAFE_CURSOR_SIZE = 64
+const BACKGROUND_DIFF_THRESHOLD = 45
 
 const createDefaultCursorSettings = () => createDefaultRuntimeCursor()
 
@@ -72,7 +73,16 @@ const createCursorAssetService = ({ cursorDir }) => {
     const normalized = normalizeCustomCursor(cursor)
     if (!normalized.enabled || !isBitmapCursor(normalized.assetPath) || !fs.existsSync(normalized.assetPath)) return normalized
     const metadata = await sharp(normalized.assetPath).metadata()
-    if ((metadata.width || 0) <= BROWSER_SAFE_CURSOR_SIZE && (metadata.height || 0) <= BROWSER_SAFE_CURSOR_SIZE) return normalized
+    const metadataPatch = {
+      width: Number(metadata.width || normalized.width || 0),
+      height: Number(metadata.height || normalized.height || 0)
+    }
+    const hotspotPatch = normalized.hotspotX === 0 && normalized.hotspotY === 0
+      ? await estimateHotspot(normalized.assetPath)
+      : { hotspotX: normalized.hotspotX, hotspotY: normalized.hotspotY }
+    if ((metadata.width || 0) <= BROWSER_SAFE_CURSOR_SIZE && (metadata.height || 0) <= BROWSER_SAFE_CURSOR_SIZE) {
+      return { ...normalized, ...metadataPatch, ...hotspotPatch }
+    }
     const sourceBuffer = fs.readFileSync(normalized.assetPath)
     const hash = crypto.createHash('sha256').update(sourceBuffer).digest('hex').slice(0, 16)
     const repaired = await writeBrowserSafeBitmap({
@@ -80,6 +90,7 @@ const createCursorAssetService = ({ cursorDir }) => {
       hash: `${hash}-cursor64`,
       originalFileName: normalized.fileName || path.basename(normalized.assetPath)
     })
+    const repairedMetadata = await sharp(repaired.assetPath).metadata()
     return {
       ...repaired,
       enabled: normalized.enabled
