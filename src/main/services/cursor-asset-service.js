@@ -6,7 +6,6 @@ const sharp = require('sharp')
 
 const SUPPORTED_CURSOR_EXTENSIONS = new Set(['.png', '.webp', '.cur'])
 const BROWSER_SAFE_CURSOR_SIZE = 64
-const BACKGROUND_DIFF_THRESHOLD = 45
 
 const createDefaultCursorSettings = () => createDefaultRuntimeCursor()
 
@@ -19,22 +18,14 @@ const isHotspotWithinBounds = (cursor, dimensions) => {
   const hotspotY = Number(cursor?.hotspotY)
   const width = Number(dimensions?.width)
   const height = Number(dimensions?.height)
-  return Number.isFinite(hotspotX) &&
-    Number.isFinite(hotspotY) &&
-    Number.isFinite(width) &&
-    Number.isFinite(height) &&
-    width > 0 &&
-    height > 0 &&
-    hotspotX >= 0 &&
-    hotspotY >= 0 &&
-    hotspotX < width &&
-    hotspotY < height
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return { hotspotX: 0, hotspotY: 0 }
+  }
+  return {
+    hotspotX: Math.max(0, Math.floor(width / 2)),
+    hotspotY: Math.max(0, Math.floor(height / 2))
+  }
 }
-
-const shouldReestimateHotspot = (cursor, dimensions) => (
-  (Number(cursor?.hotspotX) === 0 && Number(cursor?.hotspotY) === 0) ||
-  !isHotspotWithinBounds(cursor, dimensions)
-)
 
 const createCursorAssetService = ({ cursorDir }) => {
   if (!cursorDir) throw new Error('cursorDir is required')
@@ -99,9 +90,7 @@ const createCursorAssetService = ({ cursorDir }) => {
       width: Number(metadata.width || normalized.width || 0),
       height: Number(metadata.height || normalized.height || 0)
     }
-    const hotspotPatch = shouldReestimateHotspot(normalized, metadataPatch)
-      ? await estimateHotspot(normalized.assetPath)
-      : { hotspotX: normalized.hotspotX, hotspotY: normalized.hotspotY }
+    const hotspotPatch = createCenteredHotspot(metadataPatch)
     if ((metadata.width || 0) <= BROWSER_SAFE_CURSOR_SIZE && (metadata.height || 0) <= BROWSER_SAFE_CURSOR_SIZE) {
       return { ...normalized, ...metadataPatch, ...hotspotPatch }
     }
@@ -113,7 +102,7 @@ const createCursorAssetService = ({ cursorDir }) => {
       originalFileName: normalized.fileName || path.basename(normalized.assetPath)
     })
     const repairedMetadata = await sharp(repaired.assetPath).metadata()
-    const repairedHotspot = await estimateHotspot(repaired.assetPath)
+    const repairedHotspot = createCenteredHotspot(repairedMetadata)
     return {
       ...repaired,
       enabled: normalized.enabled

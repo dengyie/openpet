@@ -33,7 +33,7 @@ test('cursor asset service resizes oversized bitmap cursors to browser-safe dime
   assert.match(cursor.assetUrl, /^file:\/\//)
 })
 
-test('cursor asset service estimates the hotspot from the first visible non-background pixel', async () => {
+test('cursor asset service centers hotspots for uploaded custom cursors', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-cursor-hotspot-'))
   const sourcePath = path.join(root, 'arrow-cursor.png')
   const cursorDir = path.join(root, 'cursors')
@@ -51,8 +51,8 @@ test('cursor asset service estimates the hotspot from the first visible non-back
 
   assert.equal(cursor.width, 64)
   assert.equal(cursor.height, 64)
-  assert.equal(cursor.hotspotX, 13)
-  assert.equal(cursor.hotspotY, 8)
+  assert.equal(cursor.hotspotX, 32)
+  assert.equal(cursor.hotspotY, 32)
 })
 
 test('cursor asset service repairs previously saved oversized bitmap cursors', async () => {
@@ -87,7 +87,7 @@ test('cursor asset service repairs previously saved oversized bitmap cursors', a
   assert.equal(repaired.height, 32)
 })
 
-test('cursor asset service scales repaired hotspots into the resized bitmap coordinate system', async () => {
+test('cursor asset service centers repaired hotspots in the resized bitmap coordinate system', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-cursor-hotspot-scale-'))
   const assetPath = path.join(root, 'huge-arrow.png')
   const cursorDir = path.join(root, 'cursors')
@@ -114,11 +114,11 @@ test('cursor asset service scales repaired hotspots into the resized bitmap coor
 
   assert.equal(repaired.width, 64)
   assert.equal(repaired.height, 32)
-  assert.equal(repaired.hotspotX, 15)
-  assert.equal(repaired.hotspotY, 8)
+  assert.equal(repaired.hotspotX, 32)
+  assert.equal(repaired.hotspotY, 16)
 })
 
-test('cursor asset service re-estimates hotspots after resizing even when the legacy hotspot was in bounds', async () => {
+test('cursor asset service re-centers hotspots after resizing even when the legacy hotspot was in bounds', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-cursor-hotspot-small-legacy-'))
   const assetPath = path.join(root, 'huge-arrow-small-legacy.png')
   const cursorDir = path.join(root, 'cursors')
@@ -145,8 +145,8 @@ test('cursor asset service re-estimates hotspots after resizing even when the le
 
   assert.equal(repaired.width, 64)
   assert.equal(repaired.height, 32)
-  assert.equal(repaired.hotspotX, 15)
-  assert.equal(repaired.hotspotY, 8)
+  assert.equal(repaired.hotspotX, 32)
+  assert.equal(repaired.hotspotY, 16)
 })
 
 test('cursor asset service repairs out-of-bounds legacy hotspots for browser-safe assets', async () => {
@@ -175,8 +175,8 @@ test('cursor asset service repairs out-of-bounds legacy hotspots for browser-saf
   })
 
   assert.equal(repaired.assetPath, assetPath)
-  assert.equal(repaired.hotspotX, 15)
-  assert.equal(repaired.hotspotY, 8)
+  assert.equal(repaired.hotspotX, 32)
+  assert.equal(repaired.hotspotY, 16)
 })
 
 test('cursor asset service repairs legacy cursor metadata without rewriting browser-safe assets', async () => {
@@ -210,7 +210,7 @@ test('cursor asset service repairs legacy cursor metadata without rewriting brow
   assert.equal(repaired.height, 32)
 })
 
-test('cursor asset service repairs legacy zero hotspots from visible cursor content', async () => {
+test('cursor asset service repairs legacy zero hotspots to the visual center', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-cursor-hotspot-repair-'))
   const assetPath = path.join(root, 'safe-arrow.png')
   const cursorDir = path.join(root, 'cursors')
@@ -236,6 +236,6 @@ test('cursor asset service repairs legacy zero hotspots from visible cursor cont
   })
 
   assert.equal(repaired.assetPath, assetPath)
-  assert.equal(repaired.hotspotX, 13)
-  assert.equal(repaired.hotspotY, 8)
+  assert.equal(repaired.hotspotX, 32)
+  assert.equal(repaired.hotspotY, 32)
 })

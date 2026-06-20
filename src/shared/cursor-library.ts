@@ -146,6 +146,21 @@ const normalizeNumber = (value: unknown, fallback = 0) => {
   return Number.isFinite(number) ? number : fallback
 }
 
+const createCenteredHotspot = (width: unknown, height: unknown, fallbackX = 0, fallbackY = 0) => {
+  const normalizedWidth = normalizeNumber(width, 0)
+  const normalizedHeight = normalizeNumber(height, 0)
+  if (normalizedWidth <= 0 || normalizedHeight <= 0) {
+    return {
+      hotspotX: normalizeNumber(fallbackX, 0),
+      hotspotY: normalizeNumber(fallbackY, 0)
+    }
+  }
+  return {
+    hotspotX: Math.max(0, Math.floor(normalizedWidth / 2)),
+    hotspotY: Math.max(0, Math.floor(normalizedHeight / 2))
+  }
+}
+
 export const normalizeRuntimeCursor = (cursor: Partial<CustomCursorSettings> | null | undefined): CustomCursorSettings => {
   if (!cursor || typeof cursor !== 'object' || Array.isArray(cursor)) return createDefaultRuntimeCursor()
   const assetPath = typeof cursor.assetPath === 'string' ? cursor.assetPath : ''
@@ -172,6 +187,9 @@ export const normalizeCustomCursorRecord = (cursor: Partial<CustomCursorRecord> 
   const name = typeof cursor.name === 'string' && cursor.name.trim()
     ? cursor.name.trim()
     : stripFileExtension(fileName) || '未命名指针'
+  const width = Math.max(0, normalizeNumber(cursor.width, 0))
+  const height = Math.max(0, normalizeNumber(cursor.height, 0))
+  const hotspot = createCenteredHotspot(width, height, cursor.hotspotX, cursor.hotspotY)
   return {
     id,
     type: 'custom',
@@ -179,11 +197,11 @@ export const normalizeCustomCursorRecord = (cursor: Partial<CustomCursorRecord> 
     assetPath: typeof cursor.assetPath === 'string' ? cursor.assetPath : '',
     assetUrl,
     fileName,
-    width: Math.max(0, normalizeNumber(cursor.width, 0)),
-    height: Math.max(0, normalizeNumber(cursor.height, 0)),
+    width,
+    height,
     byteSize: Math.max(0, normalizeNumber(cursor.byteSize, 0)),
-    hotspotX: normalizeNumber(cursor.hotspotX, 0),
-    hotspotY: normalizeNumber(cursor.hotspotY, 0),
+    hotspotX: hotspot.hotspotX,
+    hotspotY: hotspot.hotspotY,
     createdAt: typeof cursor.createdAt === 'string' && cursor.createdAt ? cursor.createdAt : new Date(0).toISOString()
   }
 }
