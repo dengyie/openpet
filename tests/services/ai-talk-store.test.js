@@ -78,3 +78,94 @@ test('ai talk store persists local persona overrides by pet pack', () => {
     coreTraits: ['loyal', 'soft-spoken']
   })
 })
+
+test('ai talk store upserts active global and pet-pack memories conservatively', () => {
+  const storePath = createTempStorePath()
+  const store = createAiTalkStore({ storePath, now: () => '2026-06-20T00:00:00.000Z' })
+
+  const created = store.applyMemoryOperations({
+    petPackId: 'mochi-cat',
+    conversationId: 'control-center:mochi-cat:main',
+    messageIds: ['m1', 'm2'],
+    operations: [
+      {
+        operation: 'create',
+        scope: 'global',
+        text: 'User prefers concise Chinese replies.',
+        tags: ['preference'],
+        confidence: 0.9,
+        importance: 0.7,
+        reason: 'stable preference'
+      },
+      {
+        operation: 'create',
+        scope: 'petPack',
+        text: 'Mochi and the user like sleepy check-ins.',
+        tags: ['relationship'],
+        confidence: 0.8,
+        importance: 0.6,
+        reason: 'relationship cue'
+      }
+    ]
+  })
+
+  assert.equal(created.applied.length, 2)
+  const memories = store.listMemories({ petPackId: 'mochi-cat' })
+  assert.deepEqual(memories.map((memory) => memory.text), [
+    'User prefers concise Chinese replies.',
+    'Mochi and the user like sleepy check-ins.'
+  ])
+
+  const reinforced = store.applyMemoryOperations({
+    petPackId: 'mochi-cat',
+    conversationId: 'control-center:mochi-cat:main',
+    messageIds: ['m3'],
+    operations: [
+      {
+        operation: 'reinforce',
+        scope: 'global',
+        text: 'User prefers concise Chinese replies.',
+        tags: ['preference'],
+        confidence: 0.95,
+        importance: 0.8,
+        reason: 'repeated preference'
+      }
+    ]
+  })
+
+  assert.equal(reinforced.applied[0].operation, 'reinforce')
+  assert.equal(store.listMemories({ petPackId: 'mochi-cat' })[0].useCount, 1)
+
+  const reloaded = createAiTalkStore({ storePath })
+  assert.equal(reloaded.listMemories({ petPackId: 'mochi-cat' }).length, 2)
+})
+
+test('ai talk store filters sensitive memory candidates without storing raw secret text', () => {
+  const store = createAiTalkStore({ storePath: createTempStorePath(), now: () => '2026-06-20T00:00:00.000Z' })
+
+  const result = store.applyMemoryOperations({
+    petPackId: 'mochi-cat',
+    conversationId: 'control-center:mochi-cat:main',
+    messageIds: ['m1'],
+    operations: [
+      {
+        operation: 'create',
+        scope: 'global',
+        text: 'My API key is sk-cpa-should-not-be-saved.',
+        tags: ['secret'],
+        confidence: 1,
+        importance: 1,
+        reason: 'contains secret'
+      }
+    ]
+  })
+
+  assert.equal(result.applied.length, 0)
+  assert.equal(result.filtered.length, 1)
+  assert.equal(result.filtered[0].reason, 'sensitive')
+  assert.equal(store.listMemories({ petPackId: 'mochi-cat' }).length, 0)
+  assert.ok(!JSON.stringify(store.getState()).includes('sk-cpa-should-not-be-saved'))
+  assert.deepEqual(Object.values(store.getState().traces).map((trace) => trace.filteredMemoryCandidates), [
+    [{ operation: 'create', scope: 'global', reason: 'sensitive' }]
+  ])
+})
