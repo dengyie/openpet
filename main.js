@@ -22,6 +22,8 @@ const { createPetPackService } = require('./src/main/services/pet-pack-service')
 const { createPetService } = require('./src/main/services/pet-service')
 const { createSecretService } = require('./src/main/services/secret-service')
 const { createAiService } = require('./src/main/services/ai-service')
+const { createAiTalkStore } = require('./src/main/services/ai-talk-store')
+const { createAiTalkService } = require('./src/main/services/ai-talk-service')
 const { createImageGenerationModelService } = require('./src/main/services/image-generation-model-service')
 const { createBehaviorOrchestratorService } = require('./src/main/services/behavior-orchestrator-service')
 const { createPluginService } = require('./src/main/services/plugin-service')
@@ -182,6 +184,7 @@ const bootstrapOpenPet = () => {
     actionImportService,
     petPackService,
     aiService,
+    aiTalkService,
     imageGenerationModelService,
     pluginDirs: [pluginDir],
     officialPlugins: [createBasicBehaviorPlugin()],
@@ -232,6 +235,7 @@ const bootstrapOpenPet = () => {
     petService,
     petPackService,
     aiService,
+    aiTalkService,
     imageGenerationModelService,
     behaviorOrchestratorService,
     pluginService,

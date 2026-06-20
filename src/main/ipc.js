@@ -571,11 +571,12 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
   })
 
   ipcMainService.handle(IPC.AI_GET_CONVERSATION, (_event, payload) => {
-    return aiService.getConversation(payload?.conversationId || payload)
+    const conversationId = payload?.conversationId || payload
+    return (aiTalkService || aiService).getConversation(conversationId)
   })
 
   ipcMainService.handle(IPC.AI_CHAT, async (_event, payload) => {
-    const result = await aiService.chat(payload)
+    const result = await (aiTalkService || aiService).chat(payload)
     petService.say({ text: result.reply, source: 'ai' })
     if (behaviorOrchestratorService?.getConfig?.().enabled) {
       const decision = behaviorOrchestratorService.evaluate({
