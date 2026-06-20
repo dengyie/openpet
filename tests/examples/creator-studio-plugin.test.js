@@ -115,6 +115,121 @@ test('creator studio generation task validation rejects unsafe trigger proposals
   )
 })
 
+test('creator studio prompt builder creates an OpenPet full-pet prompt with runtime and boundary rules', () => {
+  const { buildOpenPetImagePrompt } = require('../../examples/plugins/creator-studio/lib/openpet-prompt-builder')
+  const { normalizeGenerationTask } = require('../../examples/plugins/creator-studio/lib/generation-task')
+  const generationTask = normalizeGenerationTask({
+    mode: 'full-pet',
+    targetPet: 'new',
+    styleSource: 'textOnly',
+    characterBrief: '一只软乎乎的橘猫桌宠，喜欢睡在键盘旁边。',
+    actions: [{
+      actionId: 'idle',
+      name: 'Idle',
+      motionPrompt: 'neutral idle pose',
+      loop: true,
+      frameCount: 12,
+      triggerProposal: { type: 'state', binding: 'idle' }
+    }]
+  })
+
+  const built = buildOpenPetImagePrompt({
+    run: {
+      petId: 'orange-cat',
+      input: {
+        prompt: '一只软乎乎的橘猫桌宠，喜欢睡在键盘旁边。',
+        generationTask
+      }
+    },
+    backend: 'cloud',
+    model: 'gpt-image-2'
+  })
+
+  assert.equal(built.mode, 'full-pet')
+  assert.equal(built.actionId, 'idle')
+  assert.deepEqual(built.sections, [
+    'Intent',
+    'OpenPet Runtime Contract',
+    'Canvas And Boundary Rules',
+    'Background And Transparency Policy',
+    'Character Shape Language',
+    'Generation Mode',
+    'Action Requirements',
+    'Style Consistency',
+    'Output Requirements',
+    'Negative Constraints',
+    'User Creative Brief'
+  ])
+  assert.match(built.prompt, /OpenPet desktop pet sprite asset/)
+  assert.match(built.prompt, /small floating desktop pet window/)
+  assert.match(built.prompt, /exactly one pet character/)
+  assert.match(built.prompt, /8-12% safe padding/)
+  assert.match(built.prompt, /no cropped ears, tail, paws, limbs/)
+  assert.match(built.prompt, /compact desktop-pet body/)
+  assert.match(built.prompt, /full-pet/)
+  assert.match(built.prompt, /transparent-friendly, easy cutout silhouette/)
+  assert.match(built.prompt, /no text, logo, watermark/)
+  assert.match(built.prompt, /一只软乎乎的橘猫桌宠/)
+  assert.equal(built.prompt.includes('response_format'), false)
+})
+
+test('creator studio prompt builder preserves custom action semantics and current-pet style consistency', () => {
+  const { buildOpenPetImagePrompt } = require('../../examples/plugins/creator-studio/lib/openpet-prompt-builder')
+  const { draftGenerationTask } = require('../../examples/plugins/creator-studio/lib/conversation-wizard')
+  const draft = draftGenerationTask({
+    prompt: '新增一个自定义动作：原地打滚，动作要循环。'
+  })
+
+  const built = buildOpenPetImagePrompt({
+    run: {
+      petId: 'current-cat',
+      input: {
+        prompt: draft.originalPrompt,
+        originalPrompt: draft.originalPrompt,
+        generationTask: draft.generationTask
+      }
+    },
+    backend: 'local',
+    model: 'local-pet-sprite'
+  })
+
+  assert.equal(built.mode, 'single-action')
+  assert.equal(built.actionId, draft.generationTask.actions[0].actionId)
+  assert.match(built.prompt, /Mode: single-action/)
+  assert.match(built.prompt, /Target: current/)
+  assert.match(built.prompt, /Action ID: action-[0-9a-f]{8}/)
+  assert.match(built.prompt, /Action name: 原地打滚/)
+  assert.match(built.prompt, /Loop policy: looping/)
+  assert.match(built.prompt, /Frame count intent: 12/)
+  assert.match(built.prompt, /Trigger: unbound/)
+  assert.match(built.prompt, /keep the current pet's style, proportions, palette, facial design, and line work/i)
+  assert.match(built.prompt, /same character identity/)
+  assert.match(built.prompt, /新增一个自定义动作：原地打滚/)
+})
+
+test('creator studio prompt builder filters secrets paths and bridge details from prompts', () => {
+  const { buildOpenPetImagePrompt } = require('../../examples/plugins/creator-studio/lib/openpet-prompt-builder')
+
+  const built = buildOpenPetImagePrompt({
+    run: {
+      petId: 'unsafe-cat',
+      input: {
+        prompt: 'Make a cat. API key sk-test-secret at /Users/mango/private/ref.png via http://127.0.0.1:8317/v1 and bridge-token.',
+        originalPrompt: 'Make a cat. API key sk-test-secret at /Users/mango/private/ref.png via http://127.0.0.1:8317/v1 and bridge-token.'
+      }
+    },
+    backend: 'cloud',
+    model: 'gpt-image-2'
+  })
+
+  assert.match(built.prompt, /OpenPet desktop pet sprite asset/)
+  assert.equal(built.prompt.includes('sk-test-secret'), false)
+  assert.equal(built.prompt.includes('/Users/mango/private/ref.png'), false)
+  assert.equal(built.prompt.includes('127.0.0.1:8317'), false)
+  assert.equal(built.prompt.includes('bridge-token'), false)
+  assert.equal(built.warnings.includes('creative_brief_sanitized'), true)
+})
+
 test('creator studio run store creates and advances durable run state', () => {
   const { createRun, readRun, updateRunStatus } = require('../../examples/plugins/creator-studio/lib/run-store')
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-test-'))
@@ -461,7 +576,7 @@ test('creator studio run-step command uses host bridge for local backend generat
   const created = runCreatorCommand({
     command: 'create-run',
     dataDir,
-    payload: { petName: 'Local Cat', prompt: 'A local generated cat', backend: 'local' },
+    payload: { petName: 'Local Cat', prompt: '新增一个自定义动作：原地打滚，动作要循环。', backend: 'local' },
     config: { backend: 'local' }
   })
   const bridgeServer = require('node:http').createServer((request, response) => {
@@ -551,7 +666,87 @@ test('creator studio run-step command uses host bridge for local backend generat
     assert.equal(run.status, 'ready_for_review')
     assert.equal(run.backendStatus.state, 'ready')
     assert.equal(run.artifacts.generatedImage.outputs[0].dataRelativePath, `runs/${created.json.run.runId}/frames/base/0001.png`)
+    assert.match(requests[0].payload.prompt, /OpenPet desktop pet sprite asset/)
+    assert.match(requests[0].payload.prompt, /Canvas And Boundary Rules/)
+    assert.match(requests[0].payload.prompt, /Action name: 原地打滚/)
+    assert.match(requests[0].payload.prompt, /Loop policy: looping/)
+    assert.notEqual(requests[0].payload.prompt, '新增一个自定义动作：原地打滚，动作要循环。')
+    assert.equal(requests[0].payload.prompt.includes('bridge-token'), false)
+    assert.equal(run.artifacts.generatedImage.promptBuilder.version, 1)
+    assert.equal(run.artifacts.generatedImage.promptBuilder.mode, 'single-action')
+    assert.deepEqual(run.artifacts.generatedImage.promptBuilder.warnings, [])
+    const actionTaskQa = JSON.parse(fs.readFileSync(run.artifacts.actionTaskQa, 'utf-8'))
+    assert.equal(actionTaskQa.promptBuilder.version, 1)
+    assert.equal(actionTaskQa.promptBuilder.mode, 'single-action')
+    assert.equal(actionTaskQa.promptBuilder.actionId, run.generationTask.actions[0].actionId)
     assert.deepEqual(requests.map((entry) => entry.url), ['/creator/model-image-generate'])
+  } finally {
+    bridgeServer.closeAllConnections?.()
+    await new Promise((resolve) => bridgeServer.close(resolve))
+  }
+})
+
+test('creator studio run-step command fails and persists run state when bridge image generation times out', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-cloud-timeout-'))
+  const created = runCreatorCommand({
+    command: 'create-run',
+    dataDir,
+    payload: {
+      petName: 'Cloud Timeout Cat',
+      prompt: '新增一个自定义动作：原地打滚，动作要循环。',
+      backend: 'cloud'
+    },
+    config: { backend: 'cloud' }
+  })
+
+  const bridgeServer = require('node:http').createServer((request, response) => {
+    let body = ''
+    request.on('data', (chunk) => { body += chunk })
+    request.on('end', () => {
+      void body
+      setTimeout(() => {
+        if (response.writableEnded) return
+        response.writeHead(400, {
+          'Content-Type': 'application/json',
+          Connection: 'close'
+        })
+        response.end(JSON.stringify({
+          ok: false,
+          error: 'Cloud image generation timed out after 120000ms'
+        }))
+      }, 25)
+    })
+  })
+  await new Promise((resolve) => bridgeServer.listen(0, '127.0.0.1', resolve))
+  const port = bridgeServer.address().port
+
+  try {
+    const generated = await runCreatorCommandAsync({
+      command: 'run-step',
+      dataDir,
+      payload: { runId: created.json.run.runId },
+      config: { backend: 'cloud' },
+      env: {
+        OPENPET_BRIDGE_URL: `http://127.0.0.1:${port}`,
+        OPENPET_BRIDGE_TOKEN: 'bridge-token'
+      }
+    })
+    const runPath = path.join(dataDir, 'runs', created.json.run.runId, 'run.json')
+    const logPath = path.join(dataDir, 'runs', created.json.run.runId, 'logs', 'events.jsonl')
+    const run = JSON.parse(fs.readFileSync(runPath, 'utf-8'))
+    const events = fs.readFileSync(logPath, 'utf-8').trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line))
+
+    assert.equal(created.status, 0)
+    assert.equal(generated.status, 1)
+    assert.equal(generated.json.ok, false)
+    assert.match(generated.json.error, /timed out after 120000ms/i)
+    assert.equal(run.status, 'failed')
+    assert.equal(run.currentStep, 'generate')
+    assert.equal(run.backendStatus.backend, 'cloud')
+    assert.equal(run.backendStatus.state, 'failed')
+    assert.match(run.backendStatus.message, /timed out after 120000ms/i)
+    assert.match(run.error, /timed out after 120000ms/i)
+    assert.deepEqual(events.map((entry) => entry.event), ['generate.start', 'generate.failed'])
   } finally {
     bridgeServer.closeAllConnections?.()
     await new Promise((resolve) => bridgeServer.close(resolve))
