@@ -24,17 +24,24 @@ const writeZip = (sourceDir, outputPath) => {
 
 const createCreatorStudioMetadata = (run) => {
   if (!run.generationTask) return null
+  const importPolicy = {
+    importsFrames: true,
+    appliesTriggerAutomatically: false,
+    triggerProposalOwner: 'openpet-host'
+  }
   return {
     mode: run.generationTask.mode,
     targetPet: run.generationTask.targetPet,
     styleSource: run.generationTask.styleSource,
+    generationTask: run.generationTask,
     actions: (run.generationTask.actions || []).map((action) => ({
       actionId: action.actionId,
       name: action.name,
       loop: Boolean(action.loop),
       frameCount: action.frameCount,
       triggerProposal: action.triggerProposal
-    }))
+    })),
+    importPolicy
   }
 }
 
@@ -66,7 +73,11 @@ const generateFixturePetOutput = async ({ dataDir, runId, now = () => new Date()
     fs.writeFileSync(path.join(qaDir, 'action-generation-task.json'), `${JSON.stringify({
       ok: true,
       originalPrompt: run.input.originalPrompt || run.input.prompt || '',
-      ...creatorStudio
+      mode: creatorStudio.mode,
+      targetPet: creatorStudio.targetPet,
+      styleSource: creatorStudio.styleSource,
+      actions: creatorStudio.actions,
+      importPolicy: creatorStudio.importPolicy
     }, null, 2)}\n`)
   }
   const bundlePath = path.join(outputDir, `${run.petId}.codex-pet.zip`)

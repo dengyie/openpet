@@ -504,52 +504,88 @@ test('creator studio run store resolves latest run by workflow status', () => {
 })
 
 test('creator studio backend runner generates fixture output through the selected adapter', async () => {
-  const { createRun, readRunLogs } = require('../../examples/plugins/creator-studio/lib/run-store')
-  const { draftGenerationTask } = require('../../examples/plugins/creator-studio/lib/conversation-wizard')
+  const { readRunLogs } = require('../../examples/plugins/creator-studio/lib/run-store')
+  const { confirmTaskRun, draftTaskRun } = require('../../examples/plugins/creator-studio/lib/task-workflow')
   const { runGenerationStep } = require('../../examples/plugins/creator-studio/lib/backend-runner')
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-output-'))
-  const draft = draftGenerationTask({
-    prompt: '给当前猫猫加一个“被摸头后害羞转圈”的动作，点击触发，风格保持一致。'
-  })
-  const run = createRun({
+  const draft = draftTaskRun({
     dataDir,
-    input: {
+    payload: {
       petName: 'Sprout Cat',
-      prompt: draft.originalPrompt,
-      backend: 'fixture',
-      generationTask: draft.generationTask,
-      originalPrompt: draft.originalPrompt
+      prompt: '给当前猫猫加一个“被摸头后害羞转圈”的动作，点击触发，风格保持一致。',
+      backend: 'fixture'
     },
     now: () => '2026-06-19T00:00:00.000Z'
   })
+  const confirmed = confirmTaskRun({
+    dataDir,
+    runId: draft.run.runId,
+    now: () => '2026-06-19T00:01:00.000Z'
+  })
 
-  const output = await runGenerationStep({ dataDir, runId: run.runId })
+  const output = await runGenerationStep({ dataDir, runId: confirmed.run.runId })
   const manifest = JSON.parse(fs.readFileSync(path.join(output.outputDir, 'pet.json'), 'utf-8'))
-  const actionQa = JSON.parse(fs.readFileSync(path.join(dataDir, 'runs', run.runId, 'qa', 'action-generation-task.json'), 'utf-8'))
-  const atlasQa = JSON.parse(fs.readFileSync(path.join(dataDir, 'runs', run.runId, 'qa', 'atlas-validation.json'), 'utf-8'))
+  const actionQa = JSON.parse(fs.readFileSync(path.join(dataDir, 'runs', confirmed.run.runId, 'qa', 'action-generation-task.json'), 'utf-8'))
+  const atlasQa = JSON.parse(fs.readFileSync(path.join(dataDir, 'runs', confirmed.run.runId, 'qa', 'atlas-validation.json'), 'utf-8'))
   const atlasStats = await sharp(path.join(output.outputDir, 'spritesheet.webp'))
     .ensureAlpha()
     .raw()
     .stats()
   const bundleHash = crypto.createHash('sha256').update(fs.readFileSync(output.bundlePath)).digest('hex')
 
-  assert.equal(manifest.id, run.petId)
+  assert.equal(manifest.id, confirmed.run.petId)
   assert.equal(manifest.spritesheetPath, 'spritesheet.webp')
   assert.equal(manifest.creatorStudio.mode, 'single-action')
   assert.equal(manifest.creatorStudio.actions[0].name, '被摸头后害羞转圈')
+  assert.equal(manifest.creatorStudio.importPolicy.appliesTriggerAutomatically, false)
   assert.equal(actionQa.ok, true)
+  assert.equal(actionQa.mode, 'single-action')
+  assert.equal(actionQa.targetPet, 'current')
+  assert.equal(actionQa.styleSource, 'currentPet')
+  assert.equal(actionQa.actions[0].name, '被摸头后害羞转圈')
   assert.equal(actionQa.actions[0].triggerProposal.type, 'click')
+  assert.equal(actionQa.importPolicy.appliesTriggerAutomatically, false)
+  assert.equal(actionQa.importPolicy.triggerProposalOwner, 'openpet-host')
   assert.equal(atlasQa.visiblePixels > 0, true)
   assert.equal(atlasStats.channels[3].max > 0, true)
   assert.equal(fs.existsSync(path.join(output.outputDir, 'spritesheet.webp')), true)
   assert.equal(fs.existsSync(output.bundlePath), true)
   assert.equal(output.sha256, bundleHash)
+  assert.equal(output.run.taskStatus, 'confirmed')
   assert.equal(output.run.backendStatus.state, 'ready')
   assert.equal(output.run.backendStatus.backend, 'fixture')
-  assert.deepEqual(readRunLogs({ dataDir, runId: run.runId }).map((entry) => entry.event), [
+  assert.deepEqual(readRunLogs({ dataDir, runId: confirmed.run.runId }).map((entry) => entry.event), [
+    'task.drafted',
+    'task.confirmed',
     'generate.start',
     'generate.complete'
   ])
+})
+
+test('creator studio backend runner refuses unresolved conversational tasks before generation', async () => {
+  const { draftTaskRun } = require('../../examples/plugins/creator-studio/lib/task-workflow')
+  const { readRun } = require('../../examples/plugins/creator-studio/lib/run-store')
+  const { runGenerationStep } = require('../../examples/plugins/creator-studio/lib/backend-runner')
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-unconfirmed-task-'))
+  const draft = draftTaskRun({
+    dataDir,
+    payload: {
+      petName: 'Unconfirmed Cat',
+      prompt: '新增一个自定义动作：原地打滚，动作要循环。',
+      backend: 'fixture'
+    },
+    now: () => '2026-06-20T01:00:00.000Z'
+  })
+
+  await assert.rejects(
+    runGenerationStep({ dataDir, runId: draft.run.runId }),
+    /Creator Studio task must be confirmed before generation/
+  )
+  const failed = readRun({ dataDir, runId: draft.run.runId })
+  assert.equal(failed.status, 'failed')
+  assert.equal(failed.taskStatus, 'needs_input')
+  assert.match(failed.error, /must be confirmed/)
+  assert.equal(fs.existsSync(path.join(dataDir, 'runs', draft.run.runId, 'outputs', 'pet.json')), false)
 })
 
 test('creator studio backend runner records unavailable cloud backend without fixture fallback', async () => {
@@ -685,7 +721,7 @@ test('creator studio run-step command uses host bridge for local backend generat
   const created = runCreatorCommand({
     command: 'create-run',
     dataDir,
-    payload: { petName: 'Local Cat', prompt: '新增一个自定义动作：原地打滚，动作要循环。', backend: 'local' },
+    payload: { petName: 'Local Cat', prompt: '新增一个自定义动作：原地打滚，动作要循环，点击触发。', backend: 'local' },
     config: { backend: 'local' }
   })
   const bridgeServer = require('node:http').createServer((request, response) => {
@@ -809,7 +845,7 @@ test('creator studio run-step command uses host bridge for local backend generat
     assert.match(requests[0].payload.prompt, /Canvas And Boundary Rules/)
     assert.match(requests[0].payload.prompt, /Action name: 原地打滚/)
     assert.match(requests[0].payload.prompt, /Loop policy: looping/)
-    assert.notEqual(requests[0].payload.prompt, '新增一个自定义动作：原地打滚，动作要循环。')
+    assert.notEqual(requests[0].payload.prompt, '新增一个自定义动作：原地打滚，动作要循环，点击触发。')
     assert.equal(requests[0].payload.prompt.includes('bridge-token'), false)
     assert.equal(run.artifacts.generatedImage.promptBuilder.version, 1)
     assert.equal(run.artifacts.generatedImage.promptBuilder.mode, 'single-action')
@@ -832,7 +868,7 @@ test('creator studio run-step command fails and persists run state when bridge i
     dataDir,
     payload: {
       petName: 'Cloud Timeout Cat',
-      prompt: '新增一个自定义动作：原地打滚，动作要循环。',
+      prompt: '新增一个自定义动作：原地打滚，动作要循环，点击触发。',
       backend: 'cloud'
     },
     config: { backend: 'cloud' }
@@ -899,7 +935,7 @@ test('creator studio run-step command surfaces provider business errors from the
     dataDir,
     payload: {
       petName: 'Cloud Business Error Cat',
-      prompt: '新增一个自定义动作：开心挥手，动作要循环。',
+      prompt: '新增一个自定义动作：开心挥手，动作要循环，点击触发。',
       backend: 'cloud'
     },
     config: { backend: 'cloud' }
