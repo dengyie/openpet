@@ -168,6 +168,7 @@ test.describe('Control Center smoke', () => {
     await page.getByLabel('Base URL').fill('https://ai.example.test/v1')
     await page.getByLabel('Model').fill('openpet-test-model')
     await page.getByLabel('System Prompt').fill('Stay tiny, helpful, and local-first.')
+    await page.getByRole('switch', { name: 'Enable AI memory' }).click()
     await page.getByRole('button', { name: '保存', exact: true }).click()
     await expect(page.locator('.status-line')).toContainText('AI 配置已保存')
 
