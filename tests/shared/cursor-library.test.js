@@ -118,7 +118,7 @@ test('resolveSelectedCursor returns a disabled runtime cursor for system default
   assert.match(builtin.assetUrl, /^data:image\/svg\+xml/)
 })
 
-test('resolveSelectedCursor preserves custom cursor dimensions for runtime overlay alignment', () => {
+test('resolveSelectedCursor centers custom cursor hotspots for runtime overlay alignment', () => {
   const runtime = resolveSelectedCursor({
     selectedCursorId: 'cursor-large',
     customCursors: [{
@@ -143,7 +143,7 @@ test('resolveSelectedCursor preserves custom cursor dimensions for runtime overl
     fileName: 'large.png',
     width: 64,
     height: 40,
-    hotspotX: 9,
-    hotspotY: 11
+    hotspotX: 32,
+    hotspotY: 20
   })
 })
