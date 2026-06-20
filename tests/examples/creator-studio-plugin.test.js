@@ -24,6 +24,9 @@ test('creator studio example manifest declares hybrid creator workflow entries',
   assert.deepEqual(manifest.permissions, ['pet-pack:import', 'pet:say', 'model:image-generate'])
   assert.deepEqual(manifest.commands.map((command) => command.id), [
     'create-run',
+    'draft-task',
+    'answer-question',
+    'confirm-task',
     'run-step',
     'approve-run',
     'import-approved-pet',
@@ -289,6 +292,111 @@ test('creator studio run store persists conversational generation tasks', () => 
   assert.equal(persisted.generationTask.actions[0].name, '被摸头后害羞转圈')
   assert.equal(persisted.generationTask.actions[0].triggerProposal.type, 'click')
   assert.equal(fs.existsSync(path.join(dataDir, 'runs', run.runId, 'inputs', 'generation-task.json')), true)
+  assert.equal(fs.existsSync(path.join(dataDir, 'runs', run.runId, 'inputs', 'original-prompt.txt')), true)
+  assert.equal(persisted.taskStatus, 'ready_for_confirmation')
+  assert.deepEqual(persisted.conversation, {
+    originalPrompt: draft.originalPrompt,
+    answers: []
+  })
+})
+
+test('creator studio task workflow drafts answers and confirms custom actions', () => {
+  const {
+    answerTaskQuestion,
+    confirmTaskRun,
+    draftTaskRun
+  } = require('../../examples/plugins/creator-studio/lib/task-workflow')
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-task-workflow-'))
+
+  const draft = draftTaskRun({
+    dataDir,
+    payload: {
+      prompt: '新增一个自定义动作：原地打滚，动作要循环。',
+      backend: 'fixture'
+    },
+    now: () => '2026-06-20T00:00:00.000Z'
+  })
+
+  assert.equal(draft.run.status, 'draft')
+  assert.equal(draft.run.taskStatus, 'needs_input')
+  assert.equal(draft.run.generationTask.mode, 'single-action')
+  assert.equal(draft.run.generationTask.actions[0].name, '原地打滚')
+  assert.equal(draft.run.generationTask.actions[0].triggerProposal.type, 'unbound')
+  assert.equal(draft.run.generationTask.questions[0].id, 'trigger')
+
+  const answered = answerTaskQuestion({
+    dataDir,
+    runId: draft.run.runId,
+    questionId: 'trigger',
+    answer: 'click',
+    now: () => '2026-06-20T00:01:00.000Z'
+  })
+
+  assert.equal(answered.run.taskStatus, 'ready_for_confirmation')
+  assert.equal(answered.run.generationTask.questions.length, 0)
+  assert.deepEqual(answered.run.generationTask.actions[0].triggerProposal, {
+    type: 'click',
+    binding: 'clickAction',
+    notes: 'User selected click trigger.'
+  })
+  assert.deepEqual(answered.run.conversation.answers, [{
+    questionId: 'trigger',
+    answer: 'click',
+    answeredAt: '2026-06-20T00:01:00.000Z'
+  }])
+
+  const confirmed = confirmTaskRun({
+    dataDir,
+    runId: draft.run.runId,
+    now: () => '2026-06-20T00:02:00.000Z'
+  })
+  const logs = fs.readFileSync(path.join(dataDir, 'runs', draft.run.runId, 'logs', 'events.jsonl'), 'utf-8')
+    .trim()
+    .split(/\r?\n/)
+    .map((line) => JSON.parse(line))
+
+  assert.equal(confirmed.run.taskStatus, 'confirmed')
+  assert.equal(confirmed.run.status, 'draft')
+  assert.equal(confirmed.run.currentStep, 'confirmed')
+  assert.deepEqual(logs.map((entry) => entry.event), [
+    'task.drafted',
+    'task.question_answered',
+    'task.confirmed'
+  ])
+})
+
+test('creator studio task workflow rejects invalid question answers and unresolved confirmation', () => {
+  const {
+    answerTaskQuestion,
+    confirmTaskRun,
+    draftTaskRun
+  } = require('../../examples/plugins/creator-studio/lib/task-workflow')
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-task-invalid-'))
+  const draft = draftTaskRun({
+    dataDir,
+    payload: {
+      prompt: '新增一个自定义动作：原地打滚，动作要循环。',
+      backend: 'fixture'
+    },
+    now: () => '2026-06-20T00:00:00.000Z'
+  })
+
+  assert.throws(
+    () => answerTaskQuestion({
+      dataDir,
+      runId: draft.run.runId,
+      questionId: 'trigger',
+      answer: 'shell'
+    }),
+    /answer is invalid/
+  )
+  assert.throws(
+    () => confirmTaskRun({
+      dataDir,
+      runId: draft.run.runId
+    }),
+    /remaining questions/
+  )
 })
 
 test('creator studio run store keeps same-name same-day runs separate', () => {
