@@ -265,6 +265,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
   ipcMainService.on(IPC.PET_REQUEST_FOCUS_FOR_CURSOR, (event) => {
     const win = browserWindowService.fromWebContents(event.sender)
     if (!win || typeof win.focus !== 'function') return
+    if (win.contextMenuWindow && !win.contextMenuWindow.isDestroyed?.()) return
     if (typeof win.isFocused === 'function' && win.isFocused()) return
     win.focus()
   })

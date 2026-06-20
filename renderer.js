@@ -441,6 +441,7 @@ const updateMousePassthroughFromPoint = (event) => {
 
 const clearPointerHoverState = (event = {}) => {
   state.lastPointerPoint = null
+  state.customCursorFocusRequested = false
   hideCursorOverlay()
   setNativeCursor('')
   maybeLogMouseDiagnostic({

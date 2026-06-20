@@ -20,6 +20,15 @@ test('cursor library exposes the built-in picker catalog', () => {
   )
 })
 
+test('decorative built-in paw cursor uses a centered visual hotspot', () => {
+  const paw = BUILTIN_CURSORS.find((cursor) => cursor.id === 'builtin-paw-pink')
+
+  assert.equal(paw.width, 48)
+  assert.equal(paw.height, 48)
+  assert.equal(paw.hotspotX, 24)
+  assert.equal(paw.hotspotY, 24)
+})
+
 test('listCursorOptions returns system, built-ins, and custom cursors in order', () => {
   const options = listCursorOptions([{
     id: 'custom-lemon',
