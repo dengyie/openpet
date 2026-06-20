@@ -298,6 +298,20 @@ test('unfocused pet window requests focus and keeps the DOM custom cursor visibl
   assert.equal(focusRequests.length, 1)
 })
 
+test('unfocused pet window retries cursor focus after hover leaves and returns', async () => {
+  const { callbacks, elements, focusRequests } = await createRendererHarness({
+    insideFrame: true,
+    hasFocus: false
+  })
+
+  callbacks.settings({ customCursor: { enabled: true, assetUrl: 'file:///cursor.png', assetPath: '/cursor.png', fileName: 'cursor.png', hotspotX: 4, hotspotY: 6 } })
+  dispatch(elements.pet, 'pointermove', { clientX: 24, clientY: 88, screenX: 1024, screenY: 768 })
+  dispatch(elements.pet, 'pointerleave', { clientX: -1, clientY: -1, screenX: 999, screenY: 699 })
+  dispatch(elements.pet, 'pointermove', { clientX: 28, clientY: 92, screenX: 1028, screenY: 772 })
+
+  assert.equal(focusRequests.length, 2)
+})
+
 test('unfocused pet window does not request focus for transparent cursor padding', async () => {
   const { callbacks, elements, focusRequests } = await createRendererHarness({
     insideFrame: false,
