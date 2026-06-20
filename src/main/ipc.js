@@ -262,6 +262,20 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     else win.setIgnoreMouseEvents(false)
   })
 
+  ipcMainService.on(IPC.PET_REQUEST_FOCUS_FOR_CURSOR, (event) => {
+    const win = browserWindowService.fromWebContents(event.sender)
+    if (!win || win.isDestroyed?.()) return
+    if (win.isMinimized?.()) win.restore?.()
+    win.focus?.()
+    recordAppLog({
+      scope: 'pet-window',
+      level: 'debug',
+      actor: 'system',
+      event: 'pet.cursor.focus.requested',
+      message: 'Pet window focus requested for custom cursor'
+    })
+  })
+
   ipcMainService.on(IPC.PET_RECORD_APP_LOG, (_event, entry = {}) => {
     if (!entry || typeof entry !== 'object') return
     recordAppLog({

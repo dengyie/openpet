@@ -54,8 +54,8 @@ const BUILTIN_CURSORS = Object.freeze([
         <ellipse cx="35" cy="18" rx="3.2" ry="4.2" fill="#ffd5df" stroke="#c65d6d" stroke-width="2"/>
       </svg>
     `,
-    hotspotX: 6,
-    hotspotY: 6
+    hotspotX: 24,
+    hotspotY: 24
   }),
   createBuiltinCursor({
     id: 'builtin-fish-blue',

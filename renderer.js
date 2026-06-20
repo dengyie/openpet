@@ -68,6 +68,7 @@ const state = {
   currentLayout: null,
   customCursor: { enabled: false, assetPath: '', assetUrl: '', fileName: '', width: 0, height: 0, hotspotX: 0, hotspotY: 0 },
   customCursorOverlayVisible: false,
+  customCursorFocusRequested: false,
   nativeCursor: '',
   lastPointerPoint: null,
   lastMouseDiagnostic: null,
@@ -361,12 +362,21 @@ const applyPetCursorStyle = (insideFrame, point = state.lastPointerPoint, inside
   const overlayState = cursorStyle.resolvePetCursorOverlayState(state.customCursor, context)
   const fallbackCursor = cursorStyle.resolvePetCursorStyle(state.customCursor, context)
   setNativeCursor(overlayState.visible ? overlayState.nativeCursor : fallbackCursor)
+  if (context.windowFocused) state.customCursorFocusRequested = false
+  if (overlayState.visible && !context.windowFocused && !state.customCursorFocusRequested) {
+    state.customCursorFocusRequested = true
+    window.petAPI.requestFocusForCursor?.()
+  }
   if (overlayState.visible && point) showCursorOverlay(overlayState.assetUrl, point.clientX, point.clientY)
-  else hideCursorOverlay()
+  else {
+    state.customCursorFocusRequested = false
+    hideCursorOverlay()
+  }
   return overlayState
 }
 
 const preservePetCursorStyle = () => {
+  state.customCursorFocusRequested = false
   hideCursorOverlay()
   setNativeCursor('')
   return { visible: false, assetUrl: '', nativeCursor: state.nativeCursor }
@@ -422,6 +432,7 @@ const updateMousePassthroughFromPoint = (event) => {
 
 const clearPointerHoverState = (event = {}) => {
   state.lastPointerPoint = null
+  state.customCursorFocusRequested = false
   hideCursorOverlay()
   setNativeCursor('')
   maybeLogMouseDiagnostic({
