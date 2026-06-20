@@ -9,6 +9,7 @@ const sharp = require('sharp')
 
 const { normalizePluginManifest } = require('../../src/main/plugins/manifest')
 const { normalizeConfigSchema } = require('../../src/main/plugins/config-schema')
+const { createMinimalWebp } = require('../../examples/plugins/creator-studio/lib/fake-hatch-pet')
 
 const pluginRoot = path.resolve(__dirname, '../../examples/plugins/creator-studio')
 
@@ -590,20 +591,38 @@ test('creator studio run-step command uses host bridge for local backend generat
         Connection: 'close'
       })
       if (request.url.endsWith('/creator/model-image-generate')) {
-        response.end(JSON.stringify({
-          ok: true,
-          result: {
-            ok: true,
-            backend: 'local',
-            model: 'local-pet-sprite',
-            generatedAt: '2026-06-19T00:00:00.000Z',
-            outputs: [{
-              dataRelativePath: `runs/${created.json.run.runId}/frames/base/0001.png`,
-              mimeType: 'image/png',
-              sha256: 'local-bridge-sha'
-            }]
+        const dataRelativePath = `runs/${created.json.run.runId}/frames/base/0001.png`
+        const generatedPath = path.join(dataDir, dataRelativePath)
+        fs.mkdirSync(path.dirname(generatedPath), { recursive: true })
+        sharp({
+          create: {
+            width: 96,
+            height: 112,
+            channels: 4,
+            background: { r: 20, g: 170, b: 120, alpha: 1 }
           }
-        }))
+        })
+          .png()
+          .toFile(generatedPath)
+          .then(() => {
+            response.end(JSON.stringify({
+              ok: true,
+              result: {
+                ok: true,
+                backend: 'local',
+                model: 'local-pet-sprite',
+                generatedAt: '2026-06-19T00:00:00.000Z',
+                outputs: [{
+                  dataRelativePath,
+                  mimeType: 'image/png',
+                  sha256: 'local-bridge-sha'
+                }]
+              }
+            }))
+          })
+          .catch((error) => {
+            response.end(JSON.stringify({ ok: false, error: error.message }))
+          })
         return
       }
       if (request.url.endsWith('/creator/model-health-check')) {
@@ -657,6 +676,13 @@ test('creator studio run-step command uses host bridge for local backend generat
       }
     })
     const run = JSON.parse(fs.readFileSync(path.join(dataDir, 'runs', created.json.run.runId, 'run.json'), 'utf-8'))
+    const outputDir = path.join(dataDir, 'runs', created.json.run.runId, 'outputs')
+    const spritesheetPath = path.join(outputDir, 'spritesheet.webp')
+    const atlasQa = JSON.parse(fs.readFileSync(path.join(dataDir, 'runs', created.json.run.runId, 'qa', 'atlas-validation.json'), 'utf-8'))
+    const sourceQa = JSON.parse(fs.readFileSync(path.join(dataDir, 'runs', created.json.run.runId, 'qa', 'source-image-validation.json'), 'utf-8'))
+    const atlasStats = await sharp(spritesheetPath).ensureAlpha().raw().stats()
+    const generatedAtlasHash = crypto.createHash('sha256').update(fs.readFileSync(spritesheetPath)).digest('hex')
+    const fixtureAtlasHash = crypto.createHash('sha256').update(createMinimalWebp()).digest('hex')
 
     assert.equal(created.status, 0)
     assert.equal(generated.status, 0)
@@ -666,6 +692,11 @@ test('creator studio run-step command uses host bridge for local backend generat
     assert.equal(run.status, 'ready_for_review')
     assert.equal(run.backendStatus.state, 'ready')
     assert.equal(run.artifacts.generatedImage.outputs[0].dataRelativePath, `runs/${created.json.run.runId}/frames/base/0001.png`)
+    assert.equal(atlasQa.sourceRelativePath, `runs/${created.json.run.runId}/frames/base/0001.png`)
+    assert.equal(sourceQa.visiblePixels > 0, true)
+    assert.equal(atlasQa.visiblePixels > 0, true)
+    assert.equal(atlasStats.channels[3].max > 0, true)
+    assert.notEqual(generatedAtlasHash, fixtureAtlasHash)
     assert.match(requests[0].payload.prompt, /OpenPet desktop pet sprite asset/)
     assert.match(requests[0].payload.prompt, /Canvas And Boundary Rules/)
     assert.match(requests[0].payload.prompt, /Action name: 原地打滚/)
@@ -753,6 +784,70 @@ test('creator studio run-step command fails and persists run state when bridge i
   }
 })
 
+test('creator studio run-step command surfaces provider business errors from the bridge', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-cloud-business-error-'))
+  const created = runCreatorCommand({
+    command: 'create-run',
+    dataDir,
+    payload: {
+      petName: 'Cloud Business Error Cat',
+      prompt: '新增一个自定义动作：开心挥手，动作要循环。',
+      backend: 'cloud'
+    },
+    config: { backend: 'cloud' }
+  })
+
+  const bridgeServer = require('node:http').createServer((request, response) => {
+    let body = ''
+    request.on('data', (chunk) => { body += chunk })
+    request.on('end', () => {
+      void body
+      response.writeHead(200, {
+        'Content-Type': 'application/json',
+        Connection: 'close'
+      })
+      response.end(JSON.stringify({
+        ok: false,
+        error: '该接口未接入公益站独立网关，旧转发链路已关闭'
+      }))
+    })
+  })
+  await new Promise((resolve) => bridgeServer.listen(0, '127.0.0.1', resolve))
+  const port = bridgeServer.address().port
+
+  try {
+    const generated = await runCreatorCommandAsync({
+      command: 'run-step',
+      dataDir,
+      payload: { runId: created.json.run.runId },
+      config: { backend: 'cloud' },
+      env: {
+        OPENPET_BRIDGE_URL: `http://127.0.0.1:${port}`,
+        OPENPET_BRIDGE_TOKEN: 'bridge-token'
+      }
+    })
+    const runPath = path.join(dataDir, 'runs', created.json.run.runId, 'run.json')
+    const logPath = path.join(dataDir, 'runs', created.json.run.runId, 'logs', 'events.jsonl')
+    const run = JSON.parse(fs.readFileSync(runPath, 'utf-8'))
+    const events = fs.readFileSync(logPath, 'utf-8').trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line))
+
+    assert.equal(created.status, 0)
+    assert.equal(generated.status, 1)
+    assert.equal(generated.json.ok, false)
+    assert.match(generated.json.error, /旧转发链路已关闭/)
+    assert.equal(run.status, 'failed')
+    assert.equal(run.currentStep, 'generate')
+    assert.equal(run.backendStatus.backend, 'cloud')
+    assert.equal(run.backendStatus.state, 'failed')
+    assert.match(run.backendStatus.message, /旧转发链路已关闭/)
+    assert.match(run.error, /旧转发链路已关闭/)
+    assert.deepEqual(events.map((entry) => entry.event), ['generate.start', 'generate.failed'])
+  } finally {
+    bridgeServer.closeAllConnections?.()
+    await new Promise((resolve) => bridgeServer.close(resolve))
+  }
+})
+
 test('creator studio host-bridged local run can be approved and exported as a standard pet bundle', async () => {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-local-export-'))
   const created = runCreatorCommand({
@@ -769,20 +864,38 @@ test('creator studio host-bridged local run can be approved and exported as a st
         'Content-Type': 'application/json',
         Connection: 'close'
       })
-      response.end(JSON.stringify({
-        ok: true,
-        result: {
-          ok: true,
-          backend: 'local',
-          model: 'local-pet-sprite',
-          generatedAt: '2026-06-19T00:00:00.000Z',
-          outputs: [{
-            dataRelativePath: `runs/${created.json.run.runId}/frames/base/0001.png`,
-            mimeType: 'image/png',
-            sha256: 'local-export-sha'
-          }]
+      const dataRelativePath = `runs/${created.json.run.runId}/frames/base/0001.png`
+      const generatedPath = path.join(dataDir, dataRelativePath)
+      fs.mkdirSync(path.dirname(generatedPath), { recursive: true })
+      sharp({
+        create: {
+          width: 80,
+          height: 100,
+          channels: 4,
+          background: { r: 230, g: 130, b: 40, alpha: 1 }
         }
-      }))
+      })
+        .png()
+        .toFile(generatedPath)
+        .then(() => {
+          response.end(JSON.stringify({
+            ok: true,
+            result: {
+              ok: true,
+              backend: 'local',
+              model: 'local-pet-sprite',
+              generatedAt: '2026-06-19T00:00:00.000Z',
+              outputs: [{
+                dataRelativePath,
+                mimeType: 'image/png',
+                sha256: 'local-export-sha'
+              }]
+            }
+          }))
+        })
+        .catch((error) => {
+          response.end(JSON.stringify({ ok: false, error: error.message }))
+        })
       void body
     })
   })

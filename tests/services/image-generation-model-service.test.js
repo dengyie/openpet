@@ -391,6 +391,41 @@ test('image generation model service rejects output paths outside the allowed da
   )
 })
 
+test('image generation model service rejects output directory symlinks escaping the data directory', async (t) => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-image-generation-'))
+  const outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-image-generation-outside-'))
+  const symlinkDir = path.join(dataDir, 'runs', 'symlink-output')
+  fs.mkdirSync(path.dirname(symlinkDir), { recursive: true })
+  try {
+    fs.symlinkSync(outsideDir, symlinkDir, 'dir')
+  } catch (error) {
+    t.skip(`Directory symlinks are unavailable: ${error.message}`)
+    return
+  }
+  const service = createImageGenerationModelService({
+    settingsService: createSettingsService(),
+    secretService: createSecretService()
+  })
+
+  await assert.rejects(
+    () => service.generateImage({
+      backend: 'fixture',
+      prompt: 'no-op',
+      output: {
+        dataDir,
+        dataRelativeDir: 'runs/symlink-output'
+      },
+      constraints: {
+        width: 512,
+        height: 512,
+        transparent: true
+      }
+    }),
+    /allowed data directory/i
+  )
+  assert.equal(fs.existsSync(path.join(outsideDir, '0001.png')), false)
+})
+
 test('image generation model service records failed provider calls without leaking secrets or prompt text', async () => {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-image-generation-'))
   const logs = []
@@ -508,6 +543,66 @@ test('image generation model service records invalid successful provider respons
   assert.equal(logs[2].details.errorCode, 'provider_invalid_response')
   assert.equal(logs[2].details.status, 200)
   assert.equal(logs[2].details.outputCount, 0)
+  assert.equal(JSON.stringify(logs).includes('sk-test-secret'), false)
+  assert.equal(JSON.stringify(logs).includes('private detailed custom pet prompt'), false)
+})
+
+test('image generation model service surfaces openai-compatible business errors from HTTP 200 responses', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-image-generation-'))
+  const logs = []
+  const service = createImageGenerationModelService({
+    settingsService: createSettingsService({
+      models: {
+        imageGeneration: {
+          defaultBackend: 'cloud',
+          cloud: {
+            provider: 'openai-compatible',
+            baseUrl: 'http://127.0.0.1:8317/v1',
+            model: 'gpt-image-2',
+            apiKeyRef: 'secret:model.image.openai.apiKey'
+          }
+        }
+      }
+    }),
+    secretService: createSecretService({
+      'secret:model.image.openai.apiKey': { value: 'sk-test-secret', label: 'Image API Key' }
+    }),
+    appLogService: { record: (entry) => logs.push(entry) },
+    idFactory: () => 'img-run-business-error',
+    fetchImpl: async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        code: 0,
+        msg: '该接口未接入公益站独立网关，旧转发链路已关闭',
+        data: null
+      })
+    }),
+    now: () => new Date('2026-06-19T00:00:00.000Z')
+  })
+
+  await assert.rejects(
+    () => service.generateImage({
+      backend: 'cloud',
+      prompt: 'private detailed custom pet prompt',
+      output: {
+        dataDir,
+        dataRelativeDir: 'runs/business-error/frames/base'
+      },
+      constraints: {
+        width: 1024,
+        height: 1024,
+        transparent: true
+      }
+    }),
+    /旧转发链路已关闭/
+  )
+
+  assert.equal(logs[2].event, 'imageGeneration.provider.request.failed')
+  assert.equal(logs[2].details.errorCode, 'provider_business_error')
+  assert.equal(logs[2].details.status, 200)
+  assert.equal(logs[2].details.errorMessage, '该接口未接入公益站独立网关，旧转发链路已关闭')
+  assert.equal(logs[3].details.errorMessage, '该接口未接入公益站独立网关，旧转发链路已关闭')
   assert.equal(JSON.stringify(logs).includes('sk-test-secret'), false)
   assert.equal(JSON.stringify(logs).includes('private detailed custom pet prompt'), false)
 })

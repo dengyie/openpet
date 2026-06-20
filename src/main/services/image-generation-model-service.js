@@ -97,9 +97,27 @@ const ensureInsideDataDir = ({ dataDir, dataRelativeDir }) => {
   const root = path.resolve(String(dataDir || ''))
   const relativeDir = String(dataRelativeDir || '').trim()
   if (!root || !relativeDir) throw new Error('Image generation output must target the allowed data directory')
+  if (!fs.existsSync(root)) fs.mkdirSync(root, { recursive: true })
   const targetDir = path.resolve(root, relativeDir)
   const relative = path.relative(root, targetDir)
   if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error('Image generation output must stay inside the allowed data directory')
+  }
+  const existingPath = fs.existsSync(targetDir)
+    ? targetDir
+    : (() => {
+        let currentPath = path.dirname(targetDir)
+        while (currentPath && !fs.existsSync(currentPath)) {
+          const nextPath = path.dirname(currentPath)
+          if (nextPath === currentPath) break
+          currentPath = nextPath
+        }
+        return currentPath
+      })()
+  const realRoot = fs.realpathSync.native(root)
+  const realExistingPath = fs.realpathSync.native(existingPath)
+  const realRelative = path.relative(realRoot, realExistingPath)
+  if (realRelative.startsWith('..') || path.isAbsolute(realRelative)) {
     throw new Error('Image generation output must stay inside the allowed data directory')
   }
   return { root, relativeDir, targetDir }
@@ -177,6 +195,14 @@ const getErrorMessage = async (response) => {
   } catch (_) {
     return ''
   }
+}
+
+const extractCloudProviderBusinessError = (body) => {
+  if (!isPlainObject(body)) return ''
+  if (Array.isArray(body.data)) return ''
+  const message = String(body.error?.message || body.message || body.msg || '').trim()
+  if (!message) return ''
+  return message.slice(0, 240)
 }
 
 const buildCloudGenerationPayload = ({ model, prompt, constraints }) => {
@@ -502,6 +528,27 @@ const createImageGenerationModelService = ({
     const body = await response.json()
     const items = Array.isArray(body?.data) ? body.data : []
     if (!items.length) {
+      const businessError = extractCloudProviderBusinessError(body)
+      if (businessError) {
+        recordLog({
+          level: 'error',
+          event: 'imageGeneration.provider.request.failed',
+          message: 'Cloud image provider returned a business error',
+          details: {
+            requestId,
+            backend: 'cloud',
+            provider: config.cloud.provider,
+            model: config.cloud.model,
+            baseUrlHost: getUrlHost(config.cloud.baseUrl),
+            status: response.status || 200,
+            durationMs: nowMs() - providerStartMs,
+            outputCount: 0,
+            errorCode: 'provider_business_error',
+            errorMessage: businessError
+          }
+        })
+        throw new Error(businessError)
+      }
       recordLog({
         level: 'error',
         event: 'imageGeneration.provider.request.failed',
