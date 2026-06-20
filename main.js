@@ -113,8 +113,9 @@ const bootstrapOpenPet = () => {
   const applyCursorRepairToCollection = (customCursors = [], customCursor = {}) => (
     Array.isArray(customCursors)
       ? customCursors.map((cursor) => {
-        const isRepairedCursor = cursor?.assetPath === customCursor.assetPath ||
-          cursor?.assetUrl === customCursor.assetUrl
+        const isSameAssetPath = Boolean(customCursor.assetPath && cursor?.assetPath === customCursor.assetPath)
+        const isSameAssetUrl = Boolean(customCursor.assetUrl && cursor?.assetUrl === customCursor.assetUrl)
+        const isRepairedCursor = isSameAssetPath || isSameAssetUrl
         return isRepairedCursor
           ? {
               ...cursor,

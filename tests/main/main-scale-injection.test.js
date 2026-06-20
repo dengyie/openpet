@@ -367,7 +367,7 @@ test('main persists repaired cursor metadata even when the asset path is unchang
   const initialCursor = {
     enabled: true,
     assetPath: '/tmp/cursor.png',
-    assetUrl: 'file:///tmp/cursor.png',
+    assetUrl: '',
     fileName: 'cursor.png',
     width: 0,
     height: 0,
@@ -435,6 +435,19 @@ test('main persists repaired cursor metadata even when the asset path is unchang
             assetPath: initialCursor.assetPath,
             assetUrl: initialCursor.assetUrl,
             fileName: initialCursor.fileName,
+            width: 0,
+            height: 0,
+            byteSize: 100,
+            hotspotX: 0,
+            hotspotY: 0,
+            createdAt: '2026-06-20T00:00:00.000Z'
+          }, {
+            id: 'cursor-other',
+            type: 'custom',
+            name: 'Other Cursor',
+            assetPath: '/tmp/other-cursor.png',
+            assetUrl: '',
+            fileName: 'other-cursor.png',
             width: 0,
             height: 0,
             byteSize: 100,
@@ -525,6 +538,9 @@ test('main persists repaired cursor metadata even when the asset path is unchang
     assert.equal(repairedSettings.customCursors[0].height, 64)
     assert.equal(repairedSettings.customCursors[0].hotspotX, 13)
     assert.equal(repairedSettings.customCursors[0].hotspotY, 8)
+    assert.equal(repairedSettings.customCursors[1].assetPath, '/tmp/other-cursor.png')
+    assert.equal(repairedSettings.customCursors[1].width, 0)
+    assert.equal(repairedSettings.customCursors[1].hotspotX, 0)
     assert.equal(appLogs.some((entry) => entry.event === 'settings.cursor.asset.repaired'), true)
   } finally {
     Module._load = originalLoad
