@@ -1267,9 +1267,16 @@ test('creator studio commands infer latest run for generic plugin button flow', 
 test('creator studio dashboard asset exists and service script is declared', () => {
   const dashboardPath = path.join(pluginRoot, 'web', 'dashboard', 'index.html')
   const servicePath = path.join(pluginRoot, 'service', 'studio-service.js')
+  const html = fs.readFileSync(dashboardPath, 'utf-8')
   assert.equal(fs.existsSync(dashboardPath), true)
   assert.equal(fs.existsSync(servicePath), true)
-  assert.match(fs.readFileSync(dashboardPath, 'utf-8'), /Creator Studio/)
+  assert.match(html, /Creator Studio/)
+  assert.match(html, /id="prompt-input"/)
+  assert.match(html, /id="task-preview"/)
+  assert.match(html, /id="trigger-panel"/)
+  assert.match(html, /id="run-logs"/)
+  assert.equal(html.includes('apiKey'), false)
+  assert.equal(/\bsk-[A-Za-z0-9_-]+/.test(html), false)
 })
 
 test('creator studio service exposes run detail and logs for dashboard clients', async () => {
@@ -1302,6 +1309,71 @@ test('creator studio service exposes run detail and logs for dashboard clients',
     assert.equal(detail.run.runId, run.runId)
     assert.equal(logs.ok, true)
     assert.deepEqual(logs.logs.map((entry) => entry.event), ['run.created'])
+  } finally {
+    await new Promise((resolve) => server.close(resolve))
+  }
+})
+
+test('creator studio service exposes task review routes for dashboard clients', async () => {
+  const { createCreatorStudioServer } = require('../../examples/plugins/creator-studio/service/studio-service')
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-service-task-'))
+  const dashboardPath = path.join(pluginRoot, 'web', 'dashboard', 'index.html')
+  const server = createCreatorStudioServer({ dataDir, dashboardPath })
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const port = server.address().port
+  const postJson = (pathname, body = {}) => fetch(`http://127.0.0.1:${port}${pathname}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  }).then((response) => response.json())
+
+  try {
+    const draft = await postJson('/api/tasks/draft', {
+      prompt: '新增一个自定义动作：原地打滚，动作要循环。',
+      backend: 'fixture'
+    })
+    const answered = await postJson(`/api/runs/${draft.run.runId}/questions/trigger/answer`, {
+      answer: 'click'
+    })
+    const confirmed = await postJson(`/api/runs/${draft.run.runId}/confirm`)
+    const generated = await postJson(`/api/runs/${draft.run.runId}/generate-action`)
+
+    assert.equal(draft.ok, true)
+    assert.equal(draft.run.taskStatus, 'needs_input')
+    assert.equal(draft.run.generationTask.questions[0].id, 'trigger')
+    assert.equal(answered.ok, true)
+    assert.equal(answered.run.taskStatus, 'ready_for_confirmation')
+    assert.equal(answered.run.generationTask.questions.length, 0)
+    assert.equal(confirmed.ok, true)
+    assert.equal(confirmed.run.taskStatus, 'confirmed')
+    assert.equal(generated.ok, true)
+    assert.equal(generated.run.status, 'ready_for_review')
+    assert.equal(generated.run.artifacts.actionTaskQa.endsWith('action-generation-task.json'), true)
+    assert.equal(fs.existsSync(generated.run.artifacts.actionTaskQa), true)
+  } finally {
+    await new Promise((resolve) => server.close(resolve))
+  }
+})
+
+test('creator studio service rejects invalid dashboard JSON bodies', async () => {
+  const { createCreatorStudioServer } = require('../../examples/plugins/creator-studio/service/studio-service')
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-service-invalid-json-'))
+  const dashboardPath = path.join(pluginRoot, 'web', 'dashboard', 'index.html')
+  const server = createCreatorStudioServer({ dataDir, dashboardPath })
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const port = server.address().port
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/api/tasks/draft`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{not-json'
+    })
+    const body = await response.json()
+
+    assert.equal(response.status, 400)
+    assert.equal(body.ok, false)
+    assert.match(body.error, /valid JSON/)
   } finally {
     await new Promise((resolve) => server.close(resolve))
   }

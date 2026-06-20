@@ -5,39 +5,342 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Creator Studio</title>
     <style>
+      :root {
+        color-scheme: light;
+        --ink: #17202a;
+        --muted: #66727f;
+        --line: #ddd8c8;
+        --paper: #fffdf6;
+        --field: #fffaf0;
+        --accent: #d86f38;
+        --accent-dark: #9f4726;
+        --good: #287b54;
+        --bad: #aa3d3d;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
       body {
         margin: 0;
-        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        color: #1f2933;
-        background: #f7f7f4;
+        font-family: Avenir Next, Optima, Trebuchet MS, sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at top left, rgba(216, 111, 56, 0.18), transparent 34rem),
+          linear-gradient(135deg, #fbf0d5 0%, #f8f5eb 45%, #edf3ee 100%);
       }
+
       main {
-        max-width: 980px;
+        max-width: 1080px;
         margin: 0 auto;
         padding: 32px;
       }
-      .panel {
-        border: 1px solid #d8d8d0;
-        border-radius: 8px;
-        background: #fff;
-        padding: 20px;
+
+      header {
+        margin-bottom: 24px;
       }
+
       h1 {
         margin: 0 0 8px;
-        font-size: 28px;
+        font-size: clamp(32px, 6vw, 56px);
+        letter-spacing: -0.05em;
       }
+
+      h2 {
+        margin: 0 0 12px;
+        font-size: 18px;
+      }
+
       p {
         margin: 0;
-        color: #52616b;
+        color: var(--muted);
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(280px, 0.75fr);
+        gap: 18px;
+      }
+
+      .panel {
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        background: rgba(255, 253, 246, 0.88);
+        box-shadow: 0 18px 50px rgba(51, 42, 25, 0.12);
+        padding: 20px;
+      }
+
+      label {
+        display: block;
+        margin: 0 0 8px;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      textarea,
+      select {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--field);
+        color: var(--ink);
+        font: inherit;
+        padding: 12px;
+      }
+
+      textarea {
+        min-height: 128px;
+        resize: vertical;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 14px;
+      }
+
+      button {
+        border: 0;
+        border-radius: 999px;
+        background: var(--accent);
+        color: #fff;
+        cursor: pointer;
+        font: inherit;
+        font-weight: 800;
+        padding: 10px 16px;
+      }
+
+      button.secondary {
+        background: #273f43;
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.48;
+      }
+
+      pre {
+        overflow: auto;
+        min-height: 80px;
+        max-height: 260px;
+        border-radius: 14px;
+        background: #17202a;
+        color: #f9f0d0;
+        padding: 14px;
+        white-space: pre-wrap;
+      }
+
+      .status {
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .ok {
+        color: var(--good);
+      }
+
+      .error {
+        color: var(--bad);
+      }
+
+      .stack {
+        display: grid;
+        gap: 14px;
+      }
+
+      @media (max-width: 820px) {
+        main {
+          padding: 20px;
+        }
+
+        .grid {
+          grid-template-columns: 1fr;
+        }
       }
     </style>
   </head>
   <body>
     <main>
-      <div class="panel">
+      <header>
         <h1>Creator Studio</h1>
-        <p>Run creation, review, import, and export controls will live here. The first implementation exposes command entries through OpenPet Control Center.</p>
+        <p>Describe a custom OpenPet action, review the generated task, then generate safe fixture output for import.</p>
+      </header>
+
+      <div class="grid">
+        <section class="panel stack">
+          <div>
+            <label for="prompt-input">Action prompt</label>
+            <textarea id="prompt-input">新增一个自定义动作：原地打滚，动作要循环。</textarea>
+          </div>
+          <div>
+            <label for="backend-select">Backend</label>
+            <select id="backend-select">
+              <option value="fixture">fixture</option>
+              <option value="cloud">cloud</option>
+              <option value="local">local</option>
+            </select>
+          </div>
+          <div class="actions">
+            <button id="draft-button">Draft task</button>
+            <button id="confirm-button" class="secondary" disabled>Confirm task</button>
+            <button id="generate-button" class="secondary" disabled>Generate action</button>
+          </div>
+          <p id="status-line" class="status">Ready.</p>
+        </section>
+
+        <aside class="panel stack">
+          <section>
+            <h2>Task Preview</h2>
+            <section id="task-preview">No task drafted yet.</section>
+          </section>
+          <section>
+            <h2>Follow-up</h2>
+            <section id="question-panel">No pending question.</section>
+          </section>
+          <section>
+            <h2>Trigger Proposal</h2>
+            <section id="trigger-panel">No trigger proposal yet.</section>
+          </section>
+        </aside>
       </div>
+
+      <section class="panel stack" style="margin-top: 18px;">
+        <section>
+          <h2>QA</h2>
+          <section id="qa-panel">No generated QA yet.</section>
+        </section>
+        <section>
+          <h2>Run Logs</h2>
+          <pre id="run-logs">No logs yet.</pre>
+        </section>
+      </section>
     </main>
+
+    <script>
+      const state = { run: null }
+      const $ = (id) => document.getElementById(id)
+
+      const setStatus = (message, kind = '') => {
+        $('status-line').textContent = message
+        $('status-line').className = `status ${kind}`.trim()
+      }
+
+      const postJson = async (url, body = {}) => {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        })
+        const payload = await response.json()
+        if (!response.ok || !payload.ok) throw new Error(payload.error || 'Creator Studio request failed')
+        return payload
+      }
+
+      const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (character) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      })[character])
+
+      const renderRun = () => {
+        const run = state.run
+        if (!run?.generationTask) {
+          $('task-preview').textContent = 'No task drafted yet.'
+          $('question-panel').textContent = 'No pending question.'
+          $('trigger-panel').textContent = 'No trigger proposal yet.'
+          $('confirm-button').disabled = true
+          $('generate-button').disabled = true
+          return
+        }
+        const action = run.generationTask.actions[0]
+        const question = run.generationTask.questions[0]
+        $('task-preview').innerHTML = [
+          `<strong>${escapeHtml(action.name)}</strong>`,
+          `<p>Mode: ${escapeHtml(run.generationTask.mode)} / Frames: ${escapeHtml(action.frameCount)} / Loop: ${action.loop ? 'yes' : 'no'}</p>`,
+          `<p>${escapeHtml(action.motionPrompt)}</p>`
+        ].join('')
+        $('trigger-panel').innerHTML = `<strong>${escapeHtml(action.triggerProposal.type)}</strong><p>${escapeHtml(action.triggerProposal.notes || 'No notes.')}</p>`
+        if (question) {
+          $('question-panel').innerHTML = question.options.map((option) => (
+            `<button data-answer="${escapeHtml(option)}">${escapeHtml(option)}</button>`
+          )).join(' ')
+        } else {
+          $('question-panel').textContent = 'No pending question.'
+        }
+        $('confirm-button').disabled = Boolean(question) || run.taskStatus === 'confirmed'
+        $('generate-button').disabled = Boolean(question)
+        $('qa-panel').textContent = run.artifacts?.actionTaskQa ? `QA written: ${run.artifacts.actionTaskQa}` : 'No generated QA yet.'
+      }
+
+      const refreshLogs = async () => {
+        if (!state.run?.runId) return
+        const payload = await fetch(`/api/runs/${encodeURIComponent(state.run.runId)}/logs`).then((response) => response.json())
+        $('run-logs').textContent = (payload.logs || []).map((entry) => (
+          `${entry.timestamp} ${entry.level} ${entry.event} ${entry.message}`
+        )).join('\n') || 'No logs yet.'
+      }
+
+      $('draft-button').addEventListener('click', async () => {
+        try {
+          const payload = await postJson('/api/tasks/draft', {
+            prompt: $('prompt-input').value,
+            backend: $('backend-select').value
+          })
+          state.run = payload.run
+          renderRun()
+          await refreshLogs()
+          setStatus('Task drafted.', 'ok')
+        } catch (error) {
+          setStatus(error.message, 'error')
+        }
+      })
+
+      $('question-panel').addEventListener('click', async (event) => {
+        const answer = event.target?.dataset?.answer
+        if (!answer || !state.run?.runId) return
+        try {
+          const payload = await postJson(`/api/runs/${encodeURIComponent(state.run.runId)}/questions/trigger/answer`, { answer })
+          state.run = payload.run
+          renderRun()
+          await refreshLogs()
+          setStatus('Question answered.', 'ok')
+        } catch (error) {
+          setStatus(error.message, 'error')
+        }
+      })
+
+      $('confirm-button').addEventListener('click', async () => {
+        if (!state.run?.runId) return
+        try {
+          const payload = await postJson(`/api/runs/${encodeURIComponent(state.run.runId)}/confirm`)
+          state.run = payload.run
+          renderRun()
+          await refreshLogs()
+          setStatus('Task confirmed.', 'ok')
+        } catch (error) {
+          setStatus(error.message, 'error')
+        }
+      })
+
+      $('generate-button').addEventListener('click', async () => {
+        if (!state.run?.runId) return
+        try {
+          const payload = await postJson(`/api/runs/${encodeURIComponent(state.run.runId)}/generate-action`)
+          state.run = payload.run
+          renderRun()
+          await refreshLogs()
+          setStatus(`Generated action output in ${payload.outputDir || 'run workspace'}.`, 'ok')
+        } catch (error) {
+          setStatus(error.message, 'error')
+        }
+      })
+    </script>
   </body>
 </html>
