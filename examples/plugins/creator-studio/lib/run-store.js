@@ -64,6 +64,9 @@ const createRun = ({ dataDir, input = {}, now = () => new Date().toISOString() }
     runId,
     petId,
     status: 'draft',
+    taskStatus: generationTask
+      ? (generationTask.questions.length > 0 ? 'needs_input' : 'ready_for_confirmation')
+      : 'not_started',
     backend: input.backend || 'fixture',
     modelProvider: input.modelProvider || input.backend || 'fixture',
     createdAt: timestamp,
@@ -76,6 +79,10 @@ const createRun = ({ dataDir, input = {}, now = () => new Date().toISOString() }
       ...(originalPrompt ? { originalPrompt } : {})
     },
     ...(generationTask ? { generationTask } : {}),
+    conversation: {
+      originalPrompt,
+      answers: []
+    },
     backendStatus: {
       backend: input.backend || 'fixture',
       state: 'idle',
@@ -92,6 +99,7 @@ const createRun = ({ dataDir, input = {}, now = () => new Date().toISOString() }
   fs.writeFileSync(path.join(runDir, 'inputs', 'prompt.md'), `${run.input.prompt}\n`)
   writeJson(path.join(runDir, 'inputs', 'config.json'), run.input)
   if (generationTask) writeJson(path.join(runDir, 'inputs', 'generation-task.json'), generationTask)
+  if (originalPrompt) fs.writeFileSync(path.join(runDir, 'inputs', 'original-prompt.txt'), `${originalPrompt}\n`)
   return run
 }
 
