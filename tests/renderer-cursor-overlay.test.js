@@ -67,6 +67,7 @@ const createRendererHarness = async ({ insideFrame = true, insideCursorRegion, i
   }
   const callbacks = {}
   const logs = []
+  const focusRequests = []
   const context = {
     console,
     document: {
@@ -112,6 +113,7 @@ const createRendererHarness = async ({ insideFrame = true, insideCursorRegion, i
         }),
         setViewport: () => {},
         setMousePassthrough: (passthrough) => logs.push({ event: 'pet:test:set-mouse-passthrough', passthrough }),
+        requestFocusForCursor: () => focusRequests.push({ event: 'pet:test:request-focus-for-cursor' }),
         recordAppLog: (entry) => logs.push(entry),
         onSettingsChanged: (callback) => { callbacks.settings = callback },
         onPetSay: () => {},
@@ -131,7 +133,7 @@ const createRendererHarness = async ({ insideFrame = true, insideCursorRegion, i
   vm.runInNewContext(rendererSource, context, { filename: 'renderer.js' })
   await Promise.resolve()
   await Promise.resolve()
-  return { callbacks, elements, logs, context }
+  return { callbacks, elements, focusRequests, logs, context }
 }
 
 const dispatch = (element, eventName, event) => {
