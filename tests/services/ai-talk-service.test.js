@@ -208,3 +208,132 @@ test('ai talk service preserves existing global system prompt as stable instruct
   assert.match(requests[0].messages[0].content, /Always answer in concise Chinese\./)
   assert.match(requests[0].messages[0].content, /# Pet Persona/)
 })
+
+test('ai talk service returns reply before non-blocking memory extraction completes', async () => {
+  const requests = []
+  let finishExtraction
+  const extractionStarted = new Promise((resolve) => {
+    finishExtraction = resolve
+  })
+  const store = createStore()
+  const service = createAiTalkService({
+    aiService: {
+      getConfig: () => ({
+        enabled: true,
+        behavior: { enabled: false, useTools: true },
+        memory: { enabled: true }
+      }),
+      complete: async (request) => {
+        requests.push(request)
+        if (requests.length === 1) return { reply: '我记住啦。' }
+        await extractionStarted
+        return {
+          reply: JSON.stringify({
+            memories: [
+              {
+                operation: 'create',
+                scope: 'global',
+                text: 'User likes jasmine tea.',
+                tags: ['preference'],
+                confidence: 0.8,
+                importance: 0.5,
+                reason: 'user stated preference'
+              }
+            ]
+          })
+        }
+      }
+    },
+    aiTalkStore: store,
+    petPackService: createPetPackService({ id: 'legacy-cat' })
+  })
+
+  const result = await service.chat({ message: '我喜欢茉莉花茶' })
+
+  assert.equal(result.reply, '我记住啦。')
+  assert.equal(store.listMemories({ petPackId: 'legacy-cat' }).length, 0)
+  finishExtraction()
+  await service.flushMemoryJobs()
+  assert.deepEqual(store.listMemories({ petPackId: 'legacy-cat' }).map((memory) => memory.text), ['User likes jasmine tea.'])
+})
+
+test('ai talk service injects relevant memories as dynamic context without changing persona prompt', async () => {
+  const requests = []
+  const store = createStore()
+  store.applyMemoryOperations({
+    petPackId: 'mochi-cat',
+    conversationId: 'control-center:mochi-cat:main',
+    messageIds: ['m1'],
+    operations: [
+      {
+        operation: 'create',
+        scope: 'global',
+        text: 'User prefers concise Chinese replies.',
+        tags: ['preference'],
+        confidence: 0.9,
+        importance: 0.8,
+        reason: 'stable preference'
+      },
+      {
+        operation: 'create',
+        scope: 'petPack',
+        text: 'Mochi greets the user softly before focus work.',
+        tags: ['relationship', 'focus'],
+        confidence: 0.8,
+        importance: 0.7,
+        reason: 'relationship cue'
+      }
+    ]
+  })
+  const service = createAiTalkService({
+    aiService: {
+      getConfig: () => ({
+        enabled: true,
+        behavior: { enabled: false, useTools: true },
+        memory: { enabled: false }
+      }),
+      complete: async (request) => {
+        requests.push(request)
+        return { reply: '短短地陪你。' }
+      }
+    },
+    aiTalkStore: store,
+    petPackService: createPetPackService({ id: 'mochi-cat' })
+  })
+
+  await service.chat({ message: '准备专注一下' })
+
+  assert.match(requests[0].messages[0].content, /# Pet Persona/)
+  assert.doesNotMatch(requests[0].messages[0].content, /User prefers concise Chinese replies/)
+  assert.match(requests[0].messages[1].content, /# Relevant Memories/)
+  assert.match(requests[0].messages[1].content, /User prefers concise Chinese replies/)
+  assert.match(requests[0].messages[1].content, /Mochi greets the user softly/)
+})
+
+test('ai talk service accepts fenced json memory extraction replies', async () => {
+  const store = createStore()
+  const service = createAiTalkService({
+    aiService: {
+      getConfig: () => ({
+        enabled: true,
+        behavior: { enabled: false, useTools: true },
+        memory: { enabled: true }
+      }),
+      complete: async (request) => {
+        if (request.messages[0].content.includes('Extract only durable')) {
+          return {
+            reply: '```json\n{"memories":[{"operation":"create","scope":"global","text":"User likes quiet focus music.","tags":["preference"],"confidence":0.8,"importance":0.6,"reason":"stable preference"}]}\n```'
+          }
+        }
+        return { reply: '轻轻陪你专注。' }
+      }
+    },
+    aiTalkStore: store,
+    petPackService: createPetPackService({ id: 'legacy-cat' })
+  })
+
+  await service.chat({ message: '我喜欢安静的专注音乐' })
+  await service.flushMemoryJobs()
+
+  assert.deepEqual(store.listMemories({ petPackId: 'legacy-cat' }).map((memory) => memory.text), ['User likes quiet focus music.'])
+})
