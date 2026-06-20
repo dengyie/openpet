@@ -17,6 +17,16 @@ const createBackendStatus = ({ backend, state, message = '', updatedAt }) => ({
   updatedAt
 })
 
+const assertTaskReadyForGeneration = (run) => {
+  if (!run.generationTask) return
+  if (!run.taskStatus || run.taskStatus === 'confirmed') return
+  if (run.taskStatus === 'ready_for_confirmation' && (run.generationTask.questions || []).length === 0) return
+  const error = new Error('Creator Studio task must be confirmed before generation')
+  error.backend = run.backend || run.input?.backend || 'fixture'
+  error.state = 'failed'
+  throw error
+}
+
 const writeHostGeneratedStandardOutputs = async ({ dataDir, run, generationResult, now }) => {
   const runDir = path.join(dataDir, 'runs', run.runId)
   const outputDir = path.join(runDir, 'outputs')
@@ -125,6 +135,7 @@ const runGenerationStep = async ({ dataDir, runId, now = () => new Date().toISOS
   })
 
   try {
+    assertTaskReadyForGeneration(run)
     const output = backend === 'fixture'
       ? await getBackendAdapter(backend).run({ dataDir, runId, now })
       : await buildHostGeneratedRunOutput({
