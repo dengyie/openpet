@@ -115,6 +115,7 @@ const createRendererHarness = async ({ insideFrame = true, insideCursorRegion, i
         setMousePassthrough: (passthrough) => logs.push({ event: 'pet:test:set-mouse-passthrough', passthrough }),
         requestFocusForCursor: () => focusRequests.push({ event: 'pet:test:request-focus-for-cursor' }),
         recordAppLog: (entry) => logs.push(entry),
+        requestFocusForCursor: () => { focusForCursorRequests += 1 },
         onSettingsChanged: (callback) => { callbacks.settings = callback },
         onPetSay: () => {},
         onPetAction: () => {},

@@ -389,6 +389,7 @@ const applyPetCursorStyle = (insideFrame, point = state.lastPointerPoint, inside
 }
 
 const preservePetCursorStyle = () => {
+  state.customCursorFocusRequested = false
   hideCursorOverlay()
   state.cursorFocusRequested = false
   setNativeCursor('')
