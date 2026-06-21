@@ -145,6 +145,7 @@ test('ai chat handler delegates to ai talk service when available', async () => 
   const ipcMain = createIpcMainStub()
   const sayCalls = []
   const talkCalls = []
+  const appLogs = []
 
   registerIpcHandlers({
     ...createRequiredServices({
@@ -188,6 +189,7 @@ test('ai chat handler delegates to ai talk service when available', async () => 
         return { conversationId: 'control-center:legacy-cat:main', reply: 'talk reply', messages: [{ role: 'assistant', content: 'talk reply' }] }
       }
     },
+    appLogService: { record: (entry) => appLogs.push(entry) },
     ipcMainService: ipcMain
   })
 
@@ -199,6 +201,12 @@ test('ai chat handler delegates to ai talk service when available', async () => 
   assert.equal(result.reply, 'talk reply')
   assert.equal(result.conversationId, 'control-center:legacy-cat:main')
   assert.deepEqual(history, [{ role: 'assistant', content: 'hello' }])
+  assert.deepEqual(appLogs.map((entry) => entry.event), [
+    'ai-chat.ipc.received',
+    'ai-chat.ipc.completed'
+  ])
+  assert.equal(JSON.stringify(appLogs).includes('hi'), false)
+  assert.equal(appLogs[1].details.messageCount, 1)
 })
 
 test('service:get-status returns Control Center service status shape', async () => {

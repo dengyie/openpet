@@ -85,9 +85,9 @@ const bootstrapOpenPet = () => {
   const appLogService = createAppLogService({
     logDir: path.join(app.getPath('userData'), 'logs')
   })
-  const aiService = createAiService({ settingsService, secretService })
+  const aiService = createAiService({ settingsService, secretService, appLogService })
   const aiTalkStore = createAiTalkStore({ storePath: path.join(app.getPath('userData'), 'ai-talk-store.json') })
-  const aiTalkService = createAiTalkService({ aiService, aiTalkStore, petPackService })
+  const aiTalkService = createAiTalkService({ aiService, aiTalkStore, petPackService, appLogService })
   const imageGenerationModelService = createImageGenerationModelService({ settingsService, secretService, appLogService })
   const behaviorOrchestratorService = createBehaviorOrchestratorService({ settingsService })
   const localHttpService = createLocalHttpService({ petService, settingsService })

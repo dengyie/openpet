@@ -170,13 +170,34 @@ const createTimeoutController = (timeoutMs) => {
   }
 }
 
+const normalizeEndpointForLog = (baseUrl) => {
+  try {
+    const url = new URL(String(baseUrl || ''))
+    return `${url.origin}${url.pathname.replace(/\/$/, '')}/chat/completions`
+  } catch (_) {
+    return 'invalid-ai-base-url'
+  }
+}
+
+const sanitizeDiagnosticText = (value) => String(value || '')
+  .replace(/\bsk-[A-Za-z0-9_-]{8,}\b/g, '[redacted-secret]')
+  .slice(0, 240)
+
+const createProviderError = ({ message, status, code }) => {
+  const error = new Error(message)
+  error.providerStatus = status
+  error.providerCode = code || ''
+  return error
+}
+
 const createAiService = ({
   settingsService,
   secretService,
   fetchImpl = globalThis.fetch,
   requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
   maxHistoryMessages = DEFAULT_MAX_HISTORY_MESSAGES,
-  maxConversations = DEFAULT_MAX_CONVERSATIONS
+  maxConversations = DEFAULT_MAX_CONVERSATIONS,
+  appLogService
 }) => {
   if (!settingsService) throw new Error('settingsService is required')
   if (!secretService) throw new Error('secretService is required')
@@ -186,6 +207,18 @@ const createAiService = ({
   const conversationQueues = new Map()
 
   const getRawConfig = () => normalizeConfig(settingsService.get().ai)
+
+  const recordLog = (entry) => {
+    try {
+      appLogService?.record?.({
+        actor: 'system',
+        scope: 'ai-provider',
+        ...entry
+      })
+    } catch (_) {
+      // Diagnostics must never break AI chat.
+    }
+  }
 
   const enqueueConversation = (conversationId, task) => {
     if (!conversationId) return task()
@@ -274,45 +307,99 @@ const createAiService = ({
   const complete = async ({ messages, tools = [] }) => {
     const config = getRawConfig()
     const apiKey = secretService.getSecretValue(config.apiKeyRef)
-    if (!apiKey) throw new Error('AI API key is not configured')
-    if (config.provider !== 'openai-compatible') {
-      throw new Error(`Unsupported AI provider: ${config.provider}`)
-    }
-    if (typeof fetchImpl !== 'function') throw new Error('fetch is not available')
-
-    const timeout = createTimeoutController(requestTimeoutMs)
-    let response
-    const body = {
+    const startedAt = Date.now()
+    const baseDetails = {
+      provider: config.provider,
       model: config.model,
-      messages
+      endpoint: normalizeEndpointForLog(config.baseUrl),
+      messagesCount: Array.isArray(messages) ? messages.length : 0,
+      toolsCount: Array.isArray(tools) ? tools.length : 0,
+      timeoutMs: requestTimeoutMs,
+      hasApiKey: Boolean(apiKey)
     }
-    if (tools.length) body.tools = tools
-
+    recordLog({
+      level: 'info',
+      event: 'ai.provider.request.started',
+      message: 'AI provider request started',
+      details: baseDetails
+    })
+    let response
     try {
-      response = await fetchImpl(`${config.baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json'
-        },
-        signal: timeout.signal,
-        body: JSON.stringify(body)
-      })
-    } catch (error) {
-      if (error?.name === 'AbortError') {
-        throw new Error('AI provider request timed out')
+      if (!apiKey) throw new Error('AI API key is not configured')
+      if (config.provider !== 'openai-compatible') {
+        throw new Error(`Unsupported AI provider: ${config.provider}`)
       }
-      throw error
-    } finally {
-      timeout.clear()
-    }
+      if (typeof fetchImpl !== 'function') throw new Error('fetch is not available')
 
-    const data = await response.json().catch(() => ({}))
-    if (!response.ok) {
-      const message = data?.error?.message || `AI provider request failed with status ${response.status}`
-      throw new Error(message)
+      const timeout = createTimeoutController(requestTimeoutMs)
+      const body = {
+        model: config.model,
+        messages
+      }
+      if (tools.length) body.tools = tools
+
+      try {
+        response = await fetchImpl(`${config.baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+          },
+          signal: timeout.signal,
+          body: JSON.stringify(body)
+        })
+      } catch (error) {
+        if (error?.name === 'AbortError') {
+          const timeoutError = new Error('AI provider request timed out')
+          timeoutError.name = 'AbortError'
+          throw timeoutError
+        }
+        throw error
+      } finally {
+        timeout.clear()
+      }
+
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        const message = data?.error?.message || `AI provider request failed with status ${response.status}`
+        throw createProviderError({
+          message,
+          status: response.status,
+          code: data?.error?.code
+        })
+      }
+      const result = parseChatResult(data)
+      recordLog({
+        level: 'info',
+        event: 'ai.provider.request.completed',
+        message: 'AI provider request completed',
+        details: {
+          ...baseDetails,
+          status: response.status,
+          elapsedMs: Date.now() - startedAt,
+          replyChars: String(result.reply || '').length,
+          hasBehaviorIntent: Boolean(result.behaviorIntent)
+        }
+      })
+      return result
+    } catch (error) {
+      recordLog({
+        level: 'error',
+        event: 'ai.provider.request.failed',
+        message: 'AI provider request failed',
+        details: {
+          ...baseDetails,
+          status: error?.providerStatus || response?.status || 0,
+          providerCode: error?.providerCode || '',
+          elapsedMs: Date.now() - startedAt,
+          errorName: sanitizeDiagnosticText(error?.name || 'Error'),
+          errorMessage: error?.providerStatus
+            ? 'AI provider returned an error response'
+            : sanitizeDiagnosticText(error?.message)
+        }
+      })
+      throw error
     }
-    return parseChatResult(data)
   }
 
   const chat = async ({ message, conversationId }) => {
