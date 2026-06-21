@@ -126,6 +126,10 @@ const getRecentMessages = (messages, limit = MAX_CONTEXT_MESSAGES) => {
   return messages.slice(messages.length - limit)
 }
 
+const sanitizeDiagnosticText = (value) => String(value || '')
+  .replace(/\bsk-[A-Za-z0-9_-]{8,}\b/g, '[redacted-secret]')
+  .slice(0, 240)
+
 const splitTalkConversationId = (conversationId) => {
   const normalized = normalizeString(conversationId)
   const match = normalized.match(/^(.+:.+):(main)$/)
@@ -133,10 +137,22 @@ const splitTalkConversationId = (conversationId) => {
   return { sessionId: match[1], conversationId: match[2] }
 }
 
-const createAiTalkService = ({ aiService, aiTalkStore, petPackService } = {}) => {
+const createAiTalkService = ({ aiService, aiTalkStore, petPackService, appLogService } = {}) => {
   if (!aiService) throw new Error('aiService is required')
   if (!aiTalkStore) throw new Error('aiTalkStore is required')
   if (!petPackService) throw new Error('petPackService is required')
+
+  const recordLog = (entry) => {
+    try {
+      appLogService?.record?.({
+        actor: 'system',
+        scope: 'ai-talk',
+        ...entry
+      })
+    } catch (_) {
+      // Diagnostics must never break AI chat.
+    }
+  }
 
   const resolveActivePack = () => {
     const pack = petPackService.getActivePetPack?.()
@@ -166,7 +182,19 @@ const createAiTalkService = ({ aiService, aiTalkStore, petPackService } = {}) =>
     const job = typeof aiTalkStore.createMemoryJob === 'function'
       ? aiTalkStore.createMemoryJob({ petPackId, conversationId: conversationPublicId })
       : null
+    recordLog({
+      level: 'info',
+      event: 'ai-talk.memory.extraction.scheduled',
+      message: 'AI talk memory extraction scheduled',
+      details: {
+        petPackId,
+        conversationId: conversationPublicId,
+        jobId: job?.id || '',
+        sourceMessageCount: sourceMessages.length
+      }
+    })
     const task = (async () => {
+      const startedAt = Date.now()
       try {
         const extraction = await aiService.complete({
           messages: buildMemoryExtractionMessages({ userMessage, assistantReply, petPackId, persona }),
@@ -185,10 +213,38 @@ const createAiTalkService = ({ aiService, aiTalkStore, petPackService } = {}) =>
             filteredCount: result.filtered.length
           })
         }
-      } catch (_) {
+        recordLog({
+          level: 'info',
+          event: 'ai-talk.memory.extraction.completed',
+          message: 'AI talk memory extraction completed',
+          details: {
+            petPackId,
+            conversationId: conversationPublicId,
+            jobId: job?.id || '',
+            elapsedMs: Date.now() - startedAt,
+            appliedCount: result.applied.length,
+            filteredCount: result.filtered.length
+          }
+        })
+      } catch (error) {
         if (job?.id && typeof aiTalkStore.finishMemoryJob === 'function') {
           aiTalkStore.finishMemoryJob(job.id, { status: 'failed', errorCode: 'memory_extraction_failed' })
         }
+        recordLog({
+          level: 'error',
+          event: 'ai-talk.memory.extraction.failed',
+          message: 'AI talk memory extraction failed',
+          details: {
+            petPackId,
+            conversationId: conversationPublicId,
+            jobId: job?.id || '',
+            elapsedMs: Date.now() - startedAt,
+            errorName: sanitizeDiagnosticText(error?.name || 'Error'),
+            errorMessage: error?.providerStatus
+              ? 'AI provider returned an error response'
+              : sanitizeDiagnosticText(error?.message)
+          }
+        })
       }
     })()
     pendingMemoryJobs.add(task)
@@ -209,51 +265,104 @@ const createAiTalkService = ({ aiService, aiTalkStore, petPackService } = {}) =>
   }
 
   const chat = async ({ message, entrypoint = 'control-center' } = {}) => {
+    const startedAt = Date.now()
     const content = normalizeString(message)
-    if (!content) throw new Error('AI chat message is empty')
-    const config = typeof aiService.getConfig === 'function' ? aiService.getConfig() : { enabled: true }
-    if (!config.enabled) throw new Error('AI chat is disabled')
-    const { manifest, petPackId } = resolveActivePack()
-    const { persona, systemPrompt: personaPrompt, personaHash } = resolvePersona(manifest, petPackId)
-    const { sessionId, conversationId } = aiTalkStore.ensureMainConversation({
+    const diagnostics = {
       entrypoint,
-      petPackId,
-      personaHash
-    })
-    const history = aiTalkStore.getMessages(sessionId, conversationId)
-    const userMessage = { role: 'user', content }
-    const memoryContextPrompt = compileMemoryContextPrompt(getMemoryContext(petPackId))
-    const messages = [
-      { role: 'system', content: compileSystemPrompt({ personaPrompt, globalPrompt: config.systemPrompt }) },
-      ...(memoryContextPrompt ? [{ role: 'system', content: memoryContextPrompt }] : []),
-      ...getRecentMessages(history).map(({ role, content }) => ({ role, content })),
-      userMessage
-    ]
-    const tools = config.behavior?.enabled && config.behavior?.useTools !== false
-      ? [getBehaviorToolDefinition()]
-      : []
-    const result = await aiService.complete({ messages, tools })
-    const reply = normalizeString(result.reply)
-    if (!reply) throw new Error('AI provider returned an empty response')
-    const nextMessages = aiTalkStore.appendMessages(sessionId, conversationId, [
-      userMessage,
-      { role: 'assistant', content: reply }
-    ])
-    const sourceMessages = nextMessages.slice(-2)
-    scheduleMemoryExtraction({
-      config,
-      petPackId,
-      conversationPublicId: `${sessionId}:${conversationId}`,
-      sourceMessages,
-      userMessage: content,
-      assistantReply: reply,
-      persona
-    })
-    return {
-      conversationId: `${sessionId}:${conversationId}`,
-      reply,
-      behaviorIntent: result.behaviorIntent || undefined,
-      messages: nextMessages
+      messageChars: content.length
+    }
+    try {
+      if (!content) throw new Error('AI chat message is empty')
+      const config = typeof aiService.getConfig === 'function' ? aiService.getConfig() : { enabled: true }
+      if (!config.enabled) throw new Error('AI chat is disabled')
+      const { manifest, petPackId } = resolveActivePack()
+      const { persona, systemPrompt: personaPrompt, personaHash } = resolvePersona(manifest, petPackId)
+      const { sessionId, conversationId } = aiTalkStore.ensureMainConversation({
+        entrypoint,
+        petPackId,
+        personaHash
+      })
+      const history = aiTalkStore.getMessages(sessionId, conversationId)
+      const userMessage = { role: 'user', content }
+      const memoryContext = getMemoryContext(petPackId)
+      const memoryContextPrompt = compileMemoryContextPrompt(memoryContext)
+      const messages = [
+        { role: 'system', content: compileSystemPrompt({ personaPrompt, globalPrompt: config.systemPrompt }) },
+        ...(memoryContextPrompt ? [{ role: 'system', content: memoryContextPrompt }] : []),
+        ...getRecentMessages(history).map(({ role, content }) => ({ role, content })),
+        userMessage
+      ]
+      const tools = config.behavior?.enabled && config.behavior?.useTools !== false
+        ? [getBehaviorToolDefinition()]
+        : []
+      Object.assign(diagnostics, {
+        petPackId,
+        conversationId: `${sessionId}:${conversationId}`,
+        historyCount: history.length,
+        messagesCount: messages.length,
+        memoryContextCount: memoryContext.length,
+        toolsCount: tools.length,
+        memoryEnabled: config.memory?.enabled === true,
+        behaviorEnabled: config.behavior?.enabled === true
+      })
+      recordLog({
+        level: 'info',
+        event: 'ai-talk.chat.started',
+        message: 'AI talk chat started',
+        details: diagnostics
+      })
+      const result = await aiService.complete({ messages, tools })
+      const reply = normalizeString(result.reply)
+      if (!reply) throw new Error('AI provider returned an empty response')
+      const nextMessages = aiTalkStore.appendMessages(sessionId, conversationId, [
+        userMessage,
+        { role: 'assistant', content: reply }
+      ])
+      const sourceMessages = nextMessages.slice(-2)
+      scheduleMemoryExtraction({
+        config,
+        petPackId,
+        conversationPublicId: `${sessionId}:${conversationId}`,
+        sourceMessages,
+        userMessage: content,
+        assistantReply: reply,
+        persona
+      })
+      recordLog({
+        level: 'info',
+        event: 'ai-talk.chat.completed',
+        message: 'AI talk chat completed',
+        details: {
+          ...diagnostics,
+          elapsedMs: Date.now() - startedAt,
+          replyChars: reply.length,
+          persistedMessageCount: nextMessages.length,
+          hasBehaviorIntent: Boolean(result.behaviorIntent)
+        }
+      })
+      return {
+        conversationId: `${sessionId}:${conversationId}`,
+        reply,
+        behaviorIntent: result.behaviorIntent || undefined,
+        messages: nextMessages
+      }
+    } catch (error) {
+      recordLog({
+        level: 'error',
+        event: 'ai-talk.chat.failed',
+        message: 'AI talk chat failed',
+        details: {
+          ...diagnostics,
+          elapsedMs: Date.now() - startedAt,
+          errorName: sanitizeDiagnosticText(error?.name || 'Error'),
+          errorMessage: error?.providerStatus
+            ? 'AI provider returned an error response'
+            : sanitizeDiagnosticText(error?.message),
+          providerStatus: error?.providerStatus || 0,
+          providerCode: error?.providerCode || ''
+        }
+      })
+      throw error
     }
   }
 

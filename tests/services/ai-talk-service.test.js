@@ -147,6 +147,59 @@ test('ai talk service preserves existing behavior tool request when enabled', as
   assert.deepEqual(result.behaviorIntent, { intent: 'greet', confidence: 0.8 })
 })
 
+test('ai talk service records chat lifecycle diagnostics without prompt text', async () => {
+  const logs = []
+  const service = createAiTalkService({
+    aiService: {
+      getConfig: () => ({ enabled: true, behavior: { enabled: false, useTools: true } }),
+      complete: async () => ({ reply: 'Purr.' })
+    },
+    aiTalkStore: createStore(),
+    petPackService: createPetPackService({ id: 'legacy-cat' }),
+    appLogService: { record: (entry) => logs.push(entry) }
+  })
+
+  const result = await service.chat({ message: 'secret chat text' })
+
+  const serializedLogs = JSON.stringify(logs)
+  assert.equal(result.reply, 'Purr.')
+  assert.match(serializedLogs, /ai-talk\.chat\.started/)
+  assert.match(serializedLogs, /ai-talk\.chat\.completed/)
+  assert.equal(serializedLogs.includes('secret chat text'), false)
+  assert.equal(logs.at(-1).details.conversationId, 'control-center:legacy-cat:main')
+  assert.equal(logs.at(-1).details.persistedMessageCount, 2)
+})
+
+test('ai talk service records failed chat diagnostics without prompt text', async () => {
+  const logs = []
+  const providerError = new Error('provider echoed hidden prompt')
+  providerError.providerStatus = 500
+  providerError.providerCode = 'server_error'
+  const service = createAiTalkService({
+    aiService: {
+      getConfig: () => ({ enabled: true, behavior: { enabled: false, useTools: true } }),
+      complete: async () => {
+        throw providerError
+      }
+    },
+    aiTalkStore: createStore(),
+    petPackService: createPetPackService({ id: 'legacy-cat' }),
+    appLogService: { record: (entry) => logs.push(entry) }
+  })
+
+  await assert.rejects(
+    () => service.chat({ message: 'hidden prompt' }),
+    /provider echoed hidden prompt/
+  )
+
+  const serializedLogs = JSON.stringify(logs)
+  assert.match(serializedLogs, /ai-talk\.chat\.failed/)
+  assert.equal(serializedLogs.includes('hidden prompt'), false)
+  assert.equal(serializedLogs.includes('provider echoed hidden prompt'), false)
+  assert.equal(logs.at(-1).details.providerStatus, 500)
+  assert.equal(logs.at(-1).details.providerCode, 'server_error')
+})
+
 test('ai talk service merges local persona override from store', async () => {
   const requests = []
   const store = createStore()
