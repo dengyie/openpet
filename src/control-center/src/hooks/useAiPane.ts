@@ -17,6 +17,7 @@ import type {
   AiConnectionTestResult,
   AiConfigViewState,
   ChatMessage,
+  ImageGenerationHealthCheckResult,
   ImageGenerationConfigViewState
 } from '../../../shared/openpet-contracts'
 import type { AiPaneProps } from '../panes/AiPane'
@@ -34,6 +35,18 @@ const pickAiConfigComparableFields = (config: AiConfigViewState) => JSON.stringi
   model: String(config.model || '').trim(),
   systemPrompt: String(config.systemPrompt || ''),
   memoryEnabled: Boolean(config.memory?.enabled)
+})
+
+const pickImageGenerationComparableFields = (config: ImageGenerationConfigViewState) => JSON.stringify({
+  defaultBackend: String(config.defaultBackend || ''),
+  cloudProvider: String(config.cloud?.provider || '').trim(),
+  cloudBaseUrl: String(config.cloud?.baseUrl || '').trim(),
+  cloudModel: String(config.cloud?.model || '').trim(),
+  localEndpoint: String(config.local?.endpoint || '').trim(),
+  localHealthUrl: String(config.local?.healthUrl || '').trim(),
+  localModel: String(config.local?.model || '').trim(),
+  localTimeoutMs: Number(config.local?.timeoutMs || 0),
+  localMaxConcurrentJobs: Number(config.local?.maxConcurrentJobs || 0)
 })
 
 const buildAiConfigSavePayload = (config: AiConfigViewState, activeConfig: AiConfigViewState) => {
@@ -96,16 +109,33 @@ const validateAiConfigDraft = (config: AiConfigViewState) => {
   }
 }
 
+const formatImageGenerationHealthStatus = (result: ImageGenerationHealthCheckResult) => {
+  const label = result.backend === 'cloud'
+    ? 'Cloud'
+    : result.backend === 'local'
+      ? 'Local'
+      : 'Fixture'
+  if (result.ok) {
+    if (result.code === 'provider_reachable_models_unavailable') {
+      return `${label} provider 可达，但模型列表探测不可用；可继续尝试生成。`
+    }
+    return `${label} 图片模型健康检查通过：${result.message || result.code}`
+  }
+  return `${label} 图片模型健康检查失败：${result.message || result.code}`
+}
+
 export function useAiPane() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [config, setConfig] = useState<AiConfigViewState>(defaultAiConfig)
   const [activeConfig, setActiveConfig] = useState<AiConfigViewState>(defaultAiConfig)
   const [imageGenerationConfig, setImageGenerationConfig] = useState<ImageGenerationConfigViewState>(defaultImageGenerationConfig)
+  const [activeImageGenerationConfig, setActiveImageGenerationConfig] = useState<ImageGenerationConfigViewState>(defaultImageGenerationConfig)
   const [apiKeyDraft, setApiKeyDraft] = useState('')
   const [imageApiKeyDraft, setImageApiKeyDraft] = useState('')
   const [status, setStatus] = useState('')
   const [connectionStatus, setConnectionStatus] = useState('')
+  const [imageHealthStatus, setImageHealthStatus] = useState('')
   const [chatDraft, setChatDraft] = useState('')
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [chatting, setChatting] = useState(false)
@@ -128,7 +158,9 @@ export function useAiPane() {
       const nextConfig = cloneAiConfig(loadedConfig)
       setConfig(nextConfig)
       setActiveConfig(nextConfig)
-      setImageGenerationConfig(cloneImageGenerationConfig(loadedImageGenerationConfig))
+      const nextImageGenerationConfig = cloneImageGenerationConfig(loadedImageGenerationConfig)
+      setImageGenerationConfig(nextImageGenerationConfig)
+      setActiveImageGenerationConfig(nextImageGenerationConfig)
       setChatMessages(cloneChatMessages(loadedChatMessages))
       const nextBehavior = cloneAiBehavior(loadedBehavior || loadedConfig?.behavior)
       setBehavior(nextBehavior)
@@ -144,6 +176,7 @@ export function useAiPane() {
 
   const hasUnsavedConfigChanges = pickAiConfigComparableFields(config) !== pickAiConfigComparableFields(activeConfig)
   const hasUnsavedApiKeyDraft = Boolean(apiKeyDraft.trim())
+  const hasUnsavedImageGenerationChanges = pickImageGenerationComparableFields(imageGenerationConfig) !== pickImageGenerationComparableFields(activeImageGenerationConfig)
 
   const onSave = async () => {
     setSaving(true)
@@ -200,9 +233,11 @@ export function useAiPane() {
   const onSaveImageGeneration = async () => {
     setSaving(true)
     setStatus('')
+    setImageHealthStatus('')
     try {
       const savedConfig = cloneImageGenerationConfig(await api.saveImageGenerationConfig(imageGenerationConfig))
       setImageGenerationConfig(savedConfig)
+      setActiveImageGenerationConfig(savedConfig)
       setStatus('图片生成配置已保存')
     } catch (error) {
       setStatus(messageFromError(error, '图片生成配置保存失败'))
@@ -308,6 +343,7 @@ export function useAiPane() {
   const onSaveImageGenerationApiKey = async () => {
     setSaving(true)
     setStatus('')
+    setImageHealthStatus('')
     try {
       const result = await api.saveImageGenerationApiKey(imageApiKeyDraft)
       setImageGenerationConfig((current) => ({
@@ -330,6 +366,7 @@ export function useAiPane() {
   const onClearImageGenerationApiKey = async () => {
     setSaving(true)
     setStatus('')
+    setImageHealthStatus('')
     try {
       const result = await api.clearImageGenerationApiKey()
       setImageGenerationConfig((current) => ({
@@ -350,13 +387,17 @@ export function useAiPane() {
   }
 
   const onCheckImageGenerationHealth = async () => {
+    if (hasUnsavedImageGenerationChanges) {
+      setImageHealthStatus('当前图片配置有未保存修改；请先保存图片配置后再检查健康。')
+      return
+    }
     setSaving(true)
-    setStatus('')
+    setImageHealthStatus('图片模型健康检查中')
     try {
       const result = await api.checkImageGenerationHealth({ backend: imageGenerationConfig.defaultBackend })
-      setStatus(result.ok ? '图片模型健康检查通过' : (result.message || '图片模型健康检查失败'))
+      setImageHealthStatus(formatImageGenerationHealthStatus(result))
     } catch (error) {
-      setStatus(messageFromError(error, '图片模型健康检查失败'))
+      setImageHealthStatus(messageFromError(error, '图片模型健康检查失败'))
     } finally {
       setSaving(false)
     }
@@ -411,11 +452,14 @@ export function useAiPane() {
     config,
     activeConfig,
     imageGenerationConfig,
+    activeImageGenerationConfig,
     saving,
     status,
     connectionStatus,
+    imageHealthStatus,
     hasUnsavedConfigChanges,
     hasUnsavedApiKeyDraft,
+    hasUnsavedImageGenerationChanges,
     apiKeyDraft,
     setApiKeyDraft,
     imageApiKeyDraft,

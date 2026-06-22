@@ -770,6 +770,17 @@ const demoApi: ControlCenterApi = {
         message: 'Cloud image generation API key is missing'
       }
     }
+    if (
+      activeBackend === 'cloud' &&
+      /models-unavailable|image\.example\.test/i.test(demoState.imageGenerationConfig.cloud.baseUrl)
+    ) {
+      return {
+        ok: true,
+        backend: 'cloud',
+        code: 'provider_reachable_models_unavailable',
+        message: 'Cloud provider is reachable, but the optional /models probe is unavailable'
+      }
+    }
     return {
       ok: true,
       backend: activeBackend,
