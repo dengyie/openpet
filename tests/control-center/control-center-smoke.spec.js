@@ -149,11 +149,17 @@ test.describe('Control Center smoke', () => {
     await page.goto('/')
     await page.getByRole('button', { name: 'AI' }).click()
 
+    await expect(page.locator('.provider-summary')).toContainText('当前已保存配置')
+    await page.getByRole('textbox', { name: 'Base URL', exact: true }).fill('https://user:pass@ai.example.test/v1?token=secret')
+    await expect(page.locator('.provider-warning.error')).toContainText('Base URL 不能包含用户名或密码')
+    await expect(page.getByRole('button', { name: '保存配置', exact: true })).toBeDisabled()
+
     await page.getByRole('textbox', { name: 'Base URL', exact: true }).fill('https://ai.example.test/v1')
     await page.getByRole('textbox', { name: 'Model', exact: true }).fill('openpet-test-model')
     await page.getByLabel('System Prompt').fill('Stay tiny, helpful, and local-first.')
     await page.getByRole('switch', { name: 'Enable AI memory' }).click()
-    await page.getByRole('button', { name: '保存', exact: true }).click()
+    await expect(page.locator('.provider-warning')).toContainText('未保存的 Provider 草稿')
+    await page.getByRole('button', { name: '保存配置', exact: true }).click()
     await expect(page.locator('.status-line')).toContainText('AI 配置已保存')
 
     const apiKeyRow = page.locator('.field-row').filter({ has: page.getByText('API Key', { exact: true }) })
@@ -162,6 +168,10 @@ test.describe('Control Center smoke', () => {
     await apiKeyRow.getByRole('button', { name: '保存密钥' }).click()
     await expect(page.locator('.status-line')).toContainText('API Key 已保存')
     await expect(apiKeyRow).toContainText('已保存')
+
+    await page.getByRole('button', { name: '保存并测试' }).click()
+    await expect(page.locator('.connection-result')).toContainText('连接测试通过')
+    await expect(page.locator('.connection-result')).toContainText('openpet-test-model')
 
     await page.reload()
     await page.getByRole('button', { name: 'AI' }).click()
