@@ -22,6 +22,7 @@ import type {
   AiPersonaOverride,
   AiPersonaProfileViewState,
   ChatMessage,
+  ImageGenerationHealthCheckResult,
   ImageGenerationConfigViewState
 } from '../../../shared/openpet-contracts'
 import type { AiPaneProps } from '../panes/AiPane'
@@ -57,12 +58,6 @@ const hasProviderConfigChanges = (draft: AiConfigViewState, active: AiConfigView
   Boolean(draft.memory?.enabled) !== Boolean(active.memory?.enabled)
 )
 
-const formatConnectionTestStatus = (result: AiConnectionTestResult) => (
-  result.ok
-    ? `连接测试通过：${result.model} · ${result.elapsedMs}ms`
-    : `连接测试失败：${result.message || result.code || 'unknown'}`
-)
-
 const personaFields = ['name', 'identity', 'tone', 'speakingStyle', 'relationshipToUser', 'actionStyle'] as const
 const personaListFields = ['coreTraits', 'boundaries'] as const
 
@@ -84,6 +79,43 @@ const normalizePersonaListText = (value: string) => (
     .filter(Boolean)
 )
 
+const pickImageGenerationComparableFields = (config: ImageGenerationConfigViewState) => JSON.stringify({
+  defaultBackend: String(config.defaultBackend || ''),
+  cloudProvider: String(config.cloud?.provider || '').trim(),
+  cloudBaseUrl: String(config.cloud?.baseUrl || '').trim(),
+  cloudModel: String(config.cloud?.model || '').trim(),
+  localEndpoint: String(config.local?.endpoint || '').trim(),
+  localHealthUrl: String(config.local?.healthUrl || '').trim(),
+  localModel: String(config.local?.model || '').trim(),
+  localTimeoutMs: Number(config.local?.timeoutMs || 0),
+  localMaxConcurrentJobs: Number(config.local?.maxConcurrentJobs || 0)
+})
+
+const buildAiConfigSavePayload = (config: AiConfigViewState, activeConfig: AiConfigViewState) => {
+  const payload: Partial<AiConfigViewState> = {}
+
+  if (Boolean(config.enabled) !== Boolean(activeConfig.enabled)) {
+    payload.enabled = Boolean(config.enabled)
+  }
+  if (String(config.provider || '') !== String(activeConfig.provider || '')) {
+    payload.provider = String(config.provider || '')
+  }
+  if (normalizeProviderBaseUrl(config.baseUrl || '') !== normalizeProviderBaseUrl(activeConfig.baseUrl || '')) {
+    payload.baseUrl = normalizeProviderBaseUrl(config.baseUrl || '')
+  }
+  if (String(config.model || '').trim() !== String(activeConfig.model || '').trim()) {
+    payload.model = String(config.model || '').trim()
+  }
+  if (String(config.systemPrompt || '') !== String(activeConfig.systemPrompt || '')) {
+    payload.systemPrompt = String(config.systemPrompt || '')
+  }
+  if (Boolean(config.memory?.enabled) !== Boolean(activeConfig.memory?.enabled)) {
+    payload.memory = { enabled: Boolean(config.memory?.enabled) }
+  }
+
+  return payload
+}
+
 const buildPersonaOverrideFromDraft = (draft: ReturnType<typeof personaToDraft>): AiPersonaOverride => {
   const override: AiPersonaOverride = {}
   for (const field of personaFields) {
@@ -97,6 +129,56 @@ const buildPersonaOverrideFromDraft = (draft: ReturnType<typeof personaToDraft>)
   return override
 }
 
+const formatConnectionStatus = ({
+  result,
+  hasUnsavedConfigChanges,
+  hasUnsavedApiKeyDraft
+}: {
+  result: AiConnectionTestResult
+  hasUnsavedConfigChanges: boolean
+  hasUnsavedApiKeyDraft: boolean
+}) => {
+  const context = `${result.provider} · ${result.baseUrl} · ${result.model} · ${result.elapsedMs}ms`
+  const notice = (hasUnsavedConfigChanges || hasUnsavedApiKeyDraft)
+    ? '当前存在未保存修改；本次测试使用已保存配置。'
+    : ''
+  const details = result.ok
+    ? `连接正常：${context}${result.reply ? ` · ${result.reply}` : ''}`
+    : `连接失败：${result.message || result.code || 'Unknown error'} · ${context}`
+  return notice ? `${notice} ${details}` : details
+}
+
+const validateAiConfigDraft = (config: AiConfigViewState) => {
+  const model = String(config.model || '').trim()
+  const baseUrl = String(config.baseUrl || '').trim()
+  if (!model) throw new Error('Model 不能为空')
+  if (!baseUrl) throw new Error('Base URL 不能为空')
+  let parsed
+  try {
+    parsed = new URL(baseUrl)
+  } catch (_) {
+    throw new Error('Base URL 必须是有效的 HTTP 或 HTTPS 地址')
+  }
+  if (!['http:', 'https:'].includes(parsed.protocol)) {
+    throw new Error('Base URL 必须使用 HTTP 或 HTTPS')
+  }
+}
+
+const formatImageGenerationHealthStatus = (result: ImageGenerationHealthCheckResult) => {
+  const label = result.backend === 'cloud'
+    ? 'Cloud'
+    : result.backend === 'local'
+      ? 'Local'
+      : 'Fixture'
+  if (result.ok) {
+    if (result.code === 'provider_reachable_models_unavailable') {
+      return `${label} provider 可达，但模型列表探测不可用；可继续尝试生成。`
+    }
+    return `${label} 图片模型健康检查通过：${result.message || result.code}`
+  }
+  return `${label} 图片模型健康检查失败：${result.message || result.code}`
+}
+
 export function useAiPane(activeTab = 'ai') {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -107,10 +189,12 @@ export function useAiPane(activeTab = 'ai') {
   const [personaGenerationInstruction, setPersonaGenerationInstruction] = useState('')
   const [generatedPersonaDraft, setGeneratedPersonaDraft] = useState<AiPersonaDraftViewState | null>(null)
   const [imageGenerationConfig, setImageGenerationConfig] = useState<ImageGenerationConfigViewState>(defaultImageGenerationConfig)
+  const [activeImageGenerationConfig, setActiveImageGenerationConfig] = useState<ImageGenerationConfigViewState>(defaultImageGenerationConfig)
   const [apiKeyDraft, setApiKeyDraft] = useState('')
   const [imageApiKeyDraft, setImageApiKeyDraft] = useState('')
   const [status, setStatus] = useState('')
-  const [connectionTestResult, setConnectionTestResult] = useState<AiConnectionTestResult | null>(null)
+  const [connectionStatus, setConnectionStatus] = useState('')
+  const [imageHealthStatus, setImageHealthStatus] = useState('')
   const [chatDraft, setChatDraft] = useState('')
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [chatting, setChatting] = useState(false)
@@ -145,7 +229,9 @@ export function useAiPane(activeTab = 'ai') {
       const nextPersonaProfile = cloneAiPersonaProfile(loadedPersonaProfile)
       setPersonaProfile(nextPersonaProfile)
       setPersonaDraft(personaToDraft(nextPersonaProfile.overridePersona))
-      setImageGenerationConfig(cloneImageGenerationConfig(loadedImageGenerationConfig))
+      const nextImageGenerationConfig = cloneImageGenerationConfig(loadedImageGenerationConfig)
+      setImageGenerationConfig(nextImageGenerationConfig)
+      setActiveImageGenerationConfig(nextImageGenerationConfig)
       setChatMessages(cloneChatMessages(loadedChatMessages))
       const nextBehavior = cloneAiBehavior(loadedBehavior || loadedConfig?.behavior)
       setBehavior(nextBehavior)
@@ -167,16 +253,7 @@ export function useAiPane(activeTab = 'ai') {
   const saveProviderConfigDraft = async () => {
     const validationError = validateProviderConfig(config)
     if (validationError) throw new Error(validationError)
-    const configToSave = {
-      enabled: config.enabled,
-      provider: config.provider,
-      baseUrl: normalizeProviderBaseUrl(config.baseUrl),
-      model: config.model.trim(),
-      apiKeyRef: config.apiKeyRef,
-      systemPrompt: config.systemPrompt,
-      memory: config.memory
-    }
-    const savedConfig = cloneAiConfig(await api.saveAiConfig(configToSave))
+    const savedConfig = cloneAiConfig(await api.saveAiConfig(buildAiConfigSavePayload(config, activeConfig)))
     setConfig(savedConfig)
     setActiveConfig(savedConfig)
     return savedConfig
@@ -195,12 +272,16 @@ export function useAiPane(activeTab = 'ai') {
     return result
   }
 
+  const hasUnsavedConfigChanges = hasProviderConfigChanges(config, activeConfig)
+  const hasUnsavedApiKeyDraft = Boolean(apiKeyDraft.trim())
+  const hasUnsavedImageGenerationChanges = pickImageGenerationComparableFields(imageGenerationConfig) !== pickImageGenerationComparableFields(activeImageGenerationConfig)
+
   const onSave = async () => {
     setSaving(true)
     setStatus('')
+    setConnectionStatus('')
     try {
       await saveProviderConfigDraft()
-      setConnectionTestResult(null)
       setStatus('AI 配置已保存')
     } catch (error) {
       setStatus(messageFromError(error, '保存失败'))
@@ -212,9 +293,11 @@ export function useAiPane(activeTab = 'ai') {
   const onSaveImageGeneration = async () => {
     setSaving(true)
     setStatus('')
+    setImageHealthStatus('')
     try {
       const savedConfig = cloneImageGenerationConfig(await api.saveImageGenerationConfig(imageGenerationConfig))
       setImageGenerationConfig(savedConfig)
+      setActiveImageGenerationConfig(savedConfig)
       setStatus('图片生成配置已保存')
     } catch (error) {
       setStatus(messageFromError(error, '图片生成配置保存失败'))
@@ -302,6 +385,7 @@ export function useAiPane(activeTab = 'ai') {
   const onSaveApiKey = async () => {
     setSaving(true)
     setStatus('')
+    setConnectionStatus('')
     try {
       await saveApiKeyDraft()
       setStatus('API Key 已保存')
@@ -315,6 +399,7 @@ export function useAiPane(activeTab = 'ai') {
   const onSaveImageGenerationApiKey = async () => {
     setSaving(true)
     setStatus('')
+    setImageHealthStatus('')
     try {
       const result = await api.saveImageGenerationApiKey(imageApiKeyDraft)
       setImageGenerationConfig((current) => ({
@@ -337,6 +422,7 @@ export function useAiPane(activeTab = 'ai') {
   const onClearImageGenerationApiKey = async () => {
     setSaving(true)
     setStatus('')
+    setImageHealthStatus('')
     try {
       const result = await api.clearImageGenerationApiKey()
       setImageGenerationConfig((current) => ({
@@ -357,13 +443,17 @@ export function useAiPane(activeTab = 'ai') {
   }
 
   const onCheckImageGenerationHealth = async () => {
+    if (hasUnsavedImageGenerationChanges) {
+      setImageHealthStatus('当前图片配置有未保存修改；请先保存图片配置后再检查健康。')
+      return
+    }
     setSaving(true)
-    setStatus('')
+    setImageHealthStatus('图片模型健康检查中')
     try {
       const result = await api.checkImageGenerationHealth({ backend: imageGenerationConfig.defaultBackend })
-      setStatus(result.ok ? '图片模型健康检查通过' : (result.message || '图片模型健康检查失败'))
+      setImageHealthStatus(formatImageGenerationHealthStatus(result))
     } catch (error) {
-      setStatus(messageFromError(error, '图片模型健康检查失败'))
+      setImageHealthStatus(messageFromError(error, '图片模型健康检查失败'))
     } finally {
       setSaving(false)
     }
@@ -371,16 +461,16 @@ export function useAiPane(activeTab = 'ai') {
 
   const onTest = async () => {
     setSaving(true)
-    setStatus(hasProviderConfigChanges(config, activeConfig)
-      ? '测试当前已保存配置；未保存草稿不会参与本次测试'
-      : '测试中')
-    setConnectionTestResult(null)
+    setConnectionStatus('测试中')
     try {
       const result = await api.testAiConnection()
-      setConnectionTestResult(result)
-      setStatus(formatConnectionTestStatus(result))
+      setConnectionStatus(formatConnectionStatus({
+        result,
+        hasUnsavedConfigChanges,
+        hasUnsavedApiKeyDraft
+      }))
     } catch (error) {
-      setStatus(messageFromError(error, '连接失败'))
+      setConnectionStatus(messageFromError(error, '连接失败'))
     } finally {
       setSaving(false)
     }
@@ -388,16 +478,32 @@ export function useAiPane(activeTab = 'ai') {
 
   const onSaveAndTest = async () => {
     setSaving(true)
-    setStatus('保存并测试中')
-    setConnectionTestResult(null)
+    setStatus('')
+    setConnectionStatus('保存并测试中')
     try {
-      await saveProviderConfigDraft()
-      await saveApiKeyDraft()
+      const hadUnsavedConfigChanges = hasUnsavedConfigChanges
+      let nextActiveConfig = activeConfig
+      if (hasUnsavedConfigChanges) {
+        nextActiveConfig = await saveProviderConfigDraft()
+        setStatus('AI 配置已保存')
+      }
+      if (apiKeyDraft) {
+        const keyResult = await saveApiKeyDraft()
+        if (keyResult) {
+          nextActiveConfig = { ...nextActiveConfig, hasApiKey: keyResult.hasApiKey }
+          setConfig(nextActiveConfig)
+          setActiveConfig(nextActiveConfig)
+        }
+        setStatus(hadUnsavedConfigChanges ? 'AI 配置与 API Key 已保存' : 'API Key 已保存')
+      }
       const result = await api.testAiConnection()
-      setConnectionTestResult(result)
-      setStatus(formatConnectionTestStatus(result))
+      setConnectionStatus(formatConnectionStatus({
+        result,
+        hasUnsavedConfigChanges: false,
+        hasUnsavedApiKeyDraft: false
+      }))
     } catch (error) {
-      setStatus(messageFromError(error, '保存并测试失败'))
+      setConnectionStatus(messageFromError(error, '保存并测试失败'))
     } finally {
       setSaving(false)
     }
@@ -508,13 +614,18 @@ export function useAiPane(activeTab = 'ai') {
     config,
     activeConfig,
     imageGenerationConfig,
+    activeImageGenerationConfig,
     personaProfile,
     personaDraft,
     providerConfigDirty: hasProviderConfigChanges(config, activeConfig),
     providerConfigValidationError: validateProviderConfig(config),
-    connectionTestResult,
     saving,
     status,
+    connectionStatus,
+    imageHealthStatus,
+    hasUnsavedConfigChanges,
+    hasUnsavedApiKeyDraft,
+    hasUnsavedImageGenerationChanges,
     apiKeyDraft,
     setApiKeyDraft,
     imageApiKeyDraft,

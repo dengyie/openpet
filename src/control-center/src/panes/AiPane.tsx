@@ -15,6 +15,7 @@ export interface AiPaneProps {
   config: AiConfigViewState
   activeConfig: AiConfigViewState
   imageGenerationConfig: ImageGenerationConfigViewState
+  activeImageGenerationConfig: ImageGenerationConfigViewState
   personaProfile: AiPersonaProfileViewState
   personaDraft: {
     name: string
@@ -28,7 +29,6 @@ export interface AiPaneProps {
   }
   providerConfigDirty: boolean
   providerConfigValidationError: string
-  connectionTestResult: AiConnectionTestResult | null
   onChange: (partial: Partial<AiConfigViewState>) => void
   onChangeImageGeneration: (partial: Partial<ImageGenerationConfigViewState>) => void
   onSave: () => void | Promise<void>
@@ -47,6 +47,11 @@ export interface AiPaneProps {
   onSendChat: () => void | Promise<void>
   saving: boolean
   status: string
+  connectionStatus: string
+  imageHealthStatus: string
+  hasUnsavedConfigChanges: boolean
+  hasUnsavedApiKeyDraft: boolean
+  hasUnsavedImageGenerationChanges: boolean
   apiKeyDraft: string
   setApiKeyDraft: (value: string) => void
   imageApiKeyDraft: string
@@ -80,11 +85,11 @@ export function AiPane({
   config,
   activeConfig,
   imageGenerationConfig = defaultImageGenerationConfig,
+  activeImageGenerationConfig = defaultImageGenerationConfig,
   personaProfile,
   personaDraft,
   providerConfigDirty,
   providerConfigValidationError,
-  connectionTestResult,
   onChange,
   onChangeImageGeneration,
   onSave,
@@ -103,6 +108,11 @@ export function AiPane({
   onSendChat,
   saving,
   status,
+  connectionStatus,
+  imageHealthStatus,
+  hasUnsavedConfigChanges,
+  hasUnsavedApiKeyDraft,
+  hasUnsavedImageGenerationChanges,
   apiKeyDraft,
   setApiKeyDraft,
   imageApiKeyDraft,
@@ -134,6 +144,21 @@ export function AiPane({
   const decisions = Array.isArray(behavior.decisions) ? behavior.decisions : []
   const saveDisabled = saving || Boolean(providerConfigValidationError)
   const apiKeyDraftReady = Boolean(apiKeyDraft.trim())
+  const activeSummary = `${activeConfig.provider} · ${activeConfig.baseUrl} · ${activeConfig.model} · ${activeConfig.hasApiKey ? 'API key saved' : 'API key missing'}`
+  const draftSummary = [
+    hasUnsavedConfigChanges ? '配置草稿未保存' : '',
+    hasUnsavedApiKeyDraft ? '密钥草稿未保存' : ''
+  ].filter(Boolean).join(' · ')
+  const imageBackendLabel = activeImageGenerationConfig.defaultBackend === 'cloud'
+    ? 'Cloud'
+    : activeImageGenerationConfig.defaultBackend === 'local'
+      ? 'Local'
+      : 'Fixture'
+  const imageTargetSummary = activeImageGenerationConfig.defaultBackend === 'cloud'
+    ? `${activeImageGenerationConfig.cloud.provider} · ${activeImageGenerationConfig.cloud.baseUrl} · ${activeImageGenerationConfig.cloud.model} · ${activeImageGenerationConfig.cloud.hasApiKey ? 'API key saved' : 'API key missing'}`
+    : activeImageGenerationConfig.defaultBackend === 'local'
+      ? `${activeImageGenerationConfig.local.endpoint} · ${activeImageGenerationConfig.local.model} · health ${activeImageGenerationConfig.local.healthUrl}`
+      : '离线 fixture 后端，用于测试和演示'
 
   return (
     <section className="pane">
@@ -143,32 +168,41 @@ export function AiPane({
           <p>聊天 Provider 与模型配置</p>
         </div>
         <div className="header-actions">
-          <button type="button" className="ghost" onClick={onTest} disabled={saving}>
-            测试当前已保存配置
+          <button
+            type="button"
+            className="ghost"
+            aria-label="测试当前已保存配置"
+            onClick={onTest}
+            disabled={saving}
+          >
+            测试
           </button>
-          <button type="button" className="ghost" onClick={onSaveAndTest} disabled={saveDisabled}>
+          <button
+            type="button"
+            className="ghost"
+            aria-label="保存并测试配置"
+            onClick={onSaveAndTest}
+            disabled={saveDisabled}
+          >
             保存并测试
           </button>
           <button type="button" className="primary" onClick={onSave} disabled={saveDisabled}>
-            {saving ? '保存中' : '保存配置'}
+            {saving ? '保存中' : '保存'}
           </button>
         </div>
       </header>
 
-      <div className="section provider-summary">
+      <div className="section">
         <div className="readonly-row">
-          <strong>当前已保存配置</strong>
-          <div className="provider-summary-grid">
-            <span>Provider: {activeConfig.provider}</span>
-            <span>Base URL: {activeConfig.baseUrl}</span>
-            <span>Model: {activeConfig.model}</span>
-            <span>Chat: {activeConfig.enabled ? '启用' : '关闭'}</span>
-          </div>
+          <strong>当前生效配置</strong>
+          <span className="endpoint-text">{activeSummary}</span>
         </div>
+
         <div className="readonly-row">
-          <strong>密钥状态</strong>
-          <span>{activeConfig.hasApiKey ? 'API Key 已保存于主进程 SecretService' : 'API Key 未保存'}</span>
+          <strong>草稿状态</strong>
+          <span>{draftSummary || '当前没有未保存修改'}</span>
         </div>
+
         {providerConfigDirty ? (
           <div className="provider-warning">
             你有未保存的 Provider 草稿。点击“测试当前已保存配置”不会使用这些草稿；点击“保存并测试”会先保存再测试。
@@ -177,9 +211,7 @@ export function AiPane({
         {providerConfigValidationError ? (
           <div className="provider-warning error">{providerConfigValidationError}</div>
         ) : null}
-      </div>
 
-      <div className="section">
         <div className="field-row">
           <div className="field-label">启用聊天</div>
           <Toggle ariaLabel="Enable AI chat" checked={config.enabled} onChange={(enabled) => onChange({ enabled })} />
@@ -259,7 +291,7 @@ export function AiPane({
         <div className="field-row">
           <div>
             <div className="field-label">Image Generation</div>
-            <div className="field-note">Creator Studio 主机模型设置</div>
+            <div className="field-note">Creator Studio 主机模型设置，密钥保存在 OpenPet 主进程</div>
           </div>
           <div className="inline-action">
             <button type="button" className="ghost" onClick={onCheckImageGenerationHealth} disabled={saving}>
@@ -270,6 +302,28 @@ export function AiPane({
             </button>
           </div>
         </div>
+
+        <div className="readonly-row">
+          <strong>图片当前后端</strong>
+          <span className="endpoint-text">{imageBackendLabel} · {imageTargetSummary}</span>
+        </div>
+
+        <div className="readonly-row">
+          <strong>图片草稿状态</strong>
+          <span>{hasUnsavedImageGenerationChanges ? '图片配置草稿未保存；健康检查使用当前已保存配置。' : '当前没有未保存的图片配置修改'}</span>
+        </div>
+
+        <div className="readonly-row">
+          <strong>生成边界</strong>
+          <span>Creator Studio 只提交提示词和输出目录；Provider 调用、API Key、图片写入都由 OpenPet host 执行。</span>
+        </div>
+
+        {imageHealthStatus ? (
+          <div className="readonly-row">
+            <strong>图片健康状态</strong>
+            <span>{imageHealthStatus}</span>
+          </div>
+        ) : null}
 
         <label className="field-row">
           <span className="field-label">图片默认后端</span>
@@ -515,18 +569,7 @@ export function AiPane({
 
       {status ? <div className="status-line">{status}</div> : null}
 
-      {connectionTestResult ? (
-        <div className={`connection-result ${connectionTestResult.ok ? 'ok' : 'error'}`} aria-live="polite">
-          <strong>{connectionTestResult.ok ? '连接测试通过' : '连接测试失败'}</strong>
-          <span>Provider: {connectionTestResult.provider}</span>
-          <span>Base URL: {connectionTestResult.baseUrl}</span>
-          <span>Model: {connectionTestResult.model}</span>
-          <span>API Key: {connectionTestResult.hasApiKey ? '已保存' : '未保存'}</span>
-          <span>耗时: {connectionTestResult.elapsedMs}ms</span>
-          {connectionTestResult.ok ? <span>回复: {connectionTestResult.reply || 'ok'}</span> : null}
-          {!connectionTestResult.ok ? <span>错误: {connectionTestResult.code || 'unknown'} · {connectionTestResult.message || '连接失败'}</span> : null}
-        </div>
-      ) : null}
+      {connectionStatus ? <div className="status-line">{connectionStatus}</div> : null}
 
       <div className="section">
         <div className="field-row">

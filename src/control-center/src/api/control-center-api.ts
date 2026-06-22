@@ -136,6 +136,16 @@ const createDemoPetPacks = (): PetPacksViewState => clonePetPacks({
   ]
 })
 
+const createDemoActionsConfig = (): ActionsConfigViewState => cloneActionsConfig({
+  defaultAction: 'idle',
+  clickAction: 'wave',
+  actions: [
+    { id: 'idle', label: 'Idle', kind: 'idle', loop: true, frameCount: 1, frameMs: 120, frameWidth: 8, frameHeight: 8 },
+    { id: 'wave', label: 'Wave', kind: 'click', loop: false, frameCount: 1, frameMs: 100, frameWidth: 8, frameHeight: 8 },
+    { id: 'sleep', label: 'Sleep', kind: 'idle', loop: true, frameCount: 1, frameMs: 140, frameWidth: 8, frameHeight: 8 }
+  ]
+})
+
 const compileDemoPersonaPrompt = (persona: AiPersona) => [
   '# Pet Persona',
   `Name: ${persona.name}`,
@@ -471,7 +481,7 @@ const createDemoServiceStatus = (): ServiceStatusViewState => cloneServiceStatus
 
 const createDefaultDemoState = (): DemoState => ({
   settings: cloneSettings(defaultSettings),
-  actionsConfig: cloneActionsConfig(defaultActionsConfig),
+  actionsConfig: createDemoActionsConfig(),
   aiConfig: cloneAiConfig({
     ...defaultAiConfig,
     behavior: {
@@ -509,7 +519,11 @@ const readDemoState = (): DemoState => {
     const state = JSON.parse(rawState)
     return {
       settings: cloneSettings(state.settings),
-      actionsConfig: cloneActionsConfig(state.actionsConfig || defaultActionsConfig),
+      actionsConfig: cloneActionsConfig(
+        Array.isArray(state.actionsConfig?.actions) && state.actionsConfig.actions.length > 0
+          ? state.actionsConfig
+          : createDemoActionsConfig()
+      ),
       aiConfig: cloneAiConfig(state.aiConfig),
       aiPersonaOverrides: cloneDemoPersonaOverrides(state.aiPersonaOverrides),
       imageGenerationConfig: cloneImageGenerationConfig(state.imageGenerationConfig),
@@ -942,6 +956,17 @@ const demoApi: ControlCenterApi = {
         backend: 'cloud',
         code: 'missing_api_key',
         message: 'Cloud image generation API key is missing'
+      }
+    }
+    if (
+      activeBackend === 'cloud' &&
+      /models-unavailable|image\.example\.test/i.test(demoState.imageGenerationConfig.cloud.baseUrl)
+    ) {
+      return {
+        ok: true,
+        backend: 'cloud',
+        code: 'provider_reachable_models_unavailable',
+        message: 'Cloud provider is reachable, but the optional /models probe is unavailable'
       }
     }
     return {

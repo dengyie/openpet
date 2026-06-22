@@ -55,6 +55,45 @@ test.describe('Control Center smoke', () => {
     await expect(page.locator('.readonly-row', { hasText: '更新状态' })).toContainText('Update feed is not configured.')
   })
 
+  test('applies an action trigger proposal through the demo API', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Actions' }).click()
+
+    await page.getByRole('button', { name: /Sleep/ }).click()
+    const reviewCard = page.locator('[aria-label="触发建议审阅"]')
+    await expect(reviewCard).toContainText('目标动作：Sleep')
+    await expect(reviewCard).toContainText('接受后会立即把 clickAction 改成目标动作。')
+    await reviewCard.locator('select').selectOption('click')
+    await page.getByRole('button', { name: '应用点击触发' }).click()
+
+    await expect(page.locator('.status-line')).toContainText('已应用 触发建议')
+    await expect(reviewCard).toContainText('最近结果：已应用')
+    await expect(reviewCard).toContainText('结果码：applied')
+    await expect(page.locator('.readonly-row', { hasText: '点击动作' }).locator('select')).toHaveValue('sleep')
+
+    await reviewCard.locator('select').selectOption('manual')
+    await expect(reviewCard).not.toContainText('最近结果：已应用')
+  })
+
+  test('keeps host-rule trigger proposals pending in the Actions review UI', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Actions' }).click()
+
+    await page.getByRole('button', { name: /Sleep/ }).click()
+    const clickAction = page.locator('.readonly-row', { hasText: '点击动作' }).locator('select')
+    const beforeClickAction = await clickAction.inputValue()
+    const reviewCard = page.locator('[aria-label="触发建议审阅"]')
+
+    await reviewCard.locator('select').selectOption('state')
+    await expect(reviewCard).toContainText('状态条件和优先级必须由 host 统一校验和持久化。')
+    await page.getByRole('button', { name: '确认待规则' }).click()
+
+    await expect(page.locator('.status-line')).toContainText('已确认 触发建议')
+    await expect(reviewCard).toContainText('最近结果：已确认')
+    await expect(reviewCard).toContainText('结果码：pending_host_rule')
+    await expect(clickAction).toHaveValue(beforeClickAction)
+  })
+
   test('persists Pet settings in the demo API session', async ({ page }) => {
     await page.goto('/')
 
@@ -133,17 +172,21 @@ test.describe('Control Center smoke', () => {
     await page.goto('/')
     await page.getByRole('button', { name: 'AI' }).click()
 
-    await expect(page.locator('.provider-summary')).toContainText('当前已保存配置')
+    const chatDraftStatusRow = page.locator('.readonly-row').filter({ has: page.locator('strong', { hasText: /^草稿状态$/ }) })
+    await expect(page.locator('.readonly-row', { hasText: '当前生效配置' })).toContainText('https://api.openai.com/v1')
+    await expect(chatDraftStatusRow).toContainText('当前没有未保存修改')
+
     await page.getByRole('textbox', { name: 'Base URL', exact: true }).fill('https://user:pass@ai.example.test/v1?token=secret')
     await expect(page.locator('.provider-warning.error')).toContainText('Base URL 不能包含用户名或密码')
-    await expect(page.getByRole('button', { name: '保存配置', exact: true })).toBeDisabled()
+    await expect(page.getByRole('button', { name: '保存', exact: true })).toBeDisabled()
 
     await page.getByRole('textbox', { name: 'Base URL', exact: true }).fill('https://ai.example.test/v1')
     await page.getByRole('textbox', { name: 'Model', exact: true }).fill('openpet-test-model')
     await page.getByLabel('System Prompt').fill('Stay tiny, helpful, and local-first.')
     await page.getByRole('switch', { name: 'Enable AI memory' }).click()
     await expect(page.locator('.provider-warning')).toContainText('未保存的 Provider 草稿')
-    await page.getByRole('button', { name: '保存配置', exact: true }).click()
+    await expect(chatDraftStatusRow).toContainText('配置草稿未保存')
+    await page.getByRole('button', { name: '保存', exact: true }).click()
     await expect(page.locator('.status-line')).toContainText('AI 配置已保存')
 
     const apiKeyRow = page.locator('.field-row').filter({ has: page.getByText('API Key', { exact: true }) })
@@ -159,8 +202,8 @@ test.describe('Control Center smoke', () => {
     await expect(apiKeyRow).toContainText('已保存')
 
     await page.getByRole('button', { name: '保存并测试' }).click()
-    await expect(page.locator('.connection-result')).toContainText('连接测试通过')
-    await expect(page.locator('.connection-result')).toContainText('openpet-test-model')
+    await expect(page.locator('.status-line').first()).toContainText('连接正常')
+    await expect(page.locator('.status-line').first()).toContainText('openpet-test-model')
 
     await page.reload()
     await page.getByRole('button', { name: 'AI' }).click()
@@ -181,8 +224,16 @@ test.describe('Control Center smoke', () => {
     await page.getByLabel('本地 Endpoint').fill('http://127.0.0.1:9999/generate')
     await page.getByLabel('本地 Health URL').fill('http://127.0.0.1:9999/health')
     await page.getByLabel('本地模型').fill('local-sprite-test')
+    await expect(page.locator('.readonly-row', { hasText: '图片草稿状态' })).toContainText('图片配置草稿未保存')
+    await page.getByRole('button', { name: '检查图片健康' }).click()
+    await expect(page.locator('.readonly-row', { hasText: '图片健康状态' })).toContainText('请先保存图片配置')
+
     await page.getByRole('button', { name: '保存图片配置' }).click()
     await expect(page.locator('.status-line')).toContainText('图片生成配置已保存')
+    await expect(page.locator('.readonly-row', { hasText: '图片当前后端' })).toContainText('Cloud')
+    await expect(page.locator('.readonly-row', { hasText: '图片当前后端' })).toContainText('openpet-image-test')
+    await expect(page.locator('.readonly-row', { hasText: '图片草稿状态' })).toContainText('当前没有未保存')
+    await expect(page.locator('.readonly-row', { hasText: '生成边界' })).toContainText('API Key')
 
     const imageApiKeyRow = page.locator('.field-row', { hasText: '图片 API Key' })
     const imageApiKeyInput = imageApiKeyRow.locator('input[type="password"]')
@@ -194,14 +245,14 @@ test.describe('Control Center smoke', () => {
     await expect(imageApiKeyRow).toContainText('••••1234')
 
     await page.getByRole('button', { name: '检查图片健康' }).click()
-    await expect(page.locator('.status-line')).toContainText('图片模型健康检查通过')
+    await expect(page.locator('.readonly-row', { hasText: '图片健康状态' })).toContainText('provider 可达，但模型列表探测不可用')
 
     await page.getByRole('button', { name: '清除图片密钥' }).click()
     await expect(page.locator('.status-line')).toContainText('图片 API Key 已清除')
     await expect(imageApiKeyRow).toContainText('未保存')
 
     await page.getByRole('button', { name: '检查图片健康' }).click()
-    await expect(page.locator('.status-line')).toContainText('Cloud image generation API key is missing')
+    await expect(page.locator('.readonly-row', { hasText: '图片健康状态' })).toContainText('Cloud 图片模型健康检查失败：Cloud image generation API key is missing')
 
     await page.reload()
     await page.getByRole('button', { name: 'AI' }).click()
