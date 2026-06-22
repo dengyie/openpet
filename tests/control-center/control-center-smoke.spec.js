@@ -188,14 +188,15 @@ test.describe('Control Center smoke', () => {
     await page.goto('/')
     await page.getByRole('button', { name: 'AI' }).click()
 
+    const chatDraftStatusRow = page.locator('.readonly-row').filter({ has: page.locator('strong', { hasText: /^草稿状态$/ }) })
     await expect(page.locator('.readonly-row', { hasText: '当前生效配置' })).toContainText('https://api.openai.com/v1')
-    await expect(page.locator('.readonly-row', { hasText: '草稿状态' })).toContainText('当前没有未保存修改')
+    await expect(chatDraftStatusRow).toContainText('当前没有未保存修改')
 
     await page.getByRole('textbox', { name: 'Base URL', exact: true }).fill('https://ai.example.test/v1')
     await page.getByRole('textbox', { name: 'Model', exact: true }).fill('openpet-test-model')
     await page.getByLabel('System Prompt').fill('Stay tiny, helpful, and local-first.')
     await page.getByRole('switch', { name: 'Enable AI memory' }).click()
-    await expect(page.locator('.readonly-row', { hasText: '草稿状态' })).toContainText('配置草稿未保存')
+    await expect(chatDraftStatusRow).toContainText('配置草稿未保存')
     await page.getByRole('button', { name: '保存', exact: true }).click()
     await expect(page.locator('.status-line')).toContainText('AI 配置已保存')
     await expect(page.locator('.readonly-row', { hasText: '当前生效配置' })).toContainText('https://ai.example.test/v1')
