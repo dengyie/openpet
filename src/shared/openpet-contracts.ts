@@ -142,6 +142,17 @@ export interface AiPersonaProfileViewState {
   compiledSystemPrompt: string
 }
 
+export interface AiPersonaGenerateRequest {
+  instruction?: string
+}
+
+export interface AiPersonaDraftViewState {
+  petPackId: string
+  petPackDisplayName: string
+  draftPersona: AiPersonaOverride
+  compiledPersonaPrompt: string
+}
+
 export interface AiConfigViewState {
   enabled: boolean
   provider: string
@@ -2217,6 +2228,7 @@ export interface ControlCenterApi {
   saveAiApiKey: (apiKey: string) => Promise<AiSaveApiKeyResult>
   testAiConnection: () => Promise<AiConnectionTestResult>
   getAiPersonaProfile: () => Promise<AiPersonaProfileViewState>
+  generateAiPersonaDraft: (request?: AiPersonaGenerateRequest) => Promise<AiPersonaDraftViewState>
   saveAiPersonaOverride: (override: AiPersonaOverride) => Promise<AiPersonaProfileViewState>
   getImageGenerationConfig: () => Promise<ImageGenerationConfigViewState>
   saveImageGenerationConfig: (config: Partial<ImageGenerationConfigViewState>) => Promise<ImageGenerationConfigViewState>
