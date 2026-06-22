@@ -23,7 +23,7 @@ The first host slice is now implemented. OpenPet owns image-generation backend s
 
 ## Remaining Host / Main UI Responsibilities
 
-- Refine the current AI pane image-generation card into a clearer Control Center model settings surface for selecting default image-generation backend, provider, model name, base URL, and local endpoint.
+- Refine the current AI pane image-generation card into a clearer Control Center model settings surface for selecting default image-generation backend, provider, model name, base URL, and local endpoint. First-pass inline summary, host-boundary copy, and dedicated health status are implemented in the AI pane.
 - Store API keys and provider secrets through `SecretService`; never expose raw secrets to renderers or ordinary plugin code.
 - Preserve the safe host-mediated model bridge for plugins that opt into host-managed generation.
 - Improve provider health, local endpoint reachability, and actionable setup errors.
@@ -126,7 +126,7 @@ Suggested response:
 
 - A user can configure cloud and local image-generation defaults in Control Center. Implemented in the current AI pane; UI polish remains.
 - A user can store, replace, and clear an API key without exposing it to renderer state. Implemented through `SecretService`.
-- A health check shows actionable status for missing key, invalid key, unreachable local endpoint, and healthy endpoint. Implemented; message polish remains.
+- A health check shows actionable status for missing key, invalid key, unreachable local endpoint, healthy endpoint, and providers where optional `/models` probing is unavailable. Implemented; dedicated navigation remains future polish.
 - Creator Studio can read non-secret model availability and fail with a clear setup message when unavailable. Implemented.
 - Creator Studio can request one bounded host-mediated image generation and receive host-owned output references. Implemented.
 - Existing `fixture` backend remains available for tests and offline demos.

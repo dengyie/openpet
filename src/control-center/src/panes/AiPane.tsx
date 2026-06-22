@@ -49,8 +49,10 @@ export interface AiPaneProps {
   saving: boolean
   status: string
   connectionStatus: string
+  imageHealthStatus: string
   hasUnsavedConfigChanges: boolean
   hasUnsavedApiKeyDraft: boolean
+  hasUnsavedImageGenerationChanges: boolean
   apiKeyDraft: string
   setApiKeyDraft: (value: string) => void
   imageApiKeyDraft: string
@@ -108,8 +110,10 @@ export function AiPane({
   saving,
   status,
   connectionStatus,
+  imageHealthStatus,
   hasUnsavedConfigChanges,
   hasUnsavedApiKeyDraft,
+  hasUnsavedImageGenerationChanges,
   apiKeyDraft,
   setApiKeyDraft,
   imageApiKeyDraft,
@@ -280,7 +284,7 @@ export function AiPane({
         <div className="field-row">
           <div>
             <div className="field-label">Image Generation</div>
-            <div className="field-note">Creator Studio 主机模型设置</div>
+            <div className="field-note">Creator Studio 主机模型设置，密钥保存在 OpenPet 主进程</div>
           </div>
           <div className="inline-action">
             <button type="button" className="ghost" onClick={onCheckImageGenerationHealth} disabled={saving}>
@@ -291,6 +295,28 @@ export function AiPane({
             </button>
           </div>
         </div>
+
+        <div className="readonly-row">
+          <strong>图片当前后端</strong>
+          <span className="endpoint-text">{imageBackendLabel} · {imageTargetSummary}</span>
+        </div>
+
+        <div className="readonly-row">
+          <strong>图片草稿状态</strong>
+          <span>{hasUnsavedImageGenerationChanges ? '图片配置草稿未保存；健康检查使用当前已保存配置。' : '当前没有未保存的图片配置修改'}</span>
+        </div>
+
+        <div className="readonly-row">
+          <strong>生成边界</strong>
+          <span>Creator Studio 只提交提示词和输出目录；Provider 调用、API Key、图片写入都由 OpenPet host 执行。</span>
+        </div>
+
+        {imageHealthStatus ? (
+          <div className="readonly-row">
+            <strong>图片健康状态</strong>
+            <span>{imageHealthStatus}</span>
+          </div>
+        ) : null}
 
         <label className="field-row">
           <span className="field-label">图片默认后端</span>

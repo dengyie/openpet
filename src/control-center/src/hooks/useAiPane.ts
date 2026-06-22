@@ -23,6 +23,7 @@ import type {
   AiPersonaOverride,
   AiPersonaProfileViewState,
   ChatMessage,
+  ImageGenerationHealthCheckResult,
   ImageGenerationConfigViewState
 } from '../../../shared/openpet-contracts'
 import type { AiPaneProps } from '../panes/AiPane'
@@ -108,6 +109,7 @@ export function useAiPane(activeTab = 'ai') {
   const [personaGenerationInstruction, setPersonaGenerationInstruction] = useState('')
   const [generatedPersonaDraft, setGeneratedPersonaDraft] = useState<AiPersonaDraftViewState | null>(null)
   const [imageGenerationConfig, setImageGenerationConfig] = useState<ImageGenerationConfigViewState>(defaultImageGenerationConfig)
+  const [activeImageGenerationConfig, setActiveImageGenerationConfig] = useState<ImageGenerationConfigViewState>(defaultImageGenerationConfig)
   const [apiKeyDraft, setApiKeyDraft] = useState('')
   const [imageApiKeyDraft, setImageApiKeyDraft] = useState('')
   const [status, setStatus] = useState('')
@@ -249,9 +251,11 @@ export function useAiPane(activeTab = 'ai') {
   const onSaveImageGeneration = async () => {
     setSaving(true)
     setStatus('')
+    setImageHealthStatus('')
     try {
       const savedConfig = cloneImageGenerationConfig(await api.saveImageGenerationConfig(imageGenerationConfig))
       setImageGenerationConfig(savedConfig)
+      setActiveImageGenerationConfig(savedConfig)
       setStatus('图片生成配置已保存')
     } catch (error) {
       setStatus(messageFromError(error, '图片生成配置保存失败'))
@@ -353,6 +357,7 @@ export function useAiPane(activeTab = 'ai') {
   const onSaveImageGenerationApiKey = async () => {
     setSaving(true)
     setStatus('')
+    setImageHealthStatus('')
     try {
       const result = await api.saveImageGenerationApiKey(imageApiKeyDraft)
       setImageGenerationConfig((current) => ({
@@ -375,6 +380,7 @@ export function useAiPane(activeTab = 'ai') {
   const onClearImageGenerationApiKey = async () => {
     setSaving(true)
     setStatus('')
+    setImageHealthStatus('')
     try {
       const result = await api.clearImageGenerationApiKey()
       setImageGenerationConfig((current) => ({
@@ -395,13 +401,17 @@ export function useAiPane(activeTab = 'ai') {
   }
 
   const onCheckImageGenerationHealth = async () => {
+    if (hasUnsavedImageGenerationChanges) {
+      setImageHealthStatus('当前图片配置有未保存修改；请先保存图片配置后再检查健康。')
+      return
+    }
     setSaving(true)
-    setStatus('')
+    setImageHealthStatus('图片模型健康检查中')
     try {
       const result = await api.checkImageGenerationHealth({ backend: imageGenerationConfig.defaultBackend })
-      setStatus(result.ok ? '图片模型健康检查通过' : (result.message || '图片模型健康检查失败'))
+      setImageHealthStatus(formatImageGenerationHealthStatus(result))
     } catch (error) {
-      setStatus(messageFromError(error, '图片模型健康检查失败'))
+      setImageHealthStatus(messageFromError(error, '图片模型健康检查失败'))
     } finally {
       setSaving(false)
     }
@@ -554,8 +564,10 @@ export function useAiPane(activeTab = 'ai') {
     saving,
     status,
     connectionStatus,
+    imageHealthStatus,
     hasUnsavedConfigChanges,
     hasUnsavedApiKeyDraft,
+    hasUnsavedImageGenerationChanges,
     apiKeyDraft,
     setApiKeyDraft,
     imageApiKeyDraft,

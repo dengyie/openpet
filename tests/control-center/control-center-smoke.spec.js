@@ -220,8 +220,16 @@ test.describe('Control Center smoke', () => {
     await page.getByLabel('本地 Endpoint').fill('http://127.0.0.1:9999/generate')
     await page.getByLabel('本地 Health URL').fill('http://127.0.0.1:9999/health')
     await page.getByLabel('本地模型').fill('local-sprite-test')
+    await expect(page.locator('.readonly-row', { hasText: '图片草稿状态' })).toContainText('图片配置草稿未保存')
+    await page.getByRole('button', { name: '检查图片健康' }).click()
+    await expect(page.locator('.readonly-row', { hasText: '图片健康状态' })).toContainText('请先保存图片配置')
+
     await page.getByRole('button', { name: '保存图片配置' }).click()
     await expect(page.locator('.status-line')).toContainText('图片生成配置已保存')
+    await expect(page.locator('.readonly-row', { hasText: '图片当前后端' })).toContainText('Cloud')
+    await expect(page.locator('.readonly-row', { hasText: '图片当前后端' })).toContainText('openpet-image-test')
+    await expect(page.locator('.readonly-row', { hasText: '图片草稿状态' })).toContainText('当前没有未保存')
+    await expect(page.locator('.readonly-row', { hasText: '生成边界' })).toContainText('API Key')
 
     const imageApiKeyRow = page.locator('.field-row', { hasText: '图片 API Key' })
     const imageApiKeyInput = imageApiKeyRow.locator('input[type="password"]')
@@ -233,14 +241,14 @@ test.describe('Control Center smoke', () => {
     await expect(imageApiKeyRow).toContainText('••••1234')
 
     await page.getByRole('button', { name: '检查图片健康' }).click()
-    await expect(page.locator('.status-line')).toContainText('图片模型健康检查通过')
+    await expect(page.locator('.readonly-row', { hasText: '图片健康状态' })).toContainText('provider 可达，但模型列表探测不可用')
 
     await page.getByRole('button', { name: '清除图片密钥' }).click()
     await expect(page.locator('.status-line')).toContainText('图片 API Key 已清除')
     await expect(imageApiKeyRow).toContainText('未保存')
 
     await page.getByRole('button', { name: '检查图片健康' }).click()
-    await expect(page.locator('.status-line')).toContainText('Cloud image generation API key is missing')
+    await expect(page.locator('.readonly-row', { hasText: '图片健康状态' })).toContainText('Cloud 图片模型健康检查失败：Cloud image generation API key is missing')
 
     await page.reload()
     await page.getByRole('button', { name: 'AI' }).click()
