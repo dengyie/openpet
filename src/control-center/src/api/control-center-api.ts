@@ -1,10 +1,11 @@
-import { cloneAiConfig, cloneCatalog, cloneImageGenerationConfig, cloneServiceStatus, cloneSettings, defaultAboutInfo, defaultActionsConfig, defaultAiConfig, defaultImageGenerationConfig, defaultPetPacks, defaultServiceStatus, defaultSettings, defaultUpdateCheck } from '../lib/defaults'
+import { cloneActionsConfig, cloneAiConfig, cloneCatalog, cloneImageGenerationConfig, cloneServiceStatus, cloneSettings, defaultAboutInfo, defaultActionsConfig, defaultAiConfig, defaultImageGenerationConfig, defaultPetPacks, defaultServiceStatus, defaultSettings, defaultUpdateCheck } from '../lib/defaults'
 import { stripFileExtension } from '../../../shared/cursor-library.ts'
 import type {
   ActionFrameInspectRequest,
   ActionFrameInspectionResult,
   ActionFrameImportRequest,
   ActionFrameReinspectRequest,
+  ActionsConfigViewState,
   AiChatRequest,
   AiConfigViewState,
   CatalogBlocklistEntry,
@@ -37,6 +38,7 @@ declare global {
 
 interface DemoState {
   settings: ControlCenterSettings
+  actionsConfig: ActionsConfigViewState
   aiConfig: AiConfigViewState
   imageGenerationConfig: ImageGenerationConfigViewState
   serviceStatus: ServiceStatusViewState
@@ -75,6 +77,7 @@ const createDemoInspection = (actionId = 'wave'): ActionFrameInspectionResult =>
 const demoStorageKey = 'openpet.controlCenter.demoState'
 
 const demoCatalogHash = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
+const demoActionSpriteUrl = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='
 
 const createDemoCatalog = (): CatalogState => cloneCatalog({
   schemaVersion: 1,
@@ -323,6 +326,15 @@ const createDemoServiceStatus = (): ServiceStatusViewState => cloneServiceStatus
 
 const createDefaultDemoState = (): DemoState => ({
   settings: cloneSettings(defaultSettings),
+  actionsConfig: cloneActionsConfig({
+    defaultAction: 'idle',
+    clickAction: 'wave',
+    actions: [
+      { id: 'idle', label: 'Idle', kind: 'idle', loop: true, frameCount: 1, frameMs: 120, frameWidth: 8, frameHeight: 8, sprite: demoActionSpriteUrl },
+      { id: 'wave', label: 'Wave', kind: 'click', loop: false, frameCount: 1, frameMs: 100, frameWidth: 8, frameHeight: 8, sprite: demoActionSpriteUrl },
+      { id: 'sleep', label: 'Sleep', kind: 'idle', loop: true, frameCount: 1, frameMs: 140, frameWidth: 8, frameHeight: 8, sprite: demoActionSpriteUrl }
+    ]
+  }),
   aiConfig: cloneAiConfig({
     ...defaultAiConfig,
     behavior: {
@@ -358,6 +370,7 @@ const readDemoState = (): DemoState => {
     const state = JSON.parse(rawState)
     return {
       settings: cloneSettings(state.settings),
+      actionsConfig: cloneActionsConfig(state.actionsConfig || createDefaultDemoState().actionsConfig),
       aiConfig: cloneAiConfig(state.aiConfig),
       imageGenerationConfig: cloneImageGenerationConfig(state.imageGenerationConfig),
       serviceStatus: cloneServiceStatus(state.serviceStatus),
@@ -605,19 +618,61 @@ const demoApi: ControlCenterApi = {
       cursor
     }
   },
-  getActions: async () => defaultActionsConfig,
+  getActions: async () => cloneActionsConfig(demoState.actionsConfig),
   inspectActionFrames: async ({ actionId } = {}) => createDemoInspection(actionId),
   reinspectActionFrames: async ({ selectionId, actionId } = {}) => ({ ...createDemoInspection(actionId), selectionId: selectionId || 'demo-selection' }),
   clearActionFrameSelection: async () => ({ ok: true }),
-  importActionFrames: async ({ actionId, label } = {}) => ({ ok: true, result: { importedAction: { id: actionId, label: label || actionId } }, animations: defaultActionsConfig }),
-  saveActionsConfig: async (config) => ({ animations: { ...defaultActionsConfig, ...config } }),
-  deleteAction: async () => ({ animations: defaultActionsConfig }),
+  importActionFrames: async ({ actionId, label } = {}) => ({ ok: true, result: { importedAction: { id: actionId, label: label || actionId } }, animations: cloneActionsConfig(demoState.actionsConfig) }),
+  saveActionsConfig: async (config) => {
+    const triggerProposal = config?.triggerProposal
+    if (triggerProposal?.type === 'click') {
+      demoState.actionsConfig = cloneActionsConfig({
+        ...demoState.actionsConfig,
+        clickAction: triggerProposal.actionId
+      })
+    } else if (!triggerProposal) {
+      demoState.actionsConfig = cloneActionsConfig({
+        ...demoState.actionsConfig,
+        ...config
+      })
+    }
+    writeDemoState()
+    const triggerCode = triggerProposal?.type === 'click'
+      ? 'applied'
+      : (triggerProposal && ['random', 'state', 'event'].includes(triggerProposal.type) ? 'pending_host_rule' : 'no_binding_required')
+    const triggerMessage = triggerProposal?.type === 'click'
+      ? `Click trigger now uses action: ${triggerProposal.actionId}`
+      : (triggerProposal && ['random', 'state', 'event'].includes(triggerProposal.type)
+          ? `Trigger type ${triggerProposal.type} requires a host trigger-rule editor before it can be applied.`
+          : `Action trigger proposal accepted for ${triggerProposal?.actionId || ''}`)
+    return {
+      animations: cloneActionsConfig(demoState.actionsConfig),
+      ...(triggerProposal
+        ? {
+            triggerProposal: {
+              ok: true,
+              applied: triggerProposal.type === 'click',
+              actionId: triggerProposal.actionId,
+              type: triggerProposal.type,
+              binding: triggerProposal.type === 'click' ? 'clickAction' : '',
+              code: triggerCode,
+              message: triggerMessage,
+              acceptedAt: '2026-06-22T00:00:00.000Z',
+              sourcePluginId: triggerProposal.sourcePluginId,
+              sourceRunId: triggerProposal.sourceRunId,
+              sourceCommandId: triggerProposal.sourceCommandId
+            }
+          }
+        : {})
+    }
+  },
+  deleteAction: async () => ({ animations: cloneActionsConfig(demoState.actionsConfig) }),
   listPetPacks: async () => defaultPetPacks,
   inspectPetPackDirectory: async () => ({ canceled: true }),
   clearPetPackSelection: async () => ({ ok: true }),
   importPetPack: async () => ({ petPacks: defaultPetPacks }),
   exportPetPack: async (packId) => ({ ok: true, packId, fileName: `${packId}.openpet-pet.zip` }),
-  setActivePetPack: async () => ({ petPacks: defaultPetPacks, animations: defaultActionsConfig }),
+  setActivePetPack: async () => ({ petPacks: defaultPetPacks, animations: cloneActionsConfig(demoState.actionsConfig) }),
   removePetPack: async () => ({ petPacks: defaultPetPacks }),
   getAiConfig: async () => cloneAiConfig(demoState.aiConfig),
   saveAiConfig: async (config) => {
