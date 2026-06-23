@@ -75,7 +75,10 @@ export interface AiPaneProps {
     boundariesText: string
   }
   providerConfigDirty: boolean
+  providerConfigChanges: string[]
+  activeProviderSummary: string
   providerConfigValidationError: string
+  connectionTestResult: AiConnectionTestResult | null
   imageProviderValidationError: string
   onChange: (partial: Partial<AiConfigViewState>) => void
   onChangeImageGeneration: (partial: Partial<ImageGenerationConfigViewState>) => void
@@ -137,7 +140,10 @@ export function AiPane({
   personaProfile,
   personaDraft,
   providerConfigDirty,
+  providerConfigChanges,
+  activeProviderSummary,
   providerConfigValidationError,
+  connectionTestResult,
   imageProviderValidationError,
   onChange,
   onChangeImageGeneration,
@@ -194,7 +200,6 @@ export function AiPane({
   const saveDisabled = saving || Boolean(providerConfigValidationError)
   const imageSaveDisabled = saving || Boolean(imageProviderValidationError)
   const apiKeyDraftReady = Boolean(apiKeyDraft.trim())
-  const activeSummary = `${activeConfig.provider} · ${activeConfig.baseUrl} · ${activeConfig.model} · ${activeConfig.hasApiKey ? 'API key saved' : 'API key missing'}`
   const draftSummary = [
     hasUnsavedConfigChanges ? '配置草稿未保存' : '',
     hasUnsavedApiKeyDraft ? '密钥草稿未保存' : ''
@@ -230,10 +235,10 @@ export function AiPane({
           </button>
         </div>
 
-        <div className="section">
+        <div className="section provider-summary" data-testid="ai-provider-summary">
           <div className="readonly-row">
             <strong>当前生效配置</strong>
-            <span className="endpoint-text">{activeSummary}</span>
+            <span className="endpoint-text" data-testid="ai-provider-active-summary">{activeProviderSummary}</span>
           </div>
 
           <div className="readonly-row">
@@ -242,12 +247,14 @@ export function AiPane({
           </div>
 
           {providerConfigDirty ? (
-            <div className="provider-warning">
+            <div className="provider-warning" data-testid="ai-provider-dirty-warning">
+              <strong>未保存修改：</strong> {providerConfigChanges.join(' / ') || 'Provider 草稿'}
+              <br />
               你有未保存的 Provider 草稿。点击“测试已保存配置”不会使用这些草稿；点击“保存并测试聊天 Provider”会先保存再测试。
             </div>
           ) : null}
           {providerConfigValidationError ? (
-            <div className="provider-warning error">{providerConfigValidationError}</div>
+            <div className="provider-warning error" data-testid="ai-provider-validation-error">{providerConfigValidationError}</div>
           ) : null}
 
           <div className="field-row">
@@ -608,9 +615,22 @@ export function AiPane({
         </div>
       </CollapsibleAiSection>
 
-      {status ? <div className="status-line">{status}</div> : null}
+      {status ? <div className="status-line" data-testid="ai-status-line">{status}</div> : null}
 
       {connectionStatus ? <div className="status-line">{connectionStatus}</div> : null}
+
+      {connectionTestResult ? (
+        <div className={`connection-result ${connectionTestResult.ok ? 'ok' : 'error'}`} data-testid="ai-connection-result" aria-live="polite">
+          <strong>{connectionTestResult.ok ? '连接测试通过' : '连接测试失败'}</strong>
+          <span>Provider: {connectionTestResult.provider}</span>
+          <span>Base URL: {connectionTestResult.baseUrl}</span>
+          <span>Model: {connectionTestResult.model}</span>
+          <span>API Key: {connectionTestResult.hasApiKey ? '已保存' : '未保存'}</span>
+          <span>耗时: {connectionTestResult.elapsedMs}ms</span>
+          {connectionTestResult.ok ? <span>回复: {connectionTestResult.reply || 'ok'}</span> : null}
+          {!connectionTestResult.ok ? <span>错误: {connectionTestResult.code || 'unknown'} · {connectionTestResult.message || '连接失败'}</span> : null}
+        </div>
+      ) : null}
 
       <CollapsibleAiSection title="Behavior" note="AI 回复到宠物动作的编排与诊断">
         <div className="section">

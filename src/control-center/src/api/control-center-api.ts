@@ -855,7 +855,11 @@ const demoApi: ControlCenterApi = {
   saveAiApiKey: async () => {
     demoState.aiConfig = cloneAiConfig({ ...demoState.aiConfig, apiKeyRef: 'ai.default', hasApiKey: true })
     writeDemoState()
-    return { apiKeyRef: 'ai.default', hasApiKey: true }
+    return {
+      apiKeyRef: 'ai.default',
+      hasApiKey: true,
+      updatedAt: new Date().toISOString()
+    }
   },
   testAiConnection: async () => ({
     ok: true,

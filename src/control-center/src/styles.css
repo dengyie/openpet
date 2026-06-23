@@ -713,6 +713,51 @@ button {
   color: #4b5563;
 }
 
+.provider-summary {
+  gap: 0;
+}
+
+.provider-summary-grid {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.provider-summary-grid span {
+  overflow-wrap: anywhere;
+}
+
+.provider-warning {
+  padding: 12px 0;
+  border-bottom: 1px solid #dde2e8;
+  color: #92400e;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.provider-warning.error {
+  color: #b91c1c;
+}
+
+.connection-result {
+  display: grid;
+  gap: 5px;
+  padding: 12px 0;
+  border-top: 1px solid #dde2e8;
+  border-bottom: 1px solid #dde2e8;
+  color: #4b5563;
+  font-size: 12px;
+}
+
+.connection-result strong {
+  color: #202124;
+  font-size: 13px;
+}
+
+.connection-result.error strong {
+  color: #b91c1c;
+}
+
 .status-line {
   color: #6b7280;
   font-size: 12px;

@@ -330,9 +330,16 @@ const createAiService = ({
   }
 
   const saveApiKey = (value) => {
+    const apiKey = String(value || '').trim()
+    if (!apiKey) throw new Error('API Key 不能为空')
     const config = getRawConfig()
-    secretService.setSecret({ id: config.apiKeyRef, value, label: 'AI API Key' })
-    return { apiKeyRef: config.apiKeyRef, hasApiKey: Boolean(value) }
+    const updatedAt = new Date().toISOString()
+    secretService.setSecret({ id: config.apiKeyRef, value: apiKey, label: 'AI API Key' })
+    return {
+      apiKeyRef: config.apiKeyRef,
+      hasApiKey: true,
+      updatedAt
+    }
   }
 
   const rememberConversation = (conversationId, messages) => {

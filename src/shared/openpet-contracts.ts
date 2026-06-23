@@ -1733,6 +1733,7 @@ export interface ChatMessage {
 export interface AiSaveApiKeyResult {
   apiKeyRef: string
   hasApiKey: boolean
+  updatedAt?: string
 }
 
 export interface AiConnectionTestResult {

@@ -12,6 +12,14 @@ import {
 } from '../lib/defaults'
 import { downloadTextFile } from '../lib/download'
 import { messageFromError } from '../lib/errors'
+import {
+  formatActiveProviderSummary,
+  formatConnectionTestStatus,
+  getProviderConfigChanges,
+  hasProviderConfigChanges,
+  normalizeProviderBaseUrl,
+  validateProviderConfig
+} from '../lib/ai-provider-config'
 import type {
   AiBehaviorConfig,
   AiBehaviorResult,
@@ -33,30 +41,10 @@ const parseBehaviorRules = (rulesText: string): AiBehaviorRule[] => {
   return parsed as AiBehaviorRule[]
 }
 
-const normalizeProviderBaseUrl = (value: string) => value.trim().replace(/\/+$/, '')
-
-const validateProviderConfig = (config: AiConfigViewState): string => {
-  if (config.provider !== 'openai-compatible') return '当前只支持 OpenAI compatible provider'
-  try {
-    const parsed = new URL(config.baseUrl.trim())
-    if (!['http:', 'https:'].includes(parsed.protocol)) return 'Base URL 只支持 http 或 https'
-    if (parsed.username || parsed.password) return 'Base URL 不能包含用户名或密码，请把凭证放在 API Key 中'
-    if (parsed.search || parsed.hash) return 'Base URL 不能包含 query 或 hash，请仅保留 API 根路径'
-  } catch (_) {
-    return 'Base URL 不是有效 URL'
-  }
-  if (!config.model.trim()) return 'Model 不能为空'
-  return ''
+const formatStepError = (error: unknown, context: string) => {
+  const message = messageFromError(error, context)
+  return message === context ? context : `${context}：${message}`
 }
-
-const hasProviderConfigChanges = (draft: AiConfigViewState, active: AiConfigViewState) => (
-  draft.enabled !== active.enabled ||
-  draft.provider !== active.provider ||
-  normalizeProviderBaseUrl(draft.baseUrl) !== normalizeProviderBaseUrl(active.baseUrl) ||
-  draft.model.trim() !== active.model.trim() ||
-  draft.systemPrompt !== active.systemPrompt ||
-  Boolean(draft.memory?.enabled) !== Boolean(active.memory?.enabled)
-)
 
 const personaFields = ['name', 'identity', 'tone', 'speakingStyle', 'relationshipToUser', 'actionStyle'] as const
 const personaListFields = ['coreTraits', 'boundaries'] as const
@@ -209,6 +197,7 @@ export function useAiPane(activeTab = 'ai') {
   const [imageApiKeyDraft, setImageApiKeyDraft] = useState('')
   const [status, setStatus] = useState('')
   const [connectionStatus, setConnectionStatus] = useState('')
+  const [connectionTestResult, setConnectionTestResult] = useState<AiConnectionTestResult | null>(null)
   const [imageHealthStatus, setImageHealthStatus] = useState('')
   const [chatDraft, setChatDraft] = useState('')
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
@@ -268,10 +257,11 @@ export function useAiPane(activeTab = 'ai') {
   const saveProviderConfigDraft = async () => {
     const validationError = validateProviderConfig(config)
     if (validationError) throw new Error(validationError)
+    const changedFields = getProviderConfigChanges(config, activeConfig)
     const savedConfig = cloneAiConfig(await api.saveAiConfig(buildAiConfigSavePayload(config, activeConfig)))
     setConfig(savedConfig)
     setActiveConfig(savedConfig)
-    return savedConfig
+    return { savedConfig, changedFields }
   }
 
   const saveApiKeyDraft = async () => {
@@ -281,8 +271,8 @@ export function useAiPane(activeTab = 'ai') {
       return null
     }
     const result = await api.saveAiApiKey(key)
-    setConfig((current) => ({ ...current, hasApiKey: result.hasApiKey }))
-    setActiveConfig((current) => ({ ...current, hasApiKey: result.hasApiKey }))
+    setConfig((current) => ({ ...current, apiKeyRef: result.apiKeyRef, hasApiKey: result.hasApiKey }))
+    setActiveConfig((current) => ({ ...current, apiKeyRef: result.apiKeyRef, hasApiKey: result.hasApiKey }))
     setApiKeyDraft('')
     return result
   }
@@ -296,8 +286,9 @@ export function useAiPane(activeTab = 'ai') {
     setStatus('')
     setConnectionStatus('')
     try {
-      await saveProviderConfigDraft()
-      setStatus('AI 配置已保存')
+      const { changedFields } = await saveProviderConfigDraft()
+      setConnectionTestResult(null)
+      setStatus(changedFields.length ? `AI 配置已保存：${changedFields.join(' / ')}` : 'AI 配置已保存')
     } catch (error) {
       setStatus(messageFromError(error, '保存失败'))
     } finally {
@@ -404,8 +395,12 @@ export function useAiPane(activeTab = 'ai') {
     setStatus('')
     setConnectionStatus('')
     try {
-      await saveApiKeyDraft()
-      setStatus('API Key 已保存')
+      const result = await saveApiKeyDraft()
+      if (!result) {
+        setStatus('API Key 未修改')
+      } else {
+        setStatus(result.updatedAt ? `API Key 已保存 · ${new Date(result.updatedAt).toLocaleString()}` : 'API Key 已保存')
+      }
     } catch (error) {
       setStatus(messageFromError(error, '保存失败'))
     } finally {
@@ -479,14 +474,17 @@ export function useAiPane(activeTab = 'ai') {
   const onTest = async () => {
     setSaving(true)
     setConnectionStatus('测试中')
+    setConnectionTestResult(null)
     try {
       const result = await api.testAiConnection()
+      setConnectionTestResult(result)
       setConnectionStatus(formatConnectionStatus({
         result,
         hasUnsavedConfigChanges,
         hasUnsavedApiKeyDraft
       }))
     } catch (error) {
+      setConnectionTestResult(null)
       setConnectionStatus(messageFromError(error, '连接失败'))
     } finally {
       setSaving(false)
@@ -497,30 +495,50 @@ export function useAiPane(activeTab = 'ai') {
     setSaving(true)
     setStatus('')
     setConnectionStatus('保存并测试中')
+    setConnectionTestResult(null)
     try {
-      const hadUnsavedConfigChanges = hasUnsavedConfigChanges
-      let nextActiveConfig = activeConfig
-      if (hasUnsavedConfigChanges) {
-        nextActiveConfig = await saveProviderConfigDraft()
-        setStatus('AI 配置已保存')
+      const keyDraft = apiKeyDraft.trim()
+      if ((apiKeyDraft && !keyDraft) || (!keyDraft && !activeConfig.hasApiKey)) {
+        setStatus(formatStepError(new Error('API Key 不能为空'), '保存并测试中止：API Key 保存失败'))
+        setConnectionStatus('')
+        return
       }
-      if (apiKeyDraft) {
-        const keyResult = await saveApiKeyDraft()
-        if (keyResult) {
-          nextActiveConfig = { ...nextActiveConfig, hasApiKey: keyResult.hasApiKey }
-          setConfig(nextActiveConfig)
-          setActiveConfig(nextActiveConfig)
-        }
-        setStatus(hadUnsavedConfigChanges ? 'AI 配置与 API Key 已保存' : 'API Key 已保存')
+
+      let keyResult: Awaited<ReturnType<typeof saveApiKeyDraft>> = null
+      try {
+        keyResult = await saveApiKeyDraft()
+      } catch (error) {
+        setStatus(formatStepError(error, '保存并测试中止：API Key 保存失败'))
+        setConnectionStatus('')
+        return
       }
+
+      let changedFields: string[] = []
+      try {
+        ({ changedFields } = await saveProviderConfigDraft())
+      } catch (error) {
+        const prefix = keyResult ? 'API Key 已保存，但 ' : ''
+        setStatus(`${prefix}${formatStepError(error, '配置保存失败')}`)
+        setConnectionStatus('')
+        return
+      }
+
       const result = await api.testAiConnection()
+      setConnectionTestResult(result)
       setConnectionStatus(formatConnectionStatus({
         result,
         hasUnsavedConfigChanges: false,
         hasUnsavedApiKeyDraft: false
       }))
+      const savedParts = [
+        changedFields.length ? `配置：${changedFields.join(' / ')}` : '',
+        keyResult ? 'API Key：已保存' : ''
+      ].filter(Boolean)
+      const prefix = savedParts.length ? `${savedParts.join('；')}。` : ''
+      setStatus(`${prefix}${formatConnectionTestStatus(result)}`)
     } catch (error) {
-      setConnectionStatus(messageFromError(error, '保存并测试失败'))
+      setStatus(formatStepError(error, '配置已保存，但连接测试失败'))
+      setConnectionStatus('')
     } finally {
       setSaving(false)
     }
@@ -635,7 +653,10 @@ export function useAiPane(activeTab = 'ai') {
     personaProfile,
     personaDraft,
     providerConfigDirty: hasProviderConfigChanges(config, activeConfig),
+    providerConfigChanges: getProviderConfigChanges(config, activeConfig),
+    activeProviderSummary: formatActiveProviderSummary(activeConfig),
     providerConfigValidationError: validateProviderConfig(config),
+    connectionTestResult,
     imageProviderValidationError: validateImageProviderConfig(imageGenerationConfig),
     saving,
     status,

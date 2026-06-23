@@ -102,7 +102,10 @@ test('ai service saves config and api key separately', () => {
   assert.equal(saved.hasApiKey, false)
   assert.equal(settingsService.get().ai.systemPrompt, 'Be concise.')
   assert.deepEqual(secrets, [{ id: 'ai.default', value: 'sk-new', label: 'AI API Key' }])
-  assert.deepEqual(keyResult, { apiKeyRef: 'ai.default', hasApiKey: true })
+  assert.equal(keyResult.apiKeyRef, 'ai.default')
+  assert.equal(keyResult.hasApiKey, true)
+  assert.match(keyResult.updatedAt, /^\d{4}-\d{2}-\d{2}T/)
+  assert.throws(() => service.saveApiKey('   '), /API Key 不能为空/)
 })
 
 test('ai service persists automatic memory config through saveConfig', () => {

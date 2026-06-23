@@ -285,6 +285,70 @@ test('ai persona profile IPC delegates to ai talk service when available', async
   assert.equal(saved.overridePersona.tone, 'playful')
 })
 
+test('ai provider settings IPC delegates config save key save and connection test', async () => {
+  const ipcMain = createIpcMainStub()
+  const calls = []
+  const services = createRequiredServices({})
+
+  registerIpcHandlers({
+    ...services,
+    aiService: {
+      ...services.aiService,
+      getConfig: () => {
+        calls.push(['getConfig'])
+        return { provider: 'openai-compatible', baseUrl: 'https://ai.example.test/v1', model: 'saved-model', hasApiKey: false }
+      },
+      saveConfig: (config) => {
+        calls.push(['saveConfig', config])
+        return { ...config, hasApiKey: false }
+      },
+      saveApiKey: (apiKey) => {
+        calls.push(['saveApiKey', apiKey])
+        return { apiKeyRef: 'ai.default', hasApiKey: true, updatedAt: '2026-06-24T00:00:00.000Z' }
+      },
+      testConnection: () => {
+        calls.push(['testConnection'])
+        return {
+          ok: true,
+          provider: 'openai-compatible',
+          baseUrl: 'https://ai.example.test/v1',
+          model: 'saved-model',
+          hasApiKey: true,
+          elapsedMs: 12,
+          code: 'ok',
+          message: 'AI provider connection test succeeded'
+        }
+      }
+    },
+    ipcMainService: ipcMain
+  })
+
+  const config = await ipcMain.handlers.get(IPC.AI_GET_CONFIG)()
+  const savedConfig = await ipcMain.handlers.get(IPC.AI_SAVE_CONFIG)(null, { model: 'next-model' })
+  const savedKey = await ipcMain.handlers.get(IPC.AI_SAVE_API_KEY)(null, 'sk-demo-secret')
+  const connection = await ipcMain.handlers.get(IPC.AI_TEST_CONNECTION)()
+
+  assert.deepEqual(config, { provider: 'openai-compatible', baseUrl: 'https://ai.example.test/v1', model: 'saved-model', hasApiKey: false })
+  assert.deepEqual(savedConfig, { model: 'next-model', hasApiKey: false })
+  assert.deepEqual(savedKey, { apiKeyRef: 'ai.default', hasApiKey: true, updatedAt: '2026-06-24T00:00:00.000Z' })
+  assert.deepEqual(connection, {
+    ok: true,
+    provider: 'openai-compatible',
+    baseUrl: 'https://ai.example.test/v1',
+    model: 'saved-model',
+    hasApiKey: true,
+    elapsedMs: 12,
+    code: 'ok',
+    message: 'AI provider connection test succeeded'
+  })
+  assert.deepEqual(calls, [
+    ['getConfig'],
+    ['saveConfig', { model: 'next-model' }],
+    ['saveApiKey', 'sk-demo-secret'],
+    ['testConnection']
+  ])
+})
+
 test('service:get-status returns Control Center service status shape', async () => {
   const ipcMain = createIpcMainStub()
 
