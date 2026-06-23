@@ -478,11 +478,8 @@ export function AiPane({
             <input
               aria-label="图片 Base URL"
               className="text-input"
-              value={imageGenerationConfig.cloud.baseUrl}
-              onChange={(event) => onChangeImageGeneration({
-                defaultBackend: 'cloud',
-                cloud: { ...imageGenerationConfig.cloud, baseUrl: event.target.value }
-              })}
+              value={imageGenerationConfig.baseUrl}
+              onChange={(event) => onChangeImageGeneration({ baseUrl: event.target.value })}
             />
           </label>
 
@@ -491,11 +488,8 @@ export function AiPane({
             <input
               aria-label="图片 Model"
               className="text-input"
-              value={imageGenerationConfig.cloud.model}
-              onChange={(event) => onChangeImageGeneration({
-                defaultBackend: 'cloud',
-                cloud: { ...imageGenerationConfig.cloud, model: event.target.value }
-              })}
+              value={imageGenerationConfig.model}
+              onChange={(event) => onChangeImageGeneration({ model: event.target.value })}
             />
           </label>
 
@@ -503,8 +497,8 @@ export function AiPane({
             <div>
               <div className="field-label">图片 API Key</div>
               <div className="field-note">
-                {imageGenerationConfig.cloud.hasApiKey ? '已保存' : '未保存'}
-                {imageGenerationConfig.cloud.apiKeyPreview ? ` · ${imageGenerationConfig.cloud.apiKeyPreview}` : ''}
+                {imageGenerationConfig.hasApiKey ? '已保存' : '未保存'}
+                {imageGenerationConfig.apiKeyPreview ? ` · ${imageGenerationConfig.apiKeyPreview}` : ''}
               </div>
             </div>
             <div className="inline-action">
@@ -512,13 +506,13 @@ export function AiPane({
                 className="text-input"
                 type="password"
                 value={imageApiKeyDraft}
-                placeholder={imageGenerationConfig.cloud.hasApiKey ? '输入新密钥覆盖' : '输入图片 API Key'}
+                placeholder={imageGenerationConfig.hasApiKey ? '输入新密钥覆盖' : '输入图片 API Key'}
                 onChange={(event) => setImageApiKeyDraft(event.target.value)}
               />
               <button type="button" className="ghost" onClick={onSaveImageGenerationApiKey} disabled={!imageApiKeyDraft.trim() || saving}>
                 保存图片密钥
               </button>
-              <button type="button" className="danger-text" onClick={onClearImageGenerationApiKey} disabled={saving || !imageGenerationConfig.cloud.hasApiKey}>
+              <button type="button" className="danger-text" onClick={onClearImageGenerationApiKey} disabled={saving || !imageGenerationConfig.hasApiKey}>
                 清除图片密钥
               </button>
             </div>

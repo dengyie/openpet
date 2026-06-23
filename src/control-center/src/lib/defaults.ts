@@ -99,25 +99,17 @@ export const defaultAiPersonaProfile = {
 } satisfies AiPersonaProfileViewState
 
 export const defaultImageGenerationConfig = {
-  defaultBackend: 'fixture',
-  cloud: {
-    provider: 'openai',
-    baseUrl: 'https://api.openai.com/v1',
-    model: 'gpt-image-1',
-    apiKeyRef: 'secret:model.image.openai.apiKey',
-    organization: '',
-    project: '',
-    hasApiKey: false,
-    apiKeyPreview: '',
-    apiKeyLabel: 'Image API Key'
-  },
-  local: {
-    endpoint: 'http://127.0.0.1:7860/generate',
-    healthUrl: 'http://127.0.0.1:7860/health',
-    model: 'local-pet-sprite',
-    timeoutMs: 120000,
-    maxConcurrentJobs: 1
-  }
+  provider: 'openai-compatible',
+  baseUrl: 'https://api.openai.com/v1',
+  model: 'gpt-image-2',
+  apiKeyRef: 'secret:model.image.openai.apiKey',
+  organization: '',
+  project: '',
+  timeoutMs: 120000,
+  maxConcurrentJobs: 1,
+  hasApiKey: false,
+  apiKeyPreview: '',
+  apiKeyLabel: 'Image API Key'
 } satisfies ImageGenerationConfigViewState
 
 export const defaultServiceStatus = {
@@ -263,15 +255,7 @@ export const cloneImageGenerationConfig = (
   config: Partial<ImageGenerationConfigViewState> | null | undefined
 ): ImageGenerationConfigViewState => ({
   ...defaultImageGenerationConfig,
-  ...(config || {}),
-  cloud: {
-    ...defaultImageGenerationConfig.cloud,
-    ...(config?.cloud || {})
-  },
-  local: {
-    ...defaultImageGenerationConfig.local,
-    ...(config?.local || {})
-  }
+  ...(config || {})
 })
 
 export const cloneServiceStatus = (status: Partial<ServiceStatusViewState> | null | undefined): ServiceStatusViewState => ({

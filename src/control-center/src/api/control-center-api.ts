@@ -857,15 +857,7 @@ const demoApi: ControlCenterApi = {
   saveImageGenerationConfig: async (config) => {
     demoState.imageGenerationConfig = cloneImageGenerationConfig({
       ...demoState.imageGenerationConfig,
-      ...config,
-      cloud: {
-        ...demoState.imageGenerationConfig.cloud,
-        ...(config.cloud || {})
-      },
-      local: {
-        ...demoState.imageGenerationConfig.local,
-        ...(config.local || {})
-      }
+      ...config
     })
     writeDemoState()
     return cloneImageGenerationConfig(demoState.imageGenerationConfig)
@@ -874,15 +866,12 @@ const demoApi: ControlCenterApi = {
     const preview = apiKey ? `••••${apiKey.slice(-4)}` : ''
     demoState.imageGenerationConfig = cloneImageGenerationConfig({
       ...demoState.imageGenerationConfig,
-      cloud: {
-        ...demoState.imageGenerationConfig.cloud,
-        hasApiKey: Boolean(apiKey),
-        apiKeyPreview: preview
-      }
+      hasApiKey: Boolean(apiKey),
+      apiKeyPreview: preview
     })
     writeDemoState()
     return {
-      apiKeyRef: demoState.imageGenerationConfig.cloud.apiKeyRef,
+      apiKeyRef: demoState.imageGenerationConfig.apiKeyRef,
       hasApiKey: Boolean(apiKey),
       apiKeyPreview: preview
     }
@@ -890,44 +879,39 @@ const demoApi: ControlCenterApi = {
   clearImageGenerationApiKey: async () => {
     demoState.imageGenerationConfig = cloneImageGenerationConfig({
       ...demoState.imageGenerationConfig,
-      cloud: {
-        ...demoState.imageGenerationConfig.cloud,
-        hasApiKey: false,
-        apiKeyPreview: ''
-      }
+      hasApiKey: false,
+      apiKeyPreview: ''
     })
     writeDemoState()
     return {
-      apiKeyRef: demoState.imageGenerationConfig.cloud.apiKeyRef,
+      apiKeyRef: demoState.imageGenerationConfig.apiKeyRef,
       hasApiKey: false,
       apiKeyPreview: ''
     }
   },
-  checkImageGenerationHealth: async ({ backend } = {}) => {
-    const activeBackend = backend || demoState.imageGenerationConfig.defaultBackend
-    if (activeBackend === 'cloud' && !demoState.imageGenerationConfig.cloud.hasApiKey) {
+  checkImageGenerationHealth: async () => {
+    if (!demoState.imageGenerationConfig.hasApiKey) {
       return {
         ok: false,
-        backend: 'cloud',
+        provider: demoState.imageGenerationConfig.provider,
         code: 'missing_api_key',
-        message: 'Cloud image generation API key is missing'
+        message: 'Image generation API key is missing'
       }
     }
     if (
-      activeBackend === 'cloud' &&
-      /models-unavailable|image\.example\.test/i.test(demoState.imageGenerationConfig.cloud.baseUrl)
+      /models-unavailable|image\.example\.test/i.test(demoState.imageGenerationConfig.baseUrl)
     ) {
       return {
         ok: true,
-        backend: 'cloud',
+        provider: demoState.imageGenerationConfig.provider,
         code: 'provider_reachable_models_unavailable',
-        message: 'Cloud provider is reachable, but the optional /models probe is unavailable'
+        message: 'Image Provider is reachable, but the optional /models probe is unavailable'
       }
     }
     return {
       ok: true,
-      backend: activeBackend,
-      code: `${activeBackend}_healthy`,
+      provider: demoState.imageGenerationConfig.provider,
+      code: 'provider_healthy',
       message: 'ok'
     }
   },

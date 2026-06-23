@@ -255,10 +255,7 @@ export function useAiPane(activeTab = 'ai') {
     try {
       const validationError = validateImageProviderConfig(imageGenerationConfig)
       if (validationError) throw new Error(validationError)
-      const savedConfig = cloneImageGenerationConfig(await api.saveImageGenerationConfig({
-        ...imageGenerationConfig,
-        defaultBackend: 'cloud'
-      }))
+      const savedConfig = cloneImageGenerationConfig(await api.saveImageGenerationConfig(imageGenerationConfig))
       setImageGenerationConfig(savedConfig)
       setActiveImageGenerationConfig(savedConfig)
       setStatus('图片 Provider 配置已保存')
@@ -369,12 +366,8 @@ export function useAiPane(activeTab = 'ai') {
       const result = await api.saveImageGenerationApiKey(key)
       const applyKeyResult = (current: ImageGenerationConfigViewState) => cloneImageGenerationConfig({
         ...current,
-        defaultBackend: 'cloud',
-        cloud: {
-          ...current.cloud,
-          hasApiKey: result.hasApiKey,
-          apiKeyPreview: result.apiKeyPreview
-        }
+        hasApiKey: result.hasApiKey,
+        apiKeyPreview: result.apiKeyPreview
       })
       setImageGenerationConfig(applyKeyResult)
       setActiveImageGenerationConfig(applyKeyResult)
@@ -395,11 +388,8 @@ export function useAiPane(activeTab = 'ai') {
       const result = await api.clearImageGenerationApiKey()
       const applyKeyResult = (current: ImageGenerationConfigViewState) => cloneImageGenerationConfig({
         ...current,
-        cloud: {
-          ...current.cloud,
-          hasApiKey: result.hasApiKey,
-          apiKeyPreview: result.apiKeyPreview
-        }
+        hasApiKey: result.hasApiKey,
+        apiKeyPreview: result.apiKeyPreview
       })
       setImageGenerationConfig(applyKeyResult)
       setActiveImageGenerationConfig(applyKeyResult)
@@ -420,7 +410,7 @@ export function useAiPane(activeTab = 'ai') {
     setSaving(true)
     setImageHealthStatus('图片 Provider 健康检查中')
     try {
-      const result = await api.checkImageGenerationHealth({ backend: 'cloud' })
+      const result = await api.checkImageGenerationHealth({})
       setImageHealthStatus(formatImageGenerationHealthStatus(result))
     } catch (error) {
       setImageHealthStatus(messageFromError(error, '图片模型健康检查失败'))
@@ -605,15 +595,7 @@ export function useAiPane(activeTab = 'ai') {
     onChange: (partial: Partial<AiConfigViewState>) => setConfig({ ...config, ...partial }),
     onChangeImageGeneration: (partial: Partial<ImageGenerationConfigViewState>) => setImageGenerationConfig((current) => cloneImageGenerationConfig({
       ...current,
-      ...partial,
-      cloud: {
-        ...current.cloud,
-        ...(partial.cloud || {})
-      },
-      local: {
-        ...current.local,
-        ...(partial.local || {})
-      }
+      ...partial
     })),
     onSave,
     onSaveAndTest,

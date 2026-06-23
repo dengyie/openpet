@@ -1760,30 +1760,18 @@ export interface AiConnectionTestResult {
   message?: string
 }
 
-export interface ImageGenerationCloudConfigViewState {
+export interface ImageGenerationConfigViewState {
   provider: string
   baseUrl: string
   model: string
   apiKeyRef: string
   organization: string
   project: string
+  timeoutMs: number
+  maxConcurrentJobs: number
   hasApiKey: boolean
   apiKeyPreview: string
   apiKeyLabel: string
-}
-
-export interface ImageGenerationLocalConfigViewState {
-  endpoint: string
-  healthUrl: string
-  model: string
-  timeoutMs: number
-  maxConcurrentJobs: number
-}
-
-export interface ImageGenerationConfigViewState {
-  defaultBackend: 'fixture' | 'cloud' | 'local'
-  cloud: ImageGenerationCloudConfigViewState
-  local: ImageGenerationLocalConfigViewState
 }
 
 export interface ImageGenerationSaveApiKeyResult {
@@ -1794,14 +1782,12 @@ export interface ImageGenerationSaveApiKeyResult {
 
 export interface ImageGenerationHealthCheckResult {
   ok: boolean
-  backend: 'fixture' | 'cloud' | 'local'
+  provider: string
   code: string
   message: string
 }
 
-export interface ImageGenerationHealthCheckRequest {
-  backend?: 'fixture' | 'cloud' | 'local'
-}
+export type ImageGenerationHealthCheckRequest = Record<string, never>
 
 export interface ImageGenerationOutputRef {
   dataRelativePath: string
@@ -1810,7 +1796,6 @@ export interface ImageGenerationOutputRef {
 }
 
 export interface ImageGenerationRequest {
-  backend?: 'fixture' | 'cloud' | 'local'
   prompt: string
   output: {
     dataDir?: string
@@ -1825,7 +1810,7 @@ export interface ImageGenerationRequest {
 
 export interface ImageGenerationResult {
   ok: boolean
-  backend: 'fixture' | 'cloud' | 'local'
+  provider: string
   model: string
   generatedAt?: string
   outputs: ImageGenerationOutputRef[]

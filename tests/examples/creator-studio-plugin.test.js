@@ -788,7 +788,7 @@ test('creator studio run-step command uses host bridge for local backend generat
               ok: true,
               result: {
                 ok: true,
-                backend: 'local',
+                provider: 'openai-compatible',
                 model: 'local-pet-sprite',
                 generatedAt: '2026-06-19T00:00:00.000Z',
                 outputs: [{
@@ -808,23 +808,15 @@ test('creator studio run-step command uses host bridge for local backend generat
         response.end(JSON.stringify({
           ok: true,
           config: {
-            defaultBackend: 'local',
-            cloud: {
-              provider: 'openai',
-              baseUrl: 'https://api.openai.com/v1',
-              model: 'gpt-image-1',
-              apiKeyRef: 'secret:model.image.openai.apiKey',
-              hasApiKey: false,
-              apiKeyPreview: '',
-              apiKeyLabel: 'Image API Key'
-            },
-            local: {
-              endpoint: 'http://127.0.0.1:7860/generate',
-              healthUrl: 'http://127.0.0.1:7860/health',
-              model: 'local-custom-sprite-v2',
-              timeoutMs: 120000,
-              maxConcurrentJobs: 1
-            }
+            provider: 'openai-compatible',
+            baseUrl: 'http://127.0.0.1:7860/v1',
+            model: 'local-custom-sprite-v2',
+            apiKeyRef: 'secret:model.image.openai.apiKey',
+            timeoutMs: 120000,
+            maxConcurrentJobs: 1,
+            hasApiKey: true,
+            apiKeyPreview: '••••test',
+            apiKeyLabel: 'Image API Key'
           }
         }))
         return
@@ -834,33 +826,25 @@ test('creator studio run-step command uses host bridge for local backend generat
           ok: true,
           result: {
             ok: true,
-            backend: 'local',
-            code: 'endpoint_healthy',
-            message: 'Local endpoint is reachable'
+            provider: 'openai-compatible',
+            code: 'provider_healthy',
+            message: 'Image Provider is reachable'
           }
         }))
         return
       }
       response.end(JSON.stringify({
-        ok: true,
-        config: {
-          defaultBackend: 'local',
-          cloud: {
-            provider: 'openai',
-            baseUrl: 'https://api.openai.com/v1',
-            model: 'gpt-image-1',
-            apiKeyRef: 'secret:model.image.openai.apiKey',
-            hasApiKey: false,
-            apiKeyPreview: '',
-            apiKeyLabel: 'Image API Key'
-          },
-          local: {
-            endpoint: 'http://127.0.0.1:7860/generate',
-            healthUrl: 'http://127.0.0.1:7860/health',
-            model: 'local-pet-sprite',
-            timeoutMs: 120000,
-            maxConcurrentJobs: 1
-          }
+          ok: true,
+          config: {
+          provider: 'openai-compatible',
+          baseUrl: 'http://127.0.0.1:7860/v1',
+          model: 'local-pet-sprite',
+          apiKeyRef: 'secret:model.image.openai.apiKey',
+          timeoutMs: 120000,
+          maxConcurrentJobs: 1,
+          hasApiKey: true,
+          apiKeyPreview: '••••test',
+          apiKeyLabel: 'Image API Key'
         }
       }))
     })
@@ -915,9 +899,9 @@ test('creator studio run-step command uses host bridge for local backend generat
     assert.equal(requests[1].payload.prompt.includes('bridge-token'), false)
     assert.deepEqual(run.modelSnapshot, {
       backend: 'local',
-      provider: 'local',
+      provider: 'openai-compatible',
       model: 'local-custom-sprite-v2',
-      endpointHost: '127.0.0.1:7860'
+      baseUrlHost: '127.0.0.1:7860'
     })
     assert.deepEqual(run.artifacts.generatedImage.modelSnapshot, run.modelSnapshot)
     assert.equal(run.artifacts.generatedImage.promptBuilder.version, 1)
