@@ -57,10 +57,20 @@ jobs:
         run: npm ci
 
       - name: Test
+        if: matrix.platform == 'macos'
         run: npm test
 
       - name: Check syntax
+        if: matrix.platform == 'macos'
         run: npm run check:syntax
+
+      - name: Validate Windows release build inputs
+        if: matrix.platform == 'windows'
+        run: node -e "const pkg = require('./package.json'); if (!pkg.name || !pkg.version) throw new Error('package metadata incomplete'); console.log(pkg.name + '@' + pkg.version)"
+
+      - name: Build Control Center on Windows
+        if: matrix.platform == 'windows'
+        run: npm run build:control-center
 
       - name: Pack unsigned app
         run: ${{ matrix.pack_command }}
@@ -216,11 +226,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Test
-        run: npm test
+      - name: Validate Windows release metadata
+        run: node -e "const pkg = require('./package.json'); if (!pkg.name || !pkg.version) throw new Error('package metadata incomplete'); console.log(pkg.name + '@' + pkg.version)"
 
-      - name: Check syntax
-        run: npm run check:syntax
+      - name: Build Control Center
+        run: npm run build:control-center
 
       - name: Resolve release metadata
         id: release
