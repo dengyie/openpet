@@ -99,6 +99,15 @@ const applyPetViewport = (petWindow, viewport) => {
 
 const loadPetWindow = (petWindow) => petWindow.loadFile(path.join(projectRoot, 'index.html'))
 
+const bringWindowToFront = (win, app = electron.app) => {
+  if (!win || win.isDestroyed?.()) return
+  if (win.isMinimized?.()) win.restore?.()
+  if (win.isVisible?.() === false) win.show?.()
+  win.moveTop?.()
+  win.focus?.()
+  app?.focus?.({ steal: true })
+}
+
 const createWindow = ({ load = true, BrowserWindow = electron.BrowserWindow, screen = electron.screen } = {}) => {
   const petWindow = new BrowserWindow({
     width: BASE_WIDTH,
@@ -128,9 +137,9 @@ const createWindow = ({ load = true, BrowserWindow = electron.BrowserWindow, scr
   return petWindow
 }
 
-const createSettingsWindow = (petWindow, { BrowserWindow = electron.BrowserWindow, screen = electron.screen } = {}) => {
+const createSettingsWindow = (petWindow, { BrowserWindow = electron.BrowserWindow, screen = electron.screen, app = electron.app } = {}) => {
   if (petWindow.settingsWindow && !petWindow.settingsWindow.isDestroyed()) {
-    petWindow.settingsWindow.focus()
+    bringWindowToFront(petWindow.settingsWindow, app)
     return
   }
 

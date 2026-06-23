@@ -23,6 +23,12 @@ const createBrowserWindowStub = (instances) => class BrowserWindowStub {
     this.visibleOnAllWorkspaces = null
     this.position = null
     this.destroyed = false
+    this.minimized = false
+    this.visible = true
+    this.focusCalls = 0
+    this.moveTopCalls = 0
+    this.restoreCalls = 0
+    this.showCalls = 0
     this.bounds = { x: 0, y: 0, width: options.width, height: options.height }
     instances.push(this)
   }
@@ -56,6 +62,32 @@ const createBrowserWindowStub = (instances) => class BrowserWindowStub {
 
   isDestroyed() {
     return this.destroyed
+  }
+
+  isMinimized() {
+    return this.minimized
+  }
+
+  restore() {
+    this.restoreCalls += 1
+    this.minimized = false
+  }
+
+  isVisible() {
+    return this.visible
+  }
+
+  show() {
+    this.showCalls += 1
+    this.visible = true
+  }
+
+  moveTop() {
+    this.moveTopCalls += 1
+  }
+
+  focus() {
+    this.focusCalls += 1
   }
 }
 
@@ -120,6 +152,34 @@ test('createSettingsWindow uses normal app stacking instead of pet-level always-
   assert.equal(instances[0].visibleOnAllWorkspaces.value, true)
   assert.equal(instances[1].options.alwaysOnTop, false)
   assert.equal(instances[1].visibleOnAllWorkspaces, null)
+})
+
+test('createSettingsWindow restores and raises an existing settings window', () => {
+  const instances = []
+  const appFocusCalls = []
+  const { createSettingsWindow, createWindow } = loadWindowModule()
+  const BrowserWindow = createBrowserWindowStub(instances)
+  const screen = createScreenStub()
+  const app = { focus: (options) => appFocusCalls.push(options) }
+  const petWindow = createWindow({
+    load: false,
+    BrowserWindow,
+    screen
+  })
+
+  createSettingsWindow(petWindow, { BrowserWindow, screen, app })
+  const settingsWindow = instances[1]
+  settingsWindow.minimized = true
+  settingsWindow.visible = false
+
+  createSettingsWindow(petWindow, { BrowserWindow, screen, app })
+
+  assert.equal(instances.length, 2)
+  assert.equal(settingsWindow.restoreCalls, 1)
+  assert.equal(settingsWindow.showCalls, 1)
+  assert.equal(settingsWindow.moveTopCalls, 1)
+  assert.equal(settingsWindow.focusCalls, 1)
+  assert.deepEqual(appFocusCalls, [{ steal: true }])
 })
 
 test('applyWindowScale recovers a collapsed pet window back to valid default bounds', () => {
