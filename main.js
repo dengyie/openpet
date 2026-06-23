@@ -118,34 +118,35 @@ const bootstrapOpenPet = () => {
     ['assetPath', 'assetUrl', 'fileName', 'width', 'height', 'hotspotX', 'hotspotY']
       .some((key) => before?.[key] !== after?.[key])
   )
-  const applyCursorRepairToCollection = (customCursors = [], customCursor = {}) => (
+  const applyCursorRepairToCollection = (customCursors = [], previousCursor = {}, repairedCursor = {}) => (
     Array.isArray(customCursors)
       ? customCursors.map((cursor) => {
-        const isSameAssetPath = Boolean(customCursor.assetPath && cursor?.assetPath === customCursor.assetPath)
-        const isSameAssetUrl = Boolean(customCursor.assetUrl && cursor?.assetUrl === customCursor.assetUrl)
+        const isSameAssetPath = Boolean(previousCursor.assetPath && cursor?.assetPath === previousCursor.assetPath)
+        const isSameAssetUrl = Boolean(previousCursor.assetUrl && cursor?.assetUrl === previousCursor.assetUrl)
         const isRepairedCursor = isSameAssetPath || isSameAssetUrl
         return isRepairedCursor
           ? {
               ...cursor,
-              assetPath: customCursor.assetPath,
-              assetUrl: customCursor.assetUrl,
-              fileName: customCursor.fileName,
-              width: customCursor.width,
-              height: customCursor.height,
-              hotspotX: customCursor.hotspotX,
-              hotspotY: customCursor.hotspotY
+              assetPath: repairedCursor.assetPath,
+              assetUrl: repairedCursor.assetUrl,
+              fileName: repairedCursor.fileName,
+              width: repairedCursor.width,
+              height: repairedCursor.height,
+              hotspotX: repairedCursor.hotspotX,
+              hotspotY: repairedCursor.hotspotY
             }
           : cursor
       })
       : []
   )
-  cursorAssetService.repairCursor(petService.getSettings().customCursor).then((customCursor) => {
+  const cursorBeforeRepair = petService.getSettings().customCursor
+  cursorAssetService.repairCursor(cursorBeforeRepair).then((customCursor) => {
     const currentSettings = petService.getSettings()
-    if (customCursor.assetPath && hasCursorRepairChanged(currentSettings.customCursor, customCursor)) {
+    if (customCursor.assetPath && hasCursorRepairChanged(cursorBeforeRepair, customCursor)) {
       petService.saveSettings({
         ...currentSettings,
         customCursor,
-        customCursors: applyCursorRepairToCollection(currentSettings.customCursors, customCursor)
+        customCursors: applyCursorRepairToCollection(currentSettings.customCursors, cursorBeforeRepair, customCursor)
       })
       appLogService.record({
         scope: 'settings',

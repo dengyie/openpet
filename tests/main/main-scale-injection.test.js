@@ -382,7 +382,7 @@ test('main still stops plugin services when lifecycle logging fails during quit'
   }
 })
 
-test('main persists repaired cursor metadata even when the asset path is unchanged', async () => {
+test('main persists repaired cursor metadata and collection entry when repair rewrites the asset path', async () => {
   delete require.cache[mainPath]
 
   const initialCursor = {
@@ -509,6 +509,8 @@ test('main persists repaired cursor metadata even when the asset path is unchang
         createCursorAssetService: () => ({
           repairCursor: async () => ({
             ...initialCursor,
+            assetPath: '/tmp/cursor-repaired.png',
+            assetUrl: 'file:///tmp/cursor-repaired.png',
             width: 64,
             height: 64,
             hotspotX: 13,
@@ -551,14 +553,19 @@ test('main persists repaired cursor metadata even when the asset path is unchang
     await flushAsync()
 
     assert.equal(savedSettings.length, 1)
+    assert.equal(savedSettings[0].customCursor.assetPath, '/tmp/cursor-repaired.png')
+    assert.equal(savedSettings[0].customCursor.assetUrl, 'file:///tmp/cursor-repaired.png')
     assert.equal(savedSettings[0].customCursor.width, 64)
     assert.equal(savedSettings[0].customCursor.height, 64)
     assert.equal(savedSettings[0].customCursor.hotspotX, 13)
     assert.equal(savedSettings[0].customCursor.hotspotY, 8)
+    assert.equal(savedSettings[0].customCursors[0].assetPath, '/tmp/cursor-repaired.png')
+    assert.equal(savedSettings[0].customCursors[0].assetUrl, 'file:///tmp/cursor-repaired.png')
     assert.equal(savedSettings[0].customCursors[0].width, 64)
     assert.equal(savedSettings[0].customCursors[0].height, 64)
     assert.equal(savedSettings[0].customCursors[0].hotspotX, 13)
     assert.equal(savedSettings[0].customCursors[0].hotspotY, 8)
+    assert.equal(savedSettings[0].customCursors[1].assetPath, '/tmp/other-cursor.png')
     assert.equal(appLogs.some((entry) => entry.event === 'settings.cursor.asset.repaired'), true)
   } finally {
     Module._load = originalLoad
