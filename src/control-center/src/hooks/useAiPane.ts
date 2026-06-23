@@ -253,12 +253,17 @@ export function useAiPane(activeTab = 'ai') {
     setStatus('')
     setImageHealthStatus('')
     try {
-      const savedConfig = cloneImageGenerationConfig(await api.saveImageGenerationConfig(imageGenerationConfig))
+      const validationError = validateImageProviderConfig(imageGenerationConfig)
+      if (validationError) throw new Error(validationError)
+      const savedConfig = cloneImageGenerationConfig(await api.saveImageGenerationConfig({
+        ...imageGenerationConfig,
+        defaultBackend: 'cloud'
+      }))
       setImageGenerationConfig(savedConfig)
       setActiveImageGenerationConfig(savedConfig)
-      setStatus('图片生成配置已保存')
+      setStatus('图片 Provider 配置已保存')
     } catch (error) {
-      setStatus(messageFromError(error, '图片生成配置保存失败'))
+      setStatus(messageFromError(error, '图片 Provider 配置保存失败'))
     } finally {
       setSaving(false)
     }
@@ -359,15 +364,20 @@ export function useAiPane(activeTab = 'ai') {
     setStatus('')
     setImageHealthStatus('')
     try {
-      const result = await api.saveImageGenerationApiKey(imageApiKeyDraft)
-      setImageGenerationConfig((current) => ({
+      const key = imageApiKeyDraft.trim()
+      if (!key) throw new Error('图片 API Key 不能为空')
+      const result = await api.saveImageGenerationApiKey(key)
+      const applyKeyResult = (current: ImageGenerationConfigViewState) => cloneImageGenerationConfig({
         ...current,
+        defaultBackend: 'cloud',
         cloud: {
           ...current.cloud,
           hasApiKey: result.hasApiKey,
           apiKeyPreview: result.apiKeyPreview
         }
-      }))
+      })
+      setImageGenerationConfig(applyKeyResult)
+      setActiveImageGenerationConfig(applyKeyResult)
       setImageApiKeyDraft('')
       setStatus('图片 API Key 已保存')
     } catch (error) {
@@ -383,14 +393,16 @@ export function useAiPane(activeTab = 'ai') {
     setImageHealthStatus('')
     try {
       const result = await api.clearImageGenerationApiKey()
-      setImageGenerationConfig((current) => ({
+      const applyKeyResult = (current: ImageGenerationConfigViewState) => cloneImageGenerationConfig({
         ...current,
         cloud: {
           ...current.cloud,
           hasApiKey: result.hasApiKey,
           apiKeyPreview: result.apiKeyPreview
         }
-      }))
+      })
+      setImageGenerationConfig(applyKeyResult)
+      setActiveImageGenerationConfig(applyKeyResult)
       setImageApiKeyDraft('')
       setStatus('图片 API Key 已清除')
     } catch (error) {
@@ -402,13 +414,13 @@ export function useAiPane(activeTab = 'ai') {
 
   const onCheckImageGenerationHealth = async () => {
     if (hasUnsavedImageGenerationChanges) {
-      setImageHealthStatus('当前图片配置有未保存修改；请先保存图片配置后再检查健康。')
+      setImageHealthStatus('当前图片 Provider 配置有未保存修改；请先保存图片配置后再检查健康。')
       return
     }
     setSaving(true)
-    setImageHealthStatus('图片模型健康检查中')
+    setImageHealthStatus('图片 Provider 健康检查中')
     try {
-      const result = await api.checkImageGenerationHealth({ backend: imageGenerationConfig.defaultBackend })
+      const result = await api.checkImageGenerationHealth({ backend: 'cloud' })
       setImageHealthStatus(formatImageGenerationHealthStatus(result))
     } catch (error) {
       setImageHealthStatus(messageFromError(error, '图片模型健康检查失败'))

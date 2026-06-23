@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type {
   AiBehaviorConfig,
   AiBehaviorResult,
@@ -11,6 +12,31 @@ import type {
 } from '../../../shared/openpet-contracts'
 import { Toggle } from '../components/Toggle'
 import { defaultImageGenerationConfig } from '../lib/defaults'
+
+const CollapsibleAiSection = ({
+  title,
+  note,
+  defaultOpen = false,
+  children
+}: {
+  title: string
+  note: string
+  defaultOpen?: boolean
+  children: ReactNode
+}) => (
+  <details className="ai-section" open={defaultOpen}>
+    <summary className="ai-section-summary">
+      <div>
+        <h2>{title}</h2>
+        <p>{note}</p>
+      </div>
+      <span className="ai-section-caret" aria-hidden="true">⌄</span>
+    </summary>
+    <div className="ai-section-body">
+      {children}
+    </div>
+  </details>
+)
 
 export interface AiPaneProps {
   config: AiConfigViewState
@@ -144,6 +170,7 @@ export function AiPane({
 }: AiPaneProps) {
   const decisions = Array.isArray(behavior.decisions) ? behavior.decisions : []
   const saveDisabled = saving || Boolean(providerConfigValidationError)
+  const imageSaveDisabled = saving || Boolean(imageProviderValidationError)
   const apiKeyDraftReady = Boolean(apiKeyDraft.trim())
 
   return (
@@ -243,28 +270,49 @@ export function AiPane({
               {hasUnsavedApiKeyDraft ? ' · 当前输入尚未保存' : ''}
             </div>
           </div>
-          <div className="inline-action">
+
+          {providerConfigDirty ? (
+            <div className="provider-warning">
+              你有未保存的 Provider 草稿。点击“测试已保存配置”不会使用这些草稿；点击“保存并测试聊天 Provider”会先保存再测试。
+            </div>
+          ) : null}
+          {providerConfigValidationError ? (
+            <div className="provider-warning error">{providerConfigValidationError}</div>
+          ) : null}
+
+          <div className="field-row">
+            <div className="field-label">启用聊天</div>
+            <Toggle ariaLabel="Enable AI chat" checked={config.enabled} onChange={(enabled) => onChange({ enabled })} />
+          </div>
+
+          <label className="field-row">
+            <span className="field-label">Provider</span>
+            <select
+              className="text-input"
+              value={config.provider}
+              onChange={(event) => onChange({ provider: event.target.value })}
+            >
+              <option value="openai-compatible">OpenAI compatible</option>
+            </select>
+          </label>
+
+          <label className="field-row">
+            <span className="field-label">Base URL</span>
             <input
               className="text-input"
-              type="password"
-              value={apiKeyDraft}
-              placeholder={config.hasApiKey ? '输入新密钥覆盖' : '输入 API Key'}
-              onChange={(event) => setApiKeyDraft(event.target.value)}
+              value={config.baseUrl}
+              onChange={(event) => onChange({ baseUrl: event.target.value })}
             />
-            <button type="button" className="ghost" onClick={onSaveApiKey} disabled={!apiKeyDraftReady || saving}>
-              保存密钥
-            </button>
-          </div>
-        </div>
+          </label>
 
-        <label className="field-row tall">
-          <span className="field-label">System Prompt</span>
-          <textarea
-            className="text-input textarea"
-            value={config.systemPrompt}
-            onChange={(event) => onChange({ systemPrompt: event.target.value })}
-          />
-        </label>
+          <label className="field-row">
+            <span className="field-label">Model</span>
+            <input
+              className="text-input"
+              value={config.model}
+              onChange={(event) => onChange({ model: event.target.value })}
+            />
+          </label>
 
         <div className="field-row">
           <div>
@@ -364,61 +412,122 @@ export function AiPane({
               {imageGenerationConfig.cloud.apiKeyPreview ? ` · ${imageGenerationConfig.cloud.apiKeyPreview}` : ''}
             </div>
           </div>
-          <div className="inline-action">
-            <input
-              className="text-input"
-              type="password"
-              value={imageApiKeyDraft}
-              placeholder={imageGenerationConfig.cloud.hasApiKey ? '输入新密钥覆盖' : '输入图片 API Key'}
-              onChange={(event) => setImageApiKeyDraft(event.target.value)}
+
+          <label className="field-row tall">
+            <span className="field-label">System Prompt</span>
+            <textarea
+              className="text-input textarea"
+              value={config.systemPrompt}
+              onChange={(event) => onChange({ systemPrompt: event.target.value })}
             />
-            <button type="button" className="ghost" onClick={onSaveImageGenerationApiKey} disabled={!imageApiKeyDraft || saving}>
-              保存图片密钥
-            </button>
-            <button type="button" className="danger-text" onClick={onClearImageGenerationApiKey} disabled={saving || !imageGenerationConfig.cloud.hasApiKey}>
-              清除图片密钥
-            </button>
+          </label>
+
+          <div className="field-row">
+            <div>
+              <div className="field-label">长期记忆</div>
+              <div className="field-note">主回复不阻塞，后台自动抽取用户与宠物关系记忆</div>
+            </div>
+            <Toggle
+              ariaLabel="Enable AI memory"
+              checked={config.memory.enabled}
+              onChange={(enabled) => onChange({ memory: { ...config.memory, enabled } })}
+            />
           </div>
         </div>
+      </CollapsibleAiSection>
 
-        <label className="field-row">
-          <span className="field-label">本地 Endpoint</span>
-          <input
-            aria-label="本地 Endpoint"
-            className="text-input"
-            value={imageGenerationConfig.local.endpoint}
-            onChange={(event) => onChangeImageGeneration({
-              local: { ...imageGenerationConfig.local, endpoint: event.target.value }
-            })}
-          />
-        </label>
+      <CollapsibleAiSection title="图片 Provider" note="Creator Studio 生成图片使用的 OpenAI-compatible Provider" defaultOpen>
+        <div className="section-actions">
+          <button type="button" className="ghost" onClick={onCheckImageGenerationHealth} disabled={saving}>
+            检查图片健康
+          </button>
+          <button type="button" className="primary" onClick={onSaveImageGeneration} disabled={imageSaveDisabled}>
+            保存图片 Provider
+          </button>
+        </div>
 
-        <label className="field-row">
-          <span className="field-label">本地 Health URL</span>
-          <input
-            aria-label="本地 Health URL"
-            className="text-input"
-            value={imageGenerationConfig.local.healthUrl}
-            onChange={(event) => onChangeImageGeneration({
-              local: { ...imageGenerationConfig.local, healthUrl: event.target.value }
-            })}
-          />
-        </label>
+        <div className="section">
+          <div className="readonly-row">
+            <strong>图片当前 Provider</strong>
+            <span className="endpoint-text">{imageTargetSummary}</span>
+          </div>
 
-        <label className="field-row">
-          <span className="field-label">本地模型</span>
-          <input
-            aria-label="本地模型"
-            className="text-input"
-            value={imageGenerationConfig.local.model}
-            onChange={(event) => onChangeImageGeneration({
-              local: { ...imageGenerationConfig.local, model: event.target.value }
-            })}
-          />
-        </label>
-      </div>
+          <div className="readonly-row">
+            <strong>图片草稿状态</strong>
+            <span>{hasUnsavedImageGenerationChanges ? '图片配置草稿未保存；健康检查使用当前已保存配置。' : '当前没有未保存的图片配置修改'}</span>
+          </div>
 
-      <div className="section">
+          <div className="readonly-row">
+            <strong>生成边界</strong>
+            <span>Creator Studio 只提交提示词和输出目录；Provider 调用、API Key、图片写入都由 OpenPet host 执行。</span>
+          </div>
+
+          {imageProviderValidationError ? (
+            <div className="provider-warning error">{imageProviderValidationError}</div>
+          ) : null}
+
+          {imageHealthStatus ? (
+            <div className="readonly-row">
+              <strong>图片健康状态</strong>
+              <span>{imageHealthStatus}</span>
+            </div>
+          ) : null}
+
+          <label className="field-row">
+            <span className="field-label">图片 Base URL</span>
+            <input
+              aria-label="图片 Base URL"
+              className="text-input"
+              value={imageGenerationConfig.cloud.baseUrl}
+              onChange={(event) => onChangeImageGeneration({
+                defaultBackend: 'cloud',
+                cloud: { ...imageGenerationConfig.cloud, baseUrl: event.target.value }
+              })}
+            />
+          </label>
+
+          <label className="field-row">
+            <span className="field-label">图片 Model</span>
+            <input
+              aria-label="图片 Model"
+              className="text-input"
+              value={imageGenerationConfig.cloud.model}
+              onChange={(event) => onChangeImageGeneration({
+                defaultBackend: 'cloud',
+                cloud: { ...imageGenerationConfig.cloud, model: event.target.value }
+              })}
+            />
+          </label>
+
+          <div className="field-row">
+            <div>
+              <div className="field-label">图片 API Key</div>
+              <div className="field-note">
+                {imageGenerationConfig.cloud.hasApiKey ? '已保存' : '未保存'}
+                {imageGenerationConfig.cloud.apiKeyPreview ? ` · ${imageGenerationConfig.cloud.apiKeyPreview}` : ''}
+              </div>
+            </div>
+            <div className="inline-action">
+              <input
+                className="text-input"
+                type="password"
+                value={imageApiKeyDraft}
+                placeholder={imageGenerationConfig.cloud.hasApiKey ? '输入新密钥覆盖' : '输入图片 API Key'}
+                onChange={(event) => setImageApiKeyDraft(event.target.value)}
+              />
+              <button type="button" className="ghost" onClick={onSaveImageGenerationApiKey} disabled={!imageApiKeyDraft.trim() || saving}>
+                保存图片密钥
+              </button>
+              <button type="button" className="danger-text" onClick={onClearImageGenerationApiKey} disabled={saving || !imageGenerationConfig.cloud.hasApiKey}>
+                清除图片密钥
+              </button>
+            </div>
+          </div>
+        </div>
+      </CollapsibleAiSection>
+
+      <CollapsibleAiSection title="Pet Persona Override" note="按当前宠物包覆盖 AI 人格">
+        <div className="section">
         <div className="field-row">
           <div>
             <div className="field-label">Pet Persona Override</div>
@@ -558,7 +667,8 @@ export function AiPane({
             </div>
           </div>
         ) : null}
-      </div>
+        </div>
+      </CollapsibleAiSection>
 
       {status ? <div className="status-line">{status}</div> : null}
 
@@ -575,7 +685,8 @@ export function AiPane({
         </div>
       ) : null}
 
-      <div className="section">
+      <CollapsibleAiSection title="Behavior" note="AI 回复到宠物动作的编排与诊断">
+        <div className="section">
         <div className="field-row">
           <div>
             <div className="field-label">Behavior</div>
@@ -699,34 +810,37 @@ export function AiPane({
             </div>
           </div>
         </div>
-      </div>
+        </div>
+      </CollapsibleAiSection>
 
-      <div className="chat-panel">
-        <div className="chat-transcript" aria-live="polite">
-          {chatMessages.length === 0 ? (
-            <div className="empty-chat">暂无对话</div>
-          ) : chatMessages.map((message, index) => (
-            <div className={`chat-message ${message.role}`} key={`${message.role}-${index}`}>
-              <strong>{message.role === 'user' ? 'You' : 'Pet'}</strong>
-              <span>{message.content}</span>
-            </div>
-          ))}
+      <CollapsibleAiSection title="聊天" note="用当前已保存 Provider 和宠物对话">
+        <div className="chat-panel">
+          <div className="chat-transcript" aria-live="polite">
+            {chatMessages.length === 0 ? (
+              <div className="empty-chat">暂无对话</div>
+            ) : chatMessages.map((message, index) => (
+              <div className={`chat-message ${message.role}`} key={`${message.role}-${index}`}>
+                <strong>{message.role === 'user' ? 'You' : 'Pet'}</strong>
+                <span>{message.content}</span>
+              </div>
+            ))}
+          </div>
+          <div className="chat-input-row">
+            <input
+              className="text-input"
+              value={chatDraft}
+              placeholder="说点什么"
+              onChange={(event) => setChatDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') onSendChat()
+              }}
+            />
+            <button type="button" className="primary" onClick={onSendChat} disabled={!chatDraft.trim() || chatting}>
+              {chatting ? '发送中' : '发送'}
+            </button>
+          </div>
         </div>
-        <div className="chat-input-row">
-          <input
-            className="text-input"
-            value={chatDraft}
-            placeholder="说点什么"
-            onChange={(event) => setChatDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') onSendChat()
-            }}
-          />
-          <button type="button" className="primary" onClick={onSendChat} disabled={!chatDraft.trim() || chatting}>
-            {chatting ? '发送中' : '发送'}
-          </button>
-        </div>
-      </div>
+      </CollapsibleAiSection>
     </section>
   )
 }

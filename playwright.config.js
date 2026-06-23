@@ -1,5 +1,8 @@
 const { defineConfig, devices } = require('@playwright/test')
 
+const controlCenterPort = Number(process.env.OPENPET_CONTROL_CENTER_PORT || 5173)
+const controlCenterBaseURL = `http://127.0.0.1:${controlCenterPort}`
+
 module.exports = defineConfig({
   testDir: './tests/control-center',
   timeout: 30_000,
@@ -8,7 +11,7 @@ module.exports = defineConfig({
   },
   reporter: process.env.CI ? [['list'], ['github']] : [['list']],
   use: {
-    baseURL: 'http://127.0.0.1:5173',
+    baseURL: controlCenterBaseURL,
     trace: 'on-first-retry'
   },
   projects: [
@@ -18,9 +21,9 @@ module.exports = defineConfig({
     }
   ],
   webServer: {
-    command: 'npm run dev:control-center -- --port 5173 --strictPort',
-    url: 'http://127.0.0.1:5173',
-    reuseExistingServer: !process.env.CI,
+    command: `npm run dev:control-center -- --port ${controlCenterPort} --strictPort`,
+    url: controlCenterBaseURL,
+    reuseExistingServer: !process.env.CI && !process.env.OPENPET_CONTROL_CENTER_PORT,
     timeout: 30_000
   }
 })

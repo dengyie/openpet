@@ -168,6 +168,69 @@ button {
   max-width: 620px;
 }
 
+.ai-section {
+  display: grid;
+  border-top: 1px solid #dde2e8;
+}
+
+.ai-section[open] {
+  padding-bottom: 8px;
+}
+
+.ai-section-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 68px;
+  padding: 14px 0;
+  cursor: pointer;
+  list-style: none;
+}
+
+.ai-section-summary::-webkit-details-marker {
+  display: none;
+}
+
+.ai-section-summary h2 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+.ai-section-summary p {
+  margin: 4px 0 0;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.ai-section-caret {
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid #cfd6df;
+  border-radius: 7px;
+  color: #374151;
+  transition: transform 160ms ease;
+}
+
+.ai-section[open] .ai-section-caret {
+  transform: rotate(180deg);
+}
+
+.ai-section-body {
+  display: grid;
+}
+
+.section-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 0 0 12px;
+}
+
 .field-row,
 .readonly-row {
   display: grid;

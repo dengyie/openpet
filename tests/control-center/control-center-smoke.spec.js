@@ -3,6 +3,24 @@ const { test, expect } = require('@playwright/test')
 const tabs = ['Pet', 'Actions', 'AI', 'Plugins', 'Catalog', 'Service', 'About']
 const pageErrorsByPage = new WeakMap()
 
+const escapeRegExp = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+const aiSection = (page, name) => (
+  page.locator('details.ai-section').filter({
+    has: page.locator('summary h2').filter({ hasText: new RegExp(`^${escapeRegExp(name)}$`) })
+  })
+)
+
+const expandAiSection = async (page, name) => {
+  const section = aiSection(page, name)
+  await expect(section).toHaveCount(1)
+  if (await section.getAttribute('open') === null) {
+    await section.locator('summary').click()
+  }
+  await expect(section).toHaveAttribute('open', '')
+  return section
+}
+
 test.describe('Control Center smoke', () => {
   test.beforeEach(async ({ page }) => {
     const pageErrors = []
@@ -241,20 +259,21 @@ test.describe('Control Center smoke', () => {
     await page.goto('/')
     await page.getByRole('button', { name: 'AI' }).click()
 
-    await page.getByLabel('图片默认后端').selectOption('cloud')
+    const imageProviderSection = await expandAiSection(page, '图片 Provider')
+    await expect(page.getByLabel('图片默认后端')).toHaveCount(0)
+    await expect(page.getByLabel('本地 Endpoint')).toHaveCount(0)
+    await expect(page.getByLabel('本地 Health URL')).toHaveCount(0)
+    await expect(page.getByLabel('本地模型')).toHaveCount(0)
+
     await page.getByLabel('图片 Base URL').fill('https://image.example.test/v1')
     await page.getByLabel('图片 Model').fill('openpet-image-test')
-    await page.getByLabel('本地 Endpoint').fill('http://127.0.0.1:9999/generate')
-    await page.getByLabel('本地 Health URL').fill('http://127.0.0.1:9999/health')
-    await page.getByLabel('本地模型').fill('local-sprite-test')
     await expect(page.locator('.readonly-row', { hasText: '图片草稿状态' })).toContainText('图片配置草稿未保存')
     await page.getByRole('button', { name: '检查图片健康' }).click()
     await expect(page.locator('.readonly-row', { hasText: '图片健康状态' })).toContainText('请先保存图片配置')
 
-    await page.getByRole('button', { name: '保存图片配置' }).click()
-    await expect(page.locator('.status-line')).toContainText('图片生成配置已保存')
-    await expect(page.locator('.readonly-row', { hasText: '图片当前后端' })).toContainText('Cloud')
-    await expect(page.locator('.readonly-row', { hasText: '图片当前后端' })).toContainText('openpet-image-test')
+    await imageProviderSection.getByRole('button', { name: '保存图片 Provider' }).click()
+    await expect(page.locator('.status-line')).toContainText('图片 Provider 配置已保存')
+    await expect(page.locator('.readonly-row', { hasText: '图片当前 Provider' })).toContainText('openpet-image-test')
     await expect(page.locator('.readonly-row', { hasText: '图片草稿状态' })).toContainText('当前没有未保存')
     await expect(page.locator('.readonly-row', { hasText: '生成边界' })).toContainText('API Key')
 
@@ -268,23 +287,20 @@ test.describe('Control Center smoke', () => {
     await expect(imageApiKeyRow).toContainText('••••1234')
 
     await page.getByRole('button', { name: '检查图片健康' }).click()
-    await expect(page.locator('.readonly-row', { hasText: '图片健康状态' })).toContainText('provider 可达，但模型列表探测不可用')
+    await expect(page.locator('.readonly-row', { hasText: '图片健康状态' })).toContainText('图片 Provider 可达，但模型列表探测不可用')
 
     await page.getByRole('button', { name: '清除图片密钥' }).click()
     await expect(page.locator('.status-line')).toContainText('图片 API Key 已清除')
     await expect(imageApiKeyRow).toContainText('未保存')
 
     await page.getByRole('button', { name: '检查图片健康' }).click()
-    await expect(page.locator('.readonly-row', { hasText: '图片健康状态' })).toContainText('Cloud 图片模型健康检查失败：Cloud image generation API key is missing')
+    await expect(page.locator('.readonly-row', { hasText: '图片健康状态' })).toContainText('图片 Provider 健康检查失败：Image generation API key is missing')
 
     await page.reload()
     await page.getByRole('button', { name: 'AI' }).click()
-    await expect(page.getByLabel('图片默认后端')).toHaveValue('cloud')
+    await expandAiSection(page, '图片 Provider')
     await expect(page.getByLabel('图片 Base URL')).toHaveValue('https://image.example.test/v1')
     await expect(page.getByLabel('图片 Model')).toHaveValue('openpet-image-test')
-    await expect(page.getByLabel('本地 Endpoint')).toHaveValue('http://127.0.0.1:9999/generate')
-    await expect(page.getByLabel('本地 Health URL')).toHaveValue('http://127.0.0.1:9999/health')
-    await expect(page.getByLabel('本地模型')).toHaveValue('local-sprite-test')
     await expect(page.locator('.field-row', { hasText: '图片 API Key' })).toContainText('未保存')
   })
 
@@ -292,7 +308,8 @@ test.describe('Control Center smoke', () => {
     await page.goto('/')
     await page.getByRole('button', { name: 'AI' }).click()
 
-    await expect(page.getByText('Pet Persona Override')).toBeVisible()
+    await expandAiSection(page, 'Pet Persona Override')
+    await expect(page.getByRole('heading', { name: 'Pet Persona Override' })).toBeVisible()
     await expect(page.locator('.field-note', { hasText: '当前激活宠物包' })).toContainText('Legacy Cat')
     await expect(page.getByLabel('Tone')).toHaveAttribute('placeholder', 'warm and concise')
 
@@ -314,6 +331,7 @@ test.describe('Control Center smoke', () => {
     await expect(page.locator('.status-line')).toContainText('已启用 Citrus Cat')
 
     await page.getByRole('button', { name: 'AI' }).click()
+    await expandAiSection(page, 'Pet Persona Override')
     await expect(page.locator('.field-note', { hasText: '当前激活宠物包' })).toContainText('Citrus Cat')
     await expect(page.getByLabel('Tone')).toHaveValue('')
     await expect(page.getByLabel('Tone')).toHaveAttribute('placeholder', 'light, sunny, and attentive')
@@ -340,6 +358,7 @@ test.describe('Control Center smoke', () => {
 
     await page.reload()
     await page.getByRole('button', { name: 'AI' }).click()
+    await expandAiSection(page, 'Pet Persona Override')
     await expect(page.getByLabel('Tone')).toHaveValue('generated from: 更适合专注工作')
   })
 
@@ -347,6 +366,7 @@ test.describe('Control Center smoke', () => {
     await page.goto('/')
     await page.getByRole('button', { name: 'AI' }).click()
 
+    await expandAiSection(page, 'Behavior')
     const decisionsPanel = page.locator('.field-row', { hasText: 'Decisions' })
     await expect(decisionsPanel).toContainText('1 条')
     await expect(decisionsPanel.locator('.behavior-decision-row')).toContainText('#1 matched')
@@ -366,6 +386,7 @@ test.describe('Control Center smoke', () => {
     await expect(decisionsPanel).toContainText('0 条')
     await expect(decisionsPanel.locator('.empty-chat')).toContainText('暂无决策记录')
 
+    await expandAiSection(page, '聊天')
     await page.getByPlaceholder('说点什么').fill('hello decision viewer')
     await page.getByRole('button', { name: '发送' }).click()
     await expect(page.locator('.status-line')).toContainText('已触发动作：Wave')
