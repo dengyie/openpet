@@ -104,6 +104,13 @@
         margin-top: 14px;
       }
 
+      .run-picker {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 10px;
+        align-items: end;
+      }
+
       button {
         border: 0;
         border-radius: 999px;
@@ -242,6 +249,15 @@
               <option value="local">local</option>
             </select>
           </div>
+          <div class="run-picker">
+            <div>
+              <label for="run-select">Recent runs</label>
+              <select id="run-select" disabled>
+                <option value="">No runs yet</option>
+              </select>
+            </div>
+            <button id="reload-runs-button" class="secondary" type="button">Reload</button>
+          </div>
           <div class="actions">
             <button id="draft-button">Draft task</button>
             <button id="confirm-button" class="secondary" disabled>Confirm task</button>
@@ -288,7 +304,7 @@
     </main>
 
     <script>
-      const state = { run: null, actionReview: null }
+      const state = { run: null, actionReview: null, runs: [] }
       const $ = (id) => document.getElementById(id)
 
       const setStatus = (message, kind = '') => {
@@ -315,12 +331,45 @@
         "'": '&#39;'
       })[character])
 
-      const fetchRunDetail = async () => {
-        if (!state.run?.runId) return
-        const payload = await fetch(`/api/runs/${encodeURIComponent(state.run.runId)}`).then((response) => response.json())
+      const formatRunLabel = (run) => {
+        const action = Array.isArray(run?.generationTask?.actions) ? run.generationTask.actions[0] : null
+        const name = action?.name || run?.input?.petName || run?.petId || run?.runId || 'Run'
+        return `${run?.status || 'unknown'} - ${name} - ${run?.runId || ''}`
+      }
+
+      const renderRunList = () => {
+        const runs = Array.isArray(state.runs) ? state.runs : []
+        $('run-select').disabled = runs.length === 0
+        $('run-select').innerHTML = runs.length
+          ? runs.map((run) => (
+            `<option value="${escapeHtml(run.runId)}" ${run.runId === state.run?.runId ? 'selected' : ''}>${escapeHtml(formatRunLabel(run))}</option>`
+          )).join('')
+          : '<option value="">No runs yet</option>'
+      }
+
+      const refreshRunList = async () => {
+        const payload = await fetch('/api/runs').then((response) => response.json())
+        if (!payload.ok) throw new Error(payload.error || 'Failed to load run list')
+        state.runs = Array.isArray(payload.runs) ? payload.runs : []
+        renderRunList()
+        return state.runs
+      }
+
+      const fetchRunDetail = async (runId = state.run?.runId) => {
+        if (!runId) return
+        const payload = await fetch(`/api/runs/${encodeURIComponent(runId)}`).then((response) => response.json())
         if (!payload.ok) throw new Error(payload.error || 'Failed to load run detail')
         state.run = payload.run
         state.actionReview = payload.actionReview || null
+        renderRunList()
+      }
+
+      const loadRun = async (runId, statusMessage = '') => {
+        if (!runId) return
+        await fetchRunDetail(runId)
+        renderRun()
+        await refreshLogs()
+        if (statusMessage) setStatus(statusMessage, 'ok')
       }
 
       const frameSrc = (frame) => `${frame.url}${frame.url.includes('?') ? '&' : '?'}v=${encodeURIComponent(state.run?.updatedAt || '')}`
@@ -346,6 +395,7 @@
           $('qa-panel').textContent = 'No generated QA yet.'
           $('action-review-panel').textContent = 'Generated action frames and action-frame-validation.json will appear here before import.'
           $('import-handoff-panel').textContent = 'Generate and approve an action to unlock host-owned import.'
+          $('run-logs').textContent = 'No logs yet.'
           $('confirm-button').disabled = true
           $('generate-button').disabled = true
           $('approve-button').disabled = true
@@ -432,6 +482,7 @@
           state.actionReview = payload.actionReview || null
           renderRun()
           await refreshLogs()
+          await refreshRunList()
           setStatus('Task drafted.', 'ok')
         } catch (error) {
           setStatus(error.message, 'error')
@@ -447,6 +498,7 @@
           state.actionReview = payload.actionReview || null
           renderRun()
           await refreshLogs()
+          await refreshRunList()
           setStatus('Question answered.', 'ok')
         } catch (error) {
           setStatus(error.message, 'error')
@@ -463,6 +515,7 @@
           state.actionReview = payload.actionReview || null
           renderRun()
           await refreshLogs()
+          await refreshRunList()
           setStatus(`Repaired ${fileName}.`, 'ok')
         } catch (error) {
           setStatus(error.message, 'error')
@@ -477,6 +530,7 @@
           state.actionReview = payload.actionReview || null
           renderRun()
           await refreshLogs()
+          await refreshRunList()
           setStatus('Task confirmed.', 'ok')
         } catch (error) {
           setStatus(error.message, 'error')
@@ -492,6 +546,7 @@
           if (!state.actionReview) await fetchRunDetail()
           renderRun()
           await refreshLogs()
+          await refreshRunList()
           setStatus(`Generated action output in ${payload.outputDir || 'run workspace'}.`, 'ok')
         } catch (error) {
           setStatus(error.message, 'error')
@@ -506,7 +561,41 @@
           state.actionReview = payload.actionReview || null
           renderRun()
           await refreshLogs()
+          await refreshRunList()
           setStatus(`Run approved. Use the ${payload.importCommand || 'import'} plugin command for host-owned import.`, 'ok')
+        } catch (error) {
+          setStatus(error.message, 'error')
+        }
+      })
+
+      $('run-select').addEventListener('change', async (event) => {
+        const runId = event.target?.value
+        if (!runId) return
+        try {
+          await loadRun(runId, `Loaded run ${runId}.`)
+        } catch (error) {
+          setStatus(error.message, 'error')
+        }
+      })
+
+      $('reload-runs-button').addEventListener('click', async () => {
+        try {
+          const runs = await refreshRunList()
+          const runId = state.run?.runId || runs[0]?.runId
+          if (runId) await loadRun(runId, 'Runs refreshed.')
+          else {
+            renderRun()
+            setStatus('No runs yet.', 'ok')
+          }
+        } catch (error) {
+          setStatus(error.message, 'error')
+        }
+      })
+
+      document.addEventListener('DOMContentLoaded', async () => {
+        try {
+          const runs = await refreshRunList()
+          if (runs[0]?.runId) await loadRun(runs[0].runId, 'Loaded latest run.')
         } catch (error) {
           setStatus(error.message, 'error')
         }
