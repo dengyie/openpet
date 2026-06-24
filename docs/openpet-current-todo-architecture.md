@@ -123,6 +123,7 @@ Current state:
 - Manual trigger review card can apply `click` to `clickAction`.
 - `manual` and `unbound` proposals are acknowledged without mutating bindings.
 - `random`, `state`, and `event` proposals create active host-owned durable trigger rules with preview text.
+- Actions review now asks the host for an application preview before accepting trigger proposals, and pending non-click inbox items show the host preview text before users apply them.
 - `triggerProposalInbox` is part of the action config view state and host service contract.
 - `triggerRules` is part of the action config view state, active pet-pack manifest, legacy animation config, and Control Center demo contract.
 - `ActionService.submitTriggerProposal`, `acceptTriggerProposalItem`, and `rejectTriggerProposalItem` persist proposal status: pending, accepted, rejected, applied, or pending-host-rule.
@@ -133,11 +134,11 @@ Current state:
 
 P1 work:
 
-- Add simulation/preview before applying non-click triggers.
 - Keep Creator Studio-trigger proposal handoff aligned with future trigger-rule editor and scheduler semantics.
 
 P2/P3:
 
+- Rich runtime simulation showing actual scheduler timing, state predicates, and event matching.
 - Conflict resolution between multiple rules.
 - Cooldowns, priorities, and per-pet-pack trigger profiles.
 - Import/export of trigger-rule presets.

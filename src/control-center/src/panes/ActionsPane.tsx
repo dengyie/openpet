@@ -3,6 +3,7 @@ import type {
   ActionEntry,
   ActionTriggerProposalInboxItem,
   ActionTriggerProposalAcceptanceResult,
+  ActionTriggerProposalPreviewResult,
   ActionTriggerRule,
   ActionTriggerProposalType,
   ActionsConfigViewState,
@@ -48,6 +49,7 @@ export interface ActionsPaneProps {
   setTriggerProposalType: (value: ActionTriggerProposalType) => void
   triggerProposalNotes: string
   setTriggerProposalNotes: (value: string) => void
+  triggerProposalPreview: ActionTriggerProposalPreviewResult | null
   lastTriggerProposalResult: ActionTriggerProposalAcceptanceResult | null
 }
 
@@ -231,6 +233,7 @@ function TriggerProposalInbox({
                 </span>
               </div>
               {proposal.message ? <p>{proposal.message}</p> : <p>{details.summary}</p>}
+              {proposal.preview ? <p>预览：{proposal.preview}</p> : null}
               <div className="trigger-inbox-meta">
                 {proposal.sourcePluginId ? <span>来源：{proposal.sourcePluginId}</span> : null}
                 {proposal.sourceRunId ? <span>Run：{proposal.sourceRunId}</span> : null}
@@ -463,6 +466,7 @@ export function ActionsPane({
   setTriggerProposalType,
   triggerProposalNotes,
   setTriggerProposalNotes,
+  triggerProposalPreview,
   lastTriggerProposalResult
 }: ActionsPaneProps) {
   const selectedAction = actionsConfig.actions.find((action) => action.id === selectedActionId)
@@ -597,6 +601,15 @@ export function ActionsPane({
             <span><strong>接受结果</strong>{triggerDetails.outcome}</span>
             <span><strong>边界</strong>{triggerDetails.boundary}</span>
           </div>
+
+          {triggerProposalPreview ? (
+            <div className={triggerProposalPreview.applied ? 'trigger-result applied' : 'trigger-result pending'}>
+              <strong>应用前预览</strong>
+              <span>{triggerProposalPreview.message}</span>
+              <span>预览码：{triggerProposalPreview.code}</span>
+              {triggerProposalPreview.preview ? <span>预览：{triggerProposalPreview.preview}</span> : null}
+            </div>
+          ) : null}
 
           {lastTriggerProposalResult ? (
             <div className={lastTriggerProposalResult.applied ? 'trigger-result applied' : 'trigger-result pending'}>

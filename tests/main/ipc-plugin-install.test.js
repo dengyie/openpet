@@ -688,6 +688,23 @@ test('action mutation handlers return contract-shaped results and refreshed anim
       }
     },
     actionService: {
+      previewTriggerProposal: (proposal) => {
+        calls.push(['preview-trigger', proposal])
+        return {
+          ok: true,
+          applied: true,
+          actionId: proposal.actionId,
+          type: proposal.type,
+          binding: proposal.binding || '',
+          code: 'will_apply',
+          message: 'preview',
+          preview: `Click trigger will set clickAction to ${proposal.actionId}.`,
+          sourcePluginId: proposal.sourcePluginId || '',
+          sourceRunId: proposal.sourceRunId || '',
+          sourceCommandId: proposal.sourceCommandId || '',
+          internal: 'service-only'
+        }
+      },
       acceptTriggerProposal: (proposal) => {
         calls.push(['trigger', proposal])
         return {
@@ -731,6 +748,14 @@ test('action mutation handlers return contract-shaped results and refreshed anim
       sourceCommandId: 'import-approved-action'
     }
   })
+  const triggerPreview = await ipcMain.handlers.get(IPC.ACTIONS_PREVIEW_TRIGGER_PROPOSAL)(null, {
+    actionId: 'wave',
+    type: 'click',
+    binding: 'clickAction',
+    sourcePluginId: 'openpet.creator-studio',
+    sourceRunId: 'run-1',
+    sourceCommandId: 'import-approved-action'
+  })
   const deleteResult = await ipcMain.handlers.get(IPC.ACTIONS_DELETE)(null, { actionId: 'wave' })
 
   assert.deepEqual(importResult, {
@@ -758,6 +783,19 @@ test('action mutation handlers return contract-shaped results and refreshed anim
       sourceCommandId: 'import-approved-action'
     }
   })
+  assert.deepEqual(triggerPreview, {
+    ok: true,
+    applied: true,
+    actionId: 'wave',
+    type: 'click',
+    binding: 'clickAction',
+    code: 'will_apply',
+    message: 'preview',
+    preview: 'Click trigger will set clickAction to wave.',
+    sourcePluginId: 'openpet.creator-studio',
+    sourceRunId: 'run-1',
+    sourceCommandId: 'import-approved-action'
+  })
   assert.deepEqual(deleteResult, { animations })
   assert.deepEqual(petWindowMessages.map((message) => message[0]), [
     IPC.PET_ANIMATIONS_CHANGED,
@@ -773,6 +811,14 @@ test('action mutation handlers return contract-shaped results and refreshed anim
     ['inspect', sourceDir, 'broken'],
     ['save', { defaultAction: 'idle', clickAction: 'wave' }],
     ['trigger', {
+      actionId: 'wave',
+      type: 'click',
+      binding: 'clickAction',
+      sourcePluginId: 'openpet.creator-studio',
+      sourceRunId: 'run-1',
+      sourceCommandId: 'import-approved-action'
+    }],
+    ['preview-trigger', {
       actionId: 'wave',
       type: 'click',
       binding: 'clickAction',

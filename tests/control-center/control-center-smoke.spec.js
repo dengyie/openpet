@@ -122,6 +122,8 @@ test.describe('Control Center smoke', () => {
 
     await reviewCard.locator('select').selectOption('state')
     await expect(reviewCard).toContainText('本轮保存最小规则')
+    await expect(reviewCard).toContainText('应用前预览')
+    await expect(reviewCard).toContainText('will_create_rule')
     await page.getByRole('button', { name: '创建状态规则' }).click()
 
     await expect(page.locator('.status-line')).toContainText('已确认 触发建议')
@@ -156,6 +158,7 @@ test.describe('Control Center smoke', () => {
               sourceCommandId: 'import-approved-action',
               message: 'Use Sleep when the pet enters idle focus mode.',
               status: 'pending',
+              preview: 'State trigger rule can play sleep when a host state condition matches.',
               resultCode: '',
               resultMessage: '',
               rejectionReason: '',
@@ -174,6 +177,7 @@ test.describe('Control Center smoke', () => {
               sourceCommandId: 'import-approved-action',
               message: 'Keep Wave as a click action candidate.',
               status: 'pending',
+              preview: '',
               resultCode: '',
               resultMessage: '',
               rejectionReason: '',
@@ -194,6 +198,7 @@ test.describe('Control Center smoke', () => {
     await expect(inbox).toContainText('2 条待审核')
     const sleepProposal = inbox.locator('.trigger-inbox-item', { hasText: 'Sleep' })
     await expect(sleepProposal).toContainText('待审核')
+    await expect(sleepProposal).toContainText('State trigger rule can play sleep')
     await sleepProposal.getByRole('button', { name: '接受提案' }).click()
     await expect(page.locator('.status-line')).toContainText('已接受触发提案：sleep')
     await expect(sleepProposal).toContainText('已接受')

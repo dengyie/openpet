@@ -241,7 +241,7 @@ For `full-pet`, import through the approved pet-pack import bridge.
 
 ## TODO: Host / Main UI Work
 
-- Add simulation/preview before applying non-click triggers.
+- Keep host preview output aligned with future trigger-rule editor and scheduler semantics.
 - Keep bridge route coverage for current pet/action context aligned with the plugin wizard.
 - Continue model settings UI polish on top of the implemented host model bridge.
 - Ensure API keys remain in host secret storage and are not exposed to ordinary plugins.
@@ -255,11 +255,12 @@ Completed host slice:
 - Actions UI now makes this distinction explicit: `click` is shown as an immediate `clickAction` mutation, while `random`, `state`, and `event` are shown as saved host trigger rules.
 - Creator Studio imports submit generated trigger proposals into the persistent host inbox instead of only returning them in command output.
 - Trigger-rule persistence validates that every rule references an existing imported action.
+- Actions UI shows host-generated application previews before accepting non-click proposals, including queued inbox proposals.
 
 Remaining host/main UI request:
 
-- Add simulation/preview before applying non-click triggers.
 - Add a richer trigger-rule editor/scheduler for conditions, cooldowns, priorities, and conflict resolution.
+- Add rich runtime simulation that can evaluate real scheduler timing, state predicates, and event matching before applying rules.
 - Keep final trigger persistence host-owned; plugins should continue to propose rather than directly mutate rules.
 
 ## TODO: Later Work
@@ -268,7 +269,7 @@ Remaining host/main UI request:
 - Reference image upload and current-pet reference extraction.
 - Partial regeneration for one bad action/frame range.
 - Batch full-pet generation from the same `GenerationTask` shape.
-- Trigger simulation preview before applying trigger proposals.
+- Rich trigger runtime simulation before applying trigger proposals.
 - A small prompt library with examples for common actions and pet archetypes.
 
 ## Acceptance Criteria

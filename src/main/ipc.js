@@ -14,6 +14,7 @@ const { choosePetContextMenuPoint, estimatePetContextMenuSize } = require('./pet
 const { showPetContextMenuWindow } = require('./pet-context-menu-window')
 const {
   createActionFrameImportResult,
+  createActionTriggerProposalPreviewResult,
   createActionsMutationResult,
   createAboutInfoView,
   createCatalogBlocklistResult,
@@ -990,6 +991,12 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     await actionImportService.updateActionConfig(payload)
     reloadAndSendAnimations(getPetWindow, petService)
     return createActionsMutationResult(petService.getPreviewAnimations())
+  })
+
+  ipcMainService.handle(IPC.ACTIONS_PREVIEW_TRIGGER_PROPOSAL, async (_event, payload) => {
+    if (!actionService?.previewTriggerProposal) throw new Error('Action trigger proposal preview is not available')
+    const triggerProposal = actionService.previewTriggerProposal(payload)
+    return createActionTriggerProposalPreviewResult(triggerProposal)
   })
 
   ipcMainService.handle(IPC.ACTIONS_SUBMIT_TRIGGER_PROPOSAL, async (_event, payload) => {

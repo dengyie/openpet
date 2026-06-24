@@ -307,6 +307,7 @@ export interface ActionTriggerProposalInboxItem {
   message: string
   status: ActionTriggerProposalInboxStatus
   triggerRuleId: string
+  preview: string
   resultCode: string
   resultMessage: string
   rejectionReason: string
@@ -337,6 +338,22 @@ export interface ActionTriggerProposalAcceptanceResult {
   code: 'applied' | 'no_binding_required' | 'pending_host_rule' | 'rule_created'
   message: string
   acceptedAt: string
+  triggerRule?: ActionTriggerRule
+  triggerRuleId?: string
+  preview?: string
+  sourcePluginId?: string
+  sourceRunId?: string
+  sourceCommandId?: string
+}
+
+export interface ActionTriggerProposalPreviewResult {
+  ok: boolean
+  applied: boolean
+  actionId: string
+  type: ActionTriggerProposalType
+  binding: string
+  code: 'will_apply' | 'no_binding_required' | 'will_create_rule'
+  message: string
   triggerRule?: ActionTriggerRule
   triggerRuleId?: string
   preview?: string
@@ -2374,6 +2391,7 @@ export interface ControlCenterApi {
   clearActionFrameSelection: (payload: ActionFrameClearRequest) => Promise<OkResponse>
   importActionFrames: (payload?: ActionFrameImportRequest) => Promise<ActionFrameImportResult>
   saveActionsConfig: (payload: ActionsSaveConfigRequest) => Promise<ActionsMutationResult>
+  previewActionTriggerProposal: (payload: ActionTriggerProposalAcceptanceRequest) => Promise<ActionTriggerProposalPreviewResult>
   submitActionTriggerProposal: (payload: ActionTriggerProposalAcceptanceRequest) => Promise<ActionsMutationResult>
   acceptActionTriggerProposal: (proposalId: string) => Promise<ActionsMutationResult>
   rejectActionTriggerProposal: (proposalId: string, reason?: string) => Promise<ActionsMutationResult>

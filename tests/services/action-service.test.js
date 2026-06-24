@@ -522,6 +522,48 @@ test('action service accepts review-only trigger proposals and creates host trig
   assert.equal(service.getConfig().triggerRules[0].id, state.triggerRuleId)
 })
 
+test('action service previews non-click trigger proposals without persisting rules', () => {
+  let savedConfig = null
+  const service = createActionService({
+    projectRoot: '/app/openpet',
+    loadLegacyAnimations: () => ({
+      defaultAction: 'idle',
+      clickAction: 'idle',
+      actions: [
+        { id: 'idle', label: 'Idle', kind: 'idle', loop: true, frameCount: 1, frameMs: 100, frameWidth: 32, frameHeight: 32, sprite: 'cat_anime/sprites/idle.png' },
+        { id: 'wave', label: 'Wave', kind: 'greeting', loop: false, frameCount: 1, frameMs: 100, frameWidth: 32, frameHeight: 32, sprite: 'cat_anime/sprites/wave.png' }
+      ]
+    }),
+    saveLegacyAnimations: (config) => {
+      savedConfig = config
+      return config
+    },
+    now: () => '2026-06-22T10:02:00.000Z'
+  })
+
+  const preview = service.previewTriggerProposal({
+    actionId: 'wave',
+    type: 'state',
+    notes: 'Play when the pet looks idle.'
+  })
+
+  assert.equal(preview.ok, true)
+  assert.equal(preview.applied, false)
+  assert.equal(preview.actionId, 'wave')
+  assert.equal(preview.type, 'state')
+  assert.equal(preview.code, 'will_create_rule')
+  assert.equal(preview.triggerRuleId, 'preview:state:wave')
+  assert.equal(preview.triggerRule.id, 'preview:state:wave')
+  assert.equal(preview.message, 'Preview: a host trigger rule would be created for action: wave')
+  assert.match(preview.preview, /State trigger rule can play wave/)
+  assert.equal(savedConfig, null)
+  assert.equal(service.getConfig().triggerRules.length, 0)
+  assert.throws(
+    () => service.previewTriggerProposal({ actionId: 'wave', type: 'click', binding: 'defaultAction' }),
+    /Unsupported click trigger binding/
+  )
+})
+
 test('action service persists trigger proposals through inbox submit and accept', () => {
   let savedConfig = null
   const service = createActionService({
@@ -585,6 +627,31 @@ test('action service persists trigger proposals through inbox submit and accept'
   assert.equal(savedConfig.clickAction, 'wave')
   assert.equal(savedConfig.triggerProposalInbox[0].status, 'applied')
   assert.equal(service.getConfig().triggerProposalInbox[0].status, 'applied')
+})
+
+test('action service stores preview text on submitted non-click trigger proposals', () => {
+  const service = createActionService({
+    projectRoot: '/app/openpet',
+    loadLegacyAnimations: () => ({
+      defaultAction: 'idle',
+      clickAction: 'idle',
+      actions: [
+        { id: 'idle', label: 'Idle', kind: 'idle', loop: true, frameCount: 1, frameMs: 100, frameWidth: 32, frameHeight: 32, sprite: 'cat_anime/sprites/idle.png' },
+        { id: 'wave', label: 'Wave', kind: 'greeting', loop: false, frameCount: 1, frameMs: 100, frameWidth: 32, frameHeight: 32, sprite: 'cat_anime/sprites/wave.png' }
+      ]
+    }),
+    saveLegacyAnimations: (config) => config,
+    now: () => '2026-06-22T10:02:30.000Z'
+  })
+
+  const submitted = service.submitTriggerProposal({
+    actionId: 'wave',
+    type: 'state',
+    message: 'Play when the pet looks idle.'
+  })
+
+  assert.equal(submitted.proposal.preview, 'State trigger rule can play wave when a host state condition matches.')
+  assert.equal(service.getConfig().triggerProposalInbox[0].preview, submitted.proposal.preview)
 })
 
 test('action service persists host trigger rules and rejected inbox proposals', () => {

@@ -43,6 +43,7 @@ export const IPC = Object.freeze({
   ACTIONS_CLEAR_FRAME_SELECTION: 'actions:clear-frame-selection',
   ACTIONS_IMPORT_FRAMES: 'actions:import-frames',
   ACTIONS_SAVE_CONFIG: 'actions:save-config',
+  ACTIONS_PREVIEW_TRIGGER_PROPOSAL: 'actions:preview-trigger-proposal',
   ACTIONS_SUBMIT_TRIGGER_PROPOSAL: 'actions:submit-trigger-proposal',
   ACTIONS_ACCEPT_TRIGGER_PROPOSAL: 'actions:accept-trigger-proposal',
   ACTIONS_REJECT_TRIGGER_PROPOSAL: 'actions:reject-trigger-proposal',

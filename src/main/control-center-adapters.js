@@ -24,6 +24,7 @@ const DEFAULT_LOOPBACK_HOST = '127.0.0.1'
 const TRIGGER_PROPOSAL_TYPES = new Set(['manual', 'click', 'random', 'state', 'event', 'unbound'])
 const TRIGGER_PROPOSAL_STATUSES = new Set(['pending', 'accepted', 'rejected', 'applied', 'pending-host-rule'])
 const TRIGGER_PROPOSAL_RESULT_CODES = new Set(['applied', 'no_binding_required', 'pending_host_rule', 'rule_created'])
+const TRIGGER_PROPOSAL_PREVIEW_CODES = new Set(['will_apply', 'no_binding_required', 'will_create_rule'])
 const TRIGGER_RULE_TYPES = new Set(['random', 'state', 'event'])
 const TRIGGER_RULE_STATUSES = new Set(['active', 'disabled'])
 
@@ -177,6 +178,7 @@ const createTriggerProposalInboxItem = (proposal = {}) => ({
   message: typeof proposal.message === 'string' ? proposal.message : '',
   status: typeof proposal.status === 'string' && TRIGGER_PROPOSAL_STATUSES.has(proposal.status) ? proposal.status : 'pending',
   triggerRuleId: typeof proposal.triggerRuleId === 'string' ? proposal.triggerRuleId : '',
+  preview: typeof proposal.preview === 'string' ? proposal.preview : '',
   resultCode: typeof proposal.resultCode === 'string' ? proposal.resultCode : '',
   resultMessage: typeof proposal.resultMessage === 'string' ? proposal.resultMessage : '',
   rejectionReason: typeof proposal.rejectionReason === 'string' ? proposal.rejectionReason : '',
@@ -184,6 +186,26 @@ const createTriggerProposalInboxItem = (proposal = {}) => ({
   updatedAt: typeof proposal.updatedAt === 'string' ? proposal.updatedAt : '',
   acceptedAt: typeof proposal.acceptedAt === 'string' ? proposal.acceptedAt : '',
   rejectedAt: typeof proposal.rejectedAt === 'string' ? proposal.rejectedAt : ''
+})
+
+/**
+ * @param {Partial<import('../shared/openpet-contracts').ActionTriggerProposalPreviewResult>} proposal
+ * @returns {import('../shared/openpet-contracts').ActionTriggerProposalPreviewResult}
+ */
+const createActionTriggerProposalPreviewResult = (proposal = {}) => ({
+  ok: Boolean(proposal.ok),
+  applied: Boolean(proposal.applied),
+  actionId: typeof proposal.actionId === 'string' ? proposal.actionId : '',
+  type: typeof proposal.type === 'string' && TRIGGER_PROPOSAL_TYPES.has(proposal.type) ? proposal.type : 'unbound',
+  binding: typeof proposal.binding === 'string' ? proposal.binding : '',
+  code: typeof proposal.code === 'string' && TRIGGER_PROPOSAL_PREVIEW_CODES.has(proposal.code) ? proposal.code : 'no_binding_required',
+  message: typeof proposal.message === 'string' ? proposal.message : '',
+  ...(proposal.triggerRule !== undefined ? { triggerRule: createTriggerRuleItem(proposal.triggerRule) } : {}),
+  ...(typeof proposal.triggerRuleId === 'string' ? { triggerRuleId: proposal.triggerRuleId } : {}),
+  ...(typeof proposal.preview === 'string' ? { preview: proposal.preview } : {}),
+  ...(typeof proposal.sourcePluginId === 'string' ? { sourcePluginId: proposal.sourcePluginId } : {}),
+  ...(typeof proposal.sourceRunId === 'string' ? { sourceRunId: proposal.sourceRunId } : {}),
+  ...(typeof proposal.sourceCommandId === 'string' ? { sourceCommandId: proposal.sourceCommandId } : {})
 })
 
 /**
@@ -246,6 +268,7 @@ const createUpdateCheckView = (result = {}) => ({
 
 module.exports = {
   createActionFrameImportResult,
+  createActionTriggerProposalPreviewResult,
   createActionsMutationResult,
   createAboutInfoView,
   createAboutUpdateInfo,

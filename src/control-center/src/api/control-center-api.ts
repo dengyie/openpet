@@ -6,6 +6,7 @@ import type {
   ActionFrameImportRequest,
   ActionFrameReinspectRequest,
   ActionTriggerProposalInboxStatus,
+  ActionTriggerProposalType,
   ActionsConfigViewState,
   AiChatRequest,
   AiConfigViewState,
@@ -925,6 +926,64 @@ const getActiveDemoPetPack = (): PetPackSummary | undefined => (
   demoState.petPacks.packs.find((pack) => pack.id === demoState.petPacks.activePackId)
 )
 
+const createDemoTriggerPreviewText = (type = '', actionId = '') => {
+  if (type === 'random') return `Random trigger rule can play ${actionId} from the host scheduler.`
+  if (type === 'state') return `State trigger rule can play ${actionId} when a host state condition matches.`
+  if (type === 'event') return `Event trigger rule can play ${actionId} when a host-owned event is received.`
+  if (type === 'click') return `Click trigger will set clickAction to ${actionId}.`
+  if (type === 'manual') return `Manual trigger keeps ${actionId} available from host UI without automatic scheduling.`
+  return `Unbound trigger keeps ${actionId} imported without automatic scheduling.`
+}
+
+const createDemoTriggerProposalPreview = (proposal: {
+  id?: string
+  actionId?: string
+  type?: ActionTriggerProposalType
+  binding?: string
+  sourcePluginId?: string
+  sourceRunId?: string
+  sourceCommandId?: string
+}) => {
+  const actionId = proposal.actionId || ''
+  const type = proposal.type || 'unbound'
+  const isRule = ['random', 'state', 'event'].includes(type)
+  const triggerRuleId = isRule ? `preview:${type}:${actionId}` : undefined
+  const triggerRule = isRule
+    ? {
+        id: triggerRuleId || '',
+        actionId,
+        type: type as 'random' | 'state' | 'event',
+        status: 'active' as const,
+        sourceProposalId: proposal.id || '',
+        sourcePluginId: proposal.sourcePluginId || '',
+        sourceRunId: proposal.sourceRunId || '',
+        sourceCommandId: proposal.sourceCommandId || '',
+        message: '',
+        preview: createDemoTriggerPreviewText(type, actionId),
+        createdAt: '2026-06-22T00:00:00.000Z',
+        updatedAt: '2026-06-22T00:00:00.000Z'
+      }
+    : undefined
+  return {
+    ok: true,
+    applied: type === 'click',
+    actionId,
+    type,
+    binding: type === 'click' ? (proposal.binding || 'clickAction') : '',
+    code: type === 'click' ? 'will_apply' as const : (isRule ? 'will_create_rule' as const : 'no_binding_required' as const),
+    message: isRule
+      ? `Preview: a host trigger rule would be created for action: ${actionId}`
+      : (type === 'click'
+          ? `Preview: clickAction would use action: ${actionId}`
+          : `Preview: action trigger proposal does not require an automatic binding: ${actionId}`),
+    ...(triggerRule ? { triggerRule, triggerRuleId } : {}),
+    preview: createDemoTriggerPreviewText(type, actionId),
+    sourcePluginId: proposal.sourcePluginId,
+    sourceRunId: proposal.sourceRunId,
+    sourceCommandId: proposal.sourceCommandId
+  }
+}
+
 const markDemoCatalogItemInstalled = (selection: CatalogInstallSelection): CatalogState => {
   const collectionKey = selection.kind === 'plugin' ? 'plugins' : 'petPacks'
   demoState.catalog = cloneCatalog({
@@ -1051,7 +1110,9 @@ const demoApi: ControlCenterApi = {
         : {})
     }
   },
+  previewActionTriggerProposal: async (proposal) => createDemoTriggerProposalPreview(proposal),
   submitActionTriggerProposal: async (proposal) => {
+    const preview = createDemoTriggerProposalPreview(proposal)
     const id = proposal.id || `demo-proposal-${Date.now()}`
     const item = {
       id,
@@ -1064,6 +1125,7 @@ const demoApi: ControlCenterApi = {
       message: proposal.message || proposal.notes || '',
       status: 'pending' as const,
       triggerRuleId: '',
+      preview: preview.preview || '',
       resultCode: '',
       resultMessage: '',
       rejectionReason: '',

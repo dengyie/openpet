@@ -79,7 +79,7 @@ Completed since this plan was written:
 Remaining production TODO:
 - Add real provider smoke coverage for configured `cloud` and `local` providers, without claiming visual quality automatically.
 - Add Electron/Control Center E2E coverage for the Creator Studio plugin entry and dashboard click flow.
-- Add simulation/preview and richer editor semantics for non-click trigger rules after the durable `random` / `state` / `event` persistence slice.
+- Add richer editor semantics and runtime scheduler simulation for non-click trigger rules after the host preview slice.
 
 ## File Structure
 
@@ -652,7 +652,7 @@ Required host capabilities:
 - Reference image upload and current-pet visual reference extraction.
 - Full-pet generation using the same `GenerationTask` contract.
 - Partial regeneration for one bad action or frame range.
-- Trigger simulation preview before applying trigger proposals.
+- Rich trigger runtime simulation before applying trigger proposals.
 - Prompt examples for common pets and actions.
 - Packaged-app smoke for real dashboard interaction and native import picker paths.
 

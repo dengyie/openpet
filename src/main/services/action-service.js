@@ -209,6 +209,7 @@ const normalizeTriggerProposalInboxItem = (item = {}) => {
     message: normalizeOptionalText(item.message),
     status,
     triggerRuleId: normalizeOptionalText(item.triggerRuleId),
+    preview: normalizeOptionalText(item.preview),
     resultCode: normalizeOptionalText(item.resultCode),
     resultMessage: normalizeOptionalText(item.resultMessage),
     rejectionReason: normalizeOptionalText(item.rejectionReason),
@@ -491,6 +492,78 @@ const createActionService = ({ petPackService, loadPetPack, loadLegacyAnimations
     throw new Error(`Unsupported trigger proposal type: ${type}`)
   }
 
+  const previewTriggerProposal = (proposal = {}) => {
+    const actionId = normalizeActionId(proposal.actionId, 'trigger proposal action id')
+    const type = String(proposal.type || '')
+    if (!TRIGGER_PROPOSAL_TYPES.has(type)) {
+      throw new Error(`Unsupported trigger proposal type: ${type || 'unknown'}`)
+    }
+    const current = getMutableConfig()
+    if (!current.actions.some((action) => action.id === actionId)) {
+      throw new Error(`Trigger proposal action does not exist: ${actionId}`)
+    }
+    const baseResult = {
+      ok: true,
+      applied: false,
+      actionId,
+      type,
+      binding: type === 'click' ? (proposal.binding || 'clickAction') : '',
+      sourcePluginId: normalizeOptionalText(proposal.sourcePluginId),
+      sourceRunId: normalizeOptionalText(proposal.sourceRunId),
+      sourceCommandId: normalizeOptionalText(proposal.sourceCommandId)
+    }
+    if (type === 'click') {
+      const binding = proposal.binding || 'clickAction'
+      if (binding !== 'clickAction') {
+        throw new Error(`Unsupported click trigger binding: ${binding}`)
+      }
+      return {
+        ...baseResult,
+        applied: true,
+        binding: 'clickAction',
+        code: 'will_apply',
+        message: `Preview: clickAction would use action: ${actionId}`,
+        preview: `Click trigger will set clickAction to ${actionId}.`
+      }
+    }
+    if (type === 'manual' || type === 'unbound') {
+      return {
+        ...baseResult,
+        code: 'no_binding_required',
+        message: type === 'manual'
+          ? `Preview: manual action would stay available without changing trigger bindings: ${actionId}`
+          : `Preview: action would remain imported without an automatic trigger: ${actionId}`,
+        preview: type === 'manual'
+          ? `Manual trigger keeps ${actionId} available from host UI without automatic scheduling.`
+          : `Unbound trigger keeps ${actionId} imported without automatic scheduling.`
+      }
+    }
+    if (HOST_RULE_REQUIRED_TYPES.has(type)) {
+      const preview = createTriggerRulePreview({ type, actionId })
+      const rule = normalizeTriggerRuleItem({
+        id: `preview:${type}:${actionId}`,
+        actionId,
+        type,
+        status: 'active',
+        sourceProposalId: proposal.id,
+        sourcePluginId: proposal.sourcePluginId,
+        sourceRunId: proposal.sourceRunId,
+        sourceCommandId: proposal.sourceCommandId,
+        message: proposal.notes || proposal.message,
+        preview
+      })
+      return {
+        ...baseResult,
+        code: 'will_create_rule',
+        message: `Preview: a host trigger rule would be created for action: ${actionId}`,
+        triggerRule: rule,
+        triggerRuleId: rule.id,
+        preview
+      }
+    }
+    throw new Error(`Unsupported trigger proposal type: ${type}`)
+  }
+
   const createTriggerProposalId = (inbox, type, actionId) => {
     const createdAt = now().replace(/[^a-zA-Z0-9]/g, '').slice(0, 20) || 'now'
     const baseId = `proposal:${type}:${actionId}:${createdAt}`
@@ -530,6 +603,9 @@ const createActionService = ({ petPackService, loadPetPack, loadLegacyAnimations
       sourceCommandId: payload.sourceCommandId,
       message: payload.message || payload.notes,
       status: 'pending',
+      preview: HOST_RULE_REQUIRED_TYPES.has(type)
+        ? createTriggerRulePreview({ type, actionId })
+        : '',
       createdAt: now(),
       updatedAt: now()
     })
@@ -624,6 +700,7 @@ const createActionService = ({ petPackService, loadPetPack, loadLegacyAnimations
     validateCreatorActionMutation,
     applyCreatorActionMutation,
     acceptTriggerProposal,
+    previewTriggerProposal,
     submitTriggerProposal,
     acceptTriggerProposalItem,
     rejectTriggerProposalItem

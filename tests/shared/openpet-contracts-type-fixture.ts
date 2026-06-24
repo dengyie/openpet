@@ -1,4 +1,5 @@
 import type {
+  ActionTriggerProposalPreviewResult,
   ControlCenterSettings,
   CatalogInstallSelection,
   CreatorActionsMutationResult,
@@ -202,6 +203,32 @@ const creatorActionsMutationFixture = {
     ]
   }
 } satisfies CreatorActionsMutationResult
+
+const triggerProposalPreviewFixture = {
+  ok: true,
+  applied: false,
+  actionId: 'wave',
+  type: 'state',
+  binding: '',
+  code: 'will_create_rule',
+  message: 'Preview: a host trigger rule would be created for action: wave',
+  triggerRuleId: 'preview:state:wave',
+  preview: 'State trigger rule can play wave when a host state condition matches.',
+  triggerRule: {
+    id: 'preview:state:wave',
+    actionId: 'wave',
+    type: 'state',
+    status: 'active',
+    sourceProposalId: 'proposal:state:wave:test',
+    sourcePluginId: 'openpet.creator-studio',
+    sourceRunId: 'run-1',
+    sourceCommandId: 'import-approved-action',
+    message: 'Play when idle.',
+    preview: 'State trigger rule can play wave when a host state condition matches.',
+    createdAt: '2026-06-22T10:00:00.000Z',
+    updatedAt: '2026-06-22T10:00:00.000Z'
+  }
+} satisfies ActionTriggerProposalPreviewResult
 
 const creatorAssetsInspectFramesRequestFixture = {
   relativePath: 'assets/actions/wave',

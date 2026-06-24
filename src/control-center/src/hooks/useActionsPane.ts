@@ -4,6 +4,7 @@ import { cloneActionsConfig, clonePetPacks, defaultActionsConfig, defaultPetPack
 import { messageFromError } from '../lib/errors'
 import type {
   ActionTriggerProposalAcceptanceResult,
+  ActionTriggerProposalPreviewResult,
   ActionTriggerProposalType,
   ActionsConfigViewState,
   CompletedActionFrameInspectionResult,
@@ -22,6 +23,7 @@ export function useActionsPane() {
   const [importInspection, setImportInspection] = useState<CompletedActionFrameInspectionResult | null>(null)
   const [triggerProposalType, setTriggerProposalType] = useState<ActionTriggerProposalType>('click')
   const [triggerProposalNotes, setTriggerProposalNotes] = useState('')
+  const [triggerProposalPreview, setTriggerProposalPreview] = useState<ActionTriggerProposalPreviewResult | null>(null)
   const [lastTriggerProposalResult, setLastTriggerProposalResult] = useState<ActionTriggerProposalAcceptanceResult | null>(null)
   const [status, setStatus] = useState('')
   const [working, setWorking] = useState(false)
@@ -48,6 +50,26 @@ export function useActionsPane() {
     if (actionsConfig.actions.some((action) => action.id === selectedActionId)) return
     setSelectedActionId(actionsConfig.defaultAction || actionsConfig.actions[0]?.id || '')
   }, [actionsConfig, selectedActionId])
+
+  useEffect(() => {
+    const actionId = selectedActionId || actionsConfig.defaultAction || actionsConfig.actions[0]?.id || ''
+    if (!actionId) {
+      setTriggerProposalPreview(null)
+      return undefined
+    }
+    let canceled = false
+    api.previewActionTriggerProposal({
+      actionId,
+      type: triggerProposalType,
+      binding: triggerProposalType === 'click' ? 'clickAction' : undefined,
+      notes: triggerProposalNotes.trim() || undefined
+    }).then((preview) => {
+      if (!canceled) setTriggerProposalPreview(preview)
+    }).catch(() => {
+      if (!canceled) setTriggerProposalPreview(null)
+    })
+    return () => { canceled = true }
+  }, [actionsConfig, selectedActionId, triggerProposalType, triggerProposalNotes])
 
   const onChangeImportDraft = (partial: Partial<ActionImportDraft>, clearInspection = false) => {
     setImportDraft({ ...importDraft, ...partial })
@@ -379,6 +401,7 @@ export function useActionsPane() {
     setTriggerProposalType: onChangeTriggerProposalType,
     triggerProposalNotes,
     setTriggerProposalNotes: onChangeTriggerProposalNotes,
+    triggerProposalPreview,
     lastTriggerProposalResult
   } satisfies ActionsPaneProps
 
