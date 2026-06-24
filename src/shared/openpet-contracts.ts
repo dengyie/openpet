@@ -273,10 +273,28 @@ export interface ActionsConfigViewState {
   clickAction: string
   actions: ActionEntry[]
   triggerProposalInbox: ActionTriggerProposalInboxItem[]
+  triggerRules: ActionTriggerRule[]
 }
 
 export type ActionTriggerProposalType = 'manual' | 'click' | 'random' | 'state' | 'event' | 'unbound'
 export type ActionTriggerProposalInboxStatus = 'pending' | 'accepted' | 'rejected' | 'applied' | 'pending-host-rule'
+export type ActionTriggerRuleType = 'random' | 'state' | 'event'
+export type ActionTriggerRuleStatus = 'active' | 'disabled'
+
+export interface ActionTriggerRule {
+  id: string
+  actionId: string
+  type: ActionTriggerRuleType
+  status: ActionTriggerRuleStatus
+  sourceProposalId: string
+  sourcePluginId: string
+  sourceRunId: string
+  sourceCommandId: string
+  message: string
+  preview: string
+  createdAt: string
+  updatedAt: string
+}
 
 export interface ActionTriggerProposalInboxItem {
   id: string
@@ -288,6 +306,7 @@ export interface ActionTriggerProposalInboxItem {
   sourceCommandId: string
   message: string
   status: ActionTriggerProposalInboxStatus
+  triggerRuleId: string
   resultCode: string
   resultMessage: string
   rejectionReason: string
@@ -315,9 +334,12 @@ export interface ActionTriggerProposalAcceptanceResult {
   actionId: string
   type: ActionTriggerProposalType
   binding: string
-  code: 'applied' | 'no_binding_required' | 'pending_host_rule'
+  code: 'applied' | 'no_binding_required' | 'pending_host_rule' | 'rule_created'
   message: string
   acceptedAt: string
+  triggerRule?: ActionTriggerRule
+  triggerRuleId?: string
+  preview?: string
   sourcePluginId?: string
   sourceRunId?: string
   sourceCommandId?: string

@@ -20,6 +20,7 @@ test('action service returns legacy animation config as runtime actions', () => 
     defaultAction: 'idle',
     clickAction: 'eat',
     triggerProposalInbox: [],
+    triggerRules: [],
     actions: [
       {
         id: 'idle',
@@ -72,6 +73,7 @@ test('action service can expose the normalized pet pack while preserving animati
     defaultAction: 'idle',
     clickAction: 'eat',
     triggerProposalInbox: [],
+    triggerRules: [],
     actions: [
       { id: 'idle', sprite: 'file:///packs/cat/sprites/idle.png' },
       { id: 'eat', sprite: 'file:///packs/cat/sprites/eat.png' }
@@ -455,7 +457,7 @@ test('action service accepts click trigger proposals by applying clickAction', (
   assert.equal(service.getConfig().clickAction, 'wave')
 })
 
-test('action service accepts review-only trigger proposals without mutating action bindings', () => {
+test('action service accepts review-only trigger proposals and creates host trigger rules', () => {
   let savedConfig = null
   const service = createActionService({
     projectRoot: '/app/openpet',
@@ -505,11 +507,19 @@ test('action service accepts review-only trigger proposals without mutating acti
   assert.equal(manual.applied, false)
   assert.equal(manual.code, 'no_binding_required')
   assert.equal(state.applied, false)
-  assert.equal(state.code, 'pending_host_rule')
+  assert.equal(state.code, 'rule_created')
+  assert.equal(state.triggerRule.actionId, 'wave')
+  assert.equal(state.triggerRule.type, 'state')
+  assert.equal(state.triggerRule.status, 'active')
+  assert.equal(state.triggerRule.sourcePluginId, '')
+  assert.equal(state.triggerRule.sourceRunId.length, 160)
+  assert.equal(state.triggerRuleId, 'rule:state:wave:20260622T100100000Z')
+  assert.match(state.preview, /State trigger rule can play wave/)
   assert.equal(state.sourcePluginId, '')
   assert.equal(state.sourceRunId.length, 160)
-  assert.equal(savedConfig, null)
+  assert.equal(savedConfig.triggerRules.length, 1)
   assert.equal(service.getConfig().clickAction, 'idle')
+  assert.equal(service.getConfig().triggerRules[0].id, state.triggerRuleId)
 })
 
 test('action service persists trigger proposals through inbox submit and accept', () => {
@@ -577,7 +587,7 @@ test('action service persists trigger proposals through inbox submit and accept'
   assert.equal(service.getConfig().triggerProposalInbox[0].status, 'applied')
 })
 
-test('action service persists pending-host-rule and rejected inbox proposals', () => {
+test('action service persists host trigger rules and rejected inbox proposals', () => {
   let savedConfig = null
   const service = createActionService({
     projectRoot: '/app/openpet',
@@ -632,14 +642,20 @@ test('action service persists pending-host-rule and rejected inbox proposals', (
   const rejected = service.rejectTriggerProposalItem(randomProposal.proposal.id, 'Not for this pet.')
 
   assert.equal(accepted.triggerProposal.applied, false)
-  assert.equal(accepted.triggerProposal.code, 'pending_host_rule')
-  assert.equal(accepted.proposal.status, 'pending-host-rule')
+  assert.equal(accepted.triggerProposal.code, 'rule_created')
+  assert.equal(accepted.proposal.status, 'accepted')
+  assert.equal(accepted.proposal.triggerRuleId, 'rule:state:wave:20260622T100300000Z')
+  assert.equal(accepted.triggerProposal.triggerRule.actionId, 'wave')
+  assert.equal(accepted.triggerProposal.triggerRule.type, 'state')
+  assert.equal(accepted.triggerProposal.triggerRule.sourceProposalId, 'proposal:state:wave:test')
   assert.equal(rejected.proposal.status, 'rejected')
   assert.equal(rejected.proposal.rejectionReason, 'Not for this pet.')
   assert.equal(savedConfig.clickAction, 'idle')
+  assert.equal(savedConfig.triggerRules.length, 1)
+  assert.equal(savedConfig.triggerRules[0].id, accepted.proposal.triggerRuleId)
   assert.deepEqual(
     savedConfig.triggerProposalInbox.map((proposal) => proposal.status),
-    ['pending-host-rule', 'rejected']
+    ['accepted', 'rejected']
   )
 })
 

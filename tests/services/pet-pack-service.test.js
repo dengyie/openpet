@@ -542,6 +542,9 @@ test('pet pack service updates the active installed pack manifest action fields'
     actions: [
       { id: 'idle', label: 'Idle', kind: 'idle', sprite: 'sprites/idle.png', frameCount: 1, frameMs: 100, frameWidth: 32, frameHeight: 32 },
       { id: 'wave', label: 'Wave Updated', kind: 'greeting', sprite: 'sprites/wave.png', frameCount: 1, frameMs: 100, frameWidth: 32, frameHeight: 32 }
+    ],
+    triggerRules: [
+      { id: 'rule:state:wave:test', actionId: 'wave', type: 'state', status: 'active' }
     ]
   })
 
@@ -551,6 +554,7 @@ test('pet pack service updates the active installed pack manifest action fields'
   assert.equal(updated.defaultAction, 'wave')
   assert.equal(persisted.clickAction, 'wave')
   assert.equal(persisted.actions.find((action) => action.id === 'wave').label, 'Wave Updated')
+  assert.equal(persisted.triggerRules[0].actionId, 'wave')
 })
 
 test('pet pack service reads validates and applies creator pack manifest metadata for the active installed pack', () => {

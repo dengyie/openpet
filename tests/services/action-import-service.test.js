@@ -142,6 +142,13 @@ test('action import service preserves trigger proposal inbox while regenerating 
       actionId: 'wave',
       type: 'click',
       status: 'pending'
+    }],
+    triggerRules: [{
+      id: 'rule:state:wave:test',
+      actionId: 'wave',
+      type: 'state',
+      status: 'active',
+      preview: 'State trigger rule can play wave.'
     }]
   }, null, 2)}\n`, 'utf-8')
 
@@ -151,7 +158,9 @@ test('action import service preserves trigger proposal inbox while regenerating 
   })
 
   assert.equal(result.triggerProposalInbox[0].id, 'proposal:click:wave:test')
+  assert.equal(result.triggerRules[0].id, 'rule:state:wave:test')
   assert.equal(JSON.parse(fs.readFileSync(configPath, 'utf-8')).triggerProposalInbox[0].actionId, 'wave')
+  assert.equal(JSON.parse(fs.readFileSync(configPath, 'utf-8')).triggerRules[0].actionId, 'wave')
 })
 
 test('action import service preserves custom labels after regenerating config', async () => {
@@ -172,6 +181,45 @@ test('action import service preserves custom labels after regenerating config', 
   assert.equal(JSON.parse(fs.readFileSync(configPath, 'utf-8')).actions[0].label, '挥手')
 })
 
+test('action import service preserves host trigger metadata during final import', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-action-import-trigger-metadata-'))
+  const sourceDir = path.join(root, 'source-jump')
+  const framesRoot = path.join(root, 'cat_anime', 'flames')
+  const spritesDir = path.join(root, 'cat_anime', 'sprites')
+  const configPath = path.join(root, 'cat_anime', 'animations.json')
+  fs.mkdirSync(sourceDir, { recursive: true })
+  await createFrame(path.join(sourceDir, '01_no_bg.png'))
+  await createFrame(path.join(sourceDir, '02_no_bg.png'))
+  await createActionFolder(framesRoot, 'idle')
+  await createActionFolder(framesRoot, 'wave')
+  const service = createActionImportService({ framesRoot, spritesDir, configPath })
+  await service.regenerate()
+  const current = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
+  fs.writeFileSync(configPath, `${JSON.stringify({
+    ...current,
+    triggerProposalInbox: [{
+      id: 'proposal:state:wave:test',
+      actionId: 'wave',
+      type: 'state',
+      status: 'pending'
+    }],
+    triggerRules: [{
+      id: 'rule:state:wave:test',
+      actionId: 'wave',
+      type: 'state',
+      status: 'active'
+    }]
+  }, null, 2)}\n`, 'utf-8')
+
+  const result = await service.importActionFrames({ sourceDir, actionId: 'jump', label: '跳跃' })
+
+  assert.equal(result.importedAction.id, 'jump')
+  assert.equal(result.triggerProposalInbox[0].id, 'proposal:state:wave:test')
+  assert.equal(result.triggerRules[0].id, 'rule:state:wave:test')
+  const persisted = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
+  assert.equal(persisted.triggerRules[0].actionId, 'wave')
+})
+
 test('action import service deletes an action and regenerates config', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-action-delete-'))
   const framesRoot = path.join(root, 'cat_anime', 'flames')
@@ -189,6 +237,33 @@ test('action import service deletes an action and regenerates config', async () 
   assert.deepEqual(result.actions.map((action) => action.id), ['idle'])
   assert.equal(result.defaultAction, 'idle')
   assert.equal(result.clickAction, 'idle')
+})
+
+test('action import service prunes trigger rules for deleted actions during regeneration', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-action-delete-trigger-rule-'))
+  const framesRoot = path.join(root, 'cat_anime', 'flames')
+  const spritesDir = path.join(root, 'cat_anime', 'sprites')
+  const configPath = path.join(root, 'cat_anime', 'animations.json')
+  await createActionFolder(framesRoot, 'idle')
+  await createActionFolder(framesRoot, 'wave')
+  const service = createActionImportService({ framesRoot, spritesDir, configPath })
+  await service.regenerate()
+  const current = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
+  fs.writeFileSync(configPath, `${JSON.stringify({
+    ...current,
+    triggerRules: [{
+      id: 'rule:state:wave:test',
+      actionId: 'wave',
+      type: 'state',
+      status: 'active'
+    }]
+  }, null, 2)}\n`, 'utf-8')
+
+  const result = await service.deleteAction('wave')
+
+  assert.deepEqual(result.actions.map((action) => action.id), ['idle'])
+  assert.equal(result.triggerRules, undefined)
+  assert.equal(JSON.parse(fs.readFileSync(configPath, 'utf-8')).triggerRules, undefined)
 })
 
 test('action import service refuses to delete the last valid action', async () => {

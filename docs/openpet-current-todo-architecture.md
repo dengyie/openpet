@@ -44,7 +44,7 @@ Current P0 status: no known startup/build blocker in this TODO pass. The highest
 - AI Talk core exists: `AiTalkService`, `AiTalkStore`, pet-pack `persona`, local persona override, generated persona draft, pet-pack isolated main conversations, background memory extraction, memory profile UI, delete memory, and clear current pet-pack memories.
 - Desktop chat window exists and routes through the same pet chat state/AI Talk flow instead of introducing a separate product brain.
 - Creator Studio already has `GenerationTask`, deterministic `conversation-wizard`, task answer/confirm commands, `openpet-prompt-builder`, host model bridge, run persistence, QA artifacts, dashboard display, and action import command paths.
-- Action trigger review exists for the manually selected action path: `click` can update `clickAction`; `manual` and `unbound` are acknowledged; `random`, `state`, and `event` remain pending host-rule work.
+- Action trigger review exists for the manually selected action path: `click` can update `clickAction`; `manual` and `unbound` are acknowledged; `random`, `state`, and `event` create host-owned durable trigger rules.
 - Trigger proposal inbox now has a host-owned service/API/UI closed loop: proposals can be submitted, persisted, accepted, rejected, preserved through action regeneration, and reviewed from the Actions pane.
 - Creator Studio approved single-action imports now submit their generated `triggerProposal` into the host-owned trigger proposal inbox through the narrow `trigger-proposals:write` creator-tools bridge permission after action frames are imported; the plugin still does not directly apply trigger rules.
 
@@ -122,18 +122,19 @@ Current state:
 
 - Manual trigger review card can apply `click` to `clickAction`.
 - `manual` and `unbound` proposals are acknowledged without mutating bindings.
-- `random`, `state`, and `event` proposals return pending-host-rule semantics.
+- `random`, `state`, and `event` proposals create active host-owned durable trigger rules with preview text.
 - `triggerProposalInbox` is part of the action config view state and host service contract.
+- `triggerRules` is part of the action config view state, active pet-pack manifest, legacy animation config, and Control Center demo contract.
 - `ActionService.submitTriggerProposal`, `acceptTriggerProposalItem`, and `rejectTriggerProposalItem` persist proposal status: pending, accepted, rejected, applied, or pending-host-rule.
+- Trigger-rule persistence validates that every rule references an existing imported action and survives action regeneration.
 - Control Center Actions pane shows a trigger proposal inbox and can accept/reject queued proposals.
-- Legacy action regeneration preserves the trigger proposal inbox.
+- Control Center Actions pane shows saved host trigger rules for non-click proposal types.
+- Legacy action regeneration preserves the trigger proposal inbox and trigger rules.
 
 P1 work:
 
-- Define durable trigger-rule schema for `random`, `state`, and `event`.
-- Add validation that every trigger rule references an existing imported action.
 - Add simulation/preview before applying non-click triggers.
-- Keep Creator Studio-trigger proposal handoff aligned with future durable trigger-rule schema changes.
+- Keep Creator Studio-trigger proposal handoff aligned with future trigger-rule editor and scheduler semantics.
 
 P2/P3:
 

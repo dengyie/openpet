@@ -23,7 +23,9 @@
 const DEFAULT_LOOPBACK_HOST = '127.0.0.1'
 const TRIGGER_PROPOSAL_TYPES = new Set(['manual', 'click', 'random', 'state', 'event', 'unbound'])
 const TRIGGER_PROPOSAL_STATUSES = new Set(['pending', 'accepted', 'rejected', 'applied', 'pending-host-rule'])
-const TRIGGER_PROPOSAL_RESULT_CODES = new Set(['applied', 'no_binding_required', 'pending_host_rule'])
+const TRIGGER_PROPOSAL_RESULT_CODES = new Set(['applied', 'no_binding_required', 'pending_host_rule', 'rule_created'])
+const TRIGGER_RULE_TYPES = new Set(['random', 'state', 'event'])
+const TRIGGER_RULE_STATUSES = new Set(['active', 'disabled'])
 
 /**
  * @param {unknown} value
@@ -133,9 +135,31 @@ const createTriggerProposalAcceptanceResult = (proposal = {}) => ({
   code: typeof proposal.code === 'string' && TRIGGER_PROPOSAL_RESULT_CODES.has(proposal.code) ? proposal.code : 'pending_host_rule',
   message: typeof proposal.message === 'string' ? proposal.message : '',
   acceptedAt: typeof proposal.acceptedAt === 'string' ? proposal.acceptedAt : '',
+  ...(proposal.triggerRule !== undefined ? { triggerRule: createTriggerRuleItem(proposal.triggerRule) } : {}),
+  ...(typeof proposal.triggerRuleId === 'string' ? { triggerRuleId: proposal.triggerRuleId } : {}),
+  ...(typeof proposal.preview === 'string' ? { preview: proposal.preview } : {}),
   ...(typeof proposal.sourcePluginId === 'string' ? { sourcePluginId: proposal.sourcePluginId } : {}),
   ...(typeof proposal.sourceRunId === 'string' ? { sourceRunId: proposal.sourceRunId } : {}),
   ...(typeof proposal.sourceCommandId === 'string' ? { sourceCommandId: proposal.sourceCommandId } : {})
+})
+
+/**
+ * @param {Partial<import('../shared/openpet-contracts').ActionTriggerRule>} rule
+ * @returns {import('../shared/openpet-contracts').ActionTriggerRule}
+ */
+const createTriggerRuleItem = (rule = {}) => ({
+  id: typeof rule.id === 'string' ? rule.id : '',
+  actionId: typeof rule.actionId === 'string' ? rule.actionId : '',
+  type: typeof rule.type === 'string' && TRIGGER_RULE_TYPES.has(rule.type) ? rule.type : 'random',
+  status: typeof rule.status === 'string' && TRIGGER_RULE_STATUSES.has(rule.status) ? rule.status : 'active',
+  sourceProposalId: typeof rule.sourceProposalId === 'string' ? rule.sourceProposalId : '',
+  sourcePluginId: typeof rule.sourcePluginId === 'string' ? rule.sourcePluginId : '',
+  sourceRunId: typeof rule.sourceRunId === 'string' ? rule.sourceRunId : '',
+  sourceCommandId: typeof rule.sourceCommandId === 'string' ? rule.sourceCommandId : '',
+  message: typeof rule.message === 'string' ? rule.message : '',
+  preview: typeof rule.preview === 'string' ? rule.preview : '',
+  createdAt: typeof rule.createdAt === 'string' ? rule.createdAt : '',
+  updatedAt: typeof rule.updatedAt === 'string' ? rule.updatedAt : ''
 })
 
 /**
@@ -152,6 +176,7 @@ const createTriggerProposalInboxItem = (proposal = {}) => ({
   sourceCommandId: typeof proposal.sourceCommandId === 'string' ? proposal.sourceCommandId : '',
   message: typeof proposal.message === 'string' ? proposal.message : '',
   status: typeof proposal.status === 'string' && TRIGGER_PROPOSAL_STATUSES.has(proposal.status) ? proposal.status : 'pending',
+  triggerRuleId: typeof proposal.triggerRuleId === 'string' ? proposal.triggerRuleId : '',
   resultCode: typeof proposal.resultCode === 'string' ? proposal.resultCode : '',
   resultMessage: typeof proposal.resultMessage === 'string' ? proposal.resultMessage : '',
   rejectionReason: typeof proposal.rejectionReason === 'string' ? proposal.rejectionReason : '',

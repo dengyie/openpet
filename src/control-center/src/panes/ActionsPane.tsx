@@ -3,6 +3,7 @@ import type {
   ActionEntry,
   ActionTriggerProposalInboxItem,
   ActionTriggerProposalAcceptanceResult,
+  ActionTriggerRule,
   ActionTriggerProposalType,
   ActionsConfigViewState,
   CompletedActionFrameInspectionResult,
@@ -74,23 +75,23 @@ const triggerProposalDetails: Record<ActionTriggerProposalType, {
   random: {
     label: '随机',
     summary: '建议作为随机/周期性行为使用。',
-    outcome: '接受后会标记为待主程序规则，不会立即生效。',
-    boundary: '随机频率、冷却和冲突处理需要后续 host trigger-rule schema。',
-    buttonLabel: '确认待规则'
+    outcome: '接受后会创建一条 host-owned random 规则。',
+    boundary: '本轮保存最小规则；频率、冷却和冲突处理仍由后续规则编辑器扩展。',
+    buttonLabel: '创建随机规则'
   },
   state: {
     label: '状态',
     summary: '建议由 hover、idle、心情、靠近等运行状态触发。',
-    outcome: '接受后会标记为待主程序规则，不会立即生效。',
-    boundary: '状态条件和优先级必须由 host 统一校验和持久化。',
-    buttonLabel: '确认待规则'
+    outcome: '接受后会创建一条 host-owned state 规则。',
+    boundary: '本轮保存最小规则；状态条件和优先级仍由后续规则编辑器扩展。',
+    buttonLabel: '创建状态规则'
   },
   event: {
     label: '事件',
     summary: '建议由插件事件、本地 API 事件或系统事件触发。',
-    outcome: '接受后会标记为待主程序规则，不会立即生效。',
-    boundary: '事件来源、权限和参数匹配需要 host 规则编辑器确认。',
-    buttonLabel: '确认待规则'
+    outcome: '接受后会创建一条 host-owned event 规则。',
+    boundary: '本轮保存最小规则；事件来源、权限和参数匹配仍由后续规则编辑器扩展。',
+    buttonLabel: '创建事件规则'
   },
   unbound: {
     label: '不绑定',
@@ -107,6 +108,64 @@ const triggerProposalStatusLabel: Record<ActionTriggerProposalInboxItem['status'
   rejected: '已拒绝',
   applied: '已应用',
   'pending-host-rule': '待规则'
+}
+
+function TriggerRulesPanel({
+  rules,
+  actions
+}: {
+  rules: ActionTriggerRule[]
+  actions: ActionEntry[]
+}) {
+  const activeRules = [...rules].sort((left, right) => String(right.updatedAt || right.createdAt).localeCompare(String(left.updatedAt || left.createdAt)))
+  if (!activeRules.length) {
+    return (
+      <div className="trigger-inbox-card" aria-label="触发规则">
+        <div className="trigger-review-header">
+          <div>
+            <strong>触发规则</strong>
+            <span>接受 random / state / event 提案后，会在这里生成 host-owned 规则。</span>
+          </div>
+          <span className="trigger-badge applied">空</span>
+        </div>
+        <div className="empty-chat">暂无非点击触发规则</div>
+      </div>
+    )
+  }
+  return (
+    <div className="trigger-inbox-card" aria-label="触发规则">
+      <div className="trigger-review-header">
+        <div>
+          <strong>触发规则</strong>
+          <span>{activeRules.filter((rule) => rule.status === 'active').length} 条启用 · {activeRules.length} 条总规则</span>
+        </div>
+        <span className="trigger-badge applied">Host rules</span>
+      </div>
+      <div className="trigger-inbox-grid">
+        {activeRules.map((rule) => {
+          const action = actions.find((candidate) => candidate.id === rule.actionId)
+          const details = triggerProposalDetails[rule.type]
+          return (
+            <div className={`trigger-inbox-item ${rule.status}`} key={rule.id}>
+              <div className="trigger-inbox-main">
+                <div>
+                  <strong>{action?.label || rule.actionId}</strong>
+                  <span>{rule.actionId} · {details.label} · {rule.status}</span>
+                </div>
+                <span className="trigger-badge applied">{rule.type}</span>
+              </div>
+              <p>{rule.preview || details.summary}</p>
+              <div className="trigger-inbox-meta">
+                <span>Rule：{rule.id}</span>
+                {rule.sourcePluginId ? <span>来源：{rule.sourcePluginId}</span> : null}
+                {rule.sourceRunId ? <span>Run：{rule.sourceRunId}</span> : null}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
 }
 
 function TriggerProposalInbox({
@@ -544,6 +603,7 @@ export function ActionsPane({
               <strong>{lastTriggerProposalResult.applied ? '最近结果：已应用' : '最近结果：已确认'}</strong>
               <span>{lastTriggerProposalResult.message}</span>
               <span>结果码：{lastTriggerProposalResult.code}</span>
+              {lastTriggerProposalResult.preview ? <span>预览：{lastTriggerProposalResult.preview}</span> : null}
             </div>
           ) : null}
 
@@ -560,6 +620,10 @@ export function ActionsPane({
           working={working}
           onAccept={onAcceptTriggerProposal}
           onReject={onRejectTriggerProposal}
+        />
+        <TriggerRulesPanel
+          rules={actionsConfig.triggerRules || []}
+          actions={actionsConfig.actions}
         />
       </div>
 

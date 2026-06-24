@@ -88,6 +88,97 @@ test('normalizes optional pet pack persona fields', () => {
   })
 })
 
+test('normalizes trigger rules and rejects rules for missing actions', () => {
+  const manifest = normalizePetPackManifest({
+    id: 'rule-cat',
+    actions: [
+      {
+        id: 'idle',
+        sprite: 'sprites/idle.png',
+        frameCount: 16,
+        frameMs: 95,
+        frameWidth: 191,
+        frameHeight: 453
+      }
+    ],
+    triggerRules: [{
+      id: 'rule:state:idle:test',
+      actionId: 'idle',
+      type: 'state',
+      status: 'active',
+      sourceProposalId: 'proposal:state:idle:test',
+      preview: 'State trigger rule can play idle.',
+      internal: 'ignore'
+    }]
+  })
+
+  assert.deepEqual(manifest.triggerRules[0], {
+    id: 'rule:state:idle:test',
+    actionId: 'idle',
+    type: 'state',
+    status: 'active',
+    sourceProposalId: 'proposal:state:idle:test',
+    sourcePluginId: '',
+    sourceRunId: '',
+    sourceCommandId: '',
+    message: '',
+    preview: 'State trigger rule can play idle.',
+    createdAt: '',
+    updatedAt: ''
+  })
+  assert.throws(
+    () => normalizePetPackManifest({
+      id: 'bad-rule-cat',
+      actions: [
+        {
+          id: 'idle',
+          sprite: 'sprites/idle.png',
+          frameCount: 16,
+          frameMs: 95,
+          frameWidth: 191,
+          frameHeight: 453
+        }
+      ],
+      triggerRules: [{ id: 'rule:state:missing:test', actionId: 'missing', type: 'state' }]
+    }),
+    /trigger rule action does not exist/
+  )
+  assert.throws(
+    () => normalizePetPackManifest({
+      id: 'bad-rule-type-cat',
+      actions: [
+        {
+          id: 'idle',
+          sprite: 'sprites/idle.png',
+          frameCount: 16,
+          frameMs: 95,
+          frameWidth: 191,
+          frameHeight: 453
+        }
+      ],
+      triggerRules: [{ id: 'rule:hover:idle:test', actionId: 'idle', type: 'hover' }]
+    }),
+    /trigger rule type is unsupported/
+  )
+  assert.throws(
+    () => normalizePetPackManifest({
+      id: 'bad-rule-id-cat',
+      actions: [
+        {
+          id: 'idle',
+          sprite: 'sprites/idle.png',
+          frameCount: 16,
+          frameMs: 95,
+          frameWidth: 191,
+          frameHeight: 453
+        }
+      ],
+      triggerRules: [{ id: '../bad', actionId: 'idle', type: 'state' }]
+    }),
+    /triggerRule\.id must be a safe id/
+  )
+})
+
 test('rejects invalid pet pack persona fields', () => {
   const baseManifest = {
     id: 'talking-cat',

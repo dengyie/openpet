@@ -80,7 +80,7 @@ Still open after this slice:
 - Add a real configured cloud/local provider smoke for the full single-action command flow.
 - Add Electron/Control Center E2E coverage from Plugins -> Creator Studio -> generate -> approve/import.
 - Add stronger animation-quality review tooling beyond contact sheets, such as timing playback and provider-native multi-frame support.
-- Add durable host trigger-rule persistence for non-click `random`, `state`, and `event` proposal types.
+- Add richer host trigger-rule simulation/editor/scheduler behavior beyond the durable non-click rule persistence slice.
 
 ---
 

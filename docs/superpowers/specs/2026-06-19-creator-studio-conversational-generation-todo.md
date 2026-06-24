@@ -127,8 +127,8 @@ Implemented host support:
 - Reviewed proposals can be accepted through the Actions configuration path.
 - `click` proposals are validated against existing actions and applied to `clickAction`.
 - `manual` and `unbound` proposals are acknowledged without mutating trigger bindings.
-- `random`, `state`, and `event` proposals return a pending-host-rule result until a full trigger-rule schema/editor exists.
-- Control Center Actions now includes a trigger proposal review card that shows the target action, proposal type meaning, immediate effect, host-owned boundary, and last acceptance result before/after the user confirms a proposal.
+- `random`, `state`, and `event` proposals create durable host-owned trigger rules with source provenance.
+- Control Center Actions now includes a trigger proposal review card and saved trigger-rule panel that show the target action, proposal type meaning, immediate effect, host-owned boundary, and last acceptance result before/after the user confirms a proposal.
 
 ## Plugin Processing Pipeline
 
@@ -241,7 +241,6 @@ For `full-pet`, import through the approved pet-pack import bridge.
 
 ## TODO: Host / Main UI Work
 
-- Define durable host-owned trigger-rule schema for `random`, `state`, and `event` rules.
 - Add simulation/preview before applying non-click triggers.
 - Keep bridge route coverage for current pet/action context aligned with the plugin wizard.
 - Continue model settings UI polish on top of the implemented host model bridge.
@@ -252,14 +251,15 @@ Completed host slice:
 - OpenPet host now accepts reviewed action trigger proposals through the Actions configuration path.
 - `click` proposals can be applied to `clickAction` after validating the target action exists.
 - `manual` and `unbound` proposals are confirmed without mutating bindings.
-- `random`, `state`, and `event` proposals remain visible as pending host-rule work until the full trigger-rule schema/editor exists.
-- Actions UI now makes this distinction explicit: `click` is shown as an immediate `clickAction` mutation, while `random`, `state`, and `event` are shown as accepted-but-pending host-rule proposals.
+- `random`, `state`, and `event` proposals create host-owned durable trigger rules with source proposal provenance and preview text.
+- Actions UI now makes this distinction explicit: `click` is shown as an immediate `clickAction` mutation, while `random`, `state`, and `event` are shown as saved host trigger rules.
 - Creator Studio imports submit generated trigger proposals into the persistent host inbox instead of only returning them in command output.
+- Trigger-rule persistence validates that every rule references an existing imported action.
 
 Remaining host/main UI request:
 
-- Define the durable trigger-rule schema for `random`, `state`, and `event` rules.
 - Add simulation/preview before applying non-click triggers.
+- Add a richer trigger-rule editor/scheduler for conditions, cooldowns, priorities, and conflict resolution.
 - Keep final trigger persistence host-owned; plugins should continue to propose rather than directly mutate rules.
 
 ## TODO: Later Work

@@ -151,6 +151,7 @@ const createDemoActionsConfig = (): ActionsConfigViewState => cloneActionsConfig
   defaultAction: 'idle',
   clickAction: 'wave',
   triggerProposalInbox: [],
+  triggerRules: [],
   actions: [
     { id: 'idle', label: 'Idle', kind: 'idle', loop: true, frameCount: 1, frameMs: 120, frameWidth: 8, frameHeight: 8 },
     { id: 'wave', label: 'Wave', kind: 'click', loop: false, frameCount: 1, frameMs: 100, frameWidth: 8, frameHeight: 8 },
@@ -982,10 +983,34 @@ const demoApi: ControlCenterApi = {
   importActionFrames: async ({ actionId, label } = {}) => ({ ok: true, result: { importedAction: { id: actionId, label: label || actionId } }, animations: cloneActionsConfig(demoState.actionsConfig) }),
   saveActionsConfig: async (config) => {
     const triggerProposal = config?.triggerProposal
+    const ruleProposal = triggerProposal && ['random', 'state', 'event'].includes(triggerProposal.type)
+      ? triggerProposal
+      : null
+    const triggerRule = ruleProposal
+      ? {
+          id: `demo-rule-${ruleProposal.type}-${ruleProposal.actionId}-${Date.now()}`,
+          actionId: ruleProposal.actionId,
+          type: ruleProposal.type as 'random' | 'state' | 'event',
+          status: 'active' as const,
+          sourceProposalId: ruleProposal.id || '',
+          sourcePluginId: ruleProposal.sourcePluginId || '',
+          sourceRunId: ruleProposal.sourceRunId || '',
+          sourceCommandId: ruleProposal.sourceCommandId || '',
+          message: ruleProposal.message || ruleProposal.notes || '',
+          preview: `${ruleProposal.type} rule can play ${ruleProposal.actionId} after host validation.`,
+          createdAt: '2026-06-22T00:00:00.000Z',
+          updatedAt: '2026-06-22T00:00:00.000Z'
+        }
+      : null
     if (triggerProposal?.type === 'click') {
       demoState.actionsConfig = cloneActionsConfig({
         ...demoState.actionsConfig,
         clickAction: triggerProposal.actionId
+      })
+    } else if (triggerRule) {
+      demoState.actionsConfig = cloneActionsConfig({
+        ...demoState.actionsConfig,
+        triggerRules: [...(demoState.actionsConfig.triggerRules || []), triggerRule]
       })
     } else if (!triggerProposal) {
       demoState.actionsConfig = cloneActionsConfig({
@@ -996,11 +1021,11 @@ const demoApi: ControlCenterApi = {
     writeDemoState()
     const triggerCode = triggerProposal?.type === 'click'
       ? 'applied'
-      : (triggerProposal && ['random', 'state', 'event'].includes(triggerProposal.type) ? 'pending_host_rule' : 'no_binding_required')
+      : (triggerRule ? 'rule_created' : 'no_binding_required')
     const triggerMessage = triggerProposal?.type === 'click'
       ? `Click trigger now uses action: ${triggerProposal.actionId}`
-      : (triggerProposal && ['random', 'state', 'event'].includes(triggerProposal.type)
-          ? `Trigger type ${triggerProposal.type} requires a host trigger-rule editor before it can be applied.`
+      : (triggerRule
+          ? `Created host trigger rule ${triggerRule.id} for action: ${triggerProposal?.actionId || ''}`
           : `Action trigger proposal accepted for ${triggerProposal?.actionId || ''}`)
     return {
       animations: cloneActionsConfig(demoState.actionsConfig),
@@ -1014,6 +1039,9 @@ const demoApi: ControlCenterApi = {
               binding: triggerProposal.type === 'click' ? 'clickAction' : '',
               code: triggerCode,
               message: triggerMessage,
+              triggerRule: triggerRule || undefined,
+              triggerRuleId: triggerRule?.id || undefined,
+              preview: triggerRule?.preview || undefined,
               acceptedAt: '2026-06-22T00:00:00.000Z',
               sourcePluginId: triggerProposal.sourcePluginId,
               sourceRunId: triggerProposal.sourceRunId,
@@ -1035,6 +1063,7 @@ const demoApi: ControlCenterApi = {
       sourceCommandId: proposal.sourceCommandId || '',
       message: proposal.message || proposal.notes || '',
       status: 'pending' as const,
+      triggerRuleId: '',
       resultCode: '',
       resultMessage: '',
       rejectionReason: '',
@@ -1055,9 +1084,11 @@ const demoApi: ControlCenterApi = {
     if (!proposal) throw new Error('Trigger proposal not found')
     const response = await demoApi.saveActionsConfig({
       triggerProposal: {
+        id: proposal.id,
         actionId: proposal.actionId,
         type: proposal.type,
         binding: proposal.binding || undefined,
+        message: proposal.message || undefined,
         sourcePluginId: proposal.sourcePluginId,
         sourceRunId: proposal.sourceRunId,
         sourceCommandId: proposal.sourceCommandId
@@ -1069,13 +1100,14 @@ const demoApi: ControlCenterApi = {
     const nextProposal = {
       ...proposal,
       status,
+      triggerRuleId: response.triggerProposal?.triggerRuleId || '',
       resultCode: response.triggerProposal?.code || '',
       resultMessage: response.triggerProposal?.message || '',
       acceptedAt: response.triggerProposal?.acceptedAt || '',
       updatedAt: response.triggerProposal?.acceptedAt || '2026-06-22T00:00:00.000Z'
     }
     demoState.actionsConfig = cloneActionsConfig({
-      ...demoState.actionsConfig,
+      ...(response.animations || demoState.actionsConfig),
       triggerProposalInbox: demoState.actionsConfig.triggerProposalInbox.map((item) => item.id === proposalId ? nextProposal : item)
     })
     writeDemoState()

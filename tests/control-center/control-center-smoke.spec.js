@@ -111,7 +111,7 @@ test.describe('Control Center smoke', () => {
     await expect(reviewCard).not.toContainText('最近结果：已应用')
   })
 
-  test('keeps host-rule trigger proposals pending in the Actions review UI', async ({ page }) => {
+  test('creates host-owned trigger rules from the Actions review UI', async ({ page }) => {
     await page.goto('/')
     await page.getByRole('button', { name: 'Actions' }).click()
 
@@ -121,12 +121,15 @@ test.describe('Control Center smoke', () => {
     const reviewCard = page.locator('[aria-label="触发建议审阅"]')
 
     await reviewCard.locator('select').selectOption('state')
-    await expect(reviewCard).toContainText('状态条件和优先级必须由 host 统一校验和持久化。')
-    await page.getByRole('button', { name: '确认待规则' }).click()
+    await expect(reviewCard).toContainText('本轮保存最小规则')
+    await page.getByRole('button', { name: '创建状态规则' }).click()
 
     await expect(page.locator('.status-line')).toContainText('已确认 触发建议')
     await expect(reviewCard).toContainText('最近结果：已确认')
-    await expect(reviewCard).toContainText('结果码：pending_host_rule')
+    await expect(reviewCard).toContainText('结果码：rule_created')
+    const rulesPanel = page.locator('[aria-label="触发规则"]')
+    await expect(rulesPanel).toContainText('Sleep')
+    await expect(rulesPanel).toContainText('state')
     await expect(clickAction).toHaveValue(beforeClickAction)
   })
 
@@ -141,6 +144,7 @@ test.describe('Control Center smoke', () => {
             { id: 'wave', label: 'Wave', kind: 'click', loop: false, frameCount: 1, frameMs: 100, frameWidth: 8, frameHeight: 8 },
             { id: 'sleep', label: 'Sleep', kind: 'idle', loop: true, frameCount: 1, frameMs: 140, frameWidth: 8, frameHeight: 8 }
           ],
+          triggerRules: [],
           triggerProposalInbox: [
             {
               id: 'proposal:state:sleep:test',
@@ -191,9 +195,12 @@ test.describe('Control Center smoke', () => {
     const sleepProposal = inbox.locator('.trigger-inbox-item', { hasText: 'Sleep' })
     await expect(sleepProposal).toContainText('待审核')
     await sleepProposal.getByRole('button', { name: '接受提案' }).click()
-    await expect(page.locator('.status-line')).toContainText('已标记待规则触发提案：sleep')
-    await expect(sleepProposal).toContainText('待规则')
-    await expect(sleepProposal).toContainText('pending_host_rule')
+    await expect(page.locator('.status-line')).toContainText('已接受触发提案：sleep')
+    await expect(sleepProposal).toContainText('已接受')
+    await expect(sleepProposal).toContainText('rule_created')
+    const rulesPanel = page.locator('[aria-label="触发规则"]')
+    await expect(rulesPanel).toContainText('Sleep')
+    await expect(rulesPanel).toContainText('state')
 
     const waveProposal = inbox.locator('.trigger-inbox-item', { hasText: 'Wave' })
     page.once('dialog', (dialog) => dialog.accept('Not for this pack'))

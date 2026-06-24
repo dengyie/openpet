@@ -79,7 +79,7 @@ Completed since this plan was written:
 Remaining production TODO:
 - Add real provider smoke coverage for configured `cloud` and `local` providers, without claiming visual quality automatically.
 - Add Electron/Control Center E2E coverage for the Creator Studio plugin entry and dashboard click flow.
-- Finish durable non-click trigger-rule persistence for `random`, `state`, and `event` proposals.
+- Add simulation/preview and richer editor semantics for non-click trigger rules after the durable `random` / `state` / `event` persistence slice.
 
 ## File Structure
 
