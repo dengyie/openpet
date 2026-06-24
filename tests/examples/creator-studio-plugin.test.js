@@ -42,7 +42,7 @@ test('creator studio example manifest declares hybrid creator workflow entries',
 
   assert.equal(manifest.id, 'openpet.creator-studio')
   assert.equal(manifest.profile, 'hybrid')
-  assert.deepEqual(manifest.permissions, ['pet-pack:import', 'pet:say', 'model:image-generate', 'assets:generate'])
+  assert.deepEqual(manifest.permissions, ['pet-pack:import', 'pet:say', 'model:image-generate', 'assets:generate', 'trigger-proposals:write'])
   assert.deepEqual(manifest.commands.map((command) => command.id), [
     'create-run',
     'draft-task',
@@ -1298,10 +1298,27 @@ test('creator studio import-approved-action imports approved single-action frame
     now: () => '2026-06-20T00:01:00.000Z'
   })
   const { server, requests } = createBridgeServer({
-    routes: [{
-      path: '/creator/assets/import-frames',
-      handler: () => ({ body: { ok: true, result: { importedAction: { id: 'shy-spin' } } } })
-    }]
+    routes: [
+      {
+        path: '/creator/assets/import-frames',
+        handler: () => ({ body: { ok: true, result: { importedAction: { id: 'shy-spin' } } } })
+      },
+      {
+        path: '/creator/trigger-proposals/submit',
+        handler: ({ payload }) => ({
+          body: {
+            ok: true,
+            proposal: {
+              id: 'proposal:click:shy-spin:test',
+              actionId: payload.actionId,
+              type: payload.type,
+              binding: payload.binding,
+              status: 'pending'
+            }
+          }
+        })
+      }
+    ]
   })
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
   const port = server.address().port
@@ -1323,12 +1340,21 @@ test('creator studio import-approved-action imports approved single-action frame
     assert.equal(imported.json.run.status, 'imported')
     assert.equal(imported.json.run.importedActionId, 'shy-spin')
     assert.equal(imported.json.triggerProposal.type, 'click')
+    assert.equal(imported.json.triggerProposalSubmission.ok, true)
+    assert.equal(imported.json.triggerProposalSubmission.proposal.id, 'proposal:click:shy-spin:test')
     assert.equal(stored.importStatus, 'imported')
+    assert.equal(stored.triggerProposalSubmission.ok, true)
     assert.equal(requests[0].url, '/creator/assets/import-frames')
     assert.equal(requests[0].payload.dataRelativePath, 'runs/demo/frames/actions/shy-spin')
     assert.equal(requests[0].payload.actionId, 'shy-spin')
     assert.equal(requests[0].payload.label, '害羞转圈')
     assert.equal(JSON.stringify(requests[0].payload).includes(dataDir), false)
+    assert.equal(requests[1].url, '/creator/trigger-proposals/submit')
+    assert.equal(requests[1].payload.actionId, 'shy-spin')
+    assert.equal(requests[1].payload.type, 'click')
+    assert.equal(requests[1].payload.binding, 'clickAction')
+    assert.equal(requests[1].payload.sourceRunId, run.runId)
+    assert.equal(JSON.stringify(requests[1].payload).includes(dataDir), false)
   } finally {
     server.closeAllConnections?.()
     await new Promise((resolve) => server.close(resolve))
@@ -1986,7 +2012,8 @@ test('creator studio dashboard asset exists and service script is declared', () 
   assert.match(html, /fetch\('\/api\/runs'\)/)
   assert.match(html, /DOMContentLoaded/)
   assert.match(html, /Loaded latest run/)
-  assert.match(html, /contact-sheet/)
+  assert.match(html, /contact-sheet-preview/)
+  assert.match(html, /contactSheetUrl/)
   assert.match(html, /action-frame-validation\.json/)
   assert.match(html, /id="run-logs"/)
   assert.equal(html.includes('apiKey'), false)
@@ -2123,6 +2150,8 @@ test('creator studio service exposes run detail and logs for dashboard clients',
     }).then((response) => response.json())
     const frameResponse = await fetch(`http://127.0.0.1:${port}${detail.actionReview.previewFrames[0].url}`)
     const frameBytes = Buffer.from(await frameResponse.arrayBuffer())
+    const contactSheetResponse = await fetch(`http://127.0.0.1:${port}${repaired.actionReview.contactSheetUrl}`)
+    const contactSheetBytes = Buffer.from(await contactSheetResponse.arrayBuffer())
     const repairedQa = JSON.parse(fs.readFileSync(path.join(dataDir, 'runs', run.runId, 'qa', 'action-frame-validation.json'), 'utf-8'))
     const logsAfterRepair = await fetch(`http://127.0.0.1:${port}/api/runs/${run.runId}/logs`).then((response) => response.json())
     const failedApprovalResponse = await fetch(`http://127.0.0.1:${port}/api/runs/${run.runId}/approve`, {
@@ -2149,11 +2178,18 @@ test('creator studio service exposes run detail and logs for dashboard clients',
     assert.equal(frameResponse.status, 200)
     assert.equal(frameResponse.headers.get('content-type'), 'image/png')
     assert.equal(frameBytes.slice(1, 4).toString('utf-8'), 'PNG')
+    assert.equal(contactSheetResponse.status, 200)
+    assert.equal(contactSheetResponse.headers.get('content-type'), 'image/png')
+    assert.equal(contactSheetBytes.slice(1, 4).toString('utf-8'), 'PNG')
     assert.equal(repaired.repair.fileName, '0001.png')
+    assert.equal(repaired.repair.contactSheet, `runs/${run.runId}/qa/action-frame-contact-sheet.png`)
     assert.equal(repaired.repair.qa, `runs/${run.runId}/qa/action-frame-validation.json`)
+    assert.equal(repaired.actionReview.contactSheet, `runs/${run.runId}/qa/action-frame-contact-sheet.png`)
+    assert.equal(repaired.actionReview.contactSheetUrl, `/api/runs/${encodeURIComponent(run.runId)}/action-frames/shy-spin/contact-sheet.png`)
     assert.equal(repaired.actionReview.previewFrames[0].fileName, '0001.png')
     assert.equal(JSON.stringify(repaired).includes(dataDir), false)
     assert.equal(repairedQa.frames[0].visiblePixels > 0, true)
+    assert.equal(repairedQa.contactSheetRelativePath, `runs/${run.runId}/qa/action-frame-contact-sheet.png`)
     assert.equal(repairedQa.repairs[0].fileName, '0001.png')
     assert.deepEqual(logsAfterRepair.logs.map((entry) => entry.event), ['run.created', 'action-frame.repaired'])
     assert.equal(failedApprovalResponse.status, 400)

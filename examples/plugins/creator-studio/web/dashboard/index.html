@@ -180,6 +180,21 @@
         margin-top: 12px;
       }
 
+      .contact-sheet-preview {
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: #fffef8;
+        margin-top: 12px;
+        overflow: hidden;
+        padding: 10px;
+      }
+
+      .contact-sheet-preview img {
+        display: block;
+        max-width: 100%;
+        height: auto;
+      }
+
       .frame-card {
         border: 1px solid var(--line);
         border-radius: 14px;
@@ -374,6 +389,17 @@
 
       const frameSrc = (frame) => `${frame.url}${frame.url.includes('?') ? '&' : '?'}v=${encodeURIComponent(state.run?.updatedAt || '')}`
 
+      const assetSrc = (url) => `${url}${url.includes('?') ? '&' : '?'}v=${encodeURIComponent(state.run?.updatedAt || '')}`
+
+      const renderContactSheet = (review) => {
+        if (!review?.contactSheetUrl) return ''
+        return [
+          '<div class="contact-sheet-preview">',
+          `<img alt="Action frame contact sheet" src="${escapeHtml(assetSrc(review.contactSheetUrl))}">`,
+          '</div>'
+        ].join('')
+      }
+
       const renderFramePreview = (review) => {
         const frames = Array.isArray(review?.previewFrames) ? review.previewFrames : []
         if (!frames.length) return '<p>No frame previews available yet.</p>'
@@ -427,8 +453,10 @@
             `<strong>${escapeHtml(actionFrames.name || actionFrames.actionId)}</strong>`,
             `<p>Frames: ${escapeHtml(actionFrames.frameCount)} at ${escapeHtml(actionFrames.frameWidth)}x${escapeHtml(actionFrames.frameHeight)}</p>`,
             `<p>QA: ${escapeHtml(actionFrames.qa || 'action-frame-validation.json')}</p>`,
+            actionReview?.contactSheet ? `<p>Contact sheet: ${escapeHtml(actionReview.contactSheet)}</p>` : '',
             `<p>Trigger proposal is review-only: ${escapeHtml((actionFrames.triggerProposal || action.triggerProposal).type)}</p>`,
             `<p>Review status: ${escapeHtml(run.reviewStatus || 'pending')} / Import status: ${escapeHtml(run.importStatus || 'not-imported')}</p>`,
+            renderContactSheet(actionReview),
             renderFramePreview(actionReview)
           ].join('')
           if (run.status === 'approved') {

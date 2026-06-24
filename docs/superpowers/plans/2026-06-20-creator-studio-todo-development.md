@@ -73,12 +73,13 @@ Completed since this plan was written:
 - Dashboard users can inspect action-review metadata, preview individual frames through data-relative URLs, repair a selected frame from the generated source image, approve the run, and receive the correct import command.
 - `import-approved-action` imports approved action frames through `/creator/assets/import-frames`; the plugin still does not mutate trigger bindings directly.
 - Approval/import paths gate action frames on passing QA metadata, ordered frame evidence, matching dimensions/count, and non-empty visible-pixel evidence.
+- Action-frame review now includes a generated contact sheet image served through the dashboard without exposing absolute local paths.
+- Imported single-action runs now submit their trigger proposal into the host trigger proposal inbox after action import; users still review/accept/reject through host-owned UI.
 
 Remaining production TODO:
-- Consolidate action-frame QA validation into one shared module used by dashboard approval, CLI approval/import, and tests.
 - Add real provider smoke coverage for configured `cloud` and `local` providers, without claiming visual quality automatically.
 - Add Electron/Control Center E2E coverage for the Creator Studio plugin entry and dashboard click flow.
-- Finish host-owned trigger proposal inbox/editor and durable non-click trigger-rule persistence.
+- Finish durable non-click trigger-rule persistence for `random`, `state`, and `event` proposals.
 
 ## File Structure
 

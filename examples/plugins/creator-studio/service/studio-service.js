@@ -126,6 +126,7 @@ const createPublicArtifacts = ({ dataDir, artifacts = {} }) => {
       actionId: artifacts.actionFrames.actionId,
       name: artifacts.actionFrames.name,
       qa: toDataRelativePath({ dataDir, targetPath: artifacts.actionFrames.qa }),
+      contactSheet: toDataRelativePath({ dataDir, targetPath: artifacts.actionFrames.contactSheet }),
       frameCount: artifacts.actionFrames.frameCount,
       frameWidth: artifacts.actionFrames.frameWidth,
       frameHeight: artifacts.actionFrames.frameHeight,
@@ -158,6 +159,18 @@ const getActionFramePath = ({ dataDir, run, actionId, fileName }) => {
   return framePath
 }
 
+const getActionContactSheetPath = ({ dataDir, run, actionId }) => {
+  const actionFrames = run.artifacts?.actionFrames
+  if (!actionFrames || actionFrames.actionId !== actionId) throw new Error('Action contact sheet is not available')
+  const contactSheetPath = assertPathInsideDataDir({
+    dataDir,
+    targetPath: actionFrames.contactSheet,
+    label: 'Action contact sheet'
+  })
+  if (!fs.existsSync(contactSheetPath)) throw new Error('Action contact sheet is missing')
+  return contactSheetPath
+}
+
 const createActionReview = ({ dataDir, run }) => {
   const actionFrames = run.artifacts?.actionFrames
   const action = Array.isArray(run.generationTask?.actions) ? run.generationTask.actions[0] : null
@@ -180,6 +193,10 @@ const createActionReview = ({ dataDir, run }) => {
     frameWidth: actionFrames.frameWidth || 0,
     frameHeight: actionFrames.frameHeight || 0,
     qa: toDataRelativePath({ dataDir, targetPath: actionFrames.qa }),
+    contactSheet: toDataRelativePath({ dataDir, targetPath: actionFrames.contactSheet }),
+    contactSheetUrl: actionFrames.contactSheet
+      ? `/api/runs/${encodeURIComponent(run.runId)}/action-frames/${encodeURIComponent(actionId)}/contact-sheet.png`
+      : '',
     previewFrames,
     triggerProposal: actionFrames.triggerProposal || action?.triggerProposal || { type: 'unbound' },
     importStatus: run.importStatus || 'not-imported'
@@ -307,7 +324,14 @@ const handlePost = async ({ request, response, dataDir, url }) => {
         runId,
         status: run.status,
         patch: {
-          currentStep: 'review'
+          currentStep: 'review',
+          artifacts: {
+            ...run.artifacts,
+            actionFrames: {
+              ...actionFrames,
+              contactSheet: repair.contactSheetPath
+            }
+          }
         }
       })
       appendRunLog({
@@ -329,6 +353,7 @@ const handlePost = async ({ request, response, dataDir, url }) => {
           actionId: repair.actionId,
           fileName: repair.fileName,
           frameIndex: repair.frameIndex,
+          contactSheet: toDataRelativePath({ dataDir, targetPath: repair.contactSheetPath }),
           qa: toDataRelativePath({ dataDir, targetPath: repair.qaPath })
         }
       })
@@ -377,6 +402,23 @@ const createCreatorStudioServer = ({ dataDir, dashboardPath }) => http.createSer
       return
     } catch (error) {
       sendJson(response, 404, { ok: false, error: error.message || 'Run not found' })
+      return
+    }
+  }
+
+  const contactSheetMatch = url.pathname.match(/^\/api\/runs\/([^/]+)\/action-frames\/([^/]+)\/contact-sheet\.png$/)
+  if (contactSheetMatch) {
+    try {
+      const run = readRun({ dataDir, runId: decodeURIComponent(contactSheetMatch[1]) })
+      const contactSheetPath = getActionContactSheetPath({
+        dataDir,
+        run,
+        actionId: decodeURIComponent(contactSheetMatch[2])
+      })
+      sendPng(response, contactSheetPath)
+      return
+    } catch (error) {
+      sendJson(response, 404, { ok: false, error: error.message || 'Action contact sheet not found' })
       return
     }
   }

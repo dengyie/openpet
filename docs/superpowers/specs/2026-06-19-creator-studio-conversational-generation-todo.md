@@ -224,6 +224,8 @@ For `full-pet`, import through the approved pet-pack import bridge.
 - Dashboard routes support single-action task draft, answer, confirm, generate, approve, action review, frame preview/repair, and import handoff.
 - Single-action runs write ordered transparent frame folders under the Creator Studio run workspace and store action-frame QA metadata with dimensions, frame count, trigger proposal, and visible-pixel evidence.
 - Dashboard approval, CLI approval, and action import use one shared action-frame QA gate before approval/import side effects.
+- Approved single-action imports submit the generated trigger proposal to OpenPet's host-owned trigger proposal inbox with plugin/command/run provenance after the action frames are imported. The plugin still proposes; users still review and accept/reject through host UI.
+- Single-action review writes and serves an `action-frame-contact-sheet.png` artifact for whole-sequence visual inspection.
 - Dashboard responses expose data-relative artifact paths and preview URLs, not raw absolute filesystem paths.
 - Tests cover prompt parsing, safe defaults, run persistence, prompt building, host model bridge prompt use, QA failure paths, frame repair, dashboard service routes, and single-action import handoff.
 
@@ -233,19 +235,15 @@ For `full-pet`, import through the approved pet-pack import bridge.
 - Preserve command paths as automation/test entry points while improving user-facing dashboard affordances.
 - Add explicit retry/recover flows for failed cloud/local generation without silently falling back to fixture.
 - Surface prompt-builder provenance in the dashboard, including sanitized final prompt preview for developer mode.
-- Connect generated trigger proposals to the host trigger proposal inbox after that host inbox service/UI is complete.
 - Add realistic smoke guidance for configured host image Provider generation.
-- Add stronger review artifacts for animation quality, such as contact sheets or playback previews.
+- Add stronger review artifacts beyond contact sheets, such as playback previews or timing diagnostics.
 - Keep expanding the same `GenerationTask` contract toward full-pet/multi-action generation after the single-action milestone is stable.
 
 ## TODO: Host / Main UI Work
 
-- Define host-owned trigger rule schema.
-- Add Control Center UI for trigger rules and accepted trigger proposals.
-- Complete the trigger proposal inbox service/UI/API closed loop.
+- Define durable host-owned trigger-rule schema for `random`, `state`, and `event` rules.
+- Add simulation/preview before applying non-click triggers.
 - Keep bridge route coverage for current pet/action context aligned with the plugin wizard.
-- Add bridge route for accepting a plugin trigger proposal after user review when inbox persistence is ready.
-- Add validation that trigger bindings reference existing imported actions.
 - Continue model settings UI polish on top of the implemented host model bridge.
 - Ensure API keys remain in host secret storage and are not exposed to ordinary plugins.
 
@@ -256,10 +254,10 @@ Completed host slice:
 - `manual` and `unbound` proposals are confirmed without mutating bindings.
 - `random`, `state`, and `event` proposals remain visible as pending host-rule work until the full trigger-rule schema/editor exists.
 - Actions UI now makes this distinction explicit: `click` is shown as an immediate `clickAction` mutation, while `random`, `state`, and `event` are shown as accepted-but-pending host-rule proposals.
+- Creator Studio imports submit generated trigger proposals into the persistent host inbox instead of only returning them in command output.
 
 Remaining host/main UI request:
 
-- Add a persistent trigger proposal inbox/editor in Control Center so users can review, edit, accept, or reject proposals submitted directly from Creator Studio and other plugins rather than manually choosing the current action/type. Channel names and data fields already exist in parts of the codebase, but `ActionService` still needs the submit/accept/reject item methods and the UI needs the actual inbox list.
 - Define the durable trigger-rule schema for `random`, `state`, and `event` rules.
 - Add simulation/preview before applying non-click triggers.
 - Keep final trigger persistence host-owned; plugins should continue to propose rather than directly mutate rules.
@@ -283,5 +281,5 @@ The first implementation is acceptable when:
 - fixture generation produces a valid custom action output;
 - QA catches malformed action outputs;
 - the approved action imports through the host bridge;
-- trigger proposals are persisted and visible without being silently applied by the plugin;
+- trigger proposals are persisted in the host inbox and visible without being silently applied by the plugin;
 - the same task contract can represent a future full-pet run.

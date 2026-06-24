@@ -46,6 +46,7 @@ Current P0 status: no known startup/build blocker in this TODO pass. The highest
 - Creator Studio already has `GenerationTask`, deterministic `conversation-wizard`, task answer/confirm commands, `openpet-prompt-builder`, host model bridge, run persistence, QA artifacts, dashboard display, and action import command paths.
 - Action trigger review exists for the manually selected action path: `click` can update `clickAction`; `manual` and `unbound` are acknowledged; `random`, `state`, and `event` remain pending host-rule work.
 - Trigger proposal inbox now has a host-owned service/API/UI closed loop: proposals can be submitted, persisted, accepted, rejected, preserved through action regeneration, and reviewed from the Actions pane.
+- Creator Studio approved single-action imports now submit their generated `triggerProposal` into the host-owned trigger proposal inbox through the narrow `trigger-proposals:write` creator-tools bridge permission after action frames are imported; the plugin still does not directly apply trigger rules.
 
 ## P1 Architecture TODOs
 
@@ -132,7 +133,7 @@ P1 work:
 - Define durable trigger-rule schema for `random`, `state`, and `event`.
 - Add validation that every trigger rule references an existing imported action.
 - Add simulation/preview before applying non-click triggers.
-- Connect Creator Studio imports to submit generated trigger proposals into the host inbox instead of only showing them in the plugin dashboard.
+- Keep Creator Studio-trigger proposal handoff aligned with future durable trigger-rule schema changes.
 
 P2/P3:
 
@@ -152,6 +153,7 @@ Current state:
 - `openpet-prompt-builder` compiles OpenPet-specific prompts.
 - Host model bridge sends built prompts to host-owned image generation.
 - Run persistence, logs, QA metadata, dashboard preview, and approved action import paths exist.
+- Approved single-action imports submit generated trigger proposals to the host inbox with source plugin/command/run provenance after successful action frame import.
 
 P1 work:
 
@@ -159,7 +161,7 @@ P1 work:
 - Preserve the current command paths as automation/test entry points while improving user-facing dashboard affordances.
 - Add explicit retry/recover flows for failed cloud/local generation without silently falling back to fixture.
 - Surface prompt-builder provenance in the dashboard, including sanitized final prompt preview for developer mode.
-- Connect generated trigger proposals to the host trigger proposal inbox after the inbox service/UI is complete.
+- Keep generated trigger proposal submission compatible with future random/state/event trigger-rule schema and editor semantics.
 - Add realistic smoke guidance for configured host image Provider generation.
 
 P2/P3:

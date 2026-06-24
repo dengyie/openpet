@@ -21,6 +21,28 @@ const toDataRelativePath = ({ dataDir, targetPath }) => {
   return relative.replace(/\\/g, '/')
 }
 
+const submitTriggerProposal = async ({ actionFrames, runId }) => {
+  const triggerProposal = actionFrames.triggerProposal || { type: 'unbound' }
+  try {
+    const submitted = await callBridge('/creator/trigger-proposals/submit', {
+      actionId: actionFrames.actionId,
+      type: triggerProposal.type || 'unbound',
+      binding: triggerProposal.binding || '',
+      notes: triggerProposal.notes || '',
+      sourceRunId: runId
+    })
+    return {
+      ok: true,
+      proposal: submitted.proposal || null
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      error: error.message || 'Trigger proposal submission failed'
+    }
+  }
+}
+
 runCommand(async (context) => {
   const dataDir = process.env.OPENPET_DATA_DIR
   const runId = resolveRunId({
@@ -44,6 +66,7 @@ runCommand(async (context) => {
     actionId: actionFrames.actionId,
     label: actionFrames.name || actionFrames.actionId
   })
+  const triggerProposalSubmission = await submitTriggerProposal({ actionFrames, runId })
   const run = updateRunStatus({
     dataDir,
     runId,
@@ -51,13 +74,15 @@ runCommand(async (context) => {
     patch: {
       importStatus: 'imported',
       importedActionId: actionFrames.actionId,
-      currentStep: 'imported'
+      currentStep: 'imported',
+      triggerProposalSubmission
     }
   })
   return {
     message: `Imported action ${actionFrames.actionId}`,
     run,
     imported,
-    triggerProposal: actionFrames.triggerProposal || { type: 'unbound' }
+    triggerProposal: actionFrames.triggerProposal || { type: 'unbound' },
+    triggerProposalSubmission
   }
 })
