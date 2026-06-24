@@ -11,6 +11,7 @@ const { LOCAL_PLUGIN_COMMAND_TIMEOUT_MS, runLocalPluginCommand } = require('./lo
 const { readLocalPluginManifests } = require('./plugin-discovery')
 const { createPluginCommandRuntimeManager } = require('./plugin-command-runtime-manager')
 const { createPluginCommandBridgeService } = require('./plugin-command-bridge-service')
+const { createPluginSetupRuntimeManager } = require('./plugin-setup-runtime-manager')
 
 const SDK_REGISTERED_COMMANDS = Symbol('openpet.registeredCommands')
 const STORAGE_KEY_PATTERN = /^[a-zA-Z0-9_.:-]{1,128}$/
@@ -29,7 +30,6 @@ const MAX_PLUGIN_SERVICE_HEALTH_INTERVAL_MS = 300000
 const createPluginServiceKey = (pluginId, serviceId) => `${pluginId}:${serviceId}`
 
 const ACTIVE_SERVICE_STATUSES = new Set(['running', 'stopping'])
-const ACTIVE_SETUP_STATUSES = new Set(['running', 'stopping'])
 
 const LOOPBACK_HEALTH_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]'])
 const defaultServiceProcessTree = createServiceProcessTree()
@@ -214,7 +214,6 @@ const createPluginService = ({ settingsService, petService, actionService, actio
   if (!settingsService) throw new Error('settingsService is required')
   if (!petService) throw new Error('petService is required')
   const serviceRuntimes = new Map()
-  const setupRuntimes = new Map()
 
   const getLogStore = () => {
     const logs = settingsService.get().plugins?.logs
@@ -750,7 +749,7 @@ const createPluginService = ({ settingsService, petService, actionService, actio
     ...manifest.entries,
     setup: (manifest.entries?.setup || []).map((setupEntry) => ({
       ...setupEntry,
-      runtime: createSetupRuntimeView(setupRuntimes.get(createPluginServiceKey(manifest.id, setupEntry.id)))
+      runtime: createSetupRuntimeView(setupRuntimeManager.getRuntime(manifest.id, setupEntry.id))
     })),
     services: (manifest.entries?.services || []).map((serviceEntry) => ({
       ...serviceEntry,
@@ -850,15 +849,8 @@ const createPluginService = ({ settingsService, petService, actionService, actio
 
   const getPluginServiceRuntime = (pluginId, serviceId) => serviceRuntimes.get(createPluginServiceKey(pluginId, serviceId))
 
-  const getPluginSetupRuntime = (pluginId, setupId) => setupRuntimes.get(createPluginServiceKey(pluginId, setupId))
-
   const setServiceRuntime = (pluginId, serviceId, runtime) => {
     serviceRuntimes.set(createPluginServiceKey(pluginId, serviceId), runtime)
-    return runtime
-  }
-
-  const setSetupRuntime = (pluginId, setupId, runtime) => {
-    setupRuntimes.set(createPluginServiceKey(pluginId, setupId), runtime)
     return runtime
   }
 
@@ -963,6 +955,11 @@ const createPluginService = ({ settingsService, petService, actionService, actio
     stopRuntimeProcess: stopRuntimeProcessWithFallback
   })
 
+  const setupRuntimeManager = createPluginSetupRuntimeManager({
+    appendLog,
+    stopRuntimeProcess: stopRuntimeProcessWithFallback
+  })
+
   const clearServiceStopTimer = (runtime) => {
     if (!runtime?.stopTimer) return
     clearTimeout(runtime.stopTimer)
@@ -1035,35 +1032,7 @@ const createPluginService = ({ settingsService, petService, actionService, actio
     }
   }
 
-  const stopPluginSetupRuntime = (pluginId, setupId, runtime, { log = true } = {}) => {
-    if (!runtime || runtime.status !== 'running') return runtime
-    runtime.status = 'stopping'
-    runtime.error = ''
-    runtime.exitCode = null
-    runtime.lastRunAt = new Date().toISOString()
-    try {
-      stopRuntimeProcessWithFallback(runtime, 'SIGTERM')
-    } catch (error) {
-      runtime.error = error.message || 'Plugin setup stop failed'
-      runtime.status = 'failed'
-    }
-    if (log) appendLog({
-      pluginId,
-      commandId: `setup:${setupId}`,
-      level: runtime.status === 'failed' ? 'error' : 'info',
-      message: runtime.status === 'failed' ? runtime.error : 'Setup stop requested'
-    })
-    if (runtime.status === 'failed') runtime.failStop?.(new Error(runtime.error))
-    return runtime
-  }
-
-  const stopPluginSetups = (pluginId, options = {}) => {
-    for (const [key, runtime] of setupRuntimes.entries()) {
-      if (key.startsWith(`${pluginId}:`)) {
-        stopPluginSetupRuntime(pluginId, runtime.setupId, runtime, options)
-      }
-    }
-  }
+  const stopPluginSetups = (pluginId, options = {}) => setupRuntimeManager.stopPlugin(pluginId, options)
 
   const stopPluginCommands = (pluginId) => commandRuntimeManager.stopPlugin(pluginId)
 
@@ -1435,8 +1404,7 @@ const createPluginService = ({ settingsService, petService, actionService, actio
     try {
       const plugin = findPluginForService(pluginId)
       const setupEntry = getSetupEntry(plugin, setupId)
-      const existingRuntime = getPluginSetupRuntime(pluginId, setupId)
-      if (ACTIVE_SETUP_STATUSES.has(existingRuntime?.status)) throw new Error('Plugin setup is already running')
+      setupRuntimeManager.assertNotActive(pluginId, setupId)
       const { file, args } = parseServiceCommand(setupEntry.command)
       const cwd = resolveSetupCwd(plugin.manifest, setupEntry.cwd)
       const child = spawnSetupProcess(file, args, {
@@ -1447,7 +1415,7 @@ const createPluginService = ({ settingsService, petService, actionService, actio
         stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true
       })
-      const runtime = setSetupRuntime(pluginId, setupId, {
+      const runtime = setupRuntimeManager.setRuntime(setupRuntimeManager.attachStopHandler({
         pluginId,
         setupId,
         status: 'running',
@@ -1457,7 +1425,7 @@ const createPluginService = ({ settingsService, petService, actionService, actio
         error: '',
         child,
         failStop: null
-      })
+      }))
 
       appendLog({ pluginId, commandId, level: 'info', message: 'Setup started' })
 
@@ -1769,9 +1737,7 @@ const createPluginService = ({ settingsService, petService, actionService, actio
     for (const runtime of serviceRuntimes.values()) {
       stopPluginServiceRuntime(runtime.pluginId, runtime.serviceId, runtime, { log: false })
     }
-    for (const runtime of setupRuntimes.values()) {
-      stopPluginSetupRuntime(runtime.pluginId, runtime.setupId, runtime, { log: false })
-    }
+    setupRuntimeManager.stopAll({ log: false })
     commandRuntimeManager.stopAll()
     commandBridgeService.close()
     return { ok: true }
