@@ -247,13 +247,13 @@ P2/P3:
 
 Choose one of these when starting the next development milestone:
 
-1. Trigger Proposal Inbox Closure
-   - User value: Creator Studio and future plugins can submit action trigger proposals into a real host review queue.
-   - Main files: `ActionService`, `ipc.js`, Actions pane, shared contracts, action tests, Control Center smoke.
+1. AI Talk Bubble And Action Tool UX
+   - User value: pet conversations feel more pet-like with segmented reply bubbles and safer action suggestions.
+   - Main files: `AiTalkService`, `AiTalkStore`, AI pane, pet chat renderer, behavior tool tests.
 
-2. AI Talk Relevance And Bubble UX
-   - User value: pet conversations feel more contextual and more pet-like without changing provider setup.
-   - Main files: `AiTalkService`, `AiTalkStore`, AI pane, pet chat renderer, service tests.
+2. AI Talk Refresh And Trace Export
+   - User value: switching pet packs reloads the right persona/history/memory state, and developers can inspect redacted AI Talk traces.
+   - Main files: `AiTalkService`, `AiTalkStore`, IPC/adapters, AI pane, desktop chat state tests.
 
 3. Creator Studio Dashboard Wizard Polish
    - User value: users can drive custom action generation from dashboard instead of running individual commands.
