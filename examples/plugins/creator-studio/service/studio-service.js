@@ -4,6 +4,7 @@ const path = require('path')
 const { appendRunLog, listRuns, readRun, readRunLogs, updateRunStatus } = require('../lib/run-store')
 const { runGenerationStep } = require('../lib/backend-runner')
 const { repairActionFrameFromGeneratedImage } = require('../lib/action-frame-builder')
+const { assertRunActionFrameQaPassed } = require('../lib/action-frame-qa')
 const { answerTaskQuestion, confirmTaskRun, draftTaskRun } = require('../lib/task-workflow')
 
 const SAFE_FRAME_FILE_PATTERN = /^\d{4}\.png$/
@@ -185,44 +186,6 @@ const createActionReview = ({ dataDir, run }) => {
   }
 }
 
-const assertActionFrameQaPassed = ({ dataDir, actionFrames }) => {
-  if (!actionFrames) return
-  if (!actionFrames.qa) throw new Error('Action frame QA must pass before approval')
-  const qaPath = assertPathInsideDataDir({
-    dataDir,
-    targetPath: actionFrames.qa,
-    label: 'Action frame QA'
-  })
-  if (!fs.existsSync(qaPath)) throw new Error('Action frame QA must pass before approval')
-  let qa
-  try {
-    qa = JSON.parse(fs.readFileSync(qaPath, 'utf-8'))
-  } catch (_) {
-    throw new Error('Action frame QA must be valid JSON before approval')
-  }
-  if (qa.ok !== true) throw new Error('Action frame QA must pass before approval')
-  if (qa.actionId !== actionFrames.actionId) throw new Error('Action frame QA actionId must match before approval')
-  if (Number(qa.frameCount) !== Number(actionFrames.frameCount)) {
-    throw new Error('Action frame QA frameCount must match before approval')
-  }
-  if (Number(qa.frameWidth) !== Number(actionFrames.frameWidth)) {
-    throw new Error('Action frame QA frameWidth must match before approval')
-  }
-  if (Number(qa.frameHeight) !== Number(actionFrames.frameHeight)) {
-    throw new Error('Action frame QA frameHeight must match before approval')
-  }
-  const frames = Array.isArray(qa.frames) ? qa.frames : []
-  if (frames.length !== Number(actionFrames.frameCount)) {
-    throw new Error('Action frame QA frames must be complete before approval')
-  }
-  frames.forEach((frame, index) => {
-    const expectedFileName = `${String(index + 1).padStart(4, '0')}.png`
-    if (frame?.fileName !== expectedFileName || Number(frame.visiblePixels) < 1) {
-      throw new Error('Action frame QA frames must be complete before approval')
-    }
-  })
-}
-
 const handlePost = async ({ request, response, dataDir, url }) => {
   try {
     const body = await readJsonBody(request)
@@ -288,7 +251,7 @@ const handlePost = async ({ request, response, dataDir, url }) => {
       if (current.status !== 'ready_for_review') {
         throw new Error(`Run must be ready_for_review before approval: ${current.status}`)
       }
-      assertActionFrameQaPassed({ dataDir, actionFrames: current.artifacts?.actionFrames })
+      assertRunActionFrameQaPassed({ dataDir, run: current, operation: 'approval' })
       const run = updateRunStatus({
         dataDir,
         runId,

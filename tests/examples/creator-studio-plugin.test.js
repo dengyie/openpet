@@ -1429,6 +1429,168 @@ test('creator studio import-approved-action rejects failed action frame QA befor
   }
 })
 
+test('creator studio approve-run rejects action frames without visible pixel evidence', async () => {
+  const { createRun, readRun, updateRunStatus } = require('../../examples/plugins/creator-studio/lib/run-store')
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-approve-action-qa-'))
+  const framesDir = path.join(dataDir, 'runs/demo/frames/actions/shy-spin')
+  const qaDir = path.join(dataDir, 'runs/demo/qa')
+  fs.mkdirSync(framesDir, { recursive: true })
+  fs.mkdirSync(qaDir, { recursive: true })
+  await sharp({
+    create: {
+      width: 192,
+      height: 208,
+      channels: 4,
+      background: { r: 240, g: 120, b: 140, alpha: 1 }
+    }
+  }).png().toFile(path.join(framesDir, '0001.png'))
+  fs.writeFileSync(
+    path.join(qaDir, 'action-frame-validation.json'),
+    `${JSON.stringify(createActionFrameQa({ visiblePixels: 0 }), null, 2)}\n`
+  )
+  const run = createRun({
+    dataDir,
+    input: {
+      petName: 'Action Approval QA Cat',
+      petId: 'action-approval-qa-cat',
+      backend: 'cloud',
+      prompt: '点击害羞转圈',
+      generationTask: {
+        mode: 'single-action',
+        targetPet: 'current',
+        styleSource: 'currentPet',
+        actions: [{
+          actionId: 'shy-spin',
+          name: '害羞转圈',
+          motionPrompt: '点击害羞转圈',
+          frameCount: 1,
+          triggerProposal: { type: 'click', binding: 'clickAction' }
+        }]
+      }
+    }
+  })
+  updateRunStatus({
+    dataDir,
+    runId: run.runId,
+    status: 'ready_for_review',
+    patch: {
+      reviewStatus: 'pending',
+      currentStep: 'review',
+      artifacts: {
+        actionFrames: {
+          actionId: 'shy-spin',
+          name: '害羞转圈',
+          framesDir,
+          qa: path.join(qaDir, 'action-frame-validation.json'),
+          frameCount: 1,
+          frameWidth: 192,
+          frameHeight: 208,
+          triggerProposal: { type: 'click', binding: 'clickAction' }
+        }
+      }
+    }
+  })
+
+  const approved = runCreatorCommand({
+    command: 'approve-run',
+    dataDir,
+    payload: { runId: run.runId }
+  })
+  const stored = readRun({ dataDir, runId: run.runId })
+
+  assert.equal(approved.status, 1)
+  assert.equal(approved.json.ok, false)
+  assert.match(approved.json.error, /QA frames must be complete/)
+  assert.equal(stored.status, 'ready_for_review')
+  assert.equal(stored.reviewStatus, 'pending')
+})
+
+test('creator studio import-approved-action rejects missing action frame files before bridge import', async () => {
+  const { createRun, readRun, updateRunStatus } = require('../../examples/plugins/creator-studio/lib/run-store')
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-import-action-missing-frame-'))
+  const framesDir = path.join(dataDir, 'runs/demo/frames/actions/shy-spin')
+  const qaDir = path.join(dataDir, 'runs/demo/qa')
+  fs.mkdirSync(framesDir, { recursive: true })
+  fs.mkdirSync(qaDir, { recursive: true })
+  fs.writeFileSync(
+    path.join(qaDir, 'action-frame-validation.json'),
+    `${JSON.stringify(createActionFrameQa(), null, 2)}\n`
+  )
+  const run = createRun({
+    dataDir,
+    input: {
+      petName: 'Action Missing Frame Cat',
+      petId: 'action-missing-frame-cat',
+      backend: 'cloud',
+      prompt: '点击害羞转圈',
+      generationTask: {
+        mode: 'single-action',
+        targetPet: 'current',
+        styleSource: 'currentPet',
+        actions: [{
+          actionId: 'shy-spin',
+          name: '害羞转圈',
+          motionPrompt: '点击害羞转圈',
+          frameCount: 1,
+          triggerProposal: { type: 'click', binding: 'clickAction' }
+        }]
+      }
+    }
+  })
+  updateRunStatus({
+    dataDir,
+    runId: run.runId,
+    status: 'approved',
+    patch: {
+      reviewStatus: 'approved',
+      currentStep: 'approved',
+      artifacts: {
+        actionFrames: {
+          actionId: 'shy-spin',
+          name: '害羞转圈',
+          framesDir,
+          qa: path.join(qaDir, 'action-frame-validation.json'),
+          frameCount: 1,
+          frameWidth: 192,
+          frameHeight: 208,
+          triggerProposal: { type: 'click', binding: 'clickAction' }
+        }
+      }
+    }
+  })
+  const { server, requests } = createBridgeServer({
+    routes: [{
+      path: '/creator/assets/import-frames',
+      handler: () => ({ body: { ok: true, result: { importedAction: { id: 'shy-spin' } } } })
+    }]
+  })
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const port = server.address().port
+
+  try {
+    const imported = await runCreatorCommandAsync({
+      command: 'import-approved-action',
+      dataDir,
+      payload: { runId: run.runId },
+      env: {
+        OPENPET_BRIDGE_URL: `http://127.0.0.1:${port}`,
+        OPENPET_BRIDGE_TOKEN: 'bridge-token'
+      }
+    })
+    const stored = readRun({ dataDir, runId: run.runId })
+
+    assert.equal(imported.status, 1)
+    assert.equal(imported.json.ok, false)
+    assert.match(imported.json.error, /Action frame file is missing/)
+    assert.equal(stored.status, 'approved')
+    assert.equal(stored.importStatus, 'not-imported')
+    assert.equal(requests.length, 0)
+  } finally {
+    server.closeAllConnections?.()
+    await new Promise((resolve) => server.close(resolve))
+  }
+})
+
 test('creator studio create-run command drafts a generation task from a conversation prompt', () => {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-create-task-'))
 
