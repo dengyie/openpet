@@ -13,6 +13,9 @@ const WORK_AREA_MARGIN = 8
 const MIN_TTL_MS = 6000
 const MAX_TTL_MS = 30000
 const MANUAL_OPEN_PROMPT = '想聊点什么？'
+const MAX_DIALOGUE_ITEMS = 12
+const MAX_NOTICE_ITEMS = 3
+const MAX_NOTICE_BUFFER_ITEMS = 20
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max)
 
@@ -120,6 +123,80 @@ const normalizeMessagePayload = (payload = {}) => {
   }
 }
 
+const classifyBubbleChatKind = ({ source } = {}) => (
+  String(source || '').trim() === 'ai' ? 'dialogue' : 'notice'
+)
+
+const createBubbleItemId = ({ kind, source, createdAt, text }) => {
+  const seed = `${kind}:${source || ''}:${createdAt || ''}:${text || ''}`
+  let hash = 0
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = ((hash << 5) - hash + seed.charCodeAt(index)) | 0
+  }
+  return `bubble:${kind}:${Math.abs(hash).toString(36)}`
+}
+
+const normalizeBubbleChatItem = (payload = {}) => {
+  const message = normalizeMessagePayload(payload)
+  if (!message) return null
+  const kind = payload.kind === 'dialogue' || payload.kind === 'notice'
+    ? payload.kind
+    : classifyBubbleChatKind({ source: message.source })
+  const role = ['user', 'pet', 'system'].includes(payload.role)
+    ? payload.role
+    : (kind === 'dialogue' ? 'pet' : 'system')
+  const createdAt = message.createdAt
+  return {
+    id: typeof payload.id === 'string' && payload.id ? payload.id : createBubbleItemId({ kind, source: message.source, createdAt, text: message.text }),
+    kind,
+    role,
+    text: message.text,
+    source: message.source || (kind === 'dialogue' ? 'ai' : 'pet'),
+    createdAt,
+    conversationId: typeof payload.conversationId === 'string' ? payload.conversationId : '',
+    messageId: typeof payload.messageId === 'string' ? payload.messageId : '',
+    status: ['sending', 'sent', 'failed'].includes(payload.status) ? payload.status : 'sent',
+    ttlMs: message.ttlMs,
+    petPackId: message.petPackId
+  }
+}
+
+const normalizeConversationMessage = (message = {}, index = 0) => {
+  if (!['user', 'assistant'].includes(message?.role)) return null
+  const text = String(message.content || '').trim().replace(/\s+/g, ' ')
+  if (!text) return null
+  const createdAt = typeof message.createdAt === 'string' && message.createdAt ? message.createdAt : new Date().toISOString()
+  return {
+    id: `dialogue:${message.id || index}`,
+    kind: 'dialogue',
+    role: message.role === 'user' ? 'user' : 'pet',
+    text: text.slice(0, 1000),
+    source: message.role === 'user' ? 'user' : 'ai',
+    createdAt,
+    conversationId: typeof message.conversationId === 'string' ? message.conversationId : '',
+    messageId: typeof message.id === 'string' ? message.id : '',
+    status: 'sent'
+  }
+}
+
+const createDialogueItemsFromMessages = (messages = []) => (
+  (Array.isArray(messages) ? messages : [])
+    .map((message, index) => normalizeConversationMessage(message, index))
+    .filter(Boolean)
+    .slice(-MAX_DIALOGUE_ITEMS)
+)
+
+const sortBubbleItems = (items = []) => [...items].sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')))
+
+const buildBubbleChatItems = ({ conversationMessages = [], noticeItems = [] } = {}) => {
+  const dialogueItems = createDialogueItemsFromMessages(conversationMessages)
+  const notices = (Array.isArray(noticeItems) ? noticeItems : [])
+    .map((item) => normalizeBubbleChatItem({ ...item, kind: 'notice', role: item.role || 'system' }))
+    .filter(Boolean)
+    .slice(-MAX_NOTICE_ITEMS)
+  return sortBubbleItems([...dialogueItems, ...notices])
+}
+
 const createManualOpenMessage = () => ({
   text: MANUAL_OPEN_PROMPT,
   source: 'Pet',
@@ -145,6 +222,9 @@ const createPetBubbleChatWindowManager = ({
     pinned: false,
     interacting: false,
     message: null,
+    items: [],
+    noticeItems: [],
+    unseenCount: 0,
     lastUserMessage: null,
     sending: false,
     error: '',
@@ -337,6 +417,55 @@ const createPetBubbleChatWindowManager = ({
     return getState()
   }
 
+  const rebuildItems = ({ conversationMessages = [], noticeItems = state.noticeItems, reason = 'manual' } = {}) => {
+    const normalizedNotices = (Array.isArray(noticeItems) ? noticeItems : [])
+      .map((item) => normalizeBubbleChatItem({ ...item, kind: 'notice', role: item.role || 'system' }))
+      .filter(Boolean)
+      .slice(-MAX_NOTICE_BUFFER_ITEMS)
+    const items = buildBubbleChatItems({ conversationMessages, noticeItems: normalizedNotices })
+    patchState({ items, noticeItems: normalizedNotices })
+    recordLog({
+      level: 'debug',
+      event: 'pet-bubble-chat.items.updated',
+      message: 'Pet bubble chat items updated',
+      details: {
+        reason,
+        itemCount: items.length,
+        noticeCount: normalizedNotices.length,
+        conversationMessageCount: Array.isArray(conversationMessages) ? conversationMessages.length : 0
+      }
+    })
+    return getState()
+  }
+
+  const refreshItems = ({ conversationMessages = [], reason = 'refresh' } = {}) => (
+    rebuildItems({ conversationMessages, noticeItems: state.noticeItems, reason })
+  )
+
+  const appendNoticeOrDialogue = (payload = {}) => {
+    const item = normalizeBubbleChatItem(payload)
+    if (!item) return getState()
+    if (item.kind === 'notice') {
+      const noticeItems = [...state.noticeItems, item].slice(-MAX_NOTICE_BUFFER_ITEMS)
+      const items = buildBubbleChatItems({ noticeItems })
+      patchState({ message: { ...item, ttlMs: item.ttlMs }, items, noticeItems })
+      recordLog({
+        level: 'debug',
+        event: 'pet-bubble-chat.notice.buffered',
+        message: 'Pet bubble chat notice buffered',
+        details: {
+          source: item.source,
+          textChars: item.text.length,
+          noticeCount: noticeItems.length
+        }
+      })
+      return getState()
+    }
+    const items = sortBubbleItems([...state.items.filter((existing) => existing.kind !== 'dialogue' || existing.id !== item.id), item]).slice(-MAX_DIALOGUE_ITEMS - MAX_NOTICE_ITEMS)
+    patchState({ message: { ...item, ttlMs: item.ttlMs }, items })
+    return getState()
+  }
+
   const showMessage = (payload = {}) => {
     const settings = getSettings()
     if (!settings.enabled || !settings.autoPopup) {
@@ -356,6 +485,7 @@ const createPetBubbleChatWindowManager = ({
     }
     const message = normalizeMessagePayload(payload)
     if (!message) return getState()
+    appendNoticeOrDialogue(message)
     const win = ensureWindow()
     syncToPetWindow()
     patchState({ message, visible: true })
@@ -433,6 +563,9 @@ const createPetBubbleChatWindowManager = ({
     setInteracting,
     setPinned,
     setSendingState,
+    appendNoticeOrDialogue,
+    refreshItems,
+    rebuildItems,
     showMessage,
     syncToPetWindow
   }
@@ -440,7 +573,11 @@ const createPetBubbleChatWindowManager = ({
 
 module.exports = {
   calculateBubbleTtlMs,
+  buildBubbleChatItems,
+  classifyBubbleChatKind,
   createPetBubbleChatWindowManager,
+  createDialogueItemsFromMessages,
   normalizeBubbleChatSettings,
+  normalizeBubbleChatItem,
   resolveBubbleBounds
 }

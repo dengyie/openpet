@@ -303,6 +303,29 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     petChatWindowService?.sendStateChanged?.(state)
   }
 
+  const refreshBubbleChatItems = ({ reason = 'refresh' } = {}) => {
+    if (!petBubbleChatWindowService?.refreshItems) return petBubbleChatWindowService?.getState?.() || null
+    let conversationMessages = []
+    try {
+      conversationMessages = (aiTalkService || aiService)?.getConversation?.('') || []
+    } catch (error) {
+      recordAppLog({
+        scope: 'pet-bubble-chat',
+        level: 'warn',
+        actor: 'system',
+        event: 'pet-bubble-chat.items.refresh-failed',
+        message: 'Pet bubble chat items refresh failed',
+        details: {
+          reason,
+          errorName: sanitizeDiagnosticText(error?.name || 'Error'),
+          errorMessage: sanitizeDiagnosticText(error?.message)
+        }
+      })
+      conversationMessages = []
+    }
+    return petBubbleChatWindowService.refreshItems({ conversationMessages, reason })
+  }
+
   const capturePetBubble = (payload = {}, { notify = true } = {}) => {
     const bubble = normalizePetBubble(payload)
     if (!bubble) return lastPetBubble
@@ -478,6 +501,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
       ...payload,
       petPackId: getActivePetPackId()
     })
+    refreshBubbleChatItems({ reason: 'pet-say' })
   })
   petService.onAction?.((payload) => {
     sendToPetWindow(getPetWindow, IPC.PET_PLAY_ACTION, payload)
@@ -492,6 +516,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
         ...bubble,
         petPackId: getActivePetPackId()
       })
+      refreshBubbleChatItems({ reason: 'pet-event' })
     }
   })
 
@@ -701,12 +726,13 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
   ipcMainService.handle(IPC.PET_BUBBLE_CHAT_SHOW_MESSAGE, (_event, payload = {}) => {
     const text = normalizeMessageText(payload?.text)
     if (!text) return petBubbleChatWindowService?.getState?.() || { visible: false, hasWindow: false }
-    return petBubbleChatWindowService?.showMessage?.({
+    const state = petBubbleChatWindowService?.showMessage?.({
       text,
       ttlMs: payload?.ttlMs,
       source: normalizeMessageText(payload?.source) || 'pet-renderer',
       petPackId: getActivePetPackId()
     }) || { visible: false, hasWindow: false }
+    return refreshBubbleChatItems({ reason: 'local-show-message' }) || state
   })
 
   ipcMainService.on(IPC.PET_BUBBLE_CHAT_HIDE, () => {
@@ -741,11 +767,12 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
         lastUserMessage: { text: message }
       })
       const result = await runAiChatRequest({ message, entrypoint: 'control-center' }, { source: 'bubble-chat' })
-      const state = petBubbleChatWindowService?.setSendingState?.({
+      petBubbleChatWindowService?.setSendingState?.({
         sending: false,
         lastUserMessage: { text: message },
         error: ''
-      }) || petBubbleChatWindowService?.getState?.()
+      })
+      const state = refreshBubbleChatItems({ reason: 'bubble-chat-send' }) || petBubbleChatWindowService?.getState?.()
       recordAppLog({
         scope: 'pet-bubble-chat',
         level: 'info',
@@ -825,6 +852,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     try {
       assertPetChatReady()
       const result = await runAiChatRequest({ message, entrypoint: 'control-center' }, { source })
+      refreshBubbleChatItems({ reason: 'pet-chat-send' })
       const state = getPetChatState()
       recordAppLog({
         scope: 'pet-chat',

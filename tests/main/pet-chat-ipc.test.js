@@ -273,6 +273,11 @@ test('pet chat state tracks latest pet bubble from say events', async () => {
   const sentToPetWindow = []
   const utterances = []
   const bubbleChatMessages = []
+  const refreshCalls = []
+  const conversationMessages = [
+    { id: 'u1', role: 'user', content: '你好', createdAt: '2026-06-24T00:00:00.000Z' },
+    { id: 'a1', role: 'assistant', content: '在呢', createdAt: '2026-06-24T00:00:01.000Z' }
+  ]
   const ipcMain = registerPetChatHandlers({
     getPetWindow: () => ({
       isDestroyed: () => false,
@@ -285,7 +290,7 @@ test('pet chat state tracks latest pet bubble from say events', async () => {
       onSay: (handler) => { onSayHandler = handler }
     },
     aiTalkService: {
-      getConversation: () => [],
+      getConversation: () => conversationMessages,
       getPersonaProfile: () => ({ petPackId: 'legacy-cat', petPackDisplayName: 'Legacy Cat' })
     },
     petPackService: {
@@ -301,6 +306,10 @@ test('pet chat state tracks latest pet bubble from say events', async () => {
       showMessage: (payload) => {
         bubbleChatMessages.push(payload)
         return { visible: true }
+      },
+      refreshItems: (payload) => {
+        refreshCalls.push(payload)
+        return { visible: true, items: payload.conversationMessages }
       }
     },
     petChatWindowService: {
@@ -328,13 +337,21 @@ test('pet chat state tracks latest pet bubble from say events', async () => {
     source: 'pet:event',
     ttlMs: 1800
   }])
+  assert.deepEqual(refreshCalls, [{ conversationMessages, reason: 'pet-say' }])
 })
 
 test('pet bubble chat IPC delegates state, open, local message, hide, pin and interaction updates', async () => {
   const calls = []
+  const conversationMessages = [
+    { id: 'u1', role: 'user', content: '旧消息', createdAt: '2026-06-24T00:00:00.000Z' }
+  ]
   const ipcMain = registerPetChatHandlers({
     petPackService: {
       getActivePetPack: () => ({ manifest: { id: 'legacy-cat' } })
+    },
+    aiTalkService: {
+      getConversation: () => conversationMessages,
+      getPersonaProfile: () => ({ petPackId: 'legacy-cat', petPackDisplayName: 'Legacy Cat' })
     },
     petBubbleChatWindowService: {
       getState: () => ({ visible: true, pinned: false }),
@@ -356,6 +373,10 @@ test('pet bubble chat IPC delegates state, open, local message, hide, pin and in
       showMessage: (payload) => {
         calls.push(['showMessage', payload])
         return { visible: true, message: payload }
+      },
+      refreshItems: (payload) => {
+        calls.push(['refreshItems', payload])
+        return { visible: true, refreshed: true, items: payload.conversationMessages }
       }
     }
   })
@@ -367,12 +388,8 @@ test('pet bubble chat IPC delegates state, open, local message, hide, pin and in
   assert.deepEqual(await ipcMain.handlers.get(IPC.PET_BUBBLE_CHAT_SET_INTERACTING)(null, { interacting: true }), { visible: true, interacting: true })
   assert.deepEqual(await ipcMain.handlers.get(IPC.PET_BUBBLE_CHAT_SHOW_MESSAGE)(null, { text: '本地轻量消息', ttlMs: 800 }), {
     visible: true,
-    message: {
-      text: '本地轻量消息',
-      ttlMs: 800,
-      source: 'pet-renderer',
-      petPackId: 'legacy-cat'
-    }
+    refreshed: true,
+    items: conversationMessages
   })
   assert.deepEqual(calls, [
     ['hide', { source: 'pet-bubble-chat-renderer' }],
@@ -384,6 +401,10 @@ test('pet bubble chat IPC delegates state, open, local message, hide, pin and in
       ttlMs: 800,
       source: 'pet-renderer',
       petPackId: 'legacy-cat'
+    }],
+    ['refreshItems', {
+      conversationMessages,
+      reason: 'local-show-message'
     }]
   ])
 })
@@ -475,6 +496,7 @@ test('pet bubble chat send reuses shared AI Talk conversation and updates popup 
   const reply = 'bubble reply'
   const talkCalls = []
   const popupStates = []
+  const refreshCalls = []
   const logs = []
   let conversationMessages = []
   const ipcMain = registerPetChatHandlers({
@@ -508,7 +530,11 @@ test('pet bubble chat send reuses shared AI Talk conversation and updates popup 
         popupStates.push(state)
         return { visible: true, ...state }
       },
-      showMessage: () => ({ visible: true })
+      showMessage: () => ({ visible: true }),
+      refreshItems: (payload) => {
+        refreshCalls.push(payload)
+        return { visible: true, refreshed: true, items: payload.conversationMessages }
+      }
     },
     petChatWindowService: {
       getState: () => ({ alwaysOnTop: true, visible: false, hasWindow: true }),
@@ -526,14 +552,14 @@ test('pet bubble chat send reuses shared AI Talk conversation and updates popup 
   assert.equal(result.reply, reply)
   assert.deepEqual(result.state, {
     visible: true,
-    sending: false,
-    lastUserMessage: { text: prompt },
-    error: ''
+    refreshed: true,
+    items: conversationMessages
   })
   assert.deepEqual(popupStates, [
     { sending: true, lastUserMessage: { text: prompt } },
     { sending: false, lastUserMessage: { text: prompt }, error: '' }
   ])
+  assert.deepEqual(refreshCalls, [{ conversationMessages, reason: 'bubble-chat-send' }])
   assert.equal(JSON.stringify(logs).includes(prompt), false)
   assert.deepEqual(logs.map((entry) => entry.event), [
     'pet-bubble-chat.message.started',
@@ -542,6 +568,57 @@ test('pet bubble chat send reuses shared AI Talk conversation and updates popup 
     'ai-chat.bubble.dispatched',
     'ai-chat.ipc.completed',
     'pet-bubble-chat.message.completed'
+  ])
+})
+
+test('pet chat send refreshes bubble chat items from the shared main conversation', async () => {
+  const prompt = 'hello from full chat'
+  const reply = 'reply visible in mini stream'
+  const refreshCalls = []
+  let conversationMessages = []
+  const ipcMain = registerPetChatHandlers({
+    aiService: {
+      getConfig: () => ({
+        enabled: true,
+        hasApiKey: true,
+        provider: 'openai-compatible',
+        baseUrl: 'http://127.0.0.1:8317/v1',
+        model: 'gpt-5.5'
+      })
+    },
+    aiTalkService: {
+      getPersonaProfile: () => ({ petPackId: 'legacy-cat', petPackDisplayName: 'Legacy Cat' }),
+      getConversation: () => conversationMessages,
+      chat: async () => {
+        conversationMessages = [
+          { id: 'u1', role: 'user', content: prompt, createdAt: '2026-06-24T00:00:00.000Z' },
+          { id: 'a1', role: 'assistant', content: reply, createdAt: '2026-06-24T00:00:01.000Z' }
+        ]
+        return {
+          conversationId: 'control-center:legacy-cat:main',
+          reply,
+          messages: conversationMessages
+        }
+      }
+    },
+    petBubbleChatWindowService: {
+      showMessage: () => ({ visible: true }),
+      refreshItems: (payload) => {
+        refreshCalls.push(payload)
+        return { visible: true, items: payload.conversationMessages }
+      }
+    },
+    petChatWindowService: {
+      getState: () => ({ alwaysOnTop: true, visible: true, hasWindow: true }),
+      sendStateChanged: () => {}
+    }
+  })
+
+  const result = await ipcMain.handlers.get(IPC.PET_CHAT_SEND_MESSAGE)(null, { message: prompt })
+
+  assert.equal(result.reply, reply)
+  assert.deepEqual(refreshCalls, [
+    { conversationMessages, reason: 'pet-chat-send' }
   ])
 })
 

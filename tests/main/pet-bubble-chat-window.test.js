@@ -67,6 +67,47 @@ test('calculateBubbleTtlMs scales with message length and clamps explicit ttl va
   assert.equal(clampedHigh, 30000)
 })
 
+test('bubble chat item helpers classify ai as dialogue and other sources as notices', () => {
+  const {
+    buildBubbleChatItems,
+    classifyBubbleChatKind,
+    createDialogueItemsFromMessages,
+    normalizeBubbleChatItem
+  } = loadModuleWithElectron({ app: { on: () => {} } })
+
+  assert.equal(classifyBubbleChatKind({ source: 'ai' }), 'dialogue')
+  assert.equal(classifyBubbleChatKind({ source: 'plugin:weather' }), 'notice')
+  assert.equal(classifyBubbleChatKind({ source: 'ai:behavior' }), 'notice')
+
+  const aiItem = normalizeBubbleChatItem({ text: '正式回复', source: 'ai', intent: 'notice' })
+  const noticeItem = normalizeBubbleChatItem({ text: '插件提示', source: 'plugin:weather', intent: 'dialogue' })
+  const dialogueItems = createDialogueItemsFromMessages([
+    { id: 'u1', role: 'user', content: '你好', createdAt: '2026-06-24T00:00:00.000Z' },
+    { id: 'a1', role: 'assistant', content: '喵', createdAt: '2026-06-24T00:00:01.000Z' }
+  ])
+  const items = buildBubbleChatItems({
+    conversationMessages: [
+      { id: 'u1', role: 'user', content: '你好', createdAt: '2026-06-24T00:00:00.000Z' },
+      { id: 'a1', role: 'assistant', content: '喵', createdAt: '2026-06-24T00:00:01.000Z' }
+    ],
+    noticeItems: [noticeItem]
+  })
+
+  assert.equal(aiItem.kind, 'dialogue')
+  assert.equal(aiItem.role, 'pet')
+  assert.equal(noticeItem.kind, 'notice')
+  assert.equal(noticeItem.role, 'system')
+  assert.deepEqual(dialogueItems.map((item) => [item.kind, item.role, item.source, item.text]), [
+    ['dialogue', 'user', 'user', '你好'],
+    ['dialogue', 'pet', 'ai', '喵']
+  ])
+  assert.deepEqual(items.map((item) => [item.kind, item.role, item.text]), [
+    ['dialogue', 'user', '你好'],
+    ['dialogue', 'pet', '喵'],
+    ['notice', 'system', '插件提示']
+  ])
+})
+
 test('resolveBubbleBounds anchors above pet and flips below when needed', () => {
   const { resolveBubbleBounds } = loadModuleWithElectron({ app: { on: () => {} } })
 
@@ -173,6 +214,8 @@ test('pet bubble chat manager shows latest message and auto hides when idle', ()
     assert.equal(instances[0].options.height, 260)
     assert.equal(instances[0].bounds.height, 260)
     assert.equal(state.message.text, 'hello there')
+    assert.deepEqual(state.items.map((item) => [item.kind, item.role, item.text]), [['notice', 'system', 'hello there']])
+    assert.equal(state.noticeItems.length, 1)
     assert.equal(timers.at(-1).delay, 6000)
     assert.equal(instances[0].sent.at(-1).channel, IPC.PET_BUBBLE_CHAT_STATE_CHANGED)
 
@@ -183,6 +226,69 @@ test('pet bubble chat manager shows latest message and auto hides when idle', ()
     global.setTimeout = originalSetTimeout
     global.clearTimeout = originalClearTimeout
   }
+})
+
+test('pet bubble chat manager refreshes dialogue items from the active main conversation while keeping notices', () => {
+  const { FakeBrowserWindow } = createFakeBrowserWindow()
+  const { createPetBubbleChatWindowManager } = loadModuleWithElectron({
+    BrowserWindow: FakeBrowserWindow,
+    app: { on: () => {} },
+    screen: {
+      getDisplayMatching: () => ({ workArea: { x: 0, y: 0, width: 900, height: 700 } })
+    }
+  })
+  const manager = createPetBubbleChatWindowManager({
+    BrowserWindow: FakeBrowserWindow,
+    screen: { getDisplayMatching: () => ({ workArea: { x: 0, y: 0, width: 900, height: 700 } }) },
+    settingsService: { get: () => ({ petBubbleChat: { enabled: true, autoPopup: true, autoHide: true } }) },
+    getPetWindow: () => ({
+      isDestroyed: () => false,
+      getBounds: () => ({ x: 300, y: 300, width: 120, height: 120 })
+    })
+  })
+
+  manager.showMessage({ text: '天气插件提示', source: 'plugin:weather', createdAt: '2026-06-24T00:00:02.000Z' })
+  const refreshed = manager.refreshItems({
+    reason: 'test',
+    conversationMessages: [
+      { id: 'u1', role: 'user', content: '你好', createdAt: '2026-06-24T00:00:00.000Z' },
+      { id: 'a1', role: 'assistant', content: '我在', createdAt: '2026-06-24T00:00:01.000Z' }
+    ]
+  })
+
+  assert.deepEqual(refreshed.items.map((item) => [item.kind, item.role, item.text]), [
+    ['dialogue', 'user', '你好'],
+    ['dialogue', 'pet', '我在'],
+    ['notice', 'system', '天气插件提示']
+  ])
+  assert.equal(refreshed.noticeItems.length, 1)
+})
+
+test('pet bubble chat showMessage compatibility path treats ai source as pet dialogue', () => {
+  const { FakeBrowserWindow } = createFakeBrowserWindow()
+  const { createPetBubbleChatWindowManager } = loadModuleWithElectron({
+    BrowserWindow: FakeBrowserWindow,
+    app: { on: () => {} },
+    screen: {
+      getDisplayMatching: () => ({ workArea: { x: 0, y: 0, width: 900, height: 700 } })
+    }
+  })
+  const manager = createPetBubbleChatWindowManager({
+    BrowserWindow: FakeBrowserWindow,
+    screen: { getDisplayMatching: () => ({ workArea: { x: 0, y: 0, width: 900, height: 700 } }) },
+    settingsService: { get: () => ({ petBubbleChat: { enabled: true, autoPopup: true, autoHide: true } }) },
+    getPetWindow: () => ({
+      isDestroyed: () => false,
+      getBounds: () => ({ x: 300, y: 300, width: 120, height: 120 })
+    })
+  })
+
+  const state = manager.showMessage({ text: 'AI 正式回复', source: 'ai', intent: 'notice' })
+
+  assert.deepEqual(state.items.map((item) => [item.kind, item.role, item.source, item.text]), [
+    ['dialogue', 'pet', 'ai', 'AI 正式回复']
+  ])
+  assert.equal(state.noticeItems.length, 0)
 })
 
 test('pet bubble chat manager reuses a single window and latest message replaces prior auto-hide timer', () => {
