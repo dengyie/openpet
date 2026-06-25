@@ -266,7 +266,48 @@ test('pet bubble chat manager refreshes dialogue items from the active main conv
     ['dialogue', 'pet', '我在'],
     ['notice', 'system', '天气插件提示']
   ])
+  assert.equal(refreshed.message.text, '天气插件提示')
   assert.equal(refreshed.noticeItems.length, 1)
+})
+
+test('pet bubble chat showMessage appends notices without dropping dialogue items', () => {
+  const { FakeBrowserWindow } = createFakeBrowserWindow()
+  const { createPetBubbleChatWindowManager } = loadModuleWithElectron({
+    BrowserWindow: FakeBrowserWindow,
+    app: { on: () => {} },
+    screen: {
+      getDisplayMatching: () => ({ workArea: { x: 0, y: 0, width: 900, height: 700 } })
+    }
+  })
+  const manager = createPetBubbleChatWindowManager({
+    BrowserWindow: FakeBrowserWindow,
+    screen: { getDisplayMatching: () => ({ workArea: { x: 0, y: 0, width: 900, height: 700 } }) },
+    settingsService: { get: () => ({ petBubbleChat: { enabled: true, autoPopup: true, autoHide: true } }) },
+    getPetWindow: () => ({
+      isDestroyed: () => false,
+      getBounds: () => ({ x: 300, y: 300, width: 120, height: 120 })
+    })
+  })
+
+  manager.refreshItems({
+    reason: 'test',
+    conversationMessages: [
+      { id: 'u1', role: 'user', content: '你好', createdAt: '2026-06-24T00:00:00.000Z' },
+      { id: 'a1', role: 'assistant', content: '我在', createdAt: '2026-06-24T00:00:01.000Z' }
+    ]
+  })
+  const state = manager.showMessage({
+    text: '插件提示',
+    source: 'plugin:weather',
+    createdAt: '2026-06-24T00:00:02.000Z'
+  })
+
+  assert.deepEqual(state.items.map((item) => [item.kind, item.role, item.text]), [
+    ['dialogue', 'user', '你好'],
+    ['dialogue', 'pet', '我在'],
+    ['notice', 'system', '插件提示']
+  ])
+  assert.equal(state.noticeItems.length, 1)
 })
 
 test('pet bubble chat showMessage compatibility path treats ai source as pet dialogue', () => {

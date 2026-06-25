@@ -29,11 +29,26 @@ const createElement = (id = '') => ({
   disabled: false,
   textContent: '',
   value: '',
+  className: '',
+  dataset: {},
+  children: [],
+  scrollTop: 0,
+  scrollHeight: 0,
   classList: createClassList(),
   attributes: {},
   listeners: {},
   setAttribute(name, value) {
     this.attributes[name] = String(value)
+  },
+  appendChild(child) {
+    this.children.push(child)
+    this.textContent = this.children.map((node) => node.textContent || '').join('')
+    this.scrollHeight = Math.max(this.scrollHeight, this.children.length * 36)
+  },
+  replaceChildren(...children) {
+    this.children = children
+    this.textContent = this.children.map((node) => node.textContent || '').join('')
+    this.scrollHeight = Math.max(this.scrollHeight, this.children.length * 36)
   },
   addEventListener(eventName, callback) {
     this.listeners[eventName] ||= []
@@ -63,12 +78,27 @@ const createHarness = async () => {
     setHitTestMode: [],
     sendMessage: []
   }
+  const initialItems = [
+    { id: 'u1', kind: 'dialogue', role: 'user', text: '你好', source: 'user', createdAt: '2026-06-24T00:00:00.000Z' },
+    { id: 'a1', kind: 'dialogue', role: 'pet', text: '我在', source: 'ai', createdAt: '2026-06-24T00:00:01.000Z' },
+    { id: 'n1', kind: 'notice', role: 'system', text: '天气提醒', source: 'plugin:weather', createdAt: '2026-06-24T00:00:02.000Z' }
+  ]
+  const baseState = () => ({
+    message: initialItems.at(-1),
+    items: initialItems,
+    sending: false,
+    error: '',
+    pinned: false
+  })
+  let latestState = baseState()
   const apiStateListeners = []
   const documentListeners = {}
   const elements = {
     'bubble-shell': createElement('bubble-shell'),
     'source-label': createElement('source-label'),
-    'message-text': createElement('message-text'),
+    'bubble-stream': createElement('bubble-stream'),
+    'bubble-items': createElement('bubble-items'),
+    'new-message-button': createElement('new-message-button'),
     'pin-button': createElement('pin-button'),
     'close-button': createElement('close-button'),
     'last-user-message': createElement('last-user-message'),
@@ -88,26 +118,48 @@ const createHarness = async () => {
       addEventListener() {},
       getSelection: () => selection.text,
       petBubbleChatAPI: {
-        getState: async () => ({ message: { text: 'hello', source: 'Pet' }, sending: false, error: '', pinned: false }),
+        getState: async () => latestState,
         hide: () => {},
-        setPinned: async () => ({ pinned: true, message: { text: 'hello', source: 'Pet' } }),
+        setPinned: async () => {
+          latestState = { ...latestState, pinned: true }
+          return latestState
+        },
         setInteracting: async (interacting) => {
           apiCalls.setInteracting.push(Boolean(interacting))
-          return { message: { text: 'hello', source: 'Pet' }, sending: false, error: '', pinned: false, interacting: Boolean(interacting) }
+          latestState = { ...latestState, interacting: Boolean(interacting) }
+          return latestState
         },
         setHitTestMode: async (payload) => {
           apiCalls.setHitTestMode.push(payload)
-          return { message: { text: 'hello', source: 'Pet' }, sending: false, error: '', pinned: false, hitTestInteractive: Boolean(payload?.interactive) }
+          latestState = { ...latestState, hitTestInteractive: Boolean(payload?.interactive) }
+          return latestState
         },
         sendMessage: async ({ message }) => {
           apiCalls.sendMessage.push(message)
-          return { state: { message: { text: 'reply', source: 'ai' }, sending: false, error: '', pinned: false, interacting: false, lastUserMessage: { text: message } } }
+          latestState = {
+            message: { id: 'a2', kind: 'dialogue', role: 'pet', text: 'reply', source: 'ai', createdAt: '2026-06-24T00:00:04.000Z' },
+            items: [
+              ...initialItems,
+              { id: 'u2', kind: 'dialogue', role: 'user', text: message, source: 'user', createdAt: '2026-06-24T00:00:03.000Z' },
+              { id: 'a2', kind: 'dialogue', role: 'pet', text: 'reply', source: 'ai', createdAt: '2026-06-24T00:00:04.000Z' }
+            ],
+            sending: false,
+            error: '',
+            pinned: false,
+            interacting: false,
+            lastUserMessage: { text: message }
+          }
+          return { state: latestState }
         },
-        onStateChanged: (callback) => apiStateListeners.push(callback)
+        onStateChanged: (callback) => apiStateListeners.push((state) => {
+          latestState = { ...latestState, ...state }
+          callback(latestState)
+        })
       }
     },
     document: {
       getElementById: (id) => elements[id],
+      createElement: (tagName) => createElement(tagName),
       addEventListener(eventName, callback) {
         documentListeners[eventName] ||= []
         documentListeners[eventName].push(callback)
@@ -121,8 +173,25 @@ const createHarness = async () => {
   context.globalThis = context
   vm.runInNewContext(rendererSource, context, { filename: 'pet-bubble-chat-renderer.js' })
   await Promise.resolve()
+  await Promise.resolve()
   return { apiCalls, apiStateListeners, documentListeners, elements, focusState, selection }
 }
+
+test('bubble chat renderer renders user, pet and notice items as a mini dialogue stream', async () => {
+  const harness = await createHarness()
+  const { elements } = harness
+  const items = elements['bubble-items'].children
+
+  assert.equal(elements['bubble-shell'].hidden, false)
+  assert.equal(items.length, 3)
+  assert.match(items[0].className, /bubble-item--user/)
+  assert.match(items[1].className, /bubble-item--pet/)
+  assert.match(items[2].className, /bubble-item--notice/)
+  assert.match(items[0].textContent, /你好/)
+  assert.match(items[1].textContent, /我在/)
+  assert.match(items[2].textContent, /天气提醒/)
+  assert.equal(elements['source-label'].textContent, 'plugin:weather')
+})
 
 test('bubble chat renderer sends mini input on Enter and collapses interaction after success', async () => {
   const harness = await createHarness()
@@ -143,7 +212,9 @@ test('bubble chat renderer sends mini input on Enter and collapses interaction a
   assert.deepEqual(apiCalls.sendMessage, ['hello bubble'])
   assert.equal(input.value, '')
   assert.equal(elements['send-button'].textContent, '发送')
-  assert.equal(elements['last-user-message'].textContent, '你：hello bubble')
+  assert.equal(elements['last-user-message'].hidden, true)
+  assert.match(elements['bubble-items'].textContent, /hello bubble/)
+  assert.match(elements['bubble-items'].textContent, /reply/)
   assert.equal(apiCalls.setInteracting.includes(false), true)
   assert.equal(apiCalls.setHitTestMode.some((payload) => payload.interactive === true), true)
   assert.equal(apiCalls.setHitTestMode.at(-1).interactive, false)
@@ -162,6 +233,32 @@ test('bubble chat renderer keeps interaction while text is selected and releases
   assert.equal(apiCalls.setInteracting.at(-1), false)
   assert.equal(apiCalls.setHitTestMode.at(-2).interactive, true)
   assert.equal(apiCalls.setHitTestMode.at(-1).interactive, false)
+})
+
+test('bubble chat renderer shows and clears a new-message prompt while user is interacting', async () => {
+  const harness = await createHarness()
+  const { apiStateListeners, documentListeners, elements } = harness
+
+  await dispatchDocument(documentListeners, 'mouseenter')
+  apiStateListeners[0]({
+    message: { id: 'a2', kind: 'dialogue', role: 'pet', text: '新的回复', source: 'ai', createdAt: '2026-06-24T00:00:03.000Z' },
+    items: [
+      { id: 'u1', kind: 'dialogue', role: 'user', text: '你好', source: 'user', createdAt: '2026-06-24T00:00:00.000Z' },
+      { id: 'a1', kind: 'dialogue', role: 'pet', text: '我在', source: 'ai', createdAt: '2026-06-24T00:00:01.000Z' },
+      { id: 'n1', kind: 'notice', role: 'system', text: '天气提醒', source: 'plugin:weather', createdAt: '2026-06-24T00:00:02.000Z' },
+      { id: 'a2', kind: 'dialogue', role: 'pet', text: '新的回复', source: 'ai', createdAt: '2026-06-24T00:00:03.000Z' }
+    ],
+    sending: false,
+    error: '',
+    pinned: false
+  })
+
+  assert.equal(elements['new-message-button'].hidden, false)
+  assert.equal(elements['new-message-button'].textContent, '有新消息')
+
+  await dispatch(elements['new-message-button'], 'click', { stopPropagation() {} })
+
+  assert.equal(elements['new-message-button'].hidden, true)
 })
 
 test('bubble chat renderer enables hit-test interaction while hovered and focused', async () => {

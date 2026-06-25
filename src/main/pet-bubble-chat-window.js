@@ -187,6 +187,12 @@ const createDialogueItemsFromMessages = (messages = []) => (
 )
 
 const sortBubbleItems = (items = []) => [...items].sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')))
+const getLatestBubbleItem = (items = [], fallback = null) => items.at(-1) || fallback || null
+const getCurrentDialogueItems = (items = []) => (
+  (Array.isArray(items) ? items : [])
+    .filter((item) => item?.kind === 'dialogue' && item.text)
+    .slice(-MAX_DIALOGUE_ITEMS)
+)
 
 const buildBubbleChatItems = ({ conversationMessages = [], noticeItems = [] } = {}) => {
   const dialogueItems = createDialogueItemsFromMessages(conversationMessages)
@@ -440,7 +446,7 @@ const createPetBubbleChatWindowManager = ({
       .filter(Boolean)
       .slice(-MAX_NOTICE_BUFFER_ITEMS)
     const items = buildBubbleChatItems({ conversationMessages, noticeItems: normalizedNotices })
-    patchState({ items, noticeItems: normalizedNotices })
+    patchState({ items, noticeItems: normalizedNotices, message: getLatestBubbleItem(items, state.message) })
     recordLog({
       level: 'debug',
       event: 'pet-bubble-chat.items.updated',
@@ -464,7 +470,10 @@ const createPetBubbleChatWindowManager = ({
     if (!item) return getState()
     if (item.kind === 'notice') {
       const noticeItems = [...state.noticeItems, item].slice(-MAX_NOTICE_BUFFER_ITEMS)
-      const items = buildBubbleChatItems({ noticeItems })
+      const items = sortBubbleItems([
+        ...getCurrentDialogueItems(state.items),
+        ...noticeItems.slice(-MAX_NOTICE_ITEMS)
+      ])
       patchState({ message: { ...item, ttlMs: item.ttlMs }, items, noticeItems })
       recordLog({
         level: 'debug',

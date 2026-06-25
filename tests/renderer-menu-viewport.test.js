@@ -195,6 +195,13 @@ test('menu blur leaves the current action viewport intact', async () => {
   assert.equal(elements.cat.style.bottom, initialCatBottom)
 })
 
+test('double-click opens the lightweight bubble chat window', async () => {
+  const { elements, openBubbleChatRequests } = await createRendererHarness()
+
+  await dispatch(elements.pet, 'dblclick')
+
+  assert.equal(openBubbleChatRequests.length, 1)
+})
 
 test('single-click stops an active walk without waiting for the walk timer', async () => {
   const { callbacks, elements, logs } = await createRendererHarness()
