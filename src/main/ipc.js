@@ -747,6 +747,13 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     return petBubbleChatWindowService?.setInteracting?.(Boolean(payload?.interacting), { source: 'pet-bubble-chat-renderer' }) || { visible: false, hasWindow: false }
   })
 
+  ipcMainService.handle(IPC.PET_BUBBLE_CHAT_SET_HIT_TEST_MODE, (_event, payload) => {
+    return petBubbleChatWindowService?.setHitTestMode?.({
+      interactive: Boolean(payload?.interactive),
+      source: normalizeMessageText(payload?.source) || 'pet-bubble-chat-renderer'
+    }) || { visible: false, hasWindow: false }
+  })
+
   ipcMainService.handle(IPC.PET_BUBBLE_CHAT_SEND_MESSAGE, async (_event, payload = {}) => {
     const startedAt = Date.now()
     const message = typeof payload?.message === 'string' ? payload.message.trim() : ''

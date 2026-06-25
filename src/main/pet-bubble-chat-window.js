@@ -216,6 +216,7 @@ const createPetBubbleChatWindowManager = ({
   let bubbleWindow = null
   let hideTimer = null
   let allowClose = false
+  let appliedHitTestInteractive = null
   let state = {
     visible: false,
     hasWindow: false,
@@ -225,6 +226,7 @@ const createPetBubbleChatWindowManager = ({
     items: [],
     noticeItems: [],
     unseenCount: 0,
+    hitTestInteractive: false,
     lastUserMessage: null,
     sending: false,
     error: '',
@@ -245,6 +247,15 @@ const createPetBubbleChatWindowManager = ({
   }
 
   const getSettings = () => normalizeBubbleChatSettings(settingsService.get?.().petBubbleChat)
+
+  const applyHitTestMode = (interactive = state.hitTestInteractive) => {
+    if (!bubbleWindow || bubbleWindow.isDestroyed?.() || typeof bubbleWindow.setIgnoreMouseEvents !== 'function') return
+    const shouldInteract = Boolean(interactive)
+    if (appliedHitTestInteractive === shouldInteract) return
+    if (shouldInteract) bubbleWindow.setIgnoreMouseEvents(false)
+    else bubbleWindow.setIgnoreMouseEvents(true, { forward: true })
+    appliedHitTestInteractive = shouldInteract
+  }
 
   const clearHideTimer = () => {
     if (hideTimer) clearTimeout(hideTimer)
@@ -269,7 +280,8 @@ const createPetBubbleChatWindowManager = ({
   const hide = ({ source = 'pet-bubble-chat' } = {}) => {
     clearHideTimer()
     if (bubbleWindow && !bubbleWindow.isDestroyed?.()) bubbleWindow.hide?.()
-    patchState({ visible: false, interacting: false })
+    patchState({ visible: false, interacting: false, hitTestInteractive: false })
+    applyHitTestMode(false)
     recordLog({
       level: 'info',
       event: 'pet-bubble-chat.window.hidden',
@@ -348,6 +360,7 @@ const createPetBubbleChatWindowManager = ({
       }
     })
     bubbleWindow.setVisibleOnAllWorkspaces?.(true, { visibleOnFullScreen: true })
+    applyHitTestMode(false)
     bubbleWindow.on?.('close', (event) => {
       if (allowClose) return
       event?.preventDefault?.()
@@ -355,6 +368,7 @@ const createPetBubbleChatWindowManager = ({
     })
     bubbleWindow.once?.('closed', () => {
       bubbleWindow = null
+      appliedHitTestInteractive = null
       clearHideTimer()
       patchState({ visible: false, hasWindow: false })
     })
@@ -407,6 +421,9 @@ const createPetBubbleChatWindowManager = ({
     if (focus) {
       win.moveTop?.()
       win.focus?.()
+      setHitTestMode({ interactive: true, source: 'manual-open-focus' })
+    } else {
+      setHitTestMode({ interactive: false, source: 'auto-open-idle' })
     }
     recordLog({
       level: 'info',
@@ -528,6 +545,19 @@ const createPetBubbleChatWindowManager = ({
     return getState()
   }
 
+  const setHitTestMode = ({ interactive = false, source = 'pet-bubble-chat-renderer' } = {}) => {
+    const shouldInteract = Boolean(interactive)
+    patchState({ hitTestInteractive: shouldInteract })
+    applyHitTestMode(shouldInteract)
+    recordLog({
+      level: 'debug',
+      event: 'pet-bubble-chat.hit-test.changed',
+      message: 'Pet bubble chat hit-test mode changed',
+      details: { source, interactive: shouldInteract }
+    })
+    return getState()
+  }
+
   const setSendingState = ({ sending = false, lastUserMessage = null, error = '' } = {}) => {
     const normalizedUserMessage = lastUserMessage && typeof lastUserMessage === 'object'
       ? {
@@ -561,6 +591,7 @@ const createPetBubbleChatWindowManager = ({
     hide,
     open,
     setInteracting,
+    setHitTestMode,
     setPinned,
     setSendingState,
     appendNoticeOrDialogue,

@@ -14,6 +14,7 @@ test('shared IPC contract exports stable frozen channel names', () => {
   assert.equal(IPC.PET_CHAT_SEND_MESSAGE, 'pet-chat:send-message')
   assert.equal(IPC.PET_BUBBLE_CHAT_OPEN, 'pet-bubble-chat:open')
   assert.equal(IPC.PET_BUBBLE_CHAT_SHOW_MESSAGE, 'pet-bubble-chat:show-message')
+  assert.equal(IPC.PET_BUBBLE_CHAT_SET_HIT_TEST_MODE, 'pet-bubble-chat:set-hit-test-mode')
   assert.equal(IPC.AI_GENERATE_PERSONA_DRAFT, 'ai:generate-persona-draft')
   assert.equal(IPC.AI_GET_MEMORY_PROFILE, 'ai:get-memory-profile')
   assert.equal(IPC.AI_DELETE_MEMORY, 'ai:delete-memory')

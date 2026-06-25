@@ -28,6 +28,7 @@ const createFakeBrowserWindow = () => {
       this.visible = false
       this.destroyed = false
       this.sent = []
+      this.ignoreMouseEventsCalls = []
       this.webContents = {
         send: (channel, payload) => this.sent.push({ channel, payload })
       }
@@ -44,6 +45,10 @@ const createFakeBrowserWindow = () => {
     moveTop() { this.movedTop = true }
     hide() { this.visible = false }
     loadFile() { return Promise.resolve() }
+    setIgnoreMouseEvents(ignore, options) {
+      this.ignoreMouseEvents = { ignore, options }
+      this.ignoreMouseEventsCalls.push({ ignore, options })
+    }
     setVisibleOnAllWorkspaces() {}
     on() {}
     once() {}
@@ -383,6 +388,39 @@ test('pet bubble chat manager does not show when disabled and holds visible whil
     global.setTimeout = originalSetTimeout
     global.clearTimeout = originalClearTimeout
   }
+})
+
+test('pet bubble chat manager toggles window-level hit-test passthrough', () => {
+  const { FakeBrowserWindow, instances } = createFakeBrowserWindow()
+  const { createPetBubbleChatWindowManager } = loadModuleWithElectron({
+    BrowserWindow: FakeBrowserWindow,
+    app: { on: () => {} },
+    screen: {
+      getDisplayMatching: () => ({ workArea: { x: 0, y: 0, width: 900, height: 700 } })
+    }
+  })
+  const manager = createPetBubbleChatWindowManager({
+    BrowserWindow: FakeBrowserWindow,
+    screen: { getDisplayMatching: () => ({ workArea: { x: 0, y: 0, width: 900, height: 700 } }) },
+    settingsService: { get: () => ({ petBubbleChat: { enabled: true, autoPopup: true, autoHide: true } }) },
+    getPetWindow: () => ({
+      isDestroyed: () => false,
+      getBounds: () => ({ x: 300, y: 300, width: 120, height: 120 })
+    })
+  })
+
+  manager.showMessage({ text: '可穿透提示', source: 'plugin:test' })
+  const passthrough = manager.setHitTestMode({ interactive: false, source: 'test-idle' })
+  const interactive = manager.setHitTestMode({ interactive: true, source: 'test-hover' })
+
+  assert.equal(instances.length, 1)
+  assert.deepEqual(instances[0].ignoreMouseEventsCalls, [
+    { ignore: true, options: { forward: true } },
+    { ignore: false, options: undefined }
+  ])
+  assert.deepEqual(instances[0].ignoreMouseEvents, { ignore: false, options: undefined })
+  assert.equal(passthrough.hitTestInteractive, false)
+  assert.equal(interactive.hitTestInteractive, true)
 })
 
 test('pet bubble chat manager stays visible during sending and after a recoverable send error', () => {

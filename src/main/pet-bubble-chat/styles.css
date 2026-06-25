@@ -21,11 +21,13 @@ body {
   display: grid;
   place-items: center;
   padding: 8px;
+  pointer-events: none;
   user-select: text;
 }
 
 .bubble-shell {
   width: 100%;
+  pointer-events: none;
 }
 
 .bubble-card {
@@ -44,6 +46,11 @@ body {
   box-shadow: 0 14px 36px rgba(72, 38, 12, 0.2);
   color: #3c2618;
   backdrop-filter: blur(10px);
+  pointer-events: auto;
+}
+
+.bubble-card * {
+  pointer-events: auto;
 }
 
 .bubble-card::after {

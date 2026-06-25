@@ -60,6 +60,7 @@ const dispatchDocument = async (documentListeners, eventName, event = {}) => {
 const createHarness = async () => {
   const apiCalls = {
     setInteracting: [],
+    setHitTestMode: [],
     sendMessage: []
   }
   const apiStateListeners = []
@@ -93,6 +94,10 @@ const createHarness = async () => {
         setInteracting: async (interacting) => {
           apiCalls.setInteracting.push(Boolean(interacting))
           return { message: { text: 'hello', source: 'Pet' }, sending: false, error: '', pinned: false, interacting: Boolean(interacting) }
+        },
+        setHitTestMode: async (payload) => {
+          apiCalls.setHitTestMode.push(payload)
+          return { message: { text: 'hello', source: 'Pet' }, sending: false, error: '', pinned: false, hitTestInteractive: Boolean(payload?.interactive) }
         },
         sendMessage: async ({ message }) => {
           apiCalls.sendMessage.push(message)
@@ -140,6 +145,8 @@ test('bubble chat renderer sends mini input on Enter and collapses interaction a
   assert.equal(elements['send-button'].textContent, '发送')
   assert.equal(elements['last-user-message'].textContent, '你：hello bubble')
   assert.equal(apiCalls.setInteracting.includes(false), true)
+  assert.equal(apiCalls.setHitTestMode.some((payload) => payload.interactive === true), true)
+  assert.equal(apiCalls.setHitTestMode.at(-1).interactive, false)
 })
 
 test('bubble chat renderer keeps interaction while text is selected and releases it after selection clears', async () => {
@@ -153,4 +160,18 @@ test('bubble chat renderer keeps interaction while text is selected and releases
 
   assert.equal(apiCalls.setInteracting.at(-2), true)
   assert.equal(apiCalls.setInteracting.at(-1), false)
+  assert.equal(apiCalls.setHitTestMode.at(-2).interactive, true)
+  assert.equal(apiCalls.setHitTestMode.at(-1).interactive, false)
+})
+
+test('bubble chat renderer enables hit-test interaction while hovered and focused', async () => {
+  const harness = await createHarness()
+  const { apiCalls, documentListeners, elements, focusState } = harness
+  const input = elements['mini-input']
+
+  await dispatchDocument(documentListeners, 'mouseenter')
+  focusState.activeElement = input
+  await dispatch(input, 'focus')
+
+  assert.equal(apiCalls.setHitTestMode.some((payload) => payload.interactive === true), true)
 })

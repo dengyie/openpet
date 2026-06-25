@@ -48,6 +48,10 @@ const setInteracting = (interacting) => {
   window.petBubbleChatAPI.setInteracting(interacting).then(renderState).catch(() => {})
 }
 
+const setHitTestMode = (interactive, source = 'pet-bubble-chat-renderer') => {
+  window.petBubbleChatAPI.setHitTestMode?.({ interactive, source }).then(renderState).catch(() => {})
+}
+
 const hasTextSelection = () => Boolean(String(window.getSelection?.() || '').trim())
 
 const syncUiInteractionState = () => {
@@ -56,6 +60,7 @@ const syncUiInteractionState = () => {
   const shouldInteract = hovering || focused || hasDraft || hasTextSelection() || Boolean(currentState.sending) || Boolean(currentState.error)
   if (!shouldInteract) expanded = false
   setInteracting(shouldInteract)
+  setHitTestMode(shouldInteract, 'renderer-interaction-sync')
   renderState(currentState)
 }
 
@@ -63,6 +68,7 @@ document.addEventListener('mouseenter', () => {
   hovering = true
   expanded = true
   setInteracting(true)
+  setHitTestMode(true, 'renderer-mouseenter')
   renderState(currentState)
 })
 document.addEventListener('mouseleave', () => {
@@ -80,6 +86,7 @@ document.addEventListener('keydown', (event) => {
       miniInput.value = ''
       expanded = false
       setInteracting(false)
+      setHitTestMode(false, 'renderer-escape-collapse')
       renderState(currentState)
       return
     }
@@ -90,6 +97,7 @@ document.addEventListener('keydown', (event) => {
 document.addEventListener('click', () => {
   expanded = true
   setInteracting(true)
+  setHitTestMode(true, 'renderer-click')
   renderState(currentState)
 })
 
@@ -106,12 +114,13 @@ closeButton.addEventListener('click', (event) => {
 miniInput.addEventListener('focus', () => {
   expanded = true
   setInteracting(true)
+  setHitTestMode(true, 'renderer-input-focus')
   renderState(currentState)
 })
 
 miniInput.addEventListener('input', () => {
   expanded = true
-  setInteracting(Boolean(miniInput.value.trim()) || document.activeElement === miniInput)
+  syncUiInteractionState()
   renderState(currentState)
 })
 
@@ -133,6 +142,7 @@ inputForm.addEventListener('submit', async (event) => {
   miniInput.value = ''
   expanded = true
   renderState({ ...currentState, sending: true, error: '', lastUserMessage: { text: message, createdAt: new Date().toISOString() } })
+  setHitTestMode(true, 'renderer-send-started')
   try {
     const result = await window.petBubbleChatAPI.sendMessage({ message })
     renderState(result.state || {})
