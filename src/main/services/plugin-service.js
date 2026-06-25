@@ -17,6 +17,7 @@ const { createPluginServiceStopController } = require('./plugin-service-stop-con
 const { createPluginServiceHealthController } = require('./plugin-service-health-controller')
 const { createPluginServiceLifecycleController } = require('./plugin-service-lifecycle-controller')
 const { createPluginServiceLaunchController } = require('./plugin-service-launch-controller')
+const { createPluginCommandEntryProcessController } = require('./plugin-command-entry-process-controller')
 
 const SDK_REGISTERED_COMMANDS = Symbol('openpet.registeredCommands')
 const STORAGE_KEY_PATTERN = /^[a-zA-Z0-9_.:-]{1,128}$/
@@ -932,6 +933,25 @@ const createPluginService = ({ settingsService, petService, actionService, actio
     spawnServiceProcess
   })
 
+  const commandEntryProcessController = createPluginCommandEntryProcessController({
+    appendLog,
+    appendLimitedOutput,
+    cloneJsonValue,
+    createBridgeRun: ({ pluginId, commandId, handlers }) => commandBridgeService.createRun({ pluginId, commandId, handlers }),
+    deleteBridgeRun: (pluginId, commandId, runId) => commandBridgeService.deleteRun(pluginId, commandId, runId),
+    createBridgeHandlers: createPluginBridgeHandlers,
+    ensureCreatorDirs: ensurePluginCreatorDirs,
+    createEnv: createServiceProcessEnv,
+    parseCommand: parseServiceCommand,
+    resolveCwd: resolveCommandCwd,
+    spawnCommandProcess,
+    setRuntime: (runtime) => commandRuntimeManager.setRuntime(runtime),
+    deleteRuntime: (pluginId, commandId) => commandRuntimeManager.deleteRuntime(pluginId, commandId),
+    attachStopHandler: (runtime) => commandRuntimeManager.attachStopHandler(runtime),
+    readCommandResult,
+    commandProcessTimeoutMs
+  })
+
   const stopPluginServices = (pluginId, options = {}) => serviceRuntimeManager.stopPlugin(pluginId, options)
 
   const stopPluginSetups = (pluginId, options = {}) => setupRuntimeManager.stopPlugin(pluginId, options)
@@ -1098,154 +1118,13 @@ const createPluginService = ({ settingsService, petService, actionService, actio
   }
 
   const runCommandEntryProcess = async ({ plugin, commandEntry, commandId, payload, config }) => {
-    const pluginId = plugin.manifest.id
-    commandRuntimeManager.assertNotActive(pluginId, commandId)
-    const { file, args } = parseServiceCommand(commandEntry.command)
-    const cwd = resolveCommandCwd(plugin.manifest, commandEntry.cwd)
-    const bridgeRun = await commandBridgeService.createRun({
-      pluginId,
+    commandRuntimeManager.assertNotActive(plugin.manifest.id, commandId)
+    return commandEntryProcessController.run({
+      plugin,
+      commandEntry,
       commandId,
-      handlers: createPluginBridgeHandlers(plugin, commandId)
-    })
-    const creatorDirs = ensurePluginCreatorDirs(plugin.manifest)
-    const commandContext = {
-      pluginId,
-      commandId,
-      payload: cloneJsonValue(payload, 'payload', { allowUndefined: true }),
-      config: cloneJsonValue(config, 'config'),
-      paths: {
-        extensionDir: cwd
-      }
-    }
-    let child
-    try {
-      child = spawnCommandProcess(file, args, {
-        cwd,
-        detached: false,
-        env: {
-          ...createServiceProcessEnv(),
-          OPENPET_DATA_DIR: creatorDirs.dataDir,
-          OPENPET_CACHE_DIR: creatorDirs.cacheDir,
-          OPENPET_LOG_DIR: creatorDirs.logDir,
-          OPENPET_BRIDGE_URL: bridgeRun.baseUrl,
-          OPENPET_BRIDGE_TOKEN: bridgeRun.token
-        },
-        shell: false,
-        stdio: ['pipe', 'pipe', 'pipe'],
-        windowsHide: true
-      })
-    } catch (error) {
-      commandBridgeService.deleteRun(pluginId, commandId, bridgeRun.runId)
-      throw error
-    }
-    const runtime = {
-      pluginId,
-      commandId,
-      status: 'running',
-      pid: Number(child.pid) || 0,
-      error: '',
-      child,
-      stopReason: '',
-      stop: null,
-      failStop: null
-    }
-    commandRuntimeManager.setRuntime(runtime)
-    let stdoutText = ''
-    let stderrText = ''
-
-    return new Promise((resolve, reject) => {
-      let settled = false
-      const safeKillChild = () => {
-        try {
-          child.kill?.('SIGTERM')
-        } catch (_) {}
-      }
-      const settle = (callback) => {
-        if (settled) return
-        settled = true
-        if (timeoutId) clearTimeout(timeoutId)
-        commandRuntimeManager.deleteRuntime(pluginId, commandId)
-        commandBridgeService.deleteRun(pluginId, commandId, bridgeRun.runId)
-        callback()
-      }
-      runtime.failStop = (error) => {
-        settle(() => reject(error))
-      }
-      commandRuntimeManager.attachStopHandler(runtime)
-      const timeoutMs = Number.isFinite(Number(commandProcessTimeoutMs))
-        ? Math.max(0, Number(commandProcessTimeoutMs))
-        : LOCAL_PLUGIN_COMMAND_TIMEOUT_MS
-      const timeoutId = timeoutMs > 0
-        ? setTimeout(() => {
-            settle(() => {
-              safeKillChild()
-              reject(new Error(`Plugin command timed out after ${timeoutMs}ms`))
-            })
-          }, timeoutMs)
-        : null
-      timeoutId?.unref?.()
-
-      child.stdout?.on?.('data', (chunk) => {
-        stdoutText = appendLimitedOutput(stdoutText, chunk)
-        const message = String(chunk || '').trim()
-        if (message) appendLog({ pluginId: plugin.manifest.id, commandId, level: 'info', message: `Command stdout: ${message}`.slice(0, 500) })
-      })
-      child.stderr?.on?.('data', (chunk) => {
-        stderrText = appendLimitedOutput(stderrText, chunk)
-        const message = String(chunk || '').trim()
-        if (message) appendLog({ pluginId: plugin.manifest.id, commandId, level: 'error', message: `Command stderr: ${message}`.slice(0, 500) })
-      })
-      child.on?.('error', (error) => {
-        settle(() => reject(error))
-      })
-      child.stdin?.on?.('error', (error) => {
-        settle(() => {
-          safeKillChild()
-          reject(error)
-        })
-      })
-      child.on?.('exit', (code, signal) => {
-        settle(() => {
-          const exitCode = Number.isFinite(Number(code)) ? Number(code) : null
-          if (runtime.status === 'stopping') {
-            runtime.status = 'failed'
-            runtime.error = runtime.stopReason || 'Command stopped'
-            appendLog({ pluginId, commandId, level: 'error', message: 'Command stopped' })
-            const error = new Error(runtime.error)
-            error.openpetLogged = true
-            reject(error)
-            return
-          }
-          if (exitCode !== 0 || signal) {
-            const parsedResult = readCommandResult(stdoutText)
-            const parsedError = parsedResult && typeof parsedResult === 'object' && typeof parsedResult.error === 'string'
-              ? parsedResult.error.trim()
-              : ''
-            const message = parsedError || (signal ? `Plugin command exited with signal ${signal}` : `Plugin command exited with code ${exitCode ?? 'unknown'}`)
-            reject(new Error(message))
-            return
-          }
-          const parsedResult = readCommandResult(stdoutText)
-          resolve({
-            ok: true,
-            pluginId,
-            commandId,
-            exitCode,
-            ...(parsedResult ? { result: parsedResult } : {}),
-            ...(!parsedResult && stdoutText.trim() ? { stdout: stdoutText.trim() } : {}),
-            ...(stderrText.trim() ? { stderr: stderrText.trim() } : {})
-          })
-        })
-      })
-
-      try {
-        child.stdin?.end?.(`${JSON.stringify(commandContext)}\n`)
-      } catch (error) {
-        settle(() => {
-          safeKillChild()
-          reject(error)
-        })
-      }
+      payload,
+      config
     })
   }
 
