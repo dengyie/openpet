@@ -1332,7 +1332,10 @@ const demoApi: ControlCenterApi = {
         ok: false,
         provider: demoState.imageGenerationConfig.provider,
         code: 'missing_api_key',
-        message: 'Image generation API key is missing'
+        message: 'Image generation API key is missing',
+        modelsProbe: 'failed',
+        availableModels: [],
+        currentModelDiscovered: false
       }
     }
     if (
@@ -1342,14 +1345,23 @@ const demoApi: ControlCenterApi = {
         ok: true,
         provider: demoState.imageGenerationConfig.provider,
         code: 'provider_reachable_models_unavailable',
-        message: 'Image Provider is reachable, but the optional /models probe is unavailable'
+        message: 'Image Provider is reachable, but the optional /models probe is unavailable',
+        modelsProbe: 'unavailable',
+        availableModels: [],
+        currentModelDiscovered: false
       }
     }
+    const availableModels = /healthy-models/i.test(demoState.imageGenerationConfig.baseUrl)
+      ? ['gpt-image-2', 'openpet-image-test', 'flux-dev-transparent']
+      : ['gpt-image-2']
     return {
       ok: true,
       provider: demoState.imageGenerationConfig.provider,
       code: 'provider_healthy',
-      message: 'ok'
+      message: 'ok',
+      modelsProbe: 'ok',
+      availableModels,
+      currentModelDiscovered: availableModels.includes(demoState.imageGenerationConfig.model)
     }
   },
   getAiConversation: async () => cloneChatMessages(demoState.petChatMessages),

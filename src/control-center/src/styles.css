@@ -927,6 +927,24 @@ button {
   background: #fef2f2;
 }
 
+.model-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.model-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(226, 232, 240, 0.9);
+  color: #334155;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .connection-result {
   display: grid;
   gap: 5px;

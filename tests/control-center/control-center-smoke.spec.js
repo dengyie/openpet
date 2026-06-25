@@ -463,6 +463,32 @@ test.describe('Control Center smoke', () => {
     await expect(page.locator('.field-row', { hasText: '图片 API Key' })).toContainText('未保存')
   })
 
+  test('shows image provider discovery results and transparency compatibility hints in the demo API', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: 'AI' }).click()
+
+    const imageProviderSection = await expandAiSection(page, '图片 Provider')
+    await imageProviderSection.getByRole('button', { name: /OpenAI 官方/ }).click()
+    await page.getByLabel('图片 Base URL').fill('https://healthy-models.example.test/v1')
+    await page.getByLabel('图片 Model').fill('openpet-image-test')
+    await imageProviderSection.getByRole('button', { name: '保存图片 Provider' }).click()
+
+    const imageApiKeyRow = page.locator('.field-row', { hasText: '图片 API Key' })
+    await imageApiKeyRow.locator('input[type="password"]').fill('sk-image-demo-5678')
+    await page.getByRole('button', { name: '保存图片密钥' }).click()
+    await page.getByRole('button', { name: '检查图片健康' }).click()
+
+    await expect(page.getByTestId('image-model-discovery')).toContainText('模型列表探测成功')
+    await expect(page.getByTestId('image-model-discovery')).toContainText('openpet-image-test')
+    await expect(page.getByTestId('image-model-discovery')).toContainText('已包含当前模型')
+    await expect(page.getByTestId('image-model-compatibility')).toContainText('transparent')
+    await expect(page.getByTestId('image-model-compatibility')).toContainText('OpenAI-compatible')
+
+    await page.getByLabel('图片 Model').fill('gpt-image-2')
+    await expect(page.getByTestId('image-model-compatibility')).toContainText('gpt-image-2')
+    await expect(page.getByTestId('image-model-compatibility')).toContainText('不会强制发送 background 参数')
+  })
+
   test('persists pet persona override and follows the active pet-pack in the demo API', async ({ page }) => {
     await page.goto('/')
     await page.getByRole('button', { name: 'AI' }).click()

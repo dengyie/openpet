@@ -4,6 +4,7 @@ import type {
   AiBehaviorResult,
   AiConfigViewState,
   AiConnectionTestResult,
+  ImageGenerationHealthCheckResult,
   AiMemoryItemViewState,
   AiMemoryProfileViewState,
   AiPersonaDraftViewState,
@@ -35,6 +36,75 @@ const imageProviderPresets = [
     maxConcurrentJobs: 1
   }
 ] as const
+
+const describeImageModelCompatibility = (model: string) => {
+  const normalizedModel = String(model || '').trim()
+  if (!normalizedModel) {
+    return {
+      title: '图片模型兼容提示',
+      summary: '填写图片 Model 后，这里会显示透明背景请求的兼容提示。'
+    }
+  }
+  if (normalizedModel === 'gpt-image-2') {
+    return {
+      title: `${normalizedModel} 透明背景模式`,
+      summary: 'Creator Studio 请求透明输出时，不会强制发送 background 参数；由 provider 原生行为决定透明背景能力。'
+    }
+  }
+  return {
+    title: `${normalizedModel} OpenAI-compatible 透明背景模式`,
+    summary: 'Creator Studio 会按 OpenAI-compatible 方式发送 background=transparent 或 white，并附带 b64_json 输出；请确认当前模型支持 transparent 背景参数。'
+  }
+}
+
+const renderImageModelDiscovery = (result: ImageGenerationHealthCheckResult | null, currentModel: string) => {
+  const normalizedCurrentModel = String(currentModel || '').trim()
+  if (!result) {
+    return (
+      <div className="provider-feedback" data-testid="image-model-discovery">
+        <strong>模型列表探测</strong>
+        <span>运行“检查图片健康”后，这里会显示 /models 探测结果。</span>
+      </div>
+    )
+  }
+
+  const discoveredModels = Array.isArray(result.availableModels) ? result.availableModels : []
+  if (result.modelsProbe === 'ok') {
+    const currentModelIncluded = normalizedCurrentModel ? discoveredModels.includes(normalizedCurrentModel) : false
+    return (
+      <div className={`provider-feedback ${result.ok ? 'ok' : ''}`} data-testid="image-model-discovery">
+        <strong>模型列表探测成功</strong>
+        <span>共发现 {discoveredModels.length} 个模型。</span>
+        <span>{currentModelIncluded ? '已包含当前模型' : '当前模型未出现在探测列表中'}</span>
+        {discoveredModels.length ? (
+          <div className="model-chip-list">
+            {discoveredModels.map((modelName) => (
+              <code key={modelName} className="model-chip">{modelName}</code>
+            ))}
+          </div>
+        ) : (
+          <span>Provider 可达，但没有返回模型列表内容。</span>
+        )}
+      </div>
+    )
+  }
+
+  if (result.modelsProbe === 'unavailable') {
+    return (
+      <div className="provider-feedback" data-testid="image-model-discovery">
+        <strong>模型列表探测不可用</strong>
+        <span>当前 Provider 可达，但没有开放 /models；请手动确认模型名称。</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className={`provider-feedback ${result.ok ? 'ok' : 'error'}`} data-testid="image-model-discovery">
+      <strong>模型列表探测未返回结果</strong>
+      <span>{result.message || '本次健康检查没有拿到模型列表。'}</span>
+    </div>
+  )
+}
 
 const CollapsibleAiSection = ({
   title,
@@ -137,6 +207,7 @@ export interface AiPaneProps {
   providerConfigValidationError: string
   connectionTestResult: AiConnectionTestResult | null
   imageProviderValidationError: string
+  imageHealthResult: ImageGenerationHealthCheckResult | null
   onChange: (partial: Partial<AiConfigViewState>) => void
   onChangeImageGeneration: (partial: Partial<ImageGenerationConfigViewState>) => void
   onSave: () => void | Promise<void>
@@ -208,6 +279,7 @@ export function AiPane({
   providerConfigValidationError,
   connectionTestResult,
   imageProviderValidationError,
+  imageHealthResult,
   onChange,
   onChangeImageGeneration,
   onSave,
@@ -274,6 +346,7 @@ export function AiPane({
     hasUnsavedApiKeyDraft ? '密钥草稿未保存' : ''
   ].filter(Boolean).join(' · ')
   const imageTargetSummary = `${activeImageGenerationConfig.provider} · ${activeImageGenerationConfig.baseUrl} · ${activeImageGenerationConfig.model} · ${activeImageGenerationConfig.hasApiKey ? 'API key saved' : 'API key missing'}`
+  const imageModelCompatibility = describeImageModelCompatibility(imageGenerationConfig.model)
   const applyImageProviderPreset = (preset: typeof imageProviderPresets[number]) => onChangeImageGeneration({
     provider: 'openai-compatible',
     baseUrl: preset.baseUrl,
@@ -529,6 +602,13 @@ export function AiPane({
               <span>{imageHealthStatus}</span>
             </div>
           ) : null}
+
+          {renderImageModelDiscovery(imageHealthResult, imageGenerationConfig.model)}
+
+          <div className="provider-feedback" data-testid="image-model-compatibility">
+            <strong>{imageModelCompatibility.title}</strong>
+            <span>{imageModelCompatibility.summary}</span>
+          </div>
 
           <label className="field-row">
             <span className="field-label">图片 Base URL</span>

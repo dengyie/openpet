@@ -237,6 +237,23 @@ const extractProviderBusinessError = (body) => {
 
 const isOptionalModelsProbeStatus = (status) => [404, 405, 501].includes(Number(status))
 
+const extractDiscoveredModels = (body) => {
+  const source = Array.isArray(body?.data)
+    ? body.data
+    : Array.isArray(body?.models)
+      ? body.models
+      : []
+  const models = []
+  for (const entry of source) {
+    const modelId = typeof entry === 'string'
+      ? entry.trim()
+      : String(entry?.id || '').trim()
+    if (!modelId || models.includes(modelId)) continue
+    models.push(modelId)
+  }
+  return models
+}
+
 const buildProviderGenerationPayload = ({ model, prompt, constraints }) => {
   const payload = {
     model,
@@ -469,19 +486,43 @@ const createImageGenerationModelService = ({
               ok: true,
               provider: config.provider,
               code: 'provider_reachable_models_unavailable',
-              message: 'Image Provider is reachable, but the optional /models probe is unavailable'
+              message: 'Image Provider is reachable, but the optional /models probe is unavailable',
+              modelsProbe: 'unavailable',
+              availableModels: [],
+              currentModelDiscovered: false
             },
             { status, modelsProbe: 'unavailable' }
           )
         }
         return completeHealth(
-          { ok: false, provider: config.provider, code: 'provider_unhealthy', message: `Image Provider responded with HTTP ${status}` },
+          {
+            ok: false,
+            provider: config.provider,
+            code: 'provider_unhealthy',
+            message: `Image Provider responded with HTTP ${status}`,
+            modelsProbe: 'failed',
+            availableModels: [],
+            currentModelDiscovered: false
+          },
           { status, modelsProbe: 'failed' }
         )
       }
+      let body = {}
+      try {
+        body = await response.json()
+      } catch (_) {}
+      const availableModels = extractDiscoveredModels(body)
       return completeHealth(
-        { ok: true, provider: config.provider, code: 'provider_healthy', message: 'Image Provider is reachable' },
-        { status, modelsProbe: 'ok' }
+        {
+          ok: true,
+          provider: config.provider,
+          code: 'provider_healthy',
+          message: 'Image Provider is reachable',
+          modelsProbe: 'ok',
+          availableModels,
+          currentModelDiscovered: availableModels.includes(config.model)
+        },
+        { status, modelsProbe: 'ok', discoveredModelCount: availableModels.length }
       )
     } catch (error) {
       recordLog({
