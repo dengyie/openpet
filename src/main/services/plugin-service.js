@@ -16,6 +16,7 @@ const { createPluginServiceRuntimeManager } = require('./plugin-service-runtime-
 const { createPluginServiceStopController } = require('./plugin-service-stop-controller')
 const { createPluginServiceHealthController } = require('./plugin-service-health-controller')
 const { createPluginServiceLifecycleController } = require('./plugin-service-lifecycle-controller')
+const { createPluginServiceLaunchController } = require('./plugin-service-launch-controller')
 
 const SDK_REGISTERED_COMMANDS = Symbol('openpet.registeredCommands')
 const STORAGE_KEY_PATTERN = /^[a-zA-Z0-9_.:-]{1,128}$/
@@ -787,14 +788,6 @@ const createPluginService = ({ settingsService, petService, actionService, actio
     return commandEntry
   }
 
-  const resolveServiceRuntimeDeclaration = (serviceEntry) => {
-    const override = serviceEntry.platforms?.[process.platform] || {}
-    return {
-      command: override.command || serviceEntry.command,
-      cwd: override.cwd || serviceEntry.cwd || '.'
-    }
-  }
-
   const resolvePluginEntryCwd = (manifest, cwd, label) => {
     if (!manifest.basePath) throw new Error('Plugin services require a local plugin directory')
     const basePath = path.resolve(manifest.basePath)
@@ -930,6 +923,13 @@ const createPluginService = ({ settingsService, petService, actionService, actio
     clearHealthSchedule: stopController.clearHealthSchedule,
     createHealthView: createServiceHealthView,
     fallbackStopGracePeriodMs: PLUGIN_SERVICE_STOP_GRACE_PERIOD_MS
+  })
+
+  const launchController = createPluginServiceLaunchController({
+    parseCommand: parseServiceCommand,
+    resolveCwd: resolveServiceCwd,
+    createEnv: createServiceProcessEnv,
+    spawnServiceProcess
   })
 
   const stopPluginServices = (pluginId, options = {}) => serviceRuntimeManager.stopPlugin(pluginId, options)
@@ -1437,16 +1437,9 @@ const createPluginService = ({ settingsService, petService, actionService, actio
       const serviceEntry = getServiceEntry(plugin, serviceId)
       const existingRuntime = serviceRuntimeManager.getRuntime(pluginId, serviceId)
       serviceRuntimeManager.assertNotActive(pluginId, serviceId)
-      const declaration = resolveServiceRuntimeDeclaration(serviceEntry)
-      const { file, args } = parseServiceCommand(declaration.command)
-      const cwd = resolveServiceCwd(plugin.manifest, declaration.cwd)
-      const child = spawnServiceProcess(file, args, {
-        cwd,
-        detached: true,
-        env: createServiceProcessEnv(),
-        shell: false,
-        stdio: ['ignore', 'pipe', 'pipe'],
-        windowsHide: true
+      const { child, cwd, declaration } = launchController.spawnRuntime({
+        pluginManifest: plugin.manifest,
+        serviceEntry
       })
       const runtime = serviceRuntimeManager.setRuntime(lifecycleController.createRuntime({
         pluginId,
