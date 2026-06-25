@@ -275,7 +275,7 @@
     <main>
       <header>
         <h1>Creator Studio</h1>
-        <p>Describe a custom OpenPet action, review the generated task, then generate safe fixture output for import.</p>
+        <p>Describe a custom OpenPet action, validate the workflow with fixture runs, then use cloud or local generation for real host-provider smoke.</p>
       </header>
 
       <div class="grid">
@@ -326,6 +326,10 @@
           <section>
             <h2>Recovery</h2>
             <section id="recovery-panel">No failed generation to recover.</section>
+          </section>
+          <section>
+            <h2>Workflow Guidance</h2>
+            <section id="workflow-guidance-panel">Use fixture for workflow QA first. Before cloud/local smoke, go to Control Center -> AI -> Test saved image Provider.</section>
           </section>
           <section>
             <h2>Import Handoff</h2>
@@ -505,6 +509,27 @@
         ].join('')
       }
 
+      const renderWorkflowGuidance = (run) => {
+        const guidance = run?.workflowGuidance || {}
+        const generation = guidance.generation || {}
+        const importGuidance = guidance.import || {}
+        const checklist = Array.isArray(generation.smokeChecklist) ? generation.smokeChecklist : []
+        const checklistHtml = checklist.length
+          ? `<ul>${checklist.map((entry) => `<li>${escapeHtml(entry)}</li>`).join('')}</ul>`
+          : '<p>No smoke guidance yet.</p>'
+        return [
+          '<div class="notice">',
+          `<strong>${escapeHtml(generation.summary || 'Use fixture for workflow QA first.')}</strong>`,
+          checklistHtml,
+          `<p>Import state: ${escapeHtml(importGuidance.status || 'not-ready')} / Command: ${escapeHtml(importGuidance.command || 'n/a')}</p>`,
+          `<p>${escapeHtml(importGuidance.summary || 'Approve the run before host-owned import.')}</p>`,
+          importGuidance.triggerProposalSummary
+            ? `<p>${escapeHtml(importGuidance.triggerProposalSummary)}</p>`
+            : '',
+          '</div>'
+        ].join('')
+      }
+
       const renderRun = () => {
         const run = state.run
         if (!run?.generationTask) {
@@ -512,6 +537,7 @@
           $('question-panel').textContent = 'No pending question.'
           $('trigger-panel').textContent = 'No trigger proposal yet.'
           $('recovery-panel').textContent = 'No failed generation to recover.'
+          $('workflow-guidance-panel').textContent = 'Use fixture for workflow QA first. Before cloud/local smoke, go to Control Center -> AI -> Test saved image Provider.'
           $('prompt-provenance-panel').textContent = 'Host prompt preview appears after cloud/local generation.'
           $('qa-panel').textContent = 'No generated QA yet.'
           $('action-review-panel').textContent = 'Generated action frames and action-frame-validation.json will appear here before import.'
@@ -543,6 +569,7 @@
         $('generate-button').textContent = run.recovery?.canRetryGeneration ? 'Retry generation' : 'Generate action'
         $('approve-button').disabled = run.status !== 'ready_for_review'
         $('recovery-panel').innerHTML = renderRecoveryPanel(run)
+        $('workflow-guidance-panel').innerHTML = renderWorkflowGuidance(run)
         $('prompt-provenance-panel').innerHTML = renderPromptProvenance(run)
         const actionFrames = run.artifacts?.actionFrames
         const actionReview = state.actionReview

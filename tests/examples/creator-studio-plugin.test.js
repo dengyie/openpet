@@ -2017,9 +2017,12 @@ test('creator studio dashboard asset exists and service script is declared', () 
   assert.match(html, /action-frame-validation\.json/)
   assert.match(html, /id="recovery-panel"/)
   assert.match(html, /id="prompt-provenance-panel"/)
+  assert.match(html, /id="workflow-guidance-panel"/)
   assert.match(html, /Retry generation/)
   assert.match(html, /developerPrompt/)
+  assert.match(html, /Test saved image Provider/)
   assert.match(html, /id="run-logs"/)
+  assert.equal(html.includes('safe fixture output for import'), false)
   assert.equal(html.includes('apiKey'), false)
   assert.equal(/\bsk-[A-Za-z0-9_-]+/.test(html), false)
 })
@@ -2389,6 +2392,138 @@ test('creator studio service exposes sanitized host prompt provenance for dashbo
     else process.env.OPENPET_BRIDGE_TOKEN = previousBridgeToken
     bridgeServer.closeAllConnections?.()
     await new Promise((resolve) => bridgeServer.close(resolve))
+    await new Promise((resolve) => server.close(resolve))
+  }
+})
+
+test('creator studio service exposes workflow guidance for fixture and imported provider runs', async () => {
+  const { createCreatorStudioServer } = require('../../examples/plugins/creator-studio/service/studio-service')
+  const { createRun, updateRunStatus } = require('../../examples/plugins/creator-studio/lib/run-store')
+  const { normalizeGenerationTask } = require('../../examples/plugins/creator-studio/lib/generation-task')
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-service-guidance-'))
+  const dashboardPath = path.join(pluginRoot, 'web', 'dashboard', 'index.html')
+  const server = createCreatorStudioServer({ dataDir, dashboardPath })
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const port = server.address().port
+
+  try {
+    const generationTask = normalizeGenerationTask({
+      mode: 'single-action',
+      targetPet: 'current',
+      styleSource: 'currentPet',
+      actions: [{
+        actionId: 'shy-spin',
+        name: '害羞转圈',
+        motionPrompt: '点击后害羞转圈',
+        loop: false,
+        frameCount: 16,
+        triggerProposal: { type: 'click', binding: 'clickAction', notes: 'User selected click trigger.' }
+      }]
+    })
+    const fixtureRun = createRun({
+      dataDir,
+      input: {
+        petName: 'Fixture Guidance Cat',
+        prompt: '新增一个自定义动作：害羞转圈，点击触发。',
+        originalPrompt: '新增一个自定义动作：害羞转圈，点击触发。',
+        backend: 'fixture',
+        generationTask
+      },
+      now: () => '2026-06-26T00:00:00.000Z'
+    })
+    const importedRun = createRun({
+      dataDir,
+      input: {
+        petName: 'Imported Guidance Cat',
+        prompt: '新增一个自定义动作：害羞转圈，点击触发。',
+        originalPrompt: '新增一个自定义动作：害羞转圈，点击触发。',
+        backend: 'local',
+        generationTask
+      },
+      now: () => '2026-06-26T00:01:00.000Z'
+    })
+    updateRunStatus({
+      dataDir,
+      runId: fixtureRun.runId,
+      status: 'ready_for_review',
+      patch: {
+        taskStatus: 'confirmed',
+        currentStep: 'review',
+        reviewStatus: 'pending',
+        artifacts: {
+          actionFrames: {
+            actionId: 'shy-spin',
+            name: '害羞转圈',
+            qa: path.join(dataDir, 'runs', fixtureRun.runId, 'qa', 'action-frame-validation.json'),
+            contactSheet: path.join(dataDir, 'runs', fixtureRun.runId, 'qa', 'action-frame-contact-sheet.png'),
+            frameCount: 16,
+            frameWidth: 192,
+            frameHeight: 208,
+            triggerProposal: { type: 'click', binding: 'clickAction' }
+          }
+        }
+      },
+      now: () => '2026-06-26T00:02:00.000Z'
+    })
+    updateRunStatus({
+      dataDir,
+      runId: importedRun.runId,
+      status: 'imported',
+      patch: {
+        taskStatus: 'confirmed',
+        currentStep: 'imported',
+        reviewStatus: 'approved',
+        importStatus: 'imported',
+        importedActionId: 'shy-spin',
+        modelSnapshot: {
+          backend: 'local',
+          provider: 'openai-compatible',
+          model: 'local-custom-sprite-v2',
+          baseUrlHost: '127.0.0.1:7860'
+        },
+        triggerProposalSubmission: {
+          ok: true,
+          proposal: {
+            id: 'proposal:click:shy-spin:test'
+          }
+        },
+        artifacts: {
+          actionFrames: {
+            actionId: 'shy-spin',
+            name: '害羞转圈',
+            qa: path.join(dataDir, 'runs', importedRun.runId, 'qa', 'action-frame-validation.json'),
+            contactSheet: path.join(dataDir, 'runs', importedRun.runId, 'qa', 'action-frame-contact-sheet.png'),
+            frameCount: 16,
+            frameWidth: 192,
+            frameHeight: 208,
+            triggerProposal: { type: 'click', binding: 'clickAction' }
+          }
+        }
+      },
+      now: () => '2026-06-26T00:03:00.000Z'
+    })
+
+    const fixtureDetail = await fetch(`http://127.0.0.1:${port}/api/runs/${fixtureRun.runId}`).then((response) => response.json())
+    const importedDetail = await fetch(`http://127.0.0.1:${port}/api/runs/${importedRun.runId}`).then((response) => response.json())
+    const importedSerialized = JSON.stringify(importedDetail)
+
+    assert.equal(fixtureDetail.ok, true)
+    assert.equal(fixtureDetail.run.workflowGuidance.generation.mode, 'fixture-preview')
+    assert.match(fixtureDetail.run.workflowGuidance.generation.summary, /workflow QA/i)
+    assert.equal(fixtureDetail.run.workflowGuidance.generation.smokeChecklist.some((entry) => /cloud or local/i.test(entry)), true)
+
+    assert.equal(importedDetail.ok, true)
+    assert.equal(importedDetail.run.workflowGuidance.generation.mode, 'host-provider')
+    assert.match(importedDetail.run.workflowGuidance.generation.summary, /host-owned local image Provider/i)
+    assert.equal(importedDetail.run.workflowGuidance.generation.smokeChecklist.some((entry) => /Control Center/i.test(entry)), true)
+    assert.equal(importedDetail.run.workflowGuidance.import.status, 'imported')
+    assert.equal(importedDetail.run.workflowGuidance.import.command, 'import-approved-action')
+    assert.match(importedDetail.run.workflowGuidance.import.summary, /Imported action/i)
+    assert.equal(importedDetail.run.workflowGuidance.import.triggerProposalStatus, 'submitted')
+    assert.match(importedDetail.run.workflowGuidance.import.triggerProposalSummary, /Trigger Proposal Inbox/i)
+    assert.equal(importedSerialized.includes('127.0.0.1:7860'), false)
+    assert.equal(importedSerialized.includes(dataDir), false)
+  } finally {
     await new Promise((resolve) => server.close(resolve))
   }
 })

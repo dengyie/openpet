@@ -179,6 +179,100 @@ const createPublicRecovery = ({ dataDir, run }) => {
   }
 }
 
+const createPublicTextList = ({ dataDir, values = [] }) => (
+  Array.isArray(values)
+    ? values.map((value) => createPublicText({ dataDir, value })).filter(Boolean)
+    : []
+)
+
+const resolveImportCommand = (run) => (
+  run.artifacts?.actionFrames
+    ? 'import-approved-action'
+    : 'import-approved-pet'
+)
+
+const createWorkflowGuidance = ({ dataDir, run }) => {
+  const backend = String(run.backend || run.input?.backend || 'fixture')
+  const modelSnapshot = run.modelSnapshot || run.artifacts?.generatedImage?.modelSnapshot || {}
+  const providerLabel = [modelSnapshot.provider, modelSnapshot.model].filter(Boolean).join(' / ')
+  const usesProviderRun = backend !== 'fixture'
+  const generationSummary = usesProviderRun
+    ? (
+        ['ready_for_review', 'approved', 'imported'].includes(run.status)
+          ? `This run already used the host-owned ${backend} image Provider${providerLabel ? ` (${providerLabel})` : ''}.`
+          : run.status === 'failed'
+            ? `This run failed while using the host-owned ${backend} image Provider${providerLabel ? ` (${providerLabel})` : ''}.`
+            : `This run will use the host-owned ${backend} image Provider when generation starts${providerLabel ? ` (${providerLabel})` : ''}.`
+      )
+    : 'Fixture output is for workflow QA only and does not validate real host image Provider quality.'
+  const smokeChecklist = usesProviderRun
+    ? [
+        'Use Control Center -> AI -> Test saved image Provider before production smoke runs.',
+        'The dashboard service cannot run a live provider health check because bridge tokens stay command-scoped.',
+        run.status === 'failed'
+          ? 'Fix the provider readiness issue, then use Retry generation on this same run.'
+          : 'Review QA, prompt provenance, and generated frames before claiming production asset quality.'
+      ]
+    : [
+        'Use fixture runs to validate task flow, QA, and import handoff wiring.',
+        'Switch to cloud or local before claiming production-ready generated assets.',
+        'Use Control Center -> AI -> Test saved image Provider before production smoke runs.'
+      ]
+  const hasActionFrames = Boolean(run.artifacts?.actionFrames)
+  const importCommand = resolveImportCommand(run)
+  let importStatus = 'not-ready'
+  let importSummary = hasActionFrames
+    ? 'Approve the run before using Import Approved Action from Control Center -> Plugins.'
+    : 'Approve the run before using Import Approved Pet from Control Center -> Plugins.'
+  let triggerProposalStatus = hasActionFrames ? 'not-attempted' : 'not-applicable'
+  let triggerProposalSummary = hasActionFrames
+    ? 'Trigger proposal handoff runs during Import Approved Action.'
+    : 'This run does not create an action-frame trigger proposal handoff.'
+
+  if (run.status === 'approved') {
+    importStatus = 'ready'
+    importSummary = importCommand === 'import-approved-action'
+      ? 'Run Import Approved Action from Control Center -> Plugins to complete host-owned action import.'
+      : 'Run Import Approved Pet from Control Center -> Plugins to complete host-owned pet import.'
+  } else if (run.status === 'imported') {
+    importStatus = 'imported'
+    importSummary = importCommand === 'import-approved-action'
+      ? `Imported action ${run.importedActionId || run.artifacts?.actionFrames?.actionId || ''}.`
+      : 'Imported pet-pack output through the host-owned bridge.'
+    if (hasActionFrames) {
+      if (run.triggerProposalSubmission?.ok) {
+        triggerProposalStatus = 'submitted'
+        triggerProposalSummary = `Trigger proposal handoff succeeded. Review it in Actions -> Trigger Proposal Inbox${run.triggerProposalSubmission?.proposal?.id ? ` (${run.triggerProposalSubmission.proposal.id})` : ''}.`
+      } else if (run.triggerProposalSubmission && run.triggerProposalSubmission.ok === false) {
+        triggerProposalStatus = 'failed'
+        triggerProposalSummary = 'Action import succeeded, but trigger proposal handoff failed. Re-run import or inspect the command output before applying trigger rules.'
+      }
+    }
+  } else if (run.status === 'ready_for_review') {
+    importStatus = 'review-required'
+    importSummary = hasActionFrames
+      ? 'Review QA and approve the run before host-owned action import.'
+      : 'Review the generated pet-pack output and approve the run before host-owned pet import.'
+  }
+
+  return {
+    generation: {
+      backend: createPublicText({ dataDir, value: backend }),
+      mode: usesProviderRun ? 'host-provider' : 'fixture-preview',
+      summary: createPublicText({ dataDir, value: generationSummary }),
+      smokeChecklist: createPublicTextList({ dataDir, values: smokeChecklist })
+    },
+    import: {
+      status: createPublicText({ dataDir, value: importStatus }),
+      command: createPublicText({ dataDir, value: importCommand }),
+      summary: createPublicText({ dataDir, value: importSummary }),
+      importedActionId: createPublicText({ dataDir, value: run.importedActionId || '' }),
+      triggerProposalStatus: createPublicText({ dataDir, value: triggerProposalStatus }),
+      triggerProposalSummary: createPublicText({ dataDir, value: triggerProposalSummary })
+    }
+  }
+}
+
 const createPublicArtifacts = ({ dataDir, artifacts = {} }) => {
   const publicArtifacts = {}
   if (artifacts.outputDir) publicArtifacts.outputDir = toDataRelativePath({ dataDir, targetPath: artifacts.outputDir })
@@ -213,7 +307,8 @@ const createPublicRun = ({ dataDir, run }) => {
     ...publicRun,
     artifacts: createPublicArtifacts({ dataDir, artifacts: run.artifacts || {} }),
     developerPrompt: createDeveloperPrompt({ dataDir, run }),
-    recovery: createPublicRecovery({ dataDir, run })
+    recovery: createPublicRecovery({ dataDir, run }),
+    workflowGuidance: createWorkflowGuidance({ dataDir, run })
   }
 }
 
