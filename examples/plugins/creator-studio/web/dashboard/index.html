@@ -316,6 +316,10 @@
             <section id="run-snapshot-panel">Prompt snapshot and wizard state appear after you draft or load a run.</section>
           </section>
           <section>
+            <h2>Next Step</h2>
+            <section id="next-step-panel">Draft a task to see the next recommended action.</section>
+          </section>
+          <section>
             <h2>Task Preview</h2>
             <section id="task-preview">No task drafted yet.</section>
           </section>
@@ -551,10 +555,25 @@
         ].join('')
       }
 
+      const renderNextStep = (run) => {
+        const snapshot = run?.wizardState || {}
+        const nextStep = snapshot.nextStep || {}
+        return [
+          `<div class="notice ${nextStep.blocked ? 'error' : ''}">`,
+          `<strong>${escapeHtml(nextStep.label || 'Draft task')}</strong>`,
+          `<p>${escapeHtml(nextStep.reason || 'Draft a task to see the next recommended action.')}</p>`,
+          nextStep.blocked
+            ? '<p>This step is host-owned or gated outside the dashboard.</p>'
+            : '<p>This step is available directly in the dashboard.</p>',
+          '</div>'
+        ].join('')
+      }
+
       const renderRun = () => {
         const run = state.run
         if (!run?.generationTask) {
           $('run-snapshot-panel').textContent = 'Prompt snapshot and wizard state appear after you draft or load a run.'
+          $('next-step-panel').textContent = 'Draft a task to see the next recommended action.'
           $('task-preview').textContent = 'No task drafted yet.'
           $('question-panel').textContent = 'No pending question.'
           $('trigger-panel').textContent = 'No trigger proposal yet.'
@@ -574,6 +593,7 @@
         const action = run.generationTask.actions[0]
         const question = run.generationTask.questions[0]
         $('run-snapshot-panel').innerHTML = renderRunSnapshot(run)
+        $('next-step-panel').innerHTML = renderNextStep(run)
         $('task-preview').innerHTML = [
           `<strong>${escapeHtml(action.name)}</strong>`,
           `<p>Mode: ${escapeHtml(run.generationTask.mode)} / Frames: ${escapeHtml(action.frameCount)} / Loop: ${action.loop ? 'yes' : 'no'}</p>`,

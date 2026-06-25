@@ -186,28 +186,47 @@ const createWizardState = ({ dataDir, run }) => {
   const status = String(run.status || 'draft')
   let phase = 'draft'
   let summary = 'Draft a task to create a run snapshot.'
+  let nextStepLabel = 'Draft task'
+  let nextStepReason = 'Start from a natural-language action prompt to draft a Creator Studio task.'
+  let nextStepBlocked = false
 
   if (taskStatus === 'needs_input') {
     phase = 'needs-input'
     summary = 'Answer the pending follow-up question to unlock task confirmation.'
+    nextStepLabel = 'Answer follow-up'
+    nextStepReason = 'Choose one of the pending follow-up answers in the dashboard.'
   } else if (taskStatus === 'ready_for_confirmation') {
     phase = 'ready-for-confirmation'
     summary = 'Confirm the drafted task before generation.'
+    nextStepLabel = 'Confirm task'
+    nextStepReason = 'The task is drafted. Confirm it to unlock generation.'
   } else if (status === 'failed') {
     phase = 'failed'
     summary = 'Retry generation on this same run after reviewing the failure details.'
+    nextStepLabel = 'Retry generation'
+    nextStepReason = 'Use the same run to retry generation after checking the failure details.'
   } else if (status === 'ready_for_review') {
     phase = 'ready-for-review'
     summary = 'Review QA artifacts and approve the run for host-owned import.'
+    nextStepLabel = 'Approve run'
+    nextStepReason = 'Review the QA and approve this run to unlock host-owned import.'
   } else if (status === 'approved') {
     phase = 'approved'
     summary = 'Run the host-owned import command from Control Center -> Plugins.'
+    nextStepLabel = run.artifacts?.actionFrames ? 'Import Approved Action' : 'Import Approved Pet'
+    nextStepReason = 'Use Control Center -> Plugins to run the host-owned import command.'
+    nextStepBlocked = true
   } else if (status === 'imported') {
     phase = 'imported'
     summary = 'Host-owned import is complete. Review the imported result inside OpenPet.'
+    nextStepLabel = 'Review imported result'
+    nextStepReason = 'The dashboard cannot apply post-import host actions; review the imported result inside OpenPet.'
+    nextStepBlocked = true
   } else if (taskStatus === 'confirmed') {
     phase = 'ready-to-generate'
     summary = 'Run Generate action to start host-owned generation.'
+    nextStepLabel = 'Generate action'
+    nextStepReason = 'Generation is unlocked for this confirmed task.'
   }
 
   return {
@@ -218,7 +237,12 @@ const createWizardState = ({ dataDir, run }) => {
     taskStatus: createPublicText({ dataDir, value: taskStatus || 'unknown' }),
     currentStep: createPublicText({ dataDir, value: run.currentStep || 'draft' }),
     reviewStatus: createPublicText({ dataDir, value: run.reviewStatus || 'pending' }),
-    importStatus: createPublicText({ dataDir, value: run.importStatus || 'not-imported' })
+    importStatus: createPublicText({ dataDir, value: run.importStatus || 'not-imported' }),
+    nextStep: {
+      label: createPublicText({ dataDir, value: nextStepLabel }),
+      reason: createPublicText({ dataDir, value: nextStepReason }),
+      blocked: Boolean(nextStepBlocked)
+    }
   }
 }
 
