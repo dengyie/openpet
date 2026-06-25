@@ -14,6 +14,7 @@ const { createPluginCommandBridgeService } = require('./plugin-command-bridge-se
 const { createPluginSetupRuntimeManager } = require('./plugin-setup-runtime-manager')
 const { createPluginServiceRuntimeManager } = require('./plugin-service-runtime-manager')
 const { createPluginServiceStopController } = require('./plugin-service-stop-controller')
+const { createPluginServiceHealthController } = require('./plugin-service-health-controller')
 
 const SDK_REGISTERED_COMMANDS = Symbol('openpet.registeredCommands')
 const STORAGE_KEY_PATTERN = /^[a-zA-Z0-9_.:-]{1,128}$/
@@ -29,7 +30,6 @@ const PLUGIN_SERVICE_STOP_GRACE_PERIOD_MS = 1500
 const MIN_PLUGIN_SERVICE_HEALTH_INTERVAL_MS = 15000
 const DEFAULT_PLUGIN_SERVICE_HEALTH_INTERVAL_MS = 30000
 const MAX_PLUGIN_SERVICE_HEALTH_INTERVAL_MS = 300000
-const LOOPBACK_HEALTH_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]'])
 const defaultServiceProcessTree = createServiceProcessTree()
 
 const getDirectoryByteSize = (folderPath) => {
@@ -816,26 +816,6 @@ const createPluginService = ({ settingsService, petService, actionService, actio
 
   const resolveCommandCwd = (manifest, cwd) => resolvePluginEntryCwd(manifest, cwd, 'command')
 
-  const normalizeServiceHealthUrl = (serviceEntry) => {
-    const health = serviceEntry.health || {}
-    const type = String(health.type || '').trim() || 'none'
-    if (type === 'none' || !health.url) throw new Error('Plugin service health check is not configured')
-    if (type !== 'http') throw new Error('Plugin service health type must be http')
-    let healthUrl
-    try {
-      healthUrl = new URL(String(health.url || '').trim())
-    } catch (_) {
-      throw new Error('Plugin service health URL is invalid')
-    }
-    if (!['http:', 'https:'].includes(healthUrl.protocol)) {
-      throw new Error('Plugin service health URL must use HTTP or HTTPS')
-    }
-    if (!LOOPBACK_HEALTH_HOSTS.has(healthUrl.hostname.toLowerCase())) {
-      throw new Error('Plugin service health URL must use a loopback host')
-    }
-    return healthUrl.toString()
-  }
-
   const findPluginForService = (pluginId, { requireEnabled = true } = {}) => {
     const plugin = getPlugins().find((candidate) => candidate.manifest.id === pluginId)
     if (!plugin) throw new Error(`Plugin not found: ${pluginId}`)
@@ -864,38 +844,6 @@ const createPluginService = ({ settingsService, petService, actionService, actio
       stopGracePeriodMs: Number.isFinite(Number(serviceStopGracePeriodMs)) ? Math.max(0, Number(serviceStopGracePeriodMs)) : PLUGIN_SERVICE_STOP_GRACE_PERIOD_MS,
       health: createServiceHealthView({}, serviceEntry)
     }))
-  }
-
-  const clearServiceHealthSchedule = (runtime) => {
-    if (!runtime?.healthTimer) return
-    clearServiceHealthTimer(runtime.healthTimer)
-    runtime.healthTimer = null
-  }
-
-  const scheduleServiceHealthCheck = (pluginId, serviceId, runtime, serviceEntry) => {
-    clearServiceHealthSchedule(runtime)
-    if (!runtime || runtime.status !== 'running') return
-    if (!serviceEntry?.health?.url) return
-    const policy = getPluginServiceHealthPolicy(pluginId, serviceId)
-    if (!policy.enabled) return
-    runtime.healthTimer = setServiceHealthTimer(async () => {
-      runtime.healthTimer = null
-      if (runtime.status !== 'running') return
-      if (runtime.healthChecking || runtime.health?.status === 'checking') {
-        scheduleServiceHealthCheck(pluginId, serviceId, runtime, serviceEntry)
-        return
-      }
-      runtime.healthChecking = true
-      try {
-        await checkServiceHealth(pluginId, serviceId, { reschedule: false })
-      } catch (_) {
-        // checkServiceHealth already records a bounded runtime health result or log.
-      } finally {
-        runtime.healthChecking = false
-        scheduleServiceHealthCheck(pluginId, serviceId, runtime, serviceEntry)
-      }
-    }, policy.intervalMs)
-    runtime.healthTimer?.unref?.()
   }
 
   const stopServiceProcess = (runtime, signal = 'SIGTERM') => {
@@ -947,6 +895,19 @@ const createPluginService = ({ settingsService, petService, actionService, actio
     appendLog,
     stopRuntimeProcess: stopRuntimeProcessWithFallback
   })
+
+  const healthController = createPluginServiceHealthController({
+    appendLog,
+    fetchImpl,
+    getPolicy: getPluginServiceHealthPolicy,
+    createHealthView: createServiceHealthView,
+    setHealthTimer: setServiceHealthTimer,
+    clearHealthTimer: clearServiceHealthTimer,
+    timeoutMs: healthCheckTimeoutMs
+  })
+
+  const clearServiceHealthSchedule = healthController.clearSchedule
+  const scheduleServiceHealthCheck = healthController.scheduleCheck
 
   const stopController = createPluginServiceStopController({
     appendLog,
@@ -1584,65 +1545,8 @@ const createPluginService = ({ settingsService, petService, actionService, actio
     try {
       const plugin = findPluginForService(pluginId)
       const serviceEntry = getServiceEntry(plugin, serviceId)
-      const healthUrl = normalizeServiceHealthUrl(serviceEntry)
       const runtime = getOrCreateServiceRuntime(pluginId, serviceId, serviceEntry)
-      const timeoutMs = Number.isFinite(Number(healthCheckTimeoutMs))
-        ? Math.max(0, Number(healthCheckTimeoutMs))
-        : PLUGIN_SERVICE_HEALTH_TIMEOUT_MS
-      const abortController = timeoutMs > 0 && typeof AbortController === 'function'
-        ? new AbortController()
-        : null
-      let timedOut = false
-      const timeoutId = abortController
-        ? setTimeout(() => {
-            timedOut = true
-            abortController.abort()
-          }, timeoutMs)
-        : null
-      timeoutId?.unref?.()
-      runtime.health = {
-        ...createServiceHealthView(runtime.health || {}, serviceEntry),
-        status: 'checking',
-        url: healthUrl,
-        checkedAt: new Date().toISOString(),
-        message: ''
-      }
-
-      try {
-        const response = await fetchImpl(healthUrl, {
-          method: 'GET',
-          ...(abortController ? { signal: abortController.signal } : {})
-        })
-        const statusCode = Number(response?.status)
-        const hasStatusCode = Number.isFinite(statusCode)
-        const healthy = hasStatusCode ? statusCode >= 200 && statusCode < 300 : Boolean(response?.ok)
-        runtime.health = {
-          status: healthy ? 'healthy' : 'unhealthy',
-          checkedAt: new Date().toISOString(),
-          url: healthUrl,
-          statusCode: hasStatusCode ? statusCode : null,
-          message: healthy ? 'OK' : `HTTP ${hasStatusCode ? statusCode : 'error'}`
-        }
-      } catch (error) {
-        runtime.health = {
-          status: 'unhealthy',
-          checkedAt: new Date().toISOString(),
-          url: healthUrl,
-          statusCode: null,
-          message: timedOut ? 'Health check timed out' : (error.message || 'Health check failed')
-        }
-      } finally {
-        if (timeoutId) clearTimeout(timeoutId)
-      }
-
-      appendLog({
-        pluginId,
-        commandId,
-        level: runtime.health.status === 'healthy' ? 'info' : 'error',
-        message: runtime.health.status === 'healthy' ? 'Service health healthy' : 'Service health unhealthy'
-      })
-
-      if (reschedule) scheduleServiceHealthCheck(pluginId, serviceId, runtime, serviceEntry)
+      await healthController.checkHealth(pluginId, serviceId, runtime, serviceEntry, { reschedule })
 
       return {
         ok: true,
