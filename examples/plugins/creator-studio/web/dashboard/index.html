@@ -431,13 +431,13 @@
     <main>
       <header>
         <h1>Creator Studio</h1>
-        <p>Describe a custom OpenPet action, validate the workflow with fixture runs, then use provider generation for real host-provider smoke.</p>
+        <p>Describe an OpenPet generation task, validate the workflow with fixture runs, then use provider generation for real host-provider smoke.</p>
       </header>
 
       <div class="grid">
         <section class="panel stack">
           <div>
-            <label for="prompt-input">Action prompt</label>
+            <label for="prompt-input">Generation prompt</label>
             <textarea id="prompt-input">新增一个自定义动作：原地打滚，动作要循环。</textarea>
           </div>
           <div>
@@ -504,7 +504,7 @@
           </section>
           <section>
             <h2>Import Handoff</h2>
-            <section id="import-handoff-panel">Generate and approve an action to unlock host-owned import.</section>
+            <section id="import-handoff-panel">Generate and approve a run to unlock host-owned import.</section>
           </section>
         </aside>
       </div>
@@ -520,11 +520,11 @@
         </section>
         <section>
           <h2>Playback Preview</h2>
-          <section id="playback-panel">Generate action frames to inspect playback timing.</section>
+          <section id="playback-panel">Generate output to inspect review artifacts.</section>
         </section>
         <section id="action-review">
           <h2>Single Action Review</h2>
-          <section id="action-review-panel">Generated action frames and action-frame-validation.json will appear here before import.</section>
+          <section id="action-review-panel">Generated review artifacts and QA will appear here before import.</section>
         </section>
         <section>
           <h2>Full Pet Review</h2>
@@ -946,10 +946,10 @@
           $('workflow-guidance-panel').textContent = 'Use fixture for workflow QA first. Before provider smoke, go to Control Center -> AI -> Test saved image Provider.'
           $('prompt-provenance-panel').textContent = 'Host prompt preview appears after provider generation.'
           $('qa-panel').textContent = 'No generated QA yet.'
-          $('playback-panel').textContent = 'Generate action frames to inspect playback timing.'
-          $('action-review-panel').textContent = 'Generated action frames and action-frame-validation.json will appear here before import.'
+          $('playback-panel').textContent = 'Generate output to inspect review artifacts.'
+          $('action-review-panel').textContent = 'Generated review artifacts and QA will appear here before import.'
           $('full-pet-review-panel').textContent = 'Generated pet-pack review artifacts will appear here before import.'
-          $('import-handoff-panel').textContent = 'Generate and approve an action to unlock host-owned import.'
+          $('import-handoff-panel').textContent = 'Generate and approve a run to unlock host-owned import.'
           $('run-logs').textContent = 'No logs yet.'
           $('confirm-button').disabled = true
           $('generate-button').disabled = true

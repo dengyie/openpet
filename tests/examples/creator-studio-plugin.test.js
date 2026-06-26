@@ -2133,6 +2133,17 @@ test('creator studio dashboard asset includes full-pet task preview summary copy
   assert.match(html, /Trigger plan:/)
 })
 
+test('creator studio dashboard asset uses mode-neutral entry copy', () => {
+  const dashboardPath = path.join(pluginRoot, 'web', 'dashboard', 'index.html')
+  const html = fs.readFileSync(dashboardPath, 'utf-8')
+
+  assert.match(html, /Describe an OpenPet generation task/)
+  assert.match(html, /Generation prompt/)
+  assert.match(html, /Generate output to inspect review artifacts\./)
+  assert.match(html, /Generated review artifacts and QA will appear here before import\./)
+  assert.match(html, /Generate and approve a run to unlock host-owned import\./)
+})
+
 test('creator studio service exposes full-pet review details for dashboard clients', async () => {
   const { createRun, updateRunStatus } = require('../../examples/plugins/creator-studio/lib/run-store')
   const { createCreatorStudioServer } = require('../../examples/plugins/creator-studio/service/studio-service')
