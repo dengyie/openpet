@@ -285,6 +285,10 @@
             <section id="prompt-provenance-panel">No prompt provenance yet.</section>
           </section>
           <section>
+            <h2>Generation Recovery</h2>
+            <section id="backend-recovery-panel">No recovery guidance yet.</section>
+          </section>
+          <section>
             <h2>Import Handoff</h2>
             <section id="import-handoff-panel">Generate and approve an action to unlock host-owned import.</section>
           </section>
@@ -308,7 +312,7 @@
     </main>
 
     <script>
-      const state = { run: null, actionReview: null, promptProvenance: null, runs: [] }
+      const state = { run: null, actionReview: null, promptProvenance: null, backendRecovery: null, runs: [] }
       const $ = (id) => document.getElementById(id)
 
       const setStatus = (message, kind = '') => {
@@ -366,6 +370,7 @@
         state.run = payload.run
         state.actionReview = payload.actionReview || null
         state.promptProvenance = payload.promptProvenance || null
+        state.backendRecovery = payload.backendRecovery || null
         renderRunList()
       }
 
@@ -401,6 +406,16 @@
         ].join('')
       }
 
+      const renderBackendRecovery = (recovery) => {
+        if (!recovery) return 'No recovery guidance yet.'
+        return [
+          `<p><strong>${escapeHtml(recovery.backend || 'backend')}</strong> / ${escapeHtml(recovery.state || 'failed')}</p>`,
+          `<p>${escapeHtml(recovery.summary || 'Generation failed.')}</p>`,
+          `<p>${escapeHtml(recovery.guidance || 'Retry after fixing the backend issue.')}</p>`,
+          recovery.canRetry ? `<p>Use <strong>${escapeHtml(recovery.actionLabel || 'Retry generation')}</strong> to try this run again.</p>` : ''
+        ].join('')
+      }
+
       const renderRun = () => {
         const run = state.run
         if (!run?.generationTask) {
@@ -408,6 +423,7 @@
           $('question-panel').textContent = 'No pending question.'
           $('trigger-panel').textContent = 'No trigger proposal yet.'
           $('prompt-provenance-panel').textContent = 'No prompt provenance yet.'
+          $('backend-recovery-panel').textContent = 'No recovery guidance yet.'
           $('qa-panel').textContent = 'No generated QA yet.'
           $('action-review-panel').textContent = 'Generated action frames and action-frame-validation.json will appear here before import.'
           $('import-handoff-panel').textContent = 'Generate and approve an action to unlock host-owned import.'
@@ -426,6 +442,7 @@
         ].join('')
         $('trigger-panel').innerHTML = `<strong>${escapeHtml(action.triggerProposal.type)}</strong><p>${escapeHtml(action.triggerProposal.notes || 'No notes.')}</p>`
         $('prompt-provenance-panel').innerHTML = renderPromptProvenance(state.promptProvenance)
+        $('backend-recovery-panel').innerHTML = renderBackendRecovery(state.backendRecovery)
         if (question) {
           $('question-panel').innerHTML = question.options.map((option) => (
             `<button data-answer="${escapeHtml(option)}">${escapeHtml(option)}</button>`
@@ -498,6 +515,7 @@
           state.run = payload.run
           state.actionReview = payload.actionReview || null
           state.promptProvenance = payload.promptProvenance || null
+          state.backendRecovery = payload.backendRecovery || null
           renderRun()
           await refreshLogs()
           await refreshRunList()
@@ -515,6 +533,7 @@
           state.run = payload.run
           state.actionReview = payload.actionReview || null
           state.promptProvenance = payload.promptProvenance || null
+          state.backendRecovery = payload.backendRecovery || null
           renderRun()
           await refreshLogs()
           await refreshRunList()
@@ -533,6 +552,7 @@
           state.run = payload.run
           state.actionReview = payload.actionReview || null
           state.promptProvenance = payload.promptProvenance || null
+          state.backendRecovery = payload.backendRecovery || null
           renderRun()
           await refreshLogs()
           await refreshRunList()
@@ -549,6 +569,7 @@
           state.run = payload.run
           state.actionReview = payload.actionReview || null
           state.promptProvenance = payload.promptProvenance || null
+          state.backendRecovery = payload.backendRecovery || null
           renderRun()
           await refreshLogs()
           await refreshRunList()
@@ -565,6 +586,7 @@
           state.run = payload.run
           state.actionReview = payload.actionReview || null
           state.promptProvenance = payload.promptProvenance || null
+          state.backendRecovery = payload.backendRecovery || null
           if (!state.actionReview) await fetchRunDetail()
           renderRun()
           await refreshLogs()
@@ -582,6 +604,7 @@
           state.run = payload.run
           state.actionReview = payload.actionReview || null
           state.promptProvenance = payload.promptProvenance || null
+          state.backendRecovery = payload.backendRecovery || null
           renderRun()
           await refreshLogs()
           await refreshRunList()

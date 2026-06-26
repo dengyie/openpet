@@ -150,6 +150,28 @@ const createPromptProvenance = ({ run }) => {
   }
 }
 
+const createBackendRecovery = ({ run }) => {
+  const backendStatus = run.backendStatus || {}
+  if (run.status !== 'failed' || run.currentStep !== 'generate') return null
+  const backend = String(backendStatus.backend || run.backend || run.input?.backend || '')
+  const state = String(backendStatus.state || 'failed')
+  const message = String(backendStatus.message || run.error || '').trim()
+  const summary = message
+    ? `${message.split('.').find(Boolean) || message}.`.replace(/\.\.+$/, '.')
+    : 'Generation failed.'
+  const guidance = state === 'not_configured'
+    ? 'Configure model settings in OpenPet before retrying this run.'
+    : 'Review the provider error, adjust the host image settings if needed, then retry this run.'
+  return {
+    backend,
+    state,
+    canRetry: run.status === 'failed',
+    actionLabel: 'Retry generation',
+    summary,
+    guidance
+  }
+}
+
 const createPublicRun = ({ dataDir, run }) => ({
   ...run,
   artifacts: createPublicArtifacts({ dataDir, artifacts: run.artifacts || {} })
@@ -432,7 +454,8 @@ const createCreatorStudioServer = ({ dataDir, dashboardPath }) => http.createSer
         ok: true,
         run: createPublicRun({ dataDir, run }),
         actionReview: createActionReview({ dataDir, run }),
-        promptProvenance: createPromptProvenance({ run })
+        promptProvenance: createPromptProvenance({ run }),
+        backendRecovery: createBackendRecovery({ run })
       })
       return
     } catch (error) {

@@ -2023,6 +2023,8 @@ test('creator studio dashboard asset exists and service script is declared', () 
   assert.match(html, /action-frame-validation\.json/)
   assert.match(html, /id="run-logs"/)
   assert.match(html, /id="prompt-provenance-panel"/)
+  assert.match(html, /id="backend-recovery-panel"/)
+  assert.match(html, /Generation Recovery/)
   assert.match(html, /Prompt Provenance/)
   assert.equal(html.includes('apiKey'), false)
   assert.equal(/\bsk-[A-Za-z0-9_-]+/.test(html), false)
@@ -2294,6 +2296,74 @@ test('creator studio service exposes task review routes for dashboard clients', 
     assert.equal(approved.actionReview, null)
     assert.equal(JSON.stringify(approved).includes(dataDir), false)
     assert.equal(logs.logs.at(-1).event, 'run.approved')
+  } finally {
+    await new Promise((resolve) => server.close(resolve))
+  }
+})
+
+test('creator studio service exposes backend recovery guidance for failed generation runs', async () => {
+  const { createRun, updateRunStatus } = require('../../examples/plugins/creator-studio/lib/run-store')
+  const { createCreatorStudioServer } = require('../../examples/plugins/creator-studio/service/studio-service')
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-service-failed-run-'))
+  const dashboardPath = path.join(pluginRoot, 'web', 'dashboard', 'index.html')
+  const run = createRun({
+    dataDir,
+    input: {
+      petName: 'Failed Cloud Cat',
+      prompt: '新增一个自定义动作：原地打滚，动作要循环。',
+      backend: 'cloud',
+      generationTask: {
+        mode: 'single-action',
+        targetPet: 'current',
+        styleSource: 'currentPet',
+        actions: [{
+          actionId: 'roll',
+          name: '原地打滚',
+          motionPrompt: '原地打滚',
+          frameCount: 12,
+          triggerProposal: { type: 'click', binding: 'clickAction' }
+        }],
+        questions: []
+      }
+    },
+    now: () => '2026-06-26T00:00:00.000Z'
+  })
+  updateRunStatus({
+    dataDir,
+    runId: run.runId,
+    status: 'failed',
+    patch: {
+      currentStep: 'generate',
+      taskStatus: 'confirmed',
+      backendStatus: {
+        backend: 'cloud',
+        state: 'not_configured',
+        message: 'Cloud backend is not configured. Configure model settings in OpenPet before running this backend.',
+        updatedAt: '2026-06-26T00:01:00.000Z'
+      },
+      error: 'Cloud backend is not configured. Configure model settings in OpenPet before running this backend.'
+    },
+    now: () => '2026-06-26T00:01:00.000Z'
+  })
+
+  const server = createCreatorStudioServer({ dataDir, dashboardPath })
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const port = server.address().port
+
+  try {
+    const detail = await fetch(`http://127.0.0.1:${port}/api/runs/${run.runId}`).then((response) => response.json())
+
+    assert.equal(detail.ok, true)
+    assert.deepEqual(detail.backendRecovery, {
+      backend: 'cloud',
+      state: 'not_configured',
+      canRetry: true,
+      actionLabel: 'Retry generation',
+      summary: 'Cloud backend is not configured.',
+      guidance: 'Configure model settings in OpenPet before retrying this run.'
+    })
+    assert.equal(detail.run.status, 'failed')
+    assert.equal(detail.run.currentStep, 'generate')
   } finally {
     await new Promise((resolve) => server.close(resolve))
   }
