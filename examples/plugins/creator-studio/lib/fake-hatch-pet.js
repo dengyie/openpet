@@ -2,7 +2,9 @@ const fs = require('fs')
 const path = require('path')
 const crypto = require('crypto')
 const { execFileSync } = require('child_process')
+const sharp = require('sharp')
 const { getRunDir, readRun, writeRun } = require('./run-store')
+const { buildActionFramesFromGeneratedImage } = require('./action-frame-builder')
 
 const DEFAULT_ATLAS_WIDTH = 1536
 const DEFAULT_ATLAS_HEIGHT = 1872
@@ -45,8 +47,120 @@ const createCreatorStudioMetadata = (run) => {
   }
 }
 
+const writeJson = (filePath, value) => {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true })
+  fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`)
+}
+
+const createFixtureSourcePng = async ({ outputPath }) => {
+  const catSvg = Buffer.from(`
+    <svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+      <rect width="256" height="256" fill="transparent"/>
+      <path d="M78 66 L104 32 L124 78 Z" fill="#f0b26d"/>
+      <path d="M178 66 L152 32 L132 78 Z" fill="#f0b26d"/>
+      <ellipse cx="128" cy="142" rx="74" ry="70" fill="#f4c27c"/>
+      <ellipse cx="100" cy="136" rx="10" ry="12" fill="#17202a"/>
+      <ellipse cx="156" cy="136" rx="10" ry="12" fill="#17202a"/>
+      <ellipse cx="128" cy="164" rx="16" ry="10" fill="#f7e7c6"/>
+      <path d="M118 162 Q128 172 138 162" stroke="#9f4726" stroke-width="4" fill="none" stroke-linecap="round"/>
+      <path d="M82 172 Q60 178 48 194" stroke="#9f4726" stroke-width="6" fill="none" stroke-linecap="round"/>
+      <path d="M174 172 Q196 178 208 194" stroke="#9f4726" stroke-width="6" fill="none" stroke-linecap="round"/>
+    </svg>
+  `)
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true })
+  await sharp({
+    create: {
+      width: 256,
+      height: 256,
+      channels: 4,
+      background: { r: 0, g: 0, b: 0, alpha: 0 }
+    }
+  })
+    .composite([{ input: catSvg }])
+    .png()
+    .toFile(outputPath)
+}
+
+const generateFixtureActionOutput = async ({ dataDir, runId, now = () => new Date().toISOString() }) => {
+  const run = readRun({ dataDir, runId })
+  const action = Array.isArray(run.generationTask?.actions) ? run.generationTask.actions[0] : null
+  if (!action) throw new Error('Fixture single-action generation requires one planned action')
+  const runDir = getRunDir({ dataDir, runId })
+  const qaDir = path.join(runDir, 'qa')
+  const sourceDir = path.join(runDir, 'frames', 'base')
+  const sourcePath = path.join(sourceDir, '0001.png')
+  const sourceRelativePath = path.relative(path.resolve(dataDir), sourcePath).split(path.sep).join('/')
+  const creatorStudio = createCreatorStudioMetadata(run)
+
+  await createFixtureSourcePng({ outputPath: sourcePath })
+  const generationResult = {
+    ok: true,
+    backend: 'fixture',
+    model: 'fixture-image',
+    generatedAt: now(),
+    outputs: [{
+      dataRelativePath: sourceRelativePath,
+      mimeType: 'image/png',
+      sha256: sha256(sourcePath)
+    }]
+  }
+  const actionFrames = await buildActionFramesFromGeneratedImage({
+    dataDir,
+    generationResult,
+    action,
+    outputFramesDir: path.join(runDir, 'frames', 'actions', action.actionId),
+    qaDir
+  })
+  if (creatorStudio) {
+    writeJson(path.join(qaDir, 'action-generation-task.json'), {
+      ok: true,
+      originalPrompt: run.input.originalPrompt || run.input.prompt || '',
+      mode: creatorStudio.mode,
+      targetPet: creatorStudio.targetPet,
+      styleSource: creatorStudio.styleSource,
+      actions: creatorStudio.actions,
+      importPolicy: creatorStudio.importPolicy
+    })
+  }
+  const nextRun = {
+    ...run,
+    status: 'ready_for_review',
+    currentStep: 'review',
+    updatedAt: now(),
+    artifacts: {
+      ...run.artifacts,
+      outputDir: actionFrames.framesDir,
+      actionFrames: {
+        actionId: actionFrames.actionId,
+        name: action.name,
+        framesDir: actionFrames.framesDir,
+        qa: actionFrames.qaPath,
+        contactSheet: actionFrames.contactSheetPath,
+        frameCount: actionFrames.frameCount,
+        frameWidth: actionFrames.frameWidth,
+        frameHeight: actionFrames.frameHeight,
+        triggerProposal: action.triggerProposal || { type: 'unbound' }
+      },
+      generatedImage: generationResult,
+      ...(creatorStudio ? { actionTaskQa: path.join(qaDir, 'action-generation-task.json') } : {})
+    },
+    reviewStatus: 'pending',
+    error: ''
+  }
+  writeRun({ dataDir, run: nextRun })
+  return {
+    outputDir: actionFrames.framesDir,
+    bundlePath: '',
+    sha256: '',
+    run: nextRun
+  }
+}
+
 const generateFixturePetOutput = async ({ dataDir, runId, now = () => new Date().toISOString() }) => {
   const run = readRun({ dataDir, runId })
+  if (run.generationTask?.mode === 'single-action') {
+    return generateFixtureActionOutput({ dataDir, runId, now })
+  }
   const runDir = getRunDir({ dataDir, runId })
   const outputDir = path.join(runDir, 'outputs')
   const creatorStudio = createCreatorStudioMetadata(run)

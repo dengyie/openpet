@@ -616,20 +616,14 @@ test('creator studio backend runner generates fixture output through the selecte
   })
 
   const output = await runGenerationStep({ dataDir, runId: confirmed.run.runId })
-  const manifest = JSON.parse(fs.readFileSync(path.join(output.outputDir, 'pet.json'), 'utf-8'))
   const actionQa = JSON.parse(fs.readFileSync(path.join(dataDir, 'runs', confirmed.run.runId, 'qa', 'action-generation-task.json'), 'utf-8'))
-  const atlasQa = JSON.parse(fs.readFileSync(path.join(dataDir, 'runs', confirmed.run.runId, 'qa', 'atlas-validation.json'), 'utf-8'))
-  const atlasStats = await sharp(path.join(output.outputDir, 'spritesheet.webp'))
+  const frameQa = JSON.parse(fs.readFileSync(path.join(dataDir, 'runs', confirmed.run.runId, 'qa', 'action-frame-validation.json'), 'utf-8'))
+  const firstFramePath = path.join(output.outputDir, '0001.png')
+  const lastFramePath = path.join(output.outputDir, '0016.png')
+  const frameStats = await sharp(firstFramePath)
     .ensureAlpha()
     .raw()
     .stats()
-  const bundleHash = crypto.createHash('sha256').update(fs.readFileSync(output.bundlePath)).digest('hex')
-
-  assert.equal(manifest.id, confirmed.run.petId)
-  assert.equal(manifest.spritesheetPath, 'spritesheet.webp')
-  assert.equal(manifest.creatorStudio.mode, 'single-action')
-  assert.equal(manifest.creatorStudio.actions[0].name, '被摸头后害羞转圈')
-  assert.equal(manifest.creatorStudio.importPolicy.appliesTriggerAutomatically, false)
   assert.equal(actionQa.ok, true)
   assert.equal(actionQa.mode, 'single-action')
   assert.equal(actionQa.targetPet, 'current')
@@ -638,20 +632,80 @@ test('creator studio backend runner generates fixture output through the selecte
   assert.equal(actionQa.actions[0].triggerProposal.type, 'click')
   assert.equal(actionQa.importPolicy.appliesTriggerAutomatically, false)
   assert.equal(actionQa.importPolicy.triggerProposalOwner, 'openpet-host')
-  assert.equal(atlasQa.visiblePixels > 0, true)
-  assert.equal(atlasStats.channels[3].max > 0, true)
-  assert.equal(fs.existsSync(path.join(output.outputDir, 'spritesheet.webp')), true)
-  assert.equal(fs.existsSync(output.bundlePath), true)
-  assert.equal(output.sha256, bundleHash)
+  assert.equal(frameQa.ok, true)
+  assert.equal(frameQa.actionId, confirmed.run.generationTask.actions[0].actionId)
+  assert.equal(frameQa.frameCount, 16)
+  assert.equal(frameQa.frames.length, 16)
+  assert.equal(frameQa.frames.every((frame) => frame.visiblePixels > 0), true)
+  assert.equal(frameQa.contactSheetRelativePath, `runs/${confirmed.run.runId}/qa/action-frame-contact-sheet.png`)
+  assert.equal(frameStats.channels[3].max > 0, true)
+  assert.equal(fs.existsSync(firstFramePath), true)
+  assert.equal(fs.existsSync(lastFramePath), true)
+  assert.equal(fs.existsSync(path.join(dataDir, 'runs', confirmed.run.runId, 'qa', 'action-frame-contact-sheet.png')), true)
+  assert.equal(output.bundlePath, '')
+  assert.equal(output.sha256, '')
   assert.equal(output.run.taskStatus, 'confirmed')
+  assert.equal(output.run.status, 'ready_for_review')
   assert.equal(output.run.backendStatus.state, 'ready')
   assert.equal(output.run.backendStatus.backend, 'fixture')
+  assert.equal(output.run.artifacts.actionFrames.actionId, confirmed.run.generationTask.actions[0].actionId)
+  assert.equal(output.run.artifacts.generatedImage.outputs[0].dataRelativePath, `runs/${confirmed.run.runId}/frames/base/0001.png`)
   assert.deepEqual(readRunLogs({ dataDir, runId: confirmed.run.runId }).map((entry) => entry.event), [
     'task.drafted',
     'task.confirmed',
     'generate.start',
     'generate.complete'
   ])
+})
+
+test('creator studio backend runner keeps fixture full-pet output on the packaged pet path', async () => {
+  const { confirmTaskRun, draftTaskRun } = require('../../examples/plugins/creator-studio/lib/task-workflow')
+  const { runGenerationStep } = require('../../examples/plugins/creator-studio/lib/backend-runner')
+  const { normalizeGenerationTask } = require('../../examples/plugins/creator-studio/lib/generation-task')
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-full-pet-output-'))
+  const draft = draftTaskRun({
+    dataDir,
+    payload: {
+      petName: 'Sprout Cat',
+      prompt: '生成一只完整的新桌宠。',
+      backend: 'fixture',
+      generationTask: normalizeGenerationTask({
+        mode: 'full-pet',
+        targetPet: 'new',
+        styleSource: 'textOnly',
+        characterBrief: '一只软乎乎的薄荷猫桌宠。',
+        actions: [{
+          actionId: 'idle',
+          name: 'Idle',
+          motionPrompt: 'neutral idle pose',
+          loop: true,
+          frameCount: 12,
+          triggerProposal: { type: 'state', binding: 'idle' }
+        }]
+      })
+    },
+    now: () => '2026-06-19T00:10:00.000Z'
+  })
+  const confirmed = confirmTaskRun({
+    dataDir,
+    runId: draft.run.runId,
+    now: () => '2026-06-19T00:11:00.000Z'
+  })
+
+  const output = await runGenerationStep({ dataDir, runId: confirmed.run.runId })
+  const manifest = JSON.parse(fs.readFileSync(path.join(output.outputDir, 'pet.json'), 'utf-8'))
+  const atlasQa = JSON.parse(fs.readFileSync(path.join(dataDir, 'runs', confirmed.run.runId, 'qa', 'atlas-validation.json'), 'utf-8'))
+  const bundleHash = crypto.createHash('sha256').update(fs.readFileSync(output.bundlePath)).digest('hex')
+
+  assert.equal(manifest.id, confirmed.run.petId)
+  assert.equal(manifest.spritesheetPath, 'spritesheet.webp')
+  assert.equal(manifest.creatorStudio.mode, 'full-pet')
+  assert.equal(manifest.creatorStudio.actions[0].name, 'Idle')
+  assert.equal(atlasQa.visiblePixels > 0, true)
+  assert.equal(fs.existsSync(path.join(output.outputDir, 'spritesheet.webp')), true)
+  assert.equal(fs.existsSync(output.bundlePath), true)
+  assert.equal(output.sha256, bundleHash)
+  assert.equal(output.run.artifacts.actionFrames, undefined)
 })
 
 test('creator studio backend runner refuses unresolved conversational tasks before generation', async () => {
@@ -3023,9 +3077,11 @@ test('creator studio service exposes task review routes for dashboard clients', 
     ])
     assert.equal(generated.run.wizardState.nextStep.label, 'Approve run')
     assert.equal(generated.run.wizardState.nextStep.blocked, false)
+    assert.equal(generated.run.artifacts.actionFrames.actionId.length > 0, true)
     assert.equal(generated.run.artifacts.actionTaskQa.endsWith('action-generation-task.json'), true)
     assert.equal(fs.existsSync(path.join(dataDir, generated.run.artifacts.actionTaskQa)), true)
     assert.equal(JSON.stringify(generated).includes(dataDir), false)
+    assert.equal(generated.actionReview.actionId.length > 0, true)
     assert.equal(approved.ok, true)
     assert.equal(approved.run.status, 'approved')
     assert.equal(approved.run.reviewStatus, 'approved')
@@ -3040,12 +3096,11 @@ test('creator studio service exposes task review routes for dashboard clients', 
       'review:complete',
       'import:blocked'
     ])
-    assert.equal(approved.run.wizardState.nextStep.label, 'Import Approved Pet')
+    assert.equal(approved.run.wizardState.nextStep.label, 'Import Approved Action')
     assert.equal(approved.run.wizardState.nextStep.blocked, true)
     assert.match(approved.run.wizardState.nextStep.reason, /Control Center -> Plugins/i)
-    assert.equal(approved.run.artifacts.generatedImage, undefined)
-    assert.equal(approved.importCommand, 'import-approved-pet')
-    assert.equal(approved.actionReview, null)
+    assert.equal(approved.importCommand, 'import-approved-action')
+    assert.equal(approved.actionReview.actionId.length > 0, true)
     assert.equal(JSON.stringify(approved).includes(dataDir), false)
     assert.equal(logs.logs.at(-1).event, 'run.approved')
   } finally {
