@@ -24,6 +24,7 @@ const { createPluginDashboardOpenController } = require('./plugin-dashboard-open
 const { createPluginResolutionController } = require('./plugin-resolution-controller')
 const { createPluginConfigStorageController } = require('./plugin-config-storage-controller')
 const { createPluginRuntimeSdkController } = require('./plugin-runtime-sdk-controller')
+const { createPluginBridgeHandlersController } = require('./plugin-bridge-handlers-controller')
 
 const STORAGE_KEY_PATTERN = /^[a-zA-Z0-9_.:-]{1,128}$/
 const MAX_PLUGIN_STORAGE_BYTES = 64 * 1024
@@ -358,227 +359,6 @@ const createPluginService = ({ settingsService, petService, actionService, actio
     }
   }
 
-  const createPluginBridgeHandlers = (plugin, commandId) => ({
-    context: async () => {
-      appendLog({ pluginId: plugin.manifest.id, commandId, level: 'info', message: 'Bridge context requested' })
-      return { ok: true, context: createPluginBridgeContext() }
-    },
-    creatorActionsRead: async () => {
-      assertPermission(plugin.manifest, 'actions:read')
-      appendLog({ pluginId: plugin.manifest.id, commandId, level: 'info', message: 'Bridge creator.actions read invoked' })
-      if (!actionService?.getPreviewConfig && !actionService?.getConfig) {
-        throw new Error('Creator action read is not available')
-      }
-      const actions = actionService?.getPreviewConfig?.()
-        || actionService?.getConfig?.()
-        || { defaultAction: '', clickAction: '', actions: [] }
-      return { ok: true, actions }
-    },
-    creatorActionsValidate: async (payload = {}) => {
-      assertPermission(plugin.manifest, 'actions:write')
-      if (!actionService?.validateCreatorActionMutation) throw new Error('Creator action validation is not available')
-      appendLog({ pluginId: plugin.manifest.id, commandId, level: 'info', message: 'Bridge creator.actions validate invoked' })
-      return { ok: true, validation: actionService.validateCreatorActionMutation(payload) }
-    },
-    creatorActionsApply: async (payload = {}) => {
-      assertPermission(plugin.manifest, 'actions:write')
-      if (!actionService?.applyCreatorActionMutation) throw new Error('Creator action apply is not available')
-      appendLog({ pluginId: plugin.manifest.id, commandId, level: 'info', message: 'Bridge creator.actions apply invoked' })
-      const actions = actionService.applyCreatorActionMutation(payload)
-      return { ok: true, actions }
-    },
-    creatorActionsSubmitTriggerProposal: async (payload = {}) => {
-      assertPermission(plugin.manifest, 'actions:write')
-      if (!actionService?.submitTriggerProposal) throw new Error('Creator action trigger proposal submission is not available')
-      appendLog({ pluginId: plugin.manifest.id, commandId, level: 'info', message: 'Bridge creator.actions submit-trigger-proposal invoked' })
-      const result = actionService.submitTriggerProposal(payload)
-      return { ok: true, ...result }
-    },
-    creatorPackManifestRead: async () => {
-      assertPermission(plugin.manifest, 'pack-manifest:read')
-      if (!petPackService?.getActiveCreatorPackManifest) throw new Error('Creator pack manifest read is not available')
-      appendLog({ pluginId: plugin.manifest.id, commandId, level: 'info', message: 'Bridge creator.pack-manifest read invoked' })
-      return { ok: true, manifest: petPackService.getActiveCreatorPackManifest() }
-    },
-    creatorPackManifestValidate: async (payload = {}) => {
-      assertPermission(plugin.manifest, 'pack-manifest:write')
-      if (!petPackService?.validateActiveCreatorPackManifestMutation) throw new Error('Creator pack manifest validation is not available')
-      appendLog({ pluginId: plugin.manifest.id, commandId, level: 'info', message: 'Bridge creator.pack-manifest validate invoked' })
-      return { ok: true, validation: petPackService.validateActiveCreatorPackManifestMutation(payload) }
-    },
-    creatorPackManifestApply: async (payload = {}) => {
-      assertPermission(plugin.manifest, 'pack-manifest:write')
-      if (!petPackService?.applyActiveCreatorPackManifestMutation) throw new Error('Creator pack manifest apply is not available')
-      appendLog({ pluginId: plugin.manifest.id, commandId, level: 'info', message: 'Bridge creator.pack-manifest apply invoked' })
-      return { ok: true, manifest: petPackService.applyActiveCreatorPackManifestMutation(payload) }
-    },
-    creatorAssetsInspectFrames: async (payload = {}) => {
-      assertPermission(plugin.manifest, 'assets:inspect')
-      if (!actionImportService?.inspectActionFrames) throw new Error('Creator asset inspection is not available')
-      const sourceDir = payload.dataRelativePath
-        ? resolvePluginDataPath(plugin.manifest, payload.dataRelativePath)
-        : resolvePluginAssetPath(plugin.manifest, payload.relativePath)
-      assertDirectoryHasNoSymlinks(sourceDir)
-      appendLog({ pluginId: plugin.manifest.id, commandId, level: 'info', message: 'Bridge creator.assets inspect-frames invoked' })
-      const result = await actionImportService.inspectActionFrames({
-        sourceDir,
-        actionId: payload.actionId
-      })
-      return { ok: true, result }
-    },
-    creatorAssetsImportFrames: async (payload = {}) => {
-      assertPermission(plugin.manifest, 'assets:generate')
-      if (!actionImportService?.inspectActionFrames || !actionImportService?.importActionFrames) {
-        throw new Error('Creator asset import is not available')
-      }
-      const sourceDir = payload.dataRelativePath
-        ? resolvePluginDataPath(plugin.manifest, payload.dataRelativePath)
-        : resolvePluginAssetPath(plugin.manifest, payload.relativePath)
-      assertDirectoryHasNoSymlinks(sourceDir)
-      const actionId = String(payload.actionId || '')
-      const label = payload.label == null || payload.label === '' ? undefined : String(payload.label)
-      appendLog({ pluginId: plugin.manifest.id, commandId, level: 'info', message: 'Bridge creator.assets import-frames invoked' })
-      const preflight = await actionImportService.inspectActionFrames({ sourceDir, actionId })
-      assertCreatorAssetImportWithinLimits(preflight.inspection, sourceDir)
-      const result = await actionImportService.importActionFrames({ sourceDir, actionId, label })
-      const { importedAction, ...actions } = result
-      return { ok: true, actions, importedAction }
-    },
-    creatorAssetsPickFramesInspect: async (payload = {}) => {
-      assertPermission(plugin.manifest, 'assets:inspect')
-      if (!actionImportService?.inspectActionFrames) throw new Error('Creator asset inspection is not available')
-      const selected = await selectCreatorAssetSourceDir()
-      if (selected.canceled) return { ok: true, canceled: true }
-      appendLog({ pluginId: plugin.manifest.id, commandId, level: 'info', message: 'Bridge creator.assets pick-frames inspect invoked' })
-      const result = await actionImportService.inspectActionFrames({
-        sourceDir: selected.sourceDir,
-        actionId: payload.actionId
-      })
-      return { ok: true, canceled: false, result }
-    },
-    creatorAssetsPickFramesImport: async (payload = {}) => {
-      assertPermission(plugin.manifest, 'assets:generate')
-      if (!actionImportService?.inspectActionFrames || !actionImportService?.importActionFrames) {
-        throw new Error('Creator asset import is not available')
-      }
-      const selected = await selectCreatorAssetSourceDir()
-      if (selected.canceled) return { ok: true, canceled: true }
-      const actionId = String(payload.actionId || '')
-      const label = payload.label == null || payload.label === '' ? undefined : String(payload.label)
-      appendLog({ pluginId: plugin.manifest.id, commandId, level: 'info', message: 'Bridge creator.assets pick-frames import invoked' })
-      const preflight = await actionImportService.inspectActionFrames({ sourceDir: selected.sourceDir, actionId })
-      assertCreatorAssetImportWithinLimits(preflight.inspection, selected.sourceDir)
-      const result = await actionImportService.importActionFrames({ sourceDir: selected.sourceDir, actionId, label })
-      const { importedAction, ...actions } = result
-      return { ok: true, canceled: false, actions, importedAction }
-    },
-    creatorPetPackInspectOutput: async (payload = {}) => {
-      assertPermission(plugin.manifest, 'pet-pack:import')
-      if (!petPackService?.inspectPackSource) throw new Error('Creator pet pack inspection is not available')
-      const sourcePath = payload.dataRelativePath
-        ? resolvePluginDataPath(plugin.manifest, payload.dataRelativePath)
-        : resolvePluginAssetPath(plugin.manifest, payload.relativePath)
-      appendLog({ pluginId: plugin.manifest.id, commandId, level: 'info', message: 'Bridge creator.pet-pack inspect-output invoked' })
-      return { ok: true, inspection: petPackService.inspectPackSource(sourcePath) }
-    },
-    creatorPetPackImportOutput: async (payload = {}) => {
-      assertPermission(plugin.manifest, 'pet-pack:import')
-      if (!petPackService?.importPack) throw new Error('Creator pet pack import is not available')
-      const selectionId = String(payload.selectionId || '')
-      appendLog({ pluginId: plugin.manifest.id, commandId, level: 'info', message: 'Bridge creator.pet-pack import-output invoked' })
-      const imported = petPackService.importPack(selectionId)
-      const activated = payload.activate && imported?.pack?.id && petPackService?.setActivePack
-        ? petPackService.setActivePack(imported.pack.id)
-        : null
-      if (activated) {
-        onPetPackActivated({
-          pluginId: plugin.manifest.id,
-          commandId,
-          packId: imported.pack.id,
-          imported,
-          activated
-        })
-      }
-      return { ok: true, imported, activated }
-    },
-    creatorModelSettingsRead: async () => {
-      assertPermission(plugin.manifest, 'model:image-generate')
-      if (!imageGenerationModelService?.getConfig) throw new Error('Creator model settings are not available')
-      appendLog({ pluginId: plugin.manifest.id, commandId, level: 'info', message: 'Bridge creator.model-settings read invoked' })
-      return { ok: true, config: imageGenerationModelService.getConfig() }
-    },
-    creatorModelHealthCheck: async () => {
-      assertPermission(plugin.manifest, 'model:image-generate')
-      if (!imageGenerationModelService?.checkHealth) throw new Error('Creator model health check is not available')
-      appendLog({ pluginId: plugin.manifest.id, commandId, level: 'info', message: 'Bridge creator.model-health-check invoked' })
-      return { ok: true, result: await imageGenerationModelService.checkHealth({}) }
-    },
-    creatorModelImageGenerate: async (payload = {}) => {
-      assertPermission(plugin.manifest, 'model:image-generate')
-      if (!imageGenerationModelService?.generateImage) throw new Error('Creator model image generation is not available')
-      appendLog({ pluginId: plugin.manifest.id, commandId, level: 'info', message: 'Bridge creator.model-image-generate invoked' })
-      const { backend: _ignoredBackend, ...providerPayload } = payload
-      return {
-        ok: true,
-        result: await imageGenerationModelService.generateImage({
-          ...providerPayload,
-          output: {
-            ...(payload.output || {}),
-            dataDir: ensurePluginCreatorDirs(plugin.manifest).dataDir
-          }
-        })
-      }
-    },
-    petSay: async (payload = {}) => {
-      assertPermission(plugin.manifest, 'pet:say')
-      appendLog({ pluginId: plugin.manifest.id, commandId, level: 'info', message: 'Bridge pet.say invoked' })
-      return {
-        ok: true,
-        result: petService.say({
-          text: payload.text,
-          ttlMs: payload.ttlMs,
-          source: `plugin:${plugin.manifest.id}:bridge`
-        })
-      }
-    },
-    petAction: async (payload = {}) => {
-      assertPermission(plugin.manifest, 'pet:action')
-      const actionId = String(payload.actionId || '')
-      appendLog({
-        pluginId: plugin.manifest.id,
-        commandId,
-        level: 'info',
-        message: `Bridge pet.action invoked: ${actionId}`.slice(0, 240)
-      })
-      return {
-        ok: true,
-        result: petService.playAction({
-          actionId,
-          source: `plugin:${plugin.manifest.id}:bridge`
-        })
-      }
-    },
-    petEvent: async (payload = {}) => {
-      assertPermission(plugin.manifest, 'pet:event')
-      const eventType = String(payload.type || '')
-      appendLog({
-        pluginId: plugin.manifest.id,
-        commandId,
-        level: 'info',
-        message: `Bridge pet.event invoked: ${eventType}`.slice(0, 240)
-      })
-      return {
-        ok: true,
-        result: petService.setEvent({
-          type: payload.type,
-          message: payload.message,
-          ttlMs: payload.ttlMs,
-          source: `plugin:${plugin.manifest.id}:bridge`
-        })
-      }
-    }
-  })
-
   const getPlugins = () => [
     ...officialPlugins.map((plugin) => ({
       manifest: normalizePluginManifest(plugin.manifest, { source: 'official' }),
@@ -696,6 +476,39 @@ const createPluginService = ({ settingsService, petService, actionService, actio
   const getPluginStorage = configStorageController.getStorage
   const savePluginStorage = configStorageController.saveStorage
   const getPluginStorageStats = configStorageController.getStorageStats
+
+  const bridgeHandlersController = createPluginBridgeHandlersController({
+    appendLog,
+    assertPermission,
+    getBridgeContext: createPluginBridgeContext,
+    getActionsSnapshot: () => actionService?.getPreviewConfig?.()
+      || actionService?.getConfig?.()
+      || { defaultAction: '', clickAction: '', actions: [] },
+    validateActionMutation: actionService?.validateCreatorActionMutation,
+    applyActionMutation: actionService?.applyCreatorActionMutation,
+    submitTriggerProposal: actionService?.submitTriggerProposal,
+    readPackManifest: petPackService?.getActiveCreatorPackManifest,
+    validatePackManifestMutation: petPackService?.validateActiveCreatorPackManifestMutation,
+    applyPackManifestMutation: petPackService?.applyActiveCreatorPackManifestMutation,
+    inspectFrames: actionImportService?.inspectActionFrames,
+    importFrames: actionImportService?.importActionFrames,
+    inspectPackOutput: petPackService?.inspectPackSource,
+    importPackOutput: petPackService?.importPack,
+    setActivePack: petPackService?.setActivePack,
+    onPetPackActivated,
+    readModelSettings: imageGenerationModelService?.getConfig,
+    checkModelHealth: imageGenerationModelService?.checkHealth,
+    generateModelImage: imageGenerationModelService?.generateImage,
+    petService,
+    resolveAssetPath: resolvePluginAssetPath,
+    resolveDataPath: resolvePluginDataPath,
+    selectAssetSourceDir: selectCreatorAssetSourceDir,
+    assertDirectoryHasNoSymlinks,
+    assertCreatorAssetImportWithinLimits,
+    ensureCreatorDirs: ensurePluginCreatorDirs
+  })
+
+  const createPluginBridgeHandlers = bridgeHandlersController.createHandlers
 
   const clearStorage = (pluginId) => {
     const plugin = getPlugins().find((candidate) => candidate.manifest.id === pluginId)
