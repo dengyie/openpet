@@ -2144,6 +2144,16 @@ test('creator studio dashboard asset uses mode-neutral entry copy', () => {
   assert.match(html, /Generate and approve a run to unlock host-owned import\./)
 })
 
+test('creator studio dashboard asset uses mode-neutral review section titles', () => {
+  const dashboardPath = path.join(pluginRoot, 'web', 'dashboard', 'index.html')
+  const html = fs.readFileSync(dashboardPath, 'utf-8')
+
+  assert.match(html, /<h2>Review Preview<\/h2>/)
+  assert.match(html, /<h2>Preview Playback<\/h2>/)
+  assert.match(html, /<h2>Generation Review<\/h2>/)
+  assert.equal(html.includes('Single Action Review'), false)
+})
+
 test('creator studio service exposes full-pet review details for dashboard clients', async () => {
   const { createRun, updateRunStatus } = require('../../examples/plugins/creator-studio/lib/run-store')
   const { createCreatorStudioServer } = require('../../examples/plugins/creator-studio/service/studio-service')
