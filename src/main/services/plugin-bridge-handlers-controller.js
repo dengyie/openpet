@@ -1,3 +1,26 @@
+const PLUGIN_BRIDGE_ROUTE_INVENTORY = [
+  { method: 'GET', path: '/context', handlerName: 'context', permission: '', description: 'Read bounded command bridge context.' },
+  { method: 'GET', path: '/creator/actions', handlerName: 'creatorActionsRead', permission: 'actions:read', description: 'Read the current host-owned action snapshot.' },
+  { method: 'POST', path: '/creator/actions/validate', handlerName: 'creatorActionsValidate', permission: 'actions:write', description: 'Validate a proposed action mutation without applying it.' },
+  { method: 'POST', path: '/creator/actions/apply', handlerName: 'creatorActionsApply', permission: 'actions:write', description: 'Apply a validated host-owned action mutation.' },
+  { method: 'POST', path: '/creator/actions/submit-trigger-proposal', handlerName: 'creatorActionsSubmitTriggerProposal', permission: 'actions:write', description: 'Submit a trigger proposal into the host review inbox.' },
+  { method: 'GET', path: '/creator/pack-manifest', handlerName: 'creatorPackManifestRead', permission: 'pack-manifest:read', description: 'Read the active installed user pack manifest view.' },
+  { method: 'POST', path: '/creator/pack-manifest/validate', handlerName: 'creatorPackManifestValidate', permission: 'pack-manifest:write', description: 'Validate a bounded pack-manifest mutation.' },
+  { method: 'POST', path: '/creator/pack-manifest/apply', handlerName: 'creatorPackManifestApply', permission: 'pack-manifest:write', description: 'Apply a bounded pack-manifest mutation through the host.' },
+  { method: 'POST', path: '/creator/assets/inspect-frames', handlerName: 'creatorAssetsInspectFrames', permission: 'assets:inspect', description: 'Inspect package-local or data-local action frames.' },
+  { method: 'POST', path: '/creator/assets/import-frames', handlerName: 'creatorAssetsImportFrames', permission: 'assets:generate', description: 'Import package-local or data-local action frames through host generation paths.' },
+  { method: 'POST', path: '/creator/assets/pick-frames/inspect', handlerName: 'creatorAssetsPickFramesInspect', permission: 'assets:inspect', description: 'Inspect user-picked action frames without exposing absolute paths to the command.' },
+  { method: 'POST', path: '/creator/assets/pick-frames/import', handlerName: 'creatorAssetsPickFramesImport', permission: 'assets:generate', description: 'Import user-picked action frames after host approval and inspection.' },
+  { method: 'POST', path: '/creator/pet-pack/inspect-output', handlerName: 'creatorPetPackInspectOutput', permission: 'pet-pack:import', description: 'Inspect approved pet-pack output before host import.' },
+  { method: 'POST', path: '/creator/pet-pack/import-output', handlerName: 'creatorPetPackImportOutput', permission: 'pet-pack:import', description: 'Import approved pet-pack output through the host boundary.' },
+  { method: 'GET', path: '/creator/model-settings', handlerName: 'creatorModelSettingsRead', permission: 'model:image-generate', description: 'Read sanitized host-owned image model settings.' },
+  { method: 'POST', path: '/creator/model-health-check', handlerName: 'creatorModelHealthCheck', permission: 'model:image-generate', description: 'Run a host-owned image provider health check.' },
+  { method: 'POST', path: '/creator/model-image-generate', handlerName: 'creatorModelImageGenerate', permission: 'model:image-generate', description: 'Generate image output through the host-owned provider path.' },
+  { method: 'POST', path: '/pet/say', handlerName: 'petSay', permission: 'pet:say', description: 'Send pet speech through PetService.' },
+  { method: 'POST', path: '/pet/action', handlerName: 'petAction', permission: 'pet:action', description: 'Play a pet action through PetService.' },
+  { method: 'POST', path: '/pet/event', handlerName: 'petEvent', permission: 'pet:event', description: 'Emit a bounded pet event through PetService.' }
+]
+
 const createPluginBridgeHandlersController = ({
   appendLog,
   assertPermission,
@@ -247,5 +270,6 @@ const createPluginBridgeHandlersController = ({
 }
 
 module.exports = {
+  PLUGIN_BRIDGE_ROUTE_INVENTORY,
   createPluginBridgeHandlersController
 }

@@ -1,7 +1,10 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
 
-const { createPluginBridgeHandlersController } = require('../../src/main/services/plugin-bridge-handlers-controller')
+const {
+  PLUGIN_BRIDGE_ROUTE_INVENTORY,
+  createPluginBridgeHandlersController
+} = require('../../src/main/services/plugin-bridge-handlers-controller')
 
 const createController = (overrides = {}) => {
   const logs = []
@@ -127,6 +130,30 @@ test('bridge handlers controller routes model generation through host-owned data
         format: 'png',
         dataDir: '/plugin-data'
       }
+    }
+  })
+})
+
+test('bridge handlers controller exports a unique route inventory that matches handler keys', () => {
+  const { controller } = createController()
+  const handlers = controller.createHandlers(plugin, 'start')
+
+  assert.equal(Array.isArray(PLUGIN_BRIDGE_ROUTE_INVENTORY), true)
+  assert.equal(PLUGIN_BRIDGE_ROUTE_INVENTORY.length, 20)
+
+  const uniqueRouteKeys = new Set(PLUGIN_BRIDGE_ROUTE_INVENTORY.map((entry) => `${entry.method} ${entry.path}`))
+  assert.equal(uniqueRouteKeys.size, PLUGIN_BRIDGE_ROUTE_INVENTORY.length)
+
+  PLUGIN_BRIDGE_ROUTE_INVENTORY.forEach((entry) => {
+    assert.match(entry.method, /^(GET|POST)$/)
+    assert.match(entry.path, /^\//)
+    assert.equal(typeof entry.handlerName, 'string')
+    assert.equal(typeof entry.description, 'string')
+    assert.equal(typeof handlers[entry.handlerName], 'function')
+    if (entry.path === '/context') {
+      assert.equal(entry.permission, '')
+    } else {
+      assert.match(entry.permission, /^[a-z:-]+$/)
     }
   })
 })

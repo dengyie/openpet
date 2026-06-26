@@ -2,7 +2,12 @@ const http = require('http')
 const test = require('node:test')
 const assert = require('node:assert/strict')
 
-const { createPluginCommandBridgeService } = require('../../src/main/services/plugin-command-bridge-service')
+const {
+  JSON_ROUTE_HANDLERS,
+  READ_ROUTE_HANDLERS,
+  createPluginCommandBridgeService
+} = require('../../src/main/services/plugin-command-bridge-service')
+const { PLUGIN_BRIDGE_ROUTE_INVENTORY } = require('../../src/main/services/plugin-bridge-handlers-controller')
 
 const requestJson = (url, { body, headers = {}, method = body == null ? 'GET' : 'POST', token = 'bridge-token' } = {}) => new Promise((resolve, reject) => {
   const payload = body == null ? '' : JSON.stringify(body)
@@ -163,4 +168,20 @@ test('plugin command bridge service clears runs and closes the server', async ()
   assert.equal(service.size(), 1)
   service.close()
   assert.equal(service.size(), 0)
+})
+
+test('plugin command bridge service route maps stay synchronized with bridge inventory', () => {
+  const readRoutes = Object.fromEntries(
+    PLUGIN_BRIDGE_ROUTE_INVENTORY
+      .filter((entry) => entry.method === 'GET')
+      .map((entry) => [entry.path, entry.handlerName])
+  )
+  const jsonRoutes = Object.fromEntries(
+    PLUGIN_BRIDGE_ROUTE_INVENTORY
+      .filter((entry) => entry.method === 'POST')
+      .map((entry) => [entry.path, entry.handlerName])
+  )
+
+  assert.deepEqual(READ_ROUTE_HANDLERS, readRoutes)
+  assert.deepEqual(JSON_ROUTE_HANDLERS, jsonRoutes)
 })

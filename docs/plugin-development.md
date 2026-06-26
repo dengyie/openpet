@@ -248,9 +248,13 @@ Current bridge routes:
 - `GET /creator/actions`
 - `POST /creator/actions/validate`
 - `POST /creator/actions/apply`
+- `POST /creator/actions/submit-trigger-proposal`
 - `GET /creator/pack-manifest`
 - `POST /creator/pack-manifest/validate`
 - `POST /creator/pack-manifest/apply`
+- `GET /creator/model-settings`
+- `POST /creator/model-health-check`
+- `POST /creator/model-image-generate`
 - `POST /creator/assets/inspect-frames`
 - `POST /creator/assets/import-frames`
 - `POST /creator/assets/pick-frames/inspect`
@@ -293,9 +297,13 @@ Current endpoint set:
 - `GET /creator/actions`
 - `POST /creator/actions/validate`
 - `POST /creator/actions/apply`
+- `POST /creator/actions/submit-trigger-proposal`
 - `GET /creator/pack-manifest`
 - `POST /creator/pack-manifest/validate`
 - `POST /creator/pack-manifest/apply`
+- `GET /creator/model-settings`
+- `POST /creator/model-health-check`
+- `POST /creator/model-image-generate`
 - `POST /creator/assets/inspect-frames`
 - `POST /creator/assets/import-frames`
 - `POST /creator/assets/pick-frames/inspect`
@@ -308,7 +316,7 @@ Bridge rules:
 - the bridge exists only during an explicit declaration-only command run;
 - the command must belong to an enabled, policy-allowed local extension;
 - requests must use `Authorization: Bearer <OPENPET_BRIDGE_TOKEN>`;
-- `pet:say`, `pet:action`, `pet:event`, `actions:read`, `actions:write`, `pack-manifest:read`, `pack-manifest:write`, `assets:inspect`, `assets:generate`, and `pet-pack:import` permissions are enforced per route;
+- `pet:say`, `pet:action`, `pet:event`, `actions:read`, `actions:write`, `pack-manifest:read`, `pack-manifest:write`, `assets:inspect`, `assets:generate`, `pet-pack:import`, and `model:image-generate` permissions are enforced per route;
 - all pet mutations still flow through `PetService`;
 - creator-tools action reads and writes flow through the host action service boundary, while pack manifest metadata reads and writes flow through the host pet-pack service boundary;
 - `pack-manifest:read` / `pack-manifest:write` only expose the current active installed user pack metadata workflow and do not permit arbitrary pet-pack writes, arbitrary pack targeting, or raw filesystem access;
@@ -316,6 +324,7 @@ Bridge rules:
 - creator-tools frame import/sprite generation is host-mediated, package-local, resource-limited, and does not grant raw filesystem writes or plugin-selected output paths;
 - creator-tools picker frame inspection/import is host-mediated and user-approved: the command can request a native folder picker, but selected absolute paths stay in the main process and are not returned to the bridge caller;
 - creator-tools full pet-pack import is host-mediated through `PetPackService`: the extension supplies a package-local or `OPENPET_DATA_DIR` relative approved output path, then OpenPet inspects, imports, applies policy checks, and optionally activates the pack;
+- `model:image-generate` only grants sanitized model settings reads, provider health checks, and host-owned output generation; ordinary extensions do not receive OpenPet-managed chat or image provider credentials through config, bridge payloads, renderer state, or environment variables;
 - setup entries, services, install, enable, and background health paths do not receive bridge access.
 
 Example bridge requests:
@@ -397,6 +406,8 @@ Example command behavior:
 ```
 
 OpenPet-managed config is useful for friendly setup, but it is not the only place an extension may keep settings. Extensions may also maintain their own files, databases, dashboards, `.env` files, external accounts, or local model caches. If an extension manages secrets outside OpenPet, disclose that clearly in `manifest`.
+
+Provider credentials boundary: ordinary extensions must not expect OpenPet to hand over saved chat/image provider API keys, secret-bearing base URLs, or other main-process provider credentials. If an extension needs its own third-party credentials, it must manage and disclose them as extension-owned secrets rather than piggybacking on OpenPet-managed provider storage.
 
 ## Manifest Declarations
 

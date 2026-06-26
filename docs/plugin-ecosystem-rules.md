@@ -172,9 +172,17 @@ The current local bridge stays intentionally small:
 - `GET /creator/actions`
 - `POST /creator/actions/validate`
 - `POST /creator/actions/apply`
+- `POST /creator/actions/submit-trigger-proposal`
 - `GET /creator/pack-manifest`
 - `POST /creator/pack-manifest/validate`
 - `POST /creator/pack-manifest/apply`
+- `GET /creator/model-settings`
+- `POST /creator/model-health-check`
+- `POST /creator/model-image-generate`
+- `POST /creator/assets/inspect-frames`
+- `POST /creator/assets/import-frames`
+- `POST /creator/assets/pick-frames/inspect`
+- `POST /creator/assets/pick-frames/import`
 - `POST /creator/pet-pack/inspect-output`
 - `POST /creator/pet-pack/import-output`
 
@@ -229,6 +237,8 @@ Third-party extensions may manage:
 OpenPet should not claim it can enumerate, audit, revoke, or delete every third-party secret or data file. Authors should disclose likely data locations and external dependencies in `manifest`, and OpenPet should show those declarations plainly.
 
 This is intentionally more welcoming than the older "no secrets in ordinary plugin config" posture. The new boundary is: OpenPet-owned config should be clear about whether it stores secrets, and extension-owned secrets must be disclosed and managed by the extension/user, not silently implied to be protected by OpenPet.
+
+OpenPet-managed provider credentials remain outside ordinary extension trust. The host may expose sanitized model settings, health checks, and host-owned image generation through `model:image-generate`, but it must not hand ordinary extensions saved chat/image API keys, secret-bearing provider config, or renderer-visible copies of main-process provider credentials unless a future explicit trust model is designed.
 
 ## 8. Setup, Dependencies, And Cleanup
 

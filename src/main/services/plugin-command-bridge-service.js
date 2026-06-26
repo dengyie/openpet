@@ -1,6 +1,8 @@
 const crypto = require('crypto')
 const http = require('http')
 
+const { PLUGIN_BRIDGE_ROUTE_INVENTORY } = require('./plugin-bridge-handlers-controller')
+
 const PLUGIN_BRIDGE_HOST = '127.0.0.1'
 const MAX_PLUGIN_BRIDGE_BODY_BYTES = 1024 * 1024
 
@@ -57,31 +59,17 @@ const sendJson = (response, statusCode, body) => {
   response.end(JSON.stringify(body))
 }
 
-const READ_ROUTE_HANDLERS = {
-  '/context': 'context',
-  '/creator/actions': 'creatorActionsRead',
-  '/creator/pack-manifest': 'creatorPackManifestRead',
-  '/creator/model-settings': 'creatorModelSettingsRead'
-}
+const READ_ROUTE_HANDLERS = Object.fromEntries(
+  PLUGIN_BRIDGE_ROUTE_INVENTORY
+    .filter((entry) => entry.method === 'GET')
+    .map((entry) => [entry.path, entry.handlerName])
+)
 
-const JSON_ROUTE_HANDLERS = {
-  '/pet/say': 'petSay',
-  '/pet/action': 'petAction',
-  '/pet/event': 'petEvent',
-  '/creator/actions/validate': 'creatorActionsValidate',
-  '/creator/actions/apply': 'creatorActionsApply',
-  '/creator/actions/submit-trigger-proposal': 'creatorActionsSubmitTriggerProposal',
-  '/creator/pack-manifest/validate': 'creatorPackManifestValidate',
-  '/creator/pack-manifest/apply': 'creatorPackManifestApply',
-  '/creator/assets/inspect-frames': 'creatorAssetsInspectFrames',
-  '/creator/assets/import-frames': 'creatorAssetsImportFrames',
-  '/creator/assets/pick-frames/inspect': 'creatorAssetsPickFramesInspect',
-  '/creator/assets/pick-frames/import': 'creatorAssetsPickFramesImport',
-  '/creator/pet-pack/inspect-output': 'creatorPetPackInspectOutput',
-  '/creator/pet-pack/import-output': 'creatorPetPackImportOutput',
-  '/creator/model-health-check': 'creatorModelHealthCheck',
-  '/creator/model-image-generate': 'creatorModelImageGenerate'
-}
+const JSON_ROUTE_HANDLERS = Object.fromEntries(
+  PLUGIN_BRIDGE_ROUTE_INVENTORY
+    .filter((entry) => entry.method === 'POST')
+    .map((entry) => [entry.path, entry.handlerName])
+)
 
 const BRIDGE_ROUTE_PATTERN = new RegExp(
   `^/plugins/bridge/([^/]+)/([^/]+)/([^/]+)(${[
@@ -231,6 +219,8 @@ const createPluginCommandBridgeService = ({
 module.exports = {
   MAX_PLUGIN_BRIDGE_BODY_BYTES,
   PLUGIN_BRIDGE_HOST,
+  READ_ROUTE_HANDLERS,
+  JSON_ROUTE_HANDLERS,
   createPluginBridgeKey,
   createPluginBridgeRunId,
   createPluginBridgeToken,
