@@ -201,7 +201,7 @@ The following capabilities are intentionally available to ordinary third-party a
 - package-local or user-approved frame inspection through `assets:inspect`;
 - package-local or user-approved frame import and sprite/action metadata generation through `assets:generate`;
 - approved full pet-pack import through `pet-pack:import`, where the extension provides an output path and OpenPet performs inspection, import, policy checks, and optional activation.
-- host-managed model settings reads, health checks, and bounded image generation during explicit command runs, without exposing OpenPet-owned provider credentials to the extension.
+- host-managed model settings reads, health checks, and bounded image generation through `model:image-generate` during explicit command runs, without exposing OpenPet-owned provider credentials to the extension.
 
 These are not official-only powers. A community weather announcer, pet dialogue pack, pet personality helper, action editor, sprite generator, or local model workflow may request them when the package explains the user value and accepts the host boundary.
 
