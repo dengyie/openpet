@@ -1099,6 +1099,7 @@
             importGuidance.triggerProposalSummary
               ? `<p>${escapeHtml(importGuidance.triggerProposalSummary)}</p>`
               : '<p>The output has been handed to OpenPet through the host import bridge.</p>',
+            renderImportedResultCard(run),
             '</div>'
           ].join('')
         }
@@ -1110,6 +1111,25 @@
         }
         if (actionFrames) return 'Review the generated frames, repair any bad frame, then approve the action.'
         return 'Generate action frames before action import handoff.'
+      }
+
+      const renderImportedResultCard = (run) => {
+        const resultCard = run?.workflowGuidance?.import?.resultCard || {}
+        const entries = Array.isArray(resultCard.entries) ? resultCard.entries : []
+        if (!resultCard.available || !entries.length) return ''
+        return [
+          '<div class="notice">',
+          `<strong>${escapeHtml(resultCard.title || 'Imported result details')}</strong>`,
+          '<div class="meta-list">',
+          ...entries.map((entry) => (
+            `<span>${escapeHtml(entry.label || 'Result')}: ${escapeHtml(entry.value || '')}</span>`
+          )),
+          resultCard.reviewLocation
+            ? `<span>Review location: ${escapeHtml(resultCard.reviewLocation)}</span>`
+            : '',
+          '</div>',
+          '</div>'
+        ].join('')
       }
 
       const renderRun = () => {

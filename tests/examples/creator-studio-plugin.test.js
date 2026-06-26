@@ -2472,6 +2472,7 @@ test('creator studio dashboard asset exists and service script is declared', () 
   assert.match(html, /id="reload-runs-button"/)
   assert.match(html, /id="approve-button"/)
   assert.match(html, /renderImportHandoff/)
+  assert.match(html, /renderImportedResultCard/)
   assert.match(html, /handoff\.commandTitle/)
   assert.match(html, /fetch\('\/api\/runs'\)/)
   assert.match(html, /DOMContentLoaded/)
@@ -2491,6 +2492,7 @@ test('creator studio dashboard asset exists and service script is declared', () 
   assert.match(html, /Button availability/)
   assert.match(html, /Next Step/)
   assert.match(html, /Wizard Steps/)
+  assert.match(html, /Imported result details/)
   assert.match(html, /id="wizard-steps-panel"/)
   assert.match(html, /id="run-logs"/)
   assert.match(html, /id="playback-panel"/)
@@ -3359,6 +3361,17 @@ test('creator studio service exposes workflow guidance for fixture and imported 
       },
       now: () => '2026-06-26T00:01:00.000Z'
     })
+    const importedFailedActionRun = createRun({
+      dataDir,
+      input: {
+        petName: 'Imported Failed Guidance Cat',
+        prompt: '新增一个自定义动作：害羞转圈，点击触发。',
+        originalPrompt: '新增一个自定义动作：害羞转圈，点击触发。',
+        backend: 'local',
+        generationTask
+      },
+      now: () => '2026-06-26T00:01:15.000Z'
+    })
     const importedPetRun = createRun({
       dataDir,
       input: {
@@ -3460,6 +3473,35 @@ test('creator studio service exposes workflow guidance for fixture and imported 
     })
     updateRunStatus({
       dataDir,
+      runId: importedFailedActionRun.runId,
+      status: 'imported',
+      patch: {
+        taskStatus: 'confirmed',
+        currentStep: 'imported',
+        reviewStatus: 'approved',
+        importStatus: 'imported',
+        importedActionId: 'shy-spin',
+        triggerProposalSubmission: {
+          ok: false,
+          error: 'proposal write failed'
+        },
+        artifacts: {
+          actionFrames: {
+            actionId: 'shy-spin',
+            name: '害羞转圈',
+            qa: path.join(dataDir, 'runs', importedFailedActionRun.runId, 'qa', 'action-frame-validation.json'),
+            contactSheet: path.join(dataDir, 'runs', importedFailedActionRun.runId, 'qa', 'action-frame-contact-sheet.png'),
+            frameCount: 16,
+            frameWidth: 192,
+            frameHeight: 208,
+            triggerProposal: { type: 'click', binding: 'clickAction' }
+          }
+        }
+      },
+      now: () => '2026-06-26T00:03:15.000Z'
+    })
+    updateRunStatus({
+      dataDir,
       runId: importedPetRun.runId,
       status: 'imported',
       patch: {
@@ -3497,8 +3539,10 @@ test('creator studio service exposes workflow guidance for fixture and imported 
 
     const fixtureDetail = await fetch(`http://127.0.0.1:${port}/api/runs/${fixtureRun.runId}`).then((response) => response.json())
     const importedDetail = await fetch(`http://127.0.0.1:${port}/api/runs/${importedRun.runId}`).then((response) => response.json())
+    const importedFailedActionDetail = await fetch(`http://127.0.0.1:${port}/api/runs/${importedFailedActionRun.runId}`).then((response) => response.json())
     const importedPetDetail = await fetch(`http://127.0.0.1:${port}/api/runs/${importedPetRun.runId}`).then((response) => response.json())
     const importedSerialized = JSON.stringify(importedDetail)
+    const importedFailedSerialized = JSON.stringify(importedFailedActionDetail)
     const importedPetSerialized = JSON.stringify(importedPetDetail)
 
     assert.equal(fixtureDetail.ok, true)
@@ -3521,6 +3565,13 @@ test('creator studio service exposes workflow guidance for fixture and imported 
     assert.match(importedDetail.run.workflowGuidance.import.summary, /Imported action/i)
     assert.equal(importedDetail.run.workflowGuidance.import.triggerProposalStatus, 'submitted')
     assert.match(importedDetail.run.workflowGuidance.import.triggerProposalSummary, /Trigger Proposal Inbox/i)
+    assert.equal(importedDetail.run.workflowGuidance.import.resultCard.available, true)
+    assert.equal(importedDetail.run.workflowGuidance.import.resultCard.title, 'Imported result details')
+    assert.deepEqual(importedDetail.run.workflowGuidance.import.resultCard.entries, [
+      { label: 'Imported action', value: 'shy-spin' },
+      { label: 'Trigger proposal', value: importedDetail.run.workflowGuidance.import.triggerProposalSummary }
+    ])
+    assert.equal(importedDetail.run.workflowGuidance.import.resultCard.reviewLocation, 'Actions -> Trigger Proposal Inbox')
     assert.equal(importedDetail.run.wizardState.phase, 'imported')
     assert.deepEqual(importedDetail.run.wizardState.steps.map((step) => `${step.key}:${step.status}`), [
       'draft:complete',
@@ -3535,12 +3586,26 @@ test('creator studio service exposes workflow guidance for fixture and imported 
     assert.equal(importedSerialized.includes('127.0.0.1:7860'), false)
     assert.equal(importedSerialized.includes(dataDir), false)
 
+    assert.equal(importedFailedActionDetail.ok, true)
+    assert.equal(importedFailedActionDetail.run.workflowGuidance.import.triggerProposalStatus, 'failed')
+    assert.equal(importedFailedActionDetail.run.workflowGuidance.import.resultCard.available, true)
+    assert.equal(importedFailedActionDetail.run.workflowGuidance.import.resultCard.reviewLocation, 'Control Center -> Plugins')
+    assert.match(importedFailedActionDetail.run.workflowGuidance.import.resultCard.entries[1].value, /handoff failed/i)
+    assert.equal(importedFailedSerialized.includes(dataDir), false)
+
     assert.equal(importedPetDetail.ok, true)
     assert.equal(importedPetDetail.run.workflowGuidance.import.status, 'imported')
     assert.equal(importedPetDetail.run.workflowGuidance.import.command, 'import-approved-pet')
     assert.match(importedPetDetail.run.workflowGuidance.import.summary, /Imported pet pack imported-pet-guidance-cat\./)
     assert.equal(importedPetDetail.run.workflowGuidance.import.triggerProposalStatus, 'not-applicable')
     assert.match(importedPetDetail.run.workflowGuidance.import.triggerProposalSummary, /Activated pack: imported-pet-guidance-cat\./)
+    assert.equal(importedPetDetail.run.workflowGuidance.import.resultCard.available, true)
+    assert.equal(importedPetDetail.run.workflowGuidance.import.resultCard.title, 'Imported result details')
+    assert.deepEqual(importedPetDetail.run.workflowGuidance.import.resultCard.entries, [
+      { label: 'Imported pet pack', value: 'imported-pet-guidance-cat' },
+      { label: 'Activated pack', value: 'imported-pet-guidance-cat' }
+    ])
+    assert.equal(importedPetDetail.run.workflowGuidance.import.resultCard.reviewLocation, 'OpenPet')
     assert.equal(importedPetDetail.run.importedPackId, 'imported-pet-guidance-cat')
     assert.equal(importedPetDetail.run.activatedPackId, 'imported-pet-guidance-cat')
     assert.equal(importedPetDetail.run.wizardState.phase, 'imported')

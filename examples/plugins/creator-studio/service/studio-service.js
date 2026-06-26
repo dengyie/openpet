@@ -386,6 +386,64 @@ const createPublicTextList = ({ dataDir, values = [] }) => (
     : []
 )
 
+const createImportedResultCard = ({ dataDir, run, hasActionFrames, triggerProposalSummary }) => {
+  if (run.status !== 'imported') {
+    return {
+      available: false,
+      title: '',
+      entries: [],
+      reviewLocation: ''
+    }
+  }
+
+  if (hasActionFrames) {
+    const entries = [{
+      label: 'Imported action',
+      value: run.importedActionId || run.artifacts?.actionFrames?.actionId || ''
+    }]
+    if (triggerProposalSummary) {
+      entries.push({
+        label: 'Trigger proposal',
+        value: triggerProposalSummary
+      })
+    }
+    return {
+      available: true,
+      title: 'Imported result details',
+      entries: entries.map((entry) => ({
+        label: createPublicText({ dataDir, value: entry.label }),
+        value: createPublicText({ dataDir, value: entry.value })
+      })),
+      reviewLocation: createPublicText({
+        dataDir,
+        value: run.triggerProposalSubmission?.ok === true
+          ? 'Actions -> Trigger Proposal Inbox'
+          : 'Control Center -> Plugins'
+      })
+    }
+  }
+
+  const entries = [{
+    label: 'Imported pet pack',
+    value: run.importedPackId || ''
+  }]
+  if (run.activatedPackId) {
+    entries.push({
+      label: 'Activated pack',
+      value: run.activatedPackId
+    })
+  }
+  return {
+    available: true,
+    title: 'Imported result details',
+    entries: entries.map((entry) => ({
+      label: createPublicText({ dataDir, value: entry.label }),
+      value: createPublicText({ dataDir, value: entry.value })
+    })),
+    reviewLocation: createPublicText({ dataDir, value: 'OpenPet' })
+  }
+}
+
 const resolveImportCommand = (run) => (
   run.artifacts?.actionFrames
     ? 'import-approved-action'
@@ -621,6 +679,13 @@ const createWorkflowGuidance = ({ dataDir, run }) => {
       : 'Review the generated pet-pack output and approve the run before host-owned pet import.'
   }
 
+  const resultCard = createImportedResultCard({
+    dataDir,
+    run,
+    hasActionFrames,
+    triggerProposalSummary
+  })
+
   return {
     generation: {
       backend: createPublicText({ dataDir, value: backend }),
@@ -636,7 +701,8 @@ const createWorkflowGuidance = ({ dataDir, run }) => {
       summary: createPublicText({ dataDir, value: importSummary }),
       importedActionId: createPublicText({ dataDir, value: run.importedActionId || '' }),
       triggerProposalStatus: createPublicText({ dataDir, value: triggerProposalStatus }),
-      triggerProposalSummary: createPublicText({ dataDir, value: triggerProposalSummary })
+      triggerProposalSummary: createPublicText({ dataDir, value: triggerProposalSummary }),
+      resultCard
     }
   }
 }
