@@ -96,7 +96,7 @@ P1 work:
 
 - Upgrade the action tool schema with `reason`, `displayMode`, and a current-pet action candidate whitelist.
 - Add reply bubble segmentation while keeping the full assistant reply in transcript.
-- Add redacted AI Talk trace export that links provider, conversation, memory, and behavior decisions without exposing full prompts, API keys, or raw memory text.
+- Add redacted AI Talk trace export that links provider, conversation, memory, and behavior decisions without exposing full prompts, API keys, or raw memory text. Completed in current branch: `AiTalkStore` now persists redacted chat traces, `AiTalkService` exports them, and `ipc.js` backfills host behavior decisions onto the trace after orchestration.
 - Add conservative legacy migration from old `settings.ai.conversations.control-center` into `ai-talk-store.json` only when the new store has no messages.
 
 P2/P3:

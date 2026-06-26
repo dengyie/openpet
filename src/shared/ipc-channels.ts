@@ -67,6 +67,7 @@ export const IPC = Object.freeze({
   AI_GET_MEMORY_PROFILE: 'ai:get-memory-profile',
   AI_DELETE_MEMORY: 'ai:delete-memory',
   AI_CLEAR_PET_PACK_MEMORIES: 'ai:clear-pet-pack-memories',
+  AI_EXPORT_TRACES: 'ai:export-traces',
   IMAGE_GENERATION_GET_CONFIG: 'image-generation:get-config',
   IMAGE_GENERATION_SAVE_CONFIG: 'image-generation:save-config',
   IMAGE_GENERATION_SAVE_API_KEY: 'image-generation:save-api-key',

@@ -1265,6 +1265,65 @@ const demoApi: ControlCenterApi = {
     writeDemoState()
     return createDemoMemoryProfile(demoState.petPacks)
   },
+  exportAiTraces: async () => JSON.stringify({
+    schemaVersion: 1,
+    exportedAt: new Date().toISOString(),
+    traces: [{
+      id: 'trace-demo-1',
+      petPackId: demoState.petPacks.activePackId,
+      conversationId: `control-center:${demoState.petPacks.activePackId}:main`,
+      provider: {
+        provider: demoState.aiConfig.provider,
+        model: demoState.aiConfig.model,
+        baseUrl: demoState.aiConfig.baseUrl,
+        hasBehaviorIntent: true
+      },
+      request: {
+        entrypoint: 'control-center',
+        messageChars: 12,
+        historyCount: 2,
+        messagesCount: 4,
+        memoryContextCount: 1,
+        recentPetActivityCount: 0,
+        toolsCount: 1
+      },
+      response: {
+        replyChars: 16
+      },
+      memory: {
+        injected: [{
+          id: 'memory-demo-1',
+          scope: 'global',
+          tags: ['preference'],
+          useCount: 1,
+          confidence: 0.8,
+          importance: 0.6,
+          textPreview: 'Demo memory preview',
+          textRedacted: true
+        }],
+        applied: [{
+          id: 'memory-demo-2',
+          operation: 'create',
+          scope: 'petPack',
+          reason: 'demo extraction'
+        }],
+        filtered: []
+      },
+      behavior: {
+        matched: true,
+        type: 'playAction',
+        actionId: 'wave',
+        ruleId: 'demo-rule',
+        reason: 'matched rule demo-rule',
+        intent: 'greeting',
+        cooldown: false,
+        fallback: false,
+        blockedReason: ''
+      },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }]
+  }, null, 2),
   getImageGenerationConfig: async () => cloneImageGenerationConfig(demoState.imageGenerationConfig),
   saveImageGenerationConfig: async (config) => {
     demoState.imageGenerationConfig = cloneImageGenerationConfig({

@@ -421,6 +421,21 @@ const createAiTalkService = ({ aiService, aiTalkStore, petPackService, appLogSer
       }))
   }
 
+  const exportTraces = () => {
+    if (typeof aiTalkStore.exportTraces !== 'function') throw new Error('AI talk trace export is not available')
+    return aiTalkStore.exportTraces()
+  }
+
+  const attachBehaviorTrace = (traceId, behavior) => {
+    if (typeof aiTalkStore.attachBehaviorTrace !== 'function') return null
+    return aiTalkStore.attachBehaviorTrace(traceId, behavior)
+  }
+
+  const attachMemoryTrace = (traceId, memory) => {
+    if (typeof aiTalkStore.attachMemoryTrace !== 'function') return null
+    return aiTalkStore.attachMemoryTrace(traceId, memory)
+  }
+
   const getMemoryProfile = () => {
     const { manifest, petPackId } = resolveActivePack()
     if (typeof aiTalkStore.listMemories !== 'function') throw new Error('AI talk memories are not available')
@@ -465,7 +480,7 @@ const createAiTalkService = ({ aiService, aiTalkStore, petPackService, appLogSer
     return getMemoryProfile()
   }
 
-  const scheduleMemoryExtraction = ({ config, petPackId, conversationPublicId, sourceMessages, userMessage, assistantReply, persona }) => {
+  const scheduleMemoryExtraction = ({ config, petPackId, conversationPublicId, traceId = '', sourceMessages, userMessage, assistantReply, persona }) => {
     if (config.memory?.enabled !== true || typeof aiTalkStore.applyMemoryOperations !== 'function') return
     const job = typeof aiTalkStore.createMemoryJob === 'function'
       ? aiTalkStore.createMemoryJob({ petPackId, conversationId: conversationPublicId })
@@ -493,6 +508,10 @@ const createAiTalkService = ({ aiService, aiTalkStore, petPackService, appLogSer
           conversationId: conversationPublicId,
           messageIds: sourceMessages.map((message) => message.id).filter(Boolean),
           operations: parseMemoryOperations(extraction.reply)
+        })
+        attachMemoryTrace(traceId, {
+          applied: result.applied,
+          filtered: result.filtered
         })
         if (job?.id && typeof aiTalkStore.finishMemoryJob === 'function') {
           aiTalkStore.finishMemoryJob(job.id, {
@@ -621,6 +640,25 @@ const createAiTalkService = ({ aiService, aiTalkStore, petPackService, appLogSer
         const result = await aiService.complete({ messages, tools })
         const reply = normalizeString(result.reply)
         if (!reply) throw new Error('AI provider returned an empty response')
+        const trace = typeof aiTalkStore.recordChatTrace === 'function'
+          ? aiTalkStore.recordChatTrace({
+              petPackId,
+              conversationId: conversationPublicId,
+              provider: {
+                provider: config.provider,
+                model: config.model,
+                baseUrl: config.baseUrl,
+                hasBehaviorIntent: Boolean(result.behaviorIntent)
+              },
+              request: diagnostics,
+              response: {
+                replyChars: reply.length
+              },
+              memory: {
+                injected: memoryContext
+              }
+            })
+          : null
         markInjectedMemoriesUsed(memoryContext)
         const nextMessages = aiTalkStore.appendMessages(sessionId, conversationId, [
           userMessage,
@@ -631,6 +669,7 @@ const createAiTalkService = ({ aiService, aiTalkStore, petPackService, appLogSer
           config,
           petPackId,
           conversationPublicId,
+          traceId: trace?.id || '',
           sourceMessages,
           userMessage: content,
           assistantReply: reply,
@@ -650,6 +689,7 @@ const createAiTalkService = ({ aiService, aiTalkStore, petPackService, appLogSer
         })
         return {
           conversationId: conversationPublicId,
+          traceId: trace?.id || '',
           reply,
           behaviorIntent: result.behaviorIntent || undefined,
           messages: nextMessages
@@ -682,11 +722,14 @@ const createAiTalkService = ({ aiService, aiTalkStore, petPackService, appLogSer
     clearPetPackMemories,
     deleteMemory,
     flushMemoryJobs: () => Promise.allSettled(Array.from(pendingMemoryJobs)),
+    exportTraces,
     getConversation,
     generatePersonaDraft,
     getMemoryProfile,
     getPersonaProfile,
     mergePersona,
+    attachBehaviorTrace,
+    attachMemoryTrace,
     savePersonaOverride
   }
 }

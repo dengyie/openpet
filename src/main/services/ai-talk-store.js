@@ -32,6 +32,36 @@ const createEmptyState = () => ({
   traces: {}
 })
 
+const normalizeTraceMemoryInjectedItem = (memory = {}) => ({
+  id: typeof memory?.id === 'string' ? memory.id.trim() : '',
+  scope: MEMORY_SCOPES.has(memory?.scope) ? memory.scope : 'global',
+  tags: normalizeMemoryTags(memory?.tags),
+  useCount: Math.max(0, Number(memory?.useCount) || 0),
+  confidence: normalizeScore(memory?.confidence, 0),
+  importance: normalizeScore(memory?.importance, 0),
+  textPreview: typeof memory?.text === 'string' && memory.text.trim() ? '[redacted-memory-text]' : '',
+  textRedacted: true
+})
+
+const normalizeTraceMemoryMutationItem = (item = {}) => ({
+  id: typeof item?.id === 'string' ? item.id.trim() : '',
+  operation: MEMORY_OPERATIONS.has(item?.operation) ? item.operation : 'create',
+  scope: MEMORY_SCOPES.has(item?.scope) ? item.scope : 'global',
+  reason: typeof item?.reason === 'string' ? item.reason.trim().slice(0, 120) : ''
+})
+
+const normalizeBehaviorTrace = (behavior = {}) => ({
+  matched: Boolean(behavior?.matched),
+  type: typeof behavior?.type === 'string' ? behavior.type.trim().slice(0, 80) : '',
+  actionId: typeof behavior?.actionId === 'string' ? behavior.actionId.trim().slice(0, 120) : '',
+  ruleId: typeof behavior?.ruleId === 'string' ? behavior.ruleId.trim().slice(0, 120) : '',
+  reason: typeof behavior?.reason === 'string' ? behavior.reason.trim().slice(0, 160) : '',
+  intent: typeof behavior?.intent === 'string' ? behavior.intent.trim().slice(0, 120) : '',
+  cooldown: Boolean(behavior?.cooldown),
+  fallback: Boolean(behavior?.fallback),
+  blockedReason: typeof behavior?.blockedReason === 'string' ? behavior.blockedReason.trim().slice(0, 160) : ''
+})
+
 const clone = (value) => JSON.parse(JSON.stringify(value))
 
 const ensureDirectory = (filePath) => fs.mkdirSync(path.dirname(filePath), { recursive: true })
@@ -292,6 +322,118 @@ const createAiTalkStore = ({ storePath, now = () => new Date().toISOString() } =
   const createTraceId = () => `trace:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 10)}`
   const createPetUtteranceId = () => `pet-utterance:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 10)}`
 
+  const recordChatTrace = ({
+    petPackId,
+    conversationId = '',
+    provider = {},
+    request = {},
+    response = {},
+    memory = {}
+  } = {}) => {
+    const packId = typeof petPackId === 'string' ? petPackId.trim() : ''
+    if (!packId) throw new Error('petPackId is required')
+    const traceId = createTraceId()
+    state.traces[traceId] = {
+      id: traceId,
+      petPackId: packId,
+      conversationId: typeof conversationId === 'string' ? conversationId.trim() : '',
+      provider: {
+        provider: typeof provider?.provider === 'string' ? provider.provider.trim().slice(0, 80) : '',
+        model: typeof provider?.model === 'string' ? provider.model.trim().slice(0, 120) : '',
+        baseUrl: typeof provider?.baseUrl === 'string' ? provider.baseUrl.trim().slice(0, 200) : '',
+        hasBehaviorIntent: Boolean(provider?.hasBehaviorIntent)
+      },
+      request: {
+        entrypoint: typeof request?.entrypoint === 'string' ? request.entrypoint.trim().slice(0, 80) : '',
+        messageChars: Math.max(0, Number(request?.messageChars) || 0),
+        historyCount: Math.max(0, Number(request?.historyCount) || 0),
+        messagesCount: Math.max(0, Number(request?.messagesCount) || 0),
+        memoryContextCount: Math.max(0, Number(request?.memoryContextCount) || 0),
+        recentPetActivityCount: Math.max(0, Number(request?.recentPetActivityCount) || 0),
+        toolsCount: Math.max(0, Number(request?.toolsCount) || 0)
+      },
+      response: {
+        replyChars: Math.max(0, Number(response?.replyChars) || 0)
+      },
+      memory: {
+        injected: Array.isArray(memory?.injected) ? memory.injected.map(normalizeTraceMemoryInjectedItem) : [],
+        applied: Array.isArray(memory?.applied) ? memory.applied.map(normalizeTraceMemoryMutationItem) : [],
+        filtered: Array.isArray(memory?.filtered) ? memory.filtered.map(normalizeTraceMemoryMutationItem) : []
+      },
+      behavior: null,
+      createdAt: now(),
+      updatedAt: now()
+    }
+    persist()
+    return clone(state.traces[traceId])
+  }
+
+  const attachBehaviorTrace = (traceId, behavior = {}) => {
+    const id = typeof traceId === 'string' ? traceId.trim() : ''
+    if (!id || !state.traces[id]) return null
+    state.traces[id] = {
+      ...state.traces[id],
+      behavior: normalizeBehaviorTrace(behavior),
+      updatedAt: now()
+    }
+    persist()
+    return clone(state.traces[id])
+  }
+
+  const attachMemoryTrace = (traceId, memory = {}) => {
+    const id = typeof traceId === 'string' ? traceId.trim() : ''
+    if (!id || !state.traces[id]) return null
+    state.traces[id] = {
+      ...state.traces[id],
+      memory: {
+        injected: Array.isArray(state.traces[id]?.memory?.injected) ? state.traces[id].memory.injected.map(normalizeTraceMemoryInjectedItem) : [],
+        applied: Array.isArray(memory?.applied) ? memory.applied.map(normalizeTraceMemoryMutationItem) : [],
+        filtered: Array.isArray(memory?.filtered) ? memory.filtered.map(normalizeTraceMemoryMutationItem) : []
+      },
+      updatedAt: now()
+    }
+    persist()
+    return clone(state.traces[id])
+  }
+
+  const exportTraces = () => JSON.stringify({
+    schemaVersion: 1,
+    exportedAt: now(),
+    traces: Object.values(state.traces || {})
+      .map((trace) => ({
+        id: typeof trace?.id === 'string' ? trace.id : '',
+        petPackId: typeof trace?.petPackId === 'string' ? trace.petPackId : '',
+        conversationId: typeof trace?.conversationId === 'string' ? trace.conversationId : '',
+        provider: {
+          provider: typeof trace?.provider?.provider === 'string' ? trace.provider.provider : '',
+          model: typeof trace?.provider?.model === 'string' ? trace.provider.model : '',
+          baseUrl: typeof trace?.provider?.baseUrl === 'string' ? trace.provider.baseUrl : '',
+          hasBehaviorIntent: Boolean(trace?.provider?.hasBehaviorIntent)
+        },
+        request: {
+          entrypoint: typeof trace?.request?.entrypoint === 'string' ? trace.request.entrypoint : '',
+          messageChars: Math.max(0, Number(trace?.request?.messageChars) || 0),
+          historyCount: Math.max(0, Number(trace?.request?.historyCount) || 0),
+          messagesCount: Math.max(0, Number(trace?.request?.messagesCount) || 0),
+          memoryContextCount: Math.max(0, Number(trace?.request?.memoryContextCount) || 0),
+          recentPetActivityCount: Math.max(0, Number(trace?.request?.recentPetActivityCount) || 0),
+          toolsCount: Math.max(0, Number(trace?.request?.toolsCount) || 0)
+        },
+        response: {
+          replyChars: Math.max(0, Number(trace?.response?.replyChars) || 0)
+        },
+        memory: {
+          injected: Array.isArray(trace?.memory?.injected) ? trace.memory.injected.map(normalizeTraceMemoryInjectedItem) : [],
+          applied: Array.isArray(trace?.memory?.applied) ? trace.memory.applied.map(normalizeTraceMemoryMutationItem) : [],
+          filtered: Array.isArray(trace?.memory?.filtered) ? trace.memory.filtered.map(normalizeTraceMemoryMutationItem) : []
+        },
+        behavior: trace?.behavior ? normalizeBehaviorTrace(trace.behavior) : null,
+        createdAt: typeof trace?.createdAt === 'string' ? trace.createdAt : '',
+        updatedAt: typeof trace?.updatedAt === 'string' ? trace.updatedAt : ''
+      }))
+      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+  }, null, 2)
+
   const recordPetUtterance = (utterance = {}) => {
     const timestamp = now()
     const normalized = normalizePetUtterance({
@@ -542,10 +684,13 @@ const createAiTalkStore = ({ storePath, now = () => new Date().toISOString() } =
   return {
     appendMessages,
     applyMemoryOperations,
+    attachMemoryTrace,
+    attachBehaviorTrace,
     createMemoryJob,
     clearPetPackMemories,
     deleteMemory,
     ensureMainConversation,
+    exportTraces,
     finishMemoryJob,
     getMessages,
     getPersonaOverride,
@@ -554,6 +699,7 @@ const createAiTalkStore = ({ storePath, now = () => new Date().toISOString() } =
     listMemories,
     markMemoriesUsed,
     persist,
+    recordChatTrace,
     recordPetUtterance,
     clearPetUtterances,
     savePersonaOverride

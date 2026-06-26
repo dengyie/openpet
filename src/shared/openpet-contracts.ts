@@ -161,6 +161,74 @@ export interface AiMemoryProfileViewState {
   recentJobs: AiMemoryJobViewState[]
 }
 
+export interface AiTraceMemoryInjectedViewState {
+  id: string
+  scope: string
+  tags: string[]
+  useCount: number
+  confidence: number
+  importance: number
+  textPreview: string
+  textRedacted: boolean
+}
+
+export interface AiTraceMemoryMutationViewState {
+  id: string
+  operation: string
+  scope: string
+  reason: string
+}
+
+export interface AiTraceBehaviorViewState {
+  matched: boolean
+  type: string
+  actionId: string
+  ruleId: string
+  reason: string
+  intent: string
+  cooldown: boolean
+  fallback: boolean
+  blockedReason: string
+}
+
+export interface AiTraceViewState {
+  id: string
+  petPackId: string
+  conversationId: string
+  provider: {
+    provider: string
+    model: string
+    baseUrl: string
+    hasBehaviorIntent: boolean
+  }
+  request: {
+    entrypoint: string
+    messageChars: number
+    historyCount: number
+    messagesCount: number
+    memoryContextCount: number
+    recentPetActivityCount: number
+    toolsCount: number
+  }
+  response: {
+    replyChars: number
+  }
+  memory: {
+    injected: AiTraceMemoryInjectedViewState[]
+    applied: AiTraceMemoryMutationViewState[]
+    filtered: AiTraceMemoryMutationViewState[]
+  }
+  behavior: AiTraceBehaviorViewState | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface AiTraceExportViewState {
+  schemaVersion: number
+  exportedAt: string
+  traces: AiTraceViewState[]
+}
+
 export interface AiPersona {
   name: string
   identity: string
@@ -1948,6 +2016,7 @@ export interface AiChatRequest {
 
 export interface AiChatResponse {
   conversationId?: string
+  traceId?: string
   reply: string
   messages?: ChatMessage[]
   bubble?: PetChatBubbleViewState
@@ -2398,6 +2467,7 @@ export interface ControlCenterApi {
   getAiMemoryProfile: () => Promise<AiMemoryProfileViewState>
   deleteAiMemory: (memoryId: string) => Promise<AiMemoryProfileViewState>
   clearAiPetPackMemories: () => Promise<AiMemoryProfileViewState>
+  exportAiTraces: () => Promise<string>
   getImageGenerationConfig: () => Promise<ImageGenerationConfigViewState>
   saveImageGenerationConfig: (config: Partial<ImageGenerationConfigViewState>) => Promise<ImageGenerationConfigViewState>
   saveImageGenerationApiKey: (apiKey: string) => Promise<ImageGenerationSaveApiKeyResult>

@@ -268,6 +268,64 @@ test('pet chat send emits through PetService so the floating bubble window is di
   assert.equal(sentToPetWindow.length, 0)
 })
 
+test('pet chat send attaches host behavior decision back onto ai talk trace', async () => {
+  const traceIds = []
+  const behaviorAttachments = []
+  const ipcMain = registerPetChatHandlers({
+    aiService: {
+      getConfig: () => ({
+        enabled: true,
+        hasApiKey: true,
+        provider: 'openai-compatible',
+        baseUrl: 'http://127.0.0.1:8317/v1',
+        model: 'gpt-5.5'
+      })
+    },
+    aiTalkService: {
+      getPersonaProfile: () => ({ petPackId: 'legacy-cat', petPackDisplayName: 'Legacy Cat' }),
+      getConversation: () => [],
+      attachBehaviorTrace: (traceId, behavior) => {
+        traceIds.push(traceId)
+        behaviorAttachments.push(behavior)
+      },
+      chat: async () => ({
+        traceId: 'trace-1',
+        conversationId: 'control-center:legacy-cat:main',
+        reply: 'hello there',
+        behaviorIntent: { intent: 'greeting', actionId: 'wave', confidence: 0.9 },
+        messages: [
+          { id: 'u1', role: 'user', content: 'hello', createdAt: '2026-06-24T00:00:00.000Z' },
+          { id: 'a1', role: 'assistant', content: 'hello there', createdAt: '2026-06-24T00:00:01.000Z' }
+        ]
+      })
+    },
+    behaviorOrchestratorService: {
+      getConfig: () => ({ enabled: true }),
+      evaluate: () => ({
+        matched: true,
+        type: 'playAction',
+        actionId: 'wave',
+        label: 'Wave',
+        reason: 'matched rule greet',
+        ruleId: 'greet',
+        intent: 'greeting'
+      }),
+      saveConfig: (config) => config,
+      dryRun: () => ({ matched: false }),
+      replayDecision: () => ({ matched: false }),
+      exportDiagnostics: () => ({}),
+      clearDecisions: () => ({ ok: true })
+    }
+  })
+
+  await ipcMain.handlers.get(IPC.PET_CHAT_SEND_MESSAGE)(null, { message: 'hello' })
+
+  assert.deepEqual(traceIds, ['trace-1'])
+  assert.equal(behaviorAttachments.length, 1)
+  assert.equal(behaviorAttachments[0].actionId, 'wave')
+  assert.equal(behaviorAttachments[0].reason, 'matched rule greet')
+})
+
 test('pet chat state tracks latest pet bubble from say events', async () => {
   let onSayHandler = null
   const sentToPetWindow = []

@@ -244,3 +244,66 @@ test('ai talk store marks injected memories as used', () => {
   assert.deepEqual(memories.map((memory) => memory.lastUsedAt), ['2026-06-20T00:05:00.000Z', '2026-06-20T00:05:00.000Z'])
   assert.deepEqual(memories.map((memory) => memory.useCount), [1, 1])
 })
+
+test('ai talk store exports redacted traces without prompts, secrets, or raw memory text', () => {
+  const store = createAiTalkStore({ storePath: createTempStorePath(), now: () => '2026-06-20T00:00:00.000Z' })
+
+  const trace = store.recordChatTrace({
+    petPackId: 'mochi-cat',
+    conversationId: 'control-center:mochi-cat:main',
+    provider: {
+      provider: 'openai-compatible',
+      model: 'gpt-4o-mini',
+      baseUrl: 'https://api.example.test/v1',
+      hasBehaviorIntent: true
+    },
+    request: {
+      entrypoint: 'control-center',
+      messageChars: 18,
+      historyCount: 2,
+      messagesCount: 4,
+      systemPrompt: 'secret system prompt',
+      userMessage: 'my api key is sk-test-should-not-leak'
+    },
+    response: {
+      replyChars: 42,
+      assistantReply: 'assistant reply should not be exported'
+    },
+    memory: {
+      injected: [{
+        id: 'memory-1',
+        scope: 'global',
+        text: 'User secret preference text should not leak.',
+        tags: ['focus'],
+        useCount: 3
+      }],
+      applied: [{ id: 'memory-2', operation: 'create', scope: 'petPack' }],
+      filtered: [{ operation: 'create', scope: 'global', reason: 'sensitive' }]
+    }
+  })
+
+  store.attachBehaviorTrace(trace.id, {
+    matched: true,
+    type: 'playAction',
+    actionId: 'wave',
+    ruleId: 'rule-1',
+    reason: 'matched rule rule-1',
+    intent: 'greeting'
+  })
+
+  const exported = JSON.parse(store.exportTraces())
+
+  assert.equal(exported.schemaVersion, 1)
+  assert.equal(exported.traces.length, 1)
+  assert.equal(exported.traces[0].conversationId, 'control-center:mochi-cat:main')
+  assert.equal(exported.traces[0].provider.model, 'gpt-4o-mini')
+  assert.equal(exported.traces[0].memory.injected[0].textRedacted, true)
+  assert.equal(exported.traces[0].memory.injected[0].scope, 'global')
+  assert.equal(exported.traces[0].memory.applied[0].operation, 'create')
+  assert.equal(exported.traces[0].behavior.actionId, 'wave')
+  const serialized = JSON.stringify(exported)
+  assert.equal(serialized.includes('secret system prompt'), false)
+  assert.equal(serialized.includes('assistant reply should not be exported'), false)
+  assert.equal(serialized.includes('User secret preference text should not leak.'), false)
+  assert.equal(serialized.includes('sk-test-should-not-leak'), false)
+})

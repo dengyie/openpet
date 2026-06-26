@@ -756,3 +756,81 @@ test('ai talk service accepts fenced json memory extraction replies', async () =
 
   assert.deepEqual(store.listMemories({ petPackId: 'legacy-cat' }).map((memory) => memory.text), ['User likes quiet focus music.'])
 })
+
+test('ai talk service exports redacted traces linked to memory activity', async () => {
+  const store = createStore()
+  const service = createAiTalkService({
+    aiService: {
+      getConfig: () => ({
+        enabled: true,
+        provider: 'openai-compatible',
+        baseUrl: 'https://api.example.test/v1',
+        model: 'gpt-4o-mini',
+        behavior: { enabled: true, useTools: true },
+        memory: { enabled: true },
+        systemPrompt: 'top secret prompt should not leak'
+      }),
+      complete: async (request) => {
+        if (request.messages[0].content.includes('Extract only durable')) {
+          return {
+            reply: JSON.stringify({
+              memories: [{
+                operation: 'create',
+                scope: 'global',
+                text: 'User likes quiet focus music.',
+                tags: ['preference'],
+                confidence: 0.8,
+                importance: 0.6,
+                reason: 'stable preference'
+              }]
+            })
+          }
+        }
+        return {
+          reply: '我会轻轻陪你专注。',
+          behaviorIntent: { intent: 'focus', actionId: 'wave', confidence: 0.8, bubbleText: '轻轻陪你专注' }
+        }
+      }
+    },
+    aiTalkStore: store,
+    petPackService: createPetPackService({
+      id: 'mochi-cat',
+      displayName: 'Mochi Cat',
+      persona: {
+        name: 'Mochi',
+        identity: 'A tiny desktop cat.',
+        tone: 'warm',
+        coreTraits: ['curious'],
+        speakingStyle: 'Short sentences.',
+        relationshipToUser: 'Companion.',
+        actionStyle: 'Use existing actions.',
+        boundaries: ['Do not pretend to be human.']
+      }
+    })
+  })
+
+  const result = await service.chat({ message: '我的 key 是 sk-test-should-not-export，帮我专注' })
+  await service.flushMemoryJobs()
+  service.attachBehaviorTrace(result.traceId, {
+    matched: true,
+    type: 'playAction',
+    actionId: 'wave',
+    reason: 'matched rule focus',
+    ruleId: 'focus',
+    intent: 'focus'
+  })
+
+  const exported = JSON.parse(service.exportTraces())
+
+  assert.equal(typeof result.traceId, 'string')
+  assert.equal(exported.traces.length, 1)
+  assert.equal(exported.traces[0].provider.provider, 'openai-compatible')
+  assert.equal(exported.traces[0].conversationId, 'control-center:mochi-cat:main')
+  assert.equal(exported.traces[0].memory.applied[0].scope, 'global')
+  assert.equal(exported.traces[0].behavior.actionId, 'wave')
+  assert.equal(exported.traces[0].behavior.intent, 'focus')
+  const serialized = JSON.stringify(exported)
+  assert.equal(serialized.includes('top secret prompt should not leak'), false)
+  assert.equal(serialized.includes('我的 key 是 sk-test-should-not-export'), false)
+  assert.equal(serialized.includes('User likes quiet focus music.'), false)
+})
