@@ -794,6 +794,57 @@ test('action service previews host trigger rules before persistence', () => {
   assert.match(preview.message, /Preview/)
 })
 
+test('action service removes persisted trigger rules by id', () => {
+  let savedConfig = null
+  const service = createActionService({
+    projectRoot: '/app/openpet',
+    loadLegacyAnimations: () => savedConfig || ({
+      defaultAction: 'idle',
+      clickAction: 'idle',
+      actions: [
+        {
+          id: 'idle',
+          label: 'Idle',
+          kind: 'idle',
+          loop: true,
+          frameCount: 16,
+          frameMs: 95,
+          frameWidth: 191,
+          frameHeight: 453,
+          sprite: 'cat_anime/sprites/idle.png'
+        },
+        {
+          id: 'wave',
+          label: 'Wave',
+          kind: 'custom',
+          loop: false,
+          frameCount: 8,
+          frameMs: 90,
+          frameWidth: 192,
+          frameHeight: 208,
+          sprite: 'cat_anime/sprites/wave.png'
+        }
+      ],
+      triggerRules: [{
+        id: 'rule:state:wave',
+        type: 'state',
+        actionId: 'wave',
+        enabled: true,
+        condition: { stateKey: 'posture', equals: 'resting' }
+      }]
+    }),
+    saveLegacyAnimations: (config) => {
+      savedConfig = config
+      return config
+    }
+  })
+
+  const result = service.removeTriggerRule('rule:state:wave')
+
+  assert.equal(result.triggerRules.length, 0)
+  assert.equal(savedConfig.triggerRules.length, 0)
+})
+
 test('action service rejects unsafe trigger proposal inbox mutations', () => {
   const service = createActionService({
     projectRoot: '/app/openpet',
@@ -834,6 +885,10 @@ test('action service rejects unsafe trigger proposal inbox mutations', () => {
   assert.throws(
     () => service.previewTriggerProposal({ actionId: 'idle', type: 'state', binding: 'clickAction' }),
     /Unsupported state trigger binding/
+  )
+  assert.throws(
+    () => service.removeTriggerRule('../bad'),
+    /safe id/
   )
   assert.throws(
     () => service.rejectTriggerProposalItem('../bad'),

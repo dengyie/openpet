@@ -256,6 +256,21 @@ export function useActionsPane() {
     }
   }
 
+  const onDeleteTriggerRule = async (ruleId: string) => {
+    if (!window.confirm(`删除触发规则 ${ruleId}？`)) return
+    setWorking(true)
+    setStatus('')
+    try {
+      const response = await api.deleteActionTriggerRule(ruleId)
+      setActionsConfig(cloneActionsConfig(response.animations))
+      setStatus(`已删除触发规则 ${ruleId}`)
+    } catch (error) {
+      setStatus(messageFromError(error, '删除触发规则失败'))
+    } finally {
+      setWorking(false)
+    }
+  }
+
   const onInspectPetPack = async () => {
     setWorking(true)
     setStatus('')
@@ -366,6 +381,7 @@ export function useActionsPane() {
     onClearInspection,
     onImport,
     onDelete,
+    onDeleteTriggerRule,
     onInspectPetPack,
     onClearPetPackInspection,
     onImportPetPack,

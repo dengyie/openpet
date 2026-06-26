@@ -2377,6 +2377,7 @@ export interface ControlCenterApi {
   submitActionTriggerProposal: (payload: ActionTriggerProposalAcceptanceRequest) => Promise<ActionsMutationResult>
   acceptActionTriggerProposal: (proposalId: string) => Promise<ActionsMutationResult>
   rejectActionTriggerProposal: (proposalId: string, reason?: string) => Promise<ActionsMutationResult>
+  deleteActionTriggerRule: (ruleId: string) => Promise<ActionsMutationResult>
   deleteAction: (actionId: string) => Promise<ActionsMutationResult>
   listPetPacks: () => Promise<PetPacksViewState>
   inspectPetPackDirectory: () => Promise<PetPackInspectionResult>

@@ -1140,6 +1140,14 @@ const demoApi: ControlCenterApi = {
     writeDemoState()
     return { animations: cloneActionsConfig(demoState.actionsConfig), proposal: nextProposal }
   },
+  deleteActionTriggerRule: async (ruleId) => {
+    demoState.actionsConfig = cloneActionsConfig({
+      ...demoState.actionsConfig,
+      triggerRules: (demoState.actionsConfig.triggerRules || []).filter((rule) => rule.id !== ruleId)
+    })
+    writeDemoState()
+    return { animations: cloneActionsConfig(demoState.actionsConfig) }
+  },
   deleteAction: async () => ({ animations: cloneActionsConfig(demoState.actionsConfig) }),
   listPetPacks: async () => clonePetPacks(demoState.petPacks),
   inspectPetPackDirectory: async () => ({ canceled: true }),

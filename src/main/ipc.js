@@ -1054,6 +1054,22 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     return createActionsMutationResult(result.animations, { proposal: result.proposal })
   })
 
+  ipcMainService.handle(IPC.ACTIONS_DELETE_TRIGGER_RULE, async (_event, payload) => {
+    if (!actionService?.removeTriggerRule) throw new Error('Action trigger rule deletion is not available')
+    const animations = actionService.removeTriggerRule(payload?.ruleId)
+    recordAppLog({
+      scope: 'actions',
+      level: 'info',
+      actor: 'user',
+      event: 'actions.trigger-rule.deleted',
+      message: 'Action trigger rule deleted',
+      details: {
+        ruleId: String(payload?.ruleId || '')
+      }
+    })
+    return createActionsMutationResult(animations)
+  })
+
   ipcMainService.handle(IPC.ACTIONS_DELETE, async (_event, payload) => {
     await actionImportService.deleteAction(payload.actionId)
     reloadAndSendAnimations(getPetWindow, petService)

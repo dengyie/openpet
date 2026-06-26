@@ -204,6 +204,48 @@ test.describe('Control Center smoke', () => {
     await expect(inbox).toContainText('0 条待审核')
   })
 
+  test('shows persisted trigger rules and lets the user remove one', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.sessionStorage.setItem('openpet.controlCenter.demoState', JSON.stringify({
+        actionsConfig: {
+          defaultAction: 'idle',
+          clickAction: 'wave',
+          actions: [
+            { id: 'idle', label: 'Idle', kind: 'idle', loop: true, frameCount: 1, frameMs: 120, frameWidth: 8, frameHeight: 8 },
+            { id: 'wave', label: 'Wave', kind: 'click', loop: false, frameCount: 1, frameMs: 100, frameWidth: 8, frameHeight: 8 },
+            { id: 'sleep', label: 'Sleep', kind: 'idle', loop: true, frameCount: 1, frameMs: 140, frameWidth: 8, frameHeight: 8 }
+          ],
+          triggerProposalInbox: [],
+          triggerRules: [
+            {
+              id: 'rule:state:sleep',
+              type: 'state',
+              actionId: 'sleep',
+              enabled: true,
+              condition: {
+                stateKey: 'posture',
+                equals: 'resting'
+              }
+            }
+          ]
+        }
+      }))
+    })
+
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Actions' }).click()
+
+    const rulesCard = page.locator('[aria-label="已保存触发规则"]')
+    await expect(rulesCard).toContainText('Sleep')
+    await expect(rulesCard).toContainText('state')
+    await expect(rulesCard).toContainText('posture')
+
+    page.once('dialog', (dialog) => dialog.accept())
+    await rulesCard.getByRole('button', { name: '删除规则' }).click()
+    await expect(page.locator('.status-line')).toContainText('已删除触发规则')
+    await expect(rulesCard).toContainText('暂无已保存规则')
+  })
+
   test('persists Pet settings in the demo API session', async ({ page }) => {
     await page.goto('/')
 

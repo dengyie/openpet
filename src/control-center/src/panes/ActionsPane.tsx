@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type {
   ActionEntry,
+  ActionTriggerRule,
   ActionTriggerProposalInboxItem,
   ActionTriggerProposalAcceptanceResult,
   ActionTriggerProposalType,
@@ -34,6 +35,7 @@ export interface ActionsPaneProps {
   onClearInspection: () => void | Promise<void>
   onImport: () => void | Promise<void>
   onDelete: (actionId: string) => void | Promise<void>
+  onDeleteTriggerRule: (ruleId: string) => void | Promise<void>
   onInspectPetPack: () => void | Promise<void>
   onClearPetPackInspection: () => void | Promise<void>
   onImportPetPack: () => void | Promise<void>
@@ -188,6 +190,74 @@ function TriggerProposalInbox({
                   </button>
                 </div>
               ) : null}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function TriggerRuleList({
+  rules,
+  actions,
+  working,
+  onDelete
+}: {
+  rules: ActionTriggerRule[]
+  actions: ActionEntry[]
+  working: boolean
+  onDelete: (ruleId: string) => void | Promise<void>
+}) {
+  if (!rules.length) {
+    return (
+      <div className="trigger-inbox-card" aria-label="已保存触发规则">
+        <div className="trigger-review-header">
+          <div>
+            <strong>已保存触发规则</strong>
+            <span>宿主已接受并持久化的规则会显示在这里。</span>
+          </div>
+          <span className="trigger-badge applied">空</span>
+        </div>
+        <div className="empty-chat">暂无已保存规则</div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="trigger-inbox-card" aria-label="已保存触发规则">
+      <div className="trigger-review-header">
+        <div>
+          <strong>已保存触发规则</strong>
+          <span>{rules.length} 条规则已持久化到当前动作配置。</span>
+        </div>
+        <span className="trigger-badge applied">Rules</span>
+      </div>
+      <div className="trigger-inbox-grid">
+        {rules.map((rule) => {
+          const action = actions.find((candidate) => candidate.id === rule.actionId)
+          const summary = rule.type === 'random'
+            ? `概率 ${(Number(rule.condition?.probability || 0) * 100).toFixed(0)}%`
+            : (rule.type === 'state'
+                ? `${rule.condition?.stateKey || 'state'} = ${rule.condition?.equals || ''}`
+                : `event: ${rule.condition?.eventName || ''}`)
+          return (
+            <div className="trigger-inbox-item accepted" key={rule.id}>
+              <div className="trigger-inbox-main">
+                <div>
+                  <strong>{action?.label || rule.actionId}</strong>
+                  <span>{rule.type} · {rule.id}</span>
+                </div>
+                <span className={`trigger-badge ${rule.enabled ? 'applied' : 'rejected'}`}>
+                  {rule.enabled ? '启用' : '停用'}
+                </span>
+              </div>
+              <p>{summary}</p>
+              <div className="inline-action">
+                <button type="button" className="danger-text" disabled={working} onClick={() => onDelete(rule.id)}>
+                  删除规则
+                </button>
+              </div>
             </div>
           )
         })}
@@ -391,6 +461,7 @@ export function ActionsPane({
   onClearInspection,
   onImport,
   onDelete,
+  onDeleteTriggerRule,
   onInspectPetPack,
   onClearPetPackInspection,
   onImportPetPack,
@@ -560,6 +631,13 @@ export function ActionsPane({
           working={working}
           onAccept={onAcceptTriggerProposal}
           onReject={onRejectTriggerProposal}
+        />
+
+        <TriggerRuleList
+          rules={actionsConfig.triggerRules || []}
+          actions={actionsConfig.actions}
+          working={working}
+          onDelete={onDeleteTriggerRule}
         />
       </div>
 

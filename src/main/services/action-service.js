@@ -630,6 +630,19 @@ const createActionService = ({ petPackService, loadPetPack, loadLegacyAnimations
     return { proposal: nextProposal, animations }
   }
 
+  const removeTriggerRule = (ruleId) => {
+    const id = normalizeTriggerProposalId(ruleId, 'trigger rule id')
+    const current = getMutableConfig()
+    const nextRules = (current.triggerRules || []).map(normalizeTriggerRule).filter((rule) => rule.id !== id)
+    if (nextRules.length === (current.triggerRules || []).length) {
+      throw new Error(`Trigger rule does not exist: ${id}`)
+    }
+    return persistMutableConfig({
+      ...current,
+      triggerRules: nextRules
+    })
+  }
+
   return {
     getPetPack,
     getConfig,
@@ -643,7 +656,8 @@ const createActionService = ({ petPackService, loadPetPack, loadLegacyAnimations
     previewTriggerProposal,
     submitTriggerProposal,
     acceptTriggerProposalItem,
-    rejectTriggerProposalItem
+    rejectTriggerProposalItem,
+    removeTriggerRule
   }
 }
 
