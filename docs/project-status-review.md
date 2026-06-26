@@ -1,7 +1,7 @@
 # OpenPet Project Status Review
 
-> Date: 2026-06-18
-> Branch: `main`
+> Date: 2026-06-26
+> Branch: `codex/plugin-command-runtime-split`
 > Release track: `v1.0.1-rc.2`
 
 This document is the current status snapshot. Detailed implementation history belongs in `docs/phases/`; detailed review findings belong in `docs/reviews/`.
@@ -13,6 +13,8 @@ OpenPet has reached the intended desktop platform shape: Electron pet runtime, R
 The project is strongest on macOS. Windows build and evidence tooling exists, but Windows must stay **not release-ready** until signed artifacts and real Windows smoke reports are archived.
 
 The extension ecosystem has also crossed another platform threshold: declaration-only local command entries no longer need the legacy JavaScript SDK path just to make the pet speak or react, and creator-tools entries now have host-backed authoring slices for bounded action configuration reads/writes, active installed user pack metadata workflows, package-local frame inspection/import, and user-approved picker frame inspection/import. The wider ecosystem still stays open, local-first, and honest about trust limits.
+
+The plugin host internals have also reached a clearer architecture checkpoint: `PluginService` now delegates most high-risk policy, projection, creator bridge, asset safety, and management-write logic to focused controllers, while retaining only orchestration and public entry-point composition. This is an intentional stop point rather than an invitation for unlimited further splitting.
 
 ## Current Product Shape
 
@@ -62,6 +64,7 @@ The active product gaps are evidence and ecosystem maturity, not a rewrite of th
 
 - Documentation map: `docs/README.md`
 - Current TODO architecture: `docs/openpet-current-todo-architecture.md`
+- Plugin host architecture checkpoint: `docs/plugin-service-architecture-checkpoint.md`
 - Public entry: `README.md`, `README.zh-CN.md`
 - Current handoff: `docs/HANDOFF.md`
 - Machine context: `docs/project-context.json`

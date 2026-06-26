@@ -1,6 +1,6 @@
 # OpenPet Current TODO Architecture
 
-> Date: 2026-06-24
+> Date: 2026-06-26
 > Baseline: `main@a317ec5` (`feat(chat): unify pet chat surfaces`)
 > Status: live TODO entry point
 > Scope: summarize current product gaps by the code architecture that owns them. Historical phase/spec documents remain audit records.
@@ -19,7 +19,7 @@ This is not a promise to implement every item in one milestone. It is a map for 
 - P3: longer-term platform direction.
 - Manual-required: needs real provider accounts, signed artifacts, notarization, Windows machines, production credentials, or human review.
 
-Current P0 status: no known startup/build blocker in this TODO pass. The highest-risk current gap is the half-wired trigger proposal inbox surface, but it is not yet the primary UI path.
+Current P0 status: no known startup/build blocker in this TODO pass. The highest-risk current gaps are release evidence closure and remaining trigger-rule host schema work, not the trigger proposal inbox surface itself.
 
 ## Current Code Architecture
 
@@ -33,7 +33,7 @@ Current P0 status: no known startup/build blocker in this TODO pass. The highest
 | Image generation | `src/main/services/image-generation-model-service.js` | OpenAI-compatible image Provider, health checks, host-owned output writes | plugins submit prompts only, host owns credentials and writes |
 | Behavior orchestration | `src/main/services/behavior-orchestrator-service.js` | action decision validation, cooldown, replay, diagnostics | model can suggest, host validates and executes |
 | Control Center | `src/control-center/src/api/control-center-api.ts`, `src/control-center/src/hooks/`, `src/control-center/src/panes/` | all user-facing configuration surfaces | new config must be operable here |
-| Plugin host | `src/main/services/plugin-service.js`, `src/main/services/plugin-install-service.js`, `src/main/plugins/` | manifest policy, command/service bridge, creator-tools routes | permission-gated, token-gated, no unrestricted plugin access |
+| Plugin host | `src/main/services/plugin-service.js`, `src/main/services/plugin-install-service.js`, `src/main/plugins/`, `docs/plugin-service-architecture-checkpoint.md` | manifest policy, command/service bridge, creator-tools routes, orchestrator boundary | permission-gated, token-gated, no unrestricted plugin access |
 | Creator Studio plugin | `examples/plugins/creator-studio/` | prompt/task workflow, run state, QA, preview, import requests | provider secrets, final imports, and trigger persistence stay host-owned |
 | Contracts/tests | `src/shared/openpet-contracts.ts`, `src/shared/ipc-channels.*`, `tests/` | IPC/view contracts and regression boundaries | keep JS and TS channel files synchronized |
 
@@ -46,6 +46,7 @@ Current P0 status: no known startup/build blocker in this TODO pass. The highest
 - Creator Studio already has `GenerationTask`, deterministic `conversation-wizard`, task answer/confirm commands, `openpet-prompt-builder`, host model bridge, run persistence, QA artifacts, dashboard display, and action import command paths.
 - Action trigger review exists for the manually selected action path: `click` can update `clickAction`; `manual` and `unbound` are acknowledged; `random`, `state`, and `event` remain pending host-rule work.
 - Trigger proposal inbox now has a host-owned service/API/UI closed loop: proposals can be submitted, persisted, accepted, rejected, preserved through action regeneration, and reviewed from the Actions pane.
+- `PluginService` high-risk subdomains are now split into focused controllers for resolution, config/storage, runtime SDK, creator bridge handlers, asset/path safety, listing/projection, policy/signature gating, dashboard open, and management writes. The remaining `PluginService` code is intentionally kept as orchestration; see `docs/plugin-service-architecture-checkpoint.md`.
 
 ## P1 Architecture TODOs
 
@@ -159,7 +160,7 @@ P1 work:
 - Preserve the current command paths as automation/test entry points while improving user-facing dashboard affordances.
 - Add explicit retry/recover flows for failed cloud/local generation without silently falling back to fixture.
 - Surface prompt-builder provenance in the dashboard, including sanitized final prompt preview for developer mode.
-- Connect generated trigger proposals to the host trigger proposal inbox after the inbox service/UI is complete.
+- Connect generated trigger proposals directly into the existing host trigger proposal inbox from successful generation/import flows.
 - Add realistic smoke guidance for configured host image Provider generation.
 
 P2/P3:
