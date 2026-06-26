@@ -569,6 +569,47 @@ const createDemoCreatorStudioImportResult = (payload?: JsonObject): PluginComman
   })
 }
 
+const createDemoCreatorStudioActionImportResult = (payload?: JsonObject): PluginCommandRunResultViewState => {
+  const runId = typeof payload?.runId === 'string' && payload.runId.trim()
+    ? payload.runId.trim()
+    : '2026-06-19-creator-studio-action-008'
+  return ({
+    ok: true,
+    pluginId: 'openpet.creator-studio',
+    commandId: 'import-approved-action',
+    exitCode: 0,
+    result: {
+      ok: true,
+      message: `Imported action shy-spin from run ${runId}`,
+      run: {
+        runId,
+        status: 'imported',
+        currentStep: 'imported',
+        importedActionId: 'shy-spin',
+        artifacts: {
+          actionFrames: {
+            framesDir: `/tmp/openpet/runs/${runId}/frames/actions/shy-spin`
+          }
+        }
+      },
+      imported: {
+        ok: true,
+        result: {
+          importedAction: {
+            id: 'shy-spin'
+          }
+        }
+      },
+      triggerProposalSubmission: {
+        ok: true,
+        proposal: {
+          id: 'proposal:click:shy-spin:test'
+        }
+      }
+    }
+  })
+}
+
 const createDemoServiceStatus = (): ServiceStatusViewState => cloneServiceStatus({
   ...defaultServiceStatus,
   config: {
@@ -1611,6 +1652,9 @@ const demoApi: ControlCenterApi = {
     writeDemoState()
     if (pluginId === 'openpet.creator-studio' && commandId === 'import-approved-pet') {
       return createDemoCreatorStudioImportResult(payload)
+    }
+    if (pluginId === 'openpet.creator-studio' && commandId === 'import-approved-action') {
+      return createDemoCreatorStudioActionImportResult(payload)
     }
     return {
       ok: true,
