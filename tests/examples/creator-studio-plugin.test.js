@@ -2101,6 +2101,20 @@ test('creator studio dashboard asset includes full-pet import review messaging',
   assert.match(html, /Generate and approve the pet-pack output to unlock host-owned pet import\./)
 })
 
+test('creator studio dashboard keeps full-pet review state when loading run detail', () => {
+  const dashboardPath = path.join(pluginRoot, 'web', 'dashboard', 'index.html')
+  const html = fs.readFileSync(dashboardPath, 'utf-8')
+
+  assert.match(
+    html,
+    /const state = \{ run: null, actionReview: null, fullPetReview: null, runs: \[], playbackTimer: null, playbackSession: 0 \}/
+  )
+  assert.match(
+    html,
+    /state\.fullPetReview = payload\.fullPetReview \|\| null/
+  )
+})
+
 test('creator studio service exposes full-pet review details for dashboard clients', async () => {
   const { createRun, updateRunStatus } = require('../../examples/plugins/creator-studio/lib/run-store')
   const { createCreatorStudioServer } = require('../../examples/plugins/creator-studio/service/studio-service')

@@ -538,7 +538,7 @@
     </main>
 
     <script>
-      const state = { run: null, actionReview: null, runs: [], playbackTimer: null, playbackSession: 0 }
+      const state = { run: null, actionReview: null, fullPetReview: null, runs: [], playbackTimer: null, playbackSession: 0 }
       const $ = (id) => document.getElementById(id)
 
       const stopPlaybackPreview = () => {
@@ -608,6 +608,7 @@
         if (!payload.ok) throw new Error(payload.error || 'Failed to load run detail')
         state.run = payload.run
         state.actionReview = payload.actionReview || null
+        state.fullPetReview = payload.fullPetReview || null
         renderRunList()
       }
 
