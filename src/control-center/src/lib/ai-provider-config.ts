@@ -1,7 +1,25 @@
 import type {
   AiConfigViewState,
-  AiConnectionTestResult
+  AiConnectionTestResult,
+  ImageGenerationConfigViewState
 } from '../../../shared/openpet-contracts'
+
+export const chatProviderPresets = [
+  {
+    id: 'openai',
+    title: 'OpenAI 官方',
+    description: '使用官方 OpenAI 聊天接口；API Key 保存在主进程。',
+    baseUrl: 'https://api.openai.com/v1',
+    model: 'gpt-4o-mini'
+  },
+  {
+    id: 'local-openai-compatible',
+    title: '本地/代理 OpenAI-compatible',
+    description: '适合本机 Ollama、局域网网关或反代聊天服务。',
+    baseUrl: 'http://127.0.0.1:11434/v1',
+    model: 'qwen2.5:7b-instruct'
+  }
+] as const
 
 export const normalizeProviderBaseUrl = (value: string) => value.trim().replace(/\/+$/, '')
 
@@ -47,3 +65,11 @@ export const formatConnectionTestStatus = (result: AiConnectionTestResult) => (
     ? `连接测试通过：${formatProviderDisplayName(result.provider)} · ${result.baseUrl} · ${result.model} · ${result.elapsedMs}ms`
     : `连接测试失败：${formatProviderDisplayName(result.provider)} · ${result.baseUrl} · ${result.model} · ${result.message || result.code || 'unknown'}`
 )
+
+export const getImageProviderCompatibilityHint = (config: ImageGenerationConfigViewState) => {
+  const model = String(config.model || '').trim() || '未设置模型'
+  if (model === 'gpt-image-2') {
+    return `当前模型 ${model} 走 host 默认图片协议；transparent 背景参数由 host/provider 默认协商，不额外显式下发。`
+  }
+  return `当前模型 ${model} 走 OpenAI-compatible 图片请求；host 会显式请求 transparent 背景，但最终兼容性取决于当前网关和模型实现。`
+}

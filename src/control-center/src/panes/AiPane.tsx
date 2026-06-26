@@ -14,6 +14,10 @@ import type {
 } from '../../../shared/openpet-contracts'
 import { Toggle } from '../components/Toggle'
 import { defaultImageGenerationConfig } from '../lib/defaults'
+import {
+  chatProviderPresets,
+  getImageProviderCompatibilityHint
+} from '../lib/ai-provider-config'
 
 const imageProviderPresets = [
   {
@@ -272,6 +276,12 @@ export function AiPane({
     hasUnsavedApiKeyDraft ? '密钥草稿未保存' : ''
   ].filter(Boolean).join(' · ')
   const imageTargetSummary = `${activeImageGenerationConfig.provider} · ${activeImageGenerationConfig.baseUrl} · ${activeImageGenerationConfig.model} · ${activeImageGenerationConfig.hasApiKey ? 'API key saved' : 'API key missing'}`
+  const imageCompatibilityHint = getImageProviderCompatibilityHint(imageGenerationConfig)
+  const applyChatProviderPreset = (preset: typeof chatProviderPresets[number]) => onChange({
+    provider: 'openai-compatible',
+    baseUrl: preset.baseUrl,
+    model: preset.model
+  })
   const applyImageProviderPreset = (preset: typeof imageProviderPresets[number]) => onChangeImageGeneration({
     provider: 'openai-compatible',
     baseUrl: preset.baseUrl,
@@ -327,6 +337,28 @@ export function AiPane({
               <option value="openai-compatible">OpenAI compatible</option>
             </select>
           </label>
+
+          <div className="field-row tall">
+            <div>
+              <div className="field-label">聊天 Provider 预设</div>
+              <div className="field-note">预设只填充 Base URL / Model，不会自动保存，也不会覆盖已保存密钥。</div>
+            </div>
+            <div className="provider-preset-grid">
+              {chatProviderPresets.map((preset) => (
+                <button
+                  type="button"
+                  key={preset.id}
+                  className="provider-preset-card"
+                  onClick={() => applyChatProviderPreset(preset)}
+                  disabled={saving}
+                >
+                  <strong>{preset.title}</strong>
+                  <span>{preset.description}</span>
+                  <code>{preset.baseUrl}</code>
+                </button>
+              ))}
+            </div>
+          </div>
 
           <label className="field-row">
             <span className="field-label">Base URL</span>
@@ -490,6 +522,11 @@ export function AiPane({
           <div className="readonly-row">
             <strong>生成边界</strong>
             <span>Creator Studio 只提交提示词和输出目录；Provider 调用、API Key、图片写入都由 OpenPet host 执行。</span>
+          </div>
+
+          <div className="readonly-row">
+            <strong>图片兼容性提示</strong>
+            <span>{imageCompatibilityHint}</span>
           </div>
 
           <div className="field-row tall">

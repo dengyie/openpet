@@ -64,9 +64,9 @@ Current state:
 P1 work:
 
 - Split dense AI settings into clearer model-settings sections if the current AI pane becomes hard to operate.
-- Add provider presets/catalog entries for common OpenAI-compatible chat and image endpoints.
+- Add provider presets/catalog entries for common OpenAI-compatible chat and image endpoints. Partially completed in current branch: the AI pane now exposes host-safe chat provider presets plus existing image presets for common OpenAI-compatible endpoints, without auto-saving or overwriting stored API keys.
 - Add optional `/models` discovery where providers support it, with safe fallback wording when probing is unavailable.
-- Add provider compatibility hints, especially for image models that do or do not support transparent-background payload parameters.
+- Add provider compatibility hints, especially for image models that do or do not support transparent-background payload parameters. Partially completed in current branch: the AI pane now shows image compatibility guidance that distinguishes `gpt-image-2` host-default behavior from generic OpenAI-compatible transparent-background requests.
 - Add user-visible generation usage/cost summaries when the provider response exposes safe metadata.
 
 P2/P3:
