@@ -126,12 +126,11 @@ Current state:
 - `ActionService.submitTriggerProposal`, `acceptTriggerProposalItem`, and `rejectTriggerProposalItem` persist proposal status: pending, accepted, rejected, applied, or pending-host-rule.
 - Control Center Actions pane shows a trigger proposal inbox and can accept/reject queued proposals.
 - Legacy action regeneration preserves the trigger proposal inbox.
+- Durable trigger-rule persistence now exists for `random`, `state`, and `event`, with validation against missing host actions and preview-before-apply semantics for host-managed rules.
+- The host action contract and Actions pane already surface saved trigger rules, including enable/disable and deletion flows.
 
 P1 work:
 
-- Define durable trigger-rule schema for `random`, `state`, and `event`.
-- Add validation that every trigger rule references an existing imported action.
-- Add simulation/preview before applying non-click triggers.
 - Connect Creator Studio imports to submit generated trigger proposals into the host inbox instead of only showing them in the plugin dashboard.
 
 P2/P3:
