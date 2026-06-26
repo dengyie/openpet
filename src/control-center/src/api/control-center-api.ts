@@ -537,6 +537,32 @@ const createDemoPluginLog = (pluginId: string, message: string, commandId = '') 
   message
 })
 
+const createDemoCreatorStudioImportResult = (): PluginCommandRunResultViewState => ({
+  ok: true,
+  pluginId: 'openpet.creator-studio',
+  commandId: 'import-approved-pet',
+  exitCode: 0,
+  result: {
+    ok: true,
+    message: 'Imported run 2026-06-19-creator-studio-pet-008',
+    run: {
+      runId: '2026-06-19-creator-studio-pet-008',
+      status: 'imported',
+      currentStep: 'imported',
+      importedPackId: 'creator-studio-pet',
+      artifacts: {
+        outputDir: '/tmp/openpet/runs/2026-06-19-creator-studio-pet-008/outputs',
+        bundle: '/tmp/openpet/runs/2026-06-19-creator-studio-pet-008/outputs/creator-studio-pet.codex-pet.zip'
+      }
+    },
+    imported: {
+      pack: {
+        id: 'creator-studio-pet'
+      }
+    }
+  }
+})
+
 const createDemoServiceStatus = (): ServiceStatusViewState => cloneServiceStatus({
   ...defaultServiceStatus,
   config: {
@@ -1539,6 +1565,9 @@ const demoApi: ControlCenterApi = {
   runPluginCommand: async (pluginId, commandId, payload) => {
     demoState.pluginLogs = [createDemoPluginLog(pluginId, 'Command completed', commandId), ...demoState.pluginLogs]
     writeDemoState()
+    if (pluginId === 'openpet.creator-studio' && commandId === 'import-approved-pet') {
+      return createDemoCreatorStudioImportResult()
+    }
     return {
       ok: true,
       pluginId,

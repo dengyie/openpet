@@ -1108,4 +1108,58 @@ test.describe('Control Center smoke', () => {
     await expect(page.locator('.plugin-log-row', { hasText: 'Dashboard opened' })).toContainText('dashboard:main')
     await expect(page.locator('.plugin-log-row', { hasText: 'Dashboard opened' })).toContainText('openpet.creator-studio')
   })
+
+  test('shows structured Creator Studio command results in the Plugins pane with the demo API', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.sessionStorage.setItem('openpet.controlCenter.demoState', JSON.stringify({
+        plugins: [
+          {
+            id: 'openpet.creator-studio',
+            name: 'Creator Studio',
+            version: '1.0.0',
+            source: 'local',
+            enabled: true,
+            runnable: true,
+            permissions: ['pet:say', 'storage'],
+            commands: [
+              { id: 'import-approved-pet', title: 'Import Approved Pet' }
+            ],
+            entries: {
+              setup: [],
+              commands: [
+                { id: 'import-approved-pet', title: 'Import Approved Pet', command: 'node ./commands/import-approved-pet.js', cwd: '.' }
+              ],
+              services: [],
+              dashboards: []
+            },
+            configSchema: { properties: [] },
+            config: {},
+            storage: { keyCount: 0, byteSize: 2, valid: true },
+            signatureStatus: { label: 'Unsigned local demo' }
+          }
+        ]
+      }))
+    })
+
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Plugins' }).click()
+
+    const pluginRow = page.locator('.plugin-row', { hasText: 'Creator Studio' })
+    await pluginRow.getByRole('button', { name: 'Import Approved Pet' }).click()
+
+    await expect(page.locator('.status-line')).toContainText('Imported run 2026-06-19-creator-studio-pet-008')
+    await expect(pluginRow).toContainText('最近命令结果')
+    await expect(pluginRow).toContainText('import-approved-pet · exit 0')
+    await expect(pluginRow).toContainText('Run')
+    await expect(pluginRow).toContainText('2026-06-19-creator-studio-pet-008')
+    await expect(pluginRow).toContainText('状态')
+    await expect(pluginRow).toContainText('imported')
+    await expect(pluginRow).toContainText('步骤')
+    await expect(pluginRow).toContainText('已导入 Pack')
+    await expect(pluginRow).toContainText('creator-studio-pet')
+    await expect(pluginRow).toContainText('输出目录')
+    await expect(pluginRow).toContainText('/tmp/openpet/runs/2026-06-19-creator-studio-pet-008/outputs')
+    await expect(pluginRow).toContainText('导出包')
+    await expect(pluginRow).toContainText('creator-studio-pet.codex-pet.zip')
+  })
 })
