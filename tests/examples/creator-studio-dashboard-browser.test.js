@@ -144,6 +144,45 @@ test('creator studio dashboard lets users edit a drafted action task before conf
   }
 })
 
+test('creator studio dashboard lets users edit a drafted full-pet task before confirmation', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-dashboard-browser-full-pet-task-edit-'))
+  const server = await openDashboardServer(dataDir)
+  const { browser, page } = await openDashboardPage(server)
+
+  try {
+    await page.locator('#prompt-input').fill('生成一只完整的新桌宠，要软乎乎的橘猫风格，包含 idle 动作。')
+    await page.locator('#draft-button').click()
+    await page.waitForFunction(() => !document.querySelector('#confirm-button').disabled)
+
+    await page.locator('#task-edit-character-brief').fill('一只更圆润、奶油橘色、动作更慵懒的新桌宠。')
+    await page.locator('#task-edit-name-0').fill('Lazy Idle')
+    await page.locator('#task-edit-motion-0').fill('slow breathing with tiny ear flicks and a soft tail sway')
+    await page.locator('#task-edit-loop-0').selectOption('true')
+    await page.locator('#task-edit-trigger-0').selectOption('state')
+    await page.locator('#save-task-button').click()
+
+    await page.waitForFunction(() => /Task edits saved\./.test(document.querySelector('#status-line').textContent))
+    const previewText = await page.locator('#task-preview').textContent()
+    const triggerText = await page.locator('#trigger-panel').textContent()
+    assert.match(previewText, /一只更圆润、奶油橘色、动作更慵懒的新桌宠/i)
+    assert.match(previewText, /Lazy Idle/i)
+    assert.match(previewText, /slow breathing with tiny ear flicks/i)
+    assert.match(triggerText, /state/i)
+
+    await page.locator('#confirm-button').click()
+    await page.waitForFunction(() => !document.querySelector('#generate-button').disabled)
+    await page.locator('#generate-button').click()
+    await page.waitForFunction(() => !document.querySelector('#approve-button').disabled)
+
+    const reviewText = await page.locator('#full-pet-review-panel').textContent()
+    assert.match(reviewText, /Atlas QA/i)
+    assert.match(await page.locator('#status-line').textContent(), /Generated pet-pack output/i)
+  } finally {
+    await browser.close()
+    await new Promise((resolve) => server.close(resolve))
+  }
+})
+
 test('creator studio dashboard shows failed generation recovery and retries the same run', { concurrency: false }, async () => {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-dashboard-browser-retry-'))
   let generationAttempts = 0
@@ -242,6 +281,116 @@ test('creator studio dashboard shows failed generation recovery and retries the 
     assert.equal(generationAttempts, 2)
     assert.match(await page.locator('#status-line').textContent(), /Generated action output/i)
     assert.match(await page.locator('#action-review-panel').textContent(), /Review status/i)
+  } finally {
+    await browser.close()
+    await new Promise((resolve) => server.close(resolve))
+    bridgeServer.closeAllConnections?.()
+    await new Promise((resolve) => bridgeServer.close(resolve))
+    if (previousBridgeUrl == null) delete process.env.OPENPET_BRIDGE_URL
+    else process.env.OPENPET_BRIDGE_URL = previousBridgeUrl
+    if (previousBridgeToken == null) delete process.env.OPENPET_BRIDGE_TOKEN
+    else process.env.OPENPET_BRIDGE_TOKEN = previousBridgeToken
+  }
+})
+
+test('creator studio dashboard shows full-pet validation recovery and retries the same run', { concurrency: false }, async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-dashboard-browser-full-pet-retry-'))
+  let generationAttempts = 0
+  const bridgeServer = http.createServer((request, response) => {
+    let body = ''
+    request.on('data', (chunk) => { body += chunk })
+    request.on('end', () => {
+      const payload = body ? JSON.parse(body) : {}
+      response.setHeader('Content-Type', 'application/json')
+      if (request.url.endsWith('/creator/model-settings')) {
+        response.end(JSON.stringify({
+          ok: true,
+          config: {
+            provider: 'openai-compatible',
+            baseUrl: 'http://127.0.0.1:7860/v1',
+            model: 'local-full-pet-v2'
+          }
+        }))
+        return
+      }
+      if (request.url.endsWith('/creator/model-image-generate')) {
+        generationAttempts += 1
+        const dataRelativePath = `runs/${payload.output.dataRelativeDir.split('/')[1]}/frames/base/0001.png`
+        const generatedPath = path.join(dataDir, dataRelativePath)
+        fs.mkdirSync(path.dirname(generatedPath), { recursive: true })
+        const background = generationAttempts === 1
+          ? { r: 0, g: 0, b: 0, alpha: 0 }
+          : { r: 255, g: 196, b: 120, alpha: 1 }
+        sharp({
+          create: {
+            width: 96,
+            height: 112,
+            channels: 4,
+            background
+          }
+        })
+          .png()
+          .toFile(generatedPath)
+          .then(() => {
+            response.end(JSON.stringify({
+              ok: true,
+              result: {
+                ok: true,
+                backend: 'provider',
+                model: 'local-full-pet-v2',
+                generatedAt: '2026-06-27T00:00:00.000Z',
+                outputs: [{
+                  dataRelativePath,
+                  mimeType: 'image/png',
+                  sha256: generationAttempts === 1 ? 'invalid-visible-pixels-sha' : 'full-pet-retry-sha'
+                }]
+              }
+            }))
+          })
+          .catch((error) => {
+            response.statusCode = 500
+            response.end(JSON.stringify({ ok: false, error: error.message }))
+          })
+        return
+      }
+      response.statusCode = 404
+      response.end(JSON.stringify({ ok: false, error: 'Unknown route' }))
+    })
+  })
+  await new Promise((resolve) => bridgeServer.listen(0, '127.0.0.1', resolve))
+  const previousBridgeUrl = process.env.OPENPET_BRIDGE_URL
+  const previousBridgeToken = process.env.OPENPET_BRIDGE_TOKEN
+  process.env.OPENPET_BRIDGE_URL = `http://127.0.0.1:${bridgeServer.address().port}`
+  process.env.OPENPET_BRIDGE_TOKEN = 'bridge-token'
+  const server = await openDashboardServer(dataDir)
+  const { browser, page } = await openDashboardPage(server)
+
+  try {
+    await page.locator('#backend-select').selectOption('provider')
+    await page.locator('#prompt-input').fill('生成一只完整的新桌宠，平时懒懒的，被点击会害羞转圈，偶尔会打哈欠。')
+    await page.locator('#draft-button').click()
+    await page.waitForFunction(() => !document.querySelector('#confirm-button').disabled)
+
+    await page.locator('#confirm-button').click()
+    await page.waitForFunction(() => !document.querySelector('#generate-button').disabled)
+    await page.locator('#generate-button').click()
+    await page.waitForFunction(() => /Generated image contains no visible pixels/.test(document.querySelector('#status-line').textContent))
+
+    const recoveryText = await page.locator('#recovery-panel').textContent()
+    assert.match(recoveryText, /Generation failed/i)
+    assert.match(recoveryText, /Generated image contains no visible pixels/i)
+    assert.match(recoveryText, /The generated source image was empty/i)
+    await expectRetryButtonLabel(page, 'Retry generation')
+
+    const runIdBeforeRetry = await page.locator('#run-select').inputValue()
+    await page.locator('#generate-button').click()
+    await page.waitForFunction(() => !document.querySelector('#approve-button').disabled)
+
+    const runIdAfterRetry = await page.locator('#run-select').inputValue()
+    assert.equal(runIdAfterRetry, runIdBeforeRetry)
+    assert.equal(generationAttempts, 2)
+    assert.match(await page.locator('#status-line').textContent(), /Generated pet-pack output/i)
+    assert.match(await page.locator('#full-pet-review-panel').textContent(), /Atlas QA/i)
   } finally {
     await browser.close()
     await new Promise((resolve) => server.close(resolve))

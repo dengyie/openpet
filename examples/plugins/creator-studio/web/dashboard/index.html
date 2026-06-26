@@ -805,29 +805,30 @@
             `<textarea id="task-edit-character-brief" ${editingLocked ? 'disabled' : ''}>${escapeHtml(run.generationTask.characterBrief || '')}</textarea>`,
             '</div>',
             ...actions.map((plannedAction, index) => {
+              const actionIndex = String(index)
               const triggerType = plannedAction.triggerProposal?.type || 'unbound'
               return [
                 `<section class="task-edit-action-card" data-action-id="${escapeHtml(plannedAction.actionId || '')}">`,
                 `<h3>Action ${escapeHtml(index + 1)}: ${escapeHtml(plannedAction.name || plannedAction.actionId || 'Untitled')}</h3>`,
                 '<div>',
-                `<label for="task-edit-name-${escapeHtml(index)}">Action name</label>`,
-                `<input id="task-edit-name-${escapeHtml(index)}" data-task-edit="action-name" data-action-id="${escapeHtml(plannedAction.actionId || '')}" type="text" value="${escapeHtml(plannedAction.name || '')}" ${editingLocked ? 'disabled' : ''}>`,
+                `<label for="task-edit-name-${actionIndex}">Action name</label>`,
+                `<input id="task-edit-name-${actionIndex}" data-task-edit="action-name" data-action-id="${escapeHtml(plannedAction.actionId || '')}" type="text" value="${escapeHtml(plannedAction.name || '')}" ${editingLocked ? 'disabled' : ''}>`,
                 '</div>',
                 '<div>',
-                `<label for="task-edit-motion-${escapeHtml(index)}">Motion description</label>`,
-                `<textarea id="task-edit-motion-${escapeHtml(index)}" data-task-edit="motion-prompt" data-action-id="${escapeHtml(plannedAction.actionId || '')}" ${editingLocked ? 'disabled' : ''}>${escapeHtml(plannedAction.motionPrompt || '')}</textarea>`,
+                `<label for="task-edit-motion-${actionIndex}">Motion description</label>`,
+                `<textarea id="task-edit-motion-${actionIndex}" data-task-edit="motion-prompt" data-action-id="${escapeHtml(plannedAction.actionId || '')}" ${editingLocked ? 'disabled' : ''}>${escapeHtml(plannedAction.motionPrompt || '')}</textarea>`,
                 '</div>',
                 '<div class="task-edit-grid">',
                 '<div>',
-                `<label for="task-edit-loop-${escapeHtml(index)}">Loop behavior</label>`,
-                `<select id="task-edit-loop-${escapeHtml(index)}" data-task-edit="loop" data-action-id="${escapeHtml(plannedAction.actionId || '')}" ${editingLocked ? 'disabled' : ''}>`,
+                `<label for="task-edit-loop-${actionIndex}">Loop behavior</label>`,
+                `<select id="task-edit-loop-${actionIndex}" data-task-edit="loop" data-action-id="${escapeHtml(plannedAction.actionId || '')}" ${editingLocked ? 'disabled' : ''}>`,
                 `<option value="false" ${plannedAction.loop ? '' : 'selected'}>One-shot</option>`,
                 `<option value="true" ${plannedAction.loop ? 'selected' : ''}>Looping</option>`,
                 '</select>',
                 '</div>',
                 '<div>',
-                `<label for="task-edit-trigger-${escapeHtml(index)}">Trigger type</label>`,
-                `<select id="task-edit-trigger-${escapeHtml(index)}" data-task-edit="trigger-type" data-action-id="${escapeHtml(plannedAction.actionId || '')}" ${editingLocked ? 'disabled' : ''}>`,
+                `<label for="task-edit-trigger-${actionIndex}">Trigger type</label>`,
+                `<select id="task-edit-trigger-${actionIndex}" data-task-edit="trigger-type" data-action-id="${escapeHtml(plannedAction.actionId || '')}" ${editingLocked ? 'disabled' : ''}>`,
                 ['manual', 'click', 'random', 'state', 'event', 'unbound'].map((option) => (
                   `<option value="${escapeHtml(option)}" ${option === triggerType ? 'selected' : ''}>${escapeHtml(option)}</option>`
                 )).join(''),
