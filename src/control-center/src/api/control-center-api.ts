@@ -538,22 +538,26 @@ const createDemoPluginLog = (pluginId: string, message: string, commandId = '') 
   message
 })
 
-const createDemoCreatorStudioImportResult = (): PluginCommandRunResultViewState => ({
+const createDemoCreatorStudioImportResult = (payload?: JsonObject): PluginCommandRunResultViewState => {
+  const runId = typeof payload?.runId === 'string' && payload.runId.trim()
+    ? payload.runId.trim()
+    : '2026-06-19-creator-studio-pet-008'
+  return ({
   ok: true,
   pluginId: 'openpet.creator-studio',
   commandId: 'import-approved-pet',
   exitCode: 0,
   result: {
     ok: true,
-    message: 'Imported run 2026-06-19-creator-studio-pet-008',
+    message: `Imported run ${runId}`,
     run: {
-      runId: '2026-06-19-creator-studio-pet-008',
+      runId,
       status: 'imported',
       currentStep: 'imported',
       importedPackId: 'creator-studio-pet',
       artifacts: {
-        outputDir: '/tmp/openpet/runs/2026-06-19-creator-studio-pet-008/outputs',
-        bundle: '/tmp/openpet/runs/2026-06-19-creator-studio-pet-008/outputs/creator-studio-pet.codex-pet.zip'
+        outputDir: `/tmp/openpet/runs/${runId}/outputs`,
+        bundle: `/tmp/openpet/runs/${runId}/outputs/creator-studio-pet.codex-pet.zip`
       }
     },
     imported: {
@@ -562,7 +566,8 @@ const createDemoCreatorStudioImportResult = (): PluginCommandRunResultViewState 
       }
     }
   }
-})
+  })
+}
 
 const createDemoServiceStatus = (): ServiceStatusViewState => cloneServiceStatus({
   ...defaultServiceStatus,
@@ -1605,7 +1610,7 @@ const demoApi: ControlCenterApi = {
     demoState.pluginLogs = [createDemoPluginLog(pluginId, 'Command completed', commandId), ...demoState.pluginLogs]
     writeDemoState()
     if (pluginId === 'openpet.creator-studio' && commandId === 'import-approved-pet') {
-      return createDemoCreatorStudioImportResult()
+      return createDemoCreatorStudioImportResult(payload)
     }
     return {
       ok: true,

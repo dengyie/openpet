@@ -1090,6 +1090,9 @@
             `<p>Open ${escapeHtml(handoff.location || 'Control Center -> Plugins')} and run <code>${escapeHtml(handoff.commandTitle)}</code> for run <code>${escapeHtml(handoff.runId || run.runId)}</code>.</p>`,
             `<p>${escapeHtml(handoff.reason || 'The dashboard cannot import directly because bridge access is command-scoped.')}</p>`,
             `<p>Command ID: <code>${escapeHtml(handoff.commandId || importGuidance.command || 'import')}</code></p>`,
+            handoff.payloadJson
+              ? `<p>Payload JSON: <code>${escapeHtml(handoff.payloadJson)}</code></p>`
+              : '',
             '</div>'
           ].join('')
         }

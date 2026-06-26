@@ -1506,6 +1506,16 @@ button {
   margin-top: 4px;
 }
 
+.plugin-command-payload {
+  display: grid;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.plugin-command-payload .text-input {
+  width: min(520px, 100%);
+}
+
 .plugin-service-control {
   display: flex;
   align-items: center;

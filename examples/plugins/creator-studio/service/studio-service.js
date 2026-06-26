@@ -459,11 +459,16 @@ const resolveImportCommandTitle = (commandId) => (
 const createImportHandoff = ({ dataDir, run, importStatus }) => {
   const commandId = resolveImportCommand(run)
   const ready = run.status === 'approved' && importStatus === 'ready'
+  const payload = {
+    runId: createPublicText({ dataDir, value: run.runId || '' })
+  }
   return {
     ready,
     runId: createPublicText({ dataDir, value: run.runId || '' }),
     commandId: createPublicText({ dataDir, value: commandId }),
     commandTitle: createPublicText({ dataDir, value: resolveImportCommandTitle(commandId) }),
+    payload,
+    payloadJson: createPublicText({ dataDir, value: JSON.stringify(payload) }),
     location: 'Control Center -> Plugins',
     dashboardCanImport: false,
     reason: ready

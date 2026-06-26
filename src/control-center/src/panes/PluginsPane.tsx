@@ -37,6 +37,7 @@ export interface PluginsPaneProps {
     resultText: string
     details: Array<{ label: string, value: string }>
   } | null
+  commandPayloadDrafts: Record<string, string>
   runningSetup: string
   openingDashboard: string
   changingService: string
@@ -57,6 +58,7 @@ export interface PluginsPaneProps {
   onInstallReviewedPlugin: () => void | Promise<void>
   onUninstallPlugin: (pluginId: string) => void | Promise<void>
   onChangeConfig: (pluginId: string, key: string, value: JsonValue) => void
+  onChangeCommandPayload: (pluginId: string, value: string) => void
   onChangeGithubRepositoryUrl: (value: string) => void
   onSaveConfig: (pluginId: string) => void | Promise<void>
   onRun: (pluginId: string, commandId: string) => void | Promise<void>
@@ -155,7 +157,7 @@ function PluginReviewPanel({
   )
 }
 
-export function PluginsPane({ plugins, logs, filters, status, runningCommand, lastCommandResult, runningSetup, openingDashboard, changingService, checkingServiceHealth, savingServiceHealthPolicy, savingConfig, clearingStorage, pluginReview, inspectingPlugin, githubRepositoryUrl, inspectingGithubPlugin, installingPlugin, uninstallingPlugin, onToggle, onInspectPluginPackage, onInspectGithubPluginRepository, onClearPluginReview, onInstallReviewedPlugin, onUninstallPlugin, onChangeConfig, onChangeGithubRepositoryUrl, onSaveConfig, onRun, onRunSetup, onOpenDashboard, onStartService, onStopService, onCheckServiceHealth, onSaveServiceHealthPolicy, onChangeFilters, onExportLogs, onClearLogs, onClearStorage }: PluginsPaneProps) {
+export function PluginsPane({ plugins, logs, filters, status, runningCommand, lastCommandResult, commandPayloadDrafts, runningSetup, openingDashboard, changingService, checkingServiceHealth, savingServiceHealthPolicy, savingConfig, clearingStorage, pluginReview, inspectingPlugin, githubRepositoryUrl, inspectingGithubPlugin, installingPlugin, uninstallingPlugin, onToggle, onInspectPluginPackage, onInspectGithubPluginRepository, onClearPluginReview, onInstallReviewedPlugin, onUninstallPlugin, onChangeConfig, onChangeCommandPayload, onChangeGithubRepositoryUrl, onSaveConfig, onRun, onRunSetup, onOpenDashboard, onStartService, onStopService, onCheckServiceHealth, onSaveServiceHealthPolicy, onChangeFilters, onExportLogs, onClearLogs, onClearStorage }: PluginsPaneProps) {
   return (
     <section className="pane">
       <header className="pane-header">
@@ -233,22 +235,38 @@ export function PluginsPane({ plugins, logs, filters, status, runningCommand, la
                 </button>
               </div>
               {plugin.commands?.length ? (
-                <div className="plugin-commands">
-                  {plugin.commands.map((command) => {
-                    const commandKey = `${plugin.id}:${command.id}`
-                    return (
-                      <button
-                        type="button"
-                        className="ghost"
-                        key={command.id}
-                        disabled={!plugin.enabled || !plugin.runnable || plugin.blockStatus?.blocked || runningCommand === commandKey}
-                        onClick={() => onRun(plugin.id, command.id)}
-                      >
-                        {runningCommand === commandKey ? '运行中' : command.title}
-                      </button>
-                    )
-                  })}
-                </div>
+                <>
+                  <div className="plugin-command-payload">
+                    <label className="field-label" htmlFor={`plugin-command-payload-${plugin.id}`}>可选命令 Payload JSON</label>
+                    <input
+                      id={`plugin-command-payload-${plugin.id}`}
+                      className="text-input"
+                      type="text"
+                      value={commandPayloadDrafts[plugin.id] || ''}
+                      placeholder='{"runId":"2026-06-27-creator-studio-run-001"}'
+                      onChange={(event) => onChangeCommandPayload(plugin.id, event.target.value)}
+                    />
+                    <p className="field-note">
+                      留空时使用命令默认行为。Creator Studio 的 Import Approved Action / Pet 可填写 <code>{'{"runId":"..."}'}</code> 指定要导入的 run。
+                    </p>
+                  </div>
+                  <div className="plugin-commands">
+                    {plugin.commands.map((command) => {
+                      const commandKey = `${plugin.id}:${command.id}`
+                      return (
+                        <button
+                          type="button"
+                          className="ghost"
+                          key={command.id}
+                          disabled={!plugin.enabled || !plugin.runnable || plugin.blockStatus?.blocked || runningCommand === commandKey}
+                          onClick={() => onRun(plugin.id, command.id)}
+                        >
+                          {runningCommand === commandKey ? '运行中' : command.title}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </>
               ) : null}
               {lastCommandResult?.pluginId === plugin.id ? (
                 <div className="plugin-command-result">

@@ -100,6 +100,8 @@ test('creator studio dashboard drives a full-pet fixture run to the host import 
     assert.match(handoffText, /Import Approved Pet/i)
     assert.match(handoffText, /Control Center -> Plugins/i)
     assert.match(handoffText, /Command ID: import-approved-pet/i)
+    assert.match(handoffText, /Payload JSON:/i)
+    assert.match(handoffText, /"runId":"[^"]+"/i)
   } finally {
     await browser.close()
     await new Promise((resolve) => server.close(resolve))

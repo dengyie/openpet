@@ -4,6 +4,7 @@ import { downloadTextFile } from '../lib/download'
 import { messageFromError } from '../lib/errors'
 import { toCommandResultPreview } from '../lib/plugin-command-result.mjs'
 import type {
+  JsonObject,
   JsonValue,
   PluginLogEntry,
   PluginLogFilters,
@@ -16,6 +17,21 @@ type ExportFormat = 'json' | 'csv'
 
 type PluginCommandResultPreview = ReturnType<typeof toCommandResultPreview>
 
+const parseCommandPayload = (draft: string): JsonObject | undefined => {
+  const trimmed = String(draft || '').trim()
+  if (!trimmed) return undefined
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(trimmed)
+  } catch (_) {
+    throw new Error('命令 Payload 必须是合法 JSON')
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('命令 Payload 必须是 JSON 对象')
+  }
+  return parsed as JsonObject
+}
+
 export function usePluginsPane() {
   const [loading, setLoading] = useState(true)
   const [plugins, setPlugins] = useState<PluginViewState[]>([])
@@ -24,6 +40,7 @@ export function usePluginsPane() {
   const [status, setStatus] = useState('')
   const [runningCommand, setRunningCommand] = useState('')
   const [lastCommandResult, setLastCommandResult] = useState<PluginCommandResultPreview | null>(null)
+  const [commandPayloadDrafts, setCommandPayloadDrafts] = useState<Record<string, string>>({})
   const [runningSetup, setRunningSetup] = useState('')
   const [openingDashboard, setOpeningDashboard] = useState('')
   const [changingService, setChangingService] = useState('')
@@ -185,11 +202,18 @@ export function usePluginsPane() {
   }
 
   const onRun = async (pluginId: string, commandId: string) => {
+    let payload: JsonObject | undefined
+    try {
+      payload = parseCommandPayload(commandPayloadDrafts[pluginId] || '')
+    } catch (error) {
+      setStatus(messageFromError(error, '命令 Payload 无效'))
+      return
+    }
     const commandKey = `${pluginId}:${commandId}`
     setRunningCommand(commandKey)
     setStatus('')
     try {
-      const result = await api.runPluginCommand(pluginId, commandId)
+      const result = await api.runPluginCommand(pluginId, commandId, payload)
       const preview = toCommandResultPreview(result)
       setLastCommandResult(preview)
       await refreshLogs()
@@ -372,6 +396,13 @@ export function usePluginsPane() {
     )))
   }
 
+  const onChangeCommandPayload = (pluginId: string, value: string) => {
+    setCommandPayloadDrafts((current) => ({
+      ...current,
+      [pluginId]: value
+    }))
+  }
+
   const paneProps = {
     plugins,
     logs,
@@ -379,6 +410,7 @@ export function usePluginsPane() {
     status,
     runningCommand,
     lastCommandResult,
+    commandPayloadDrafts,
     runningSetup,
     openingDashboard,
     changingService,
@@ -399,6 +431,7 @@ export function usePluginsPane() {
     onInstallReviewedPlugin,
     onUninstallPlugin,
     onChangeConfig,
+    onChangeCommandPayload,
     onChangeGithubRepositoryUrl: setGithubRepositoryUrl,
     onSaveConfig,
     onRun,
