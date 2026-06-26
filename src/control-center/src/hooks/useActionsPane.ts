@@ -271,6 +271,20 @@ export function useActionsPane() {
     }
   }
 
+  const onSetTriggerRuleEnabled = async (ruleId: string, enabled: boolean) => {
+    setWorking(true)
+    setStatus('')
+    try {
+      const response = await api.setActionTriggerRuleEnabled(ruleId, enabled)
+      setActionsConfig(cloneActionsConfig(response.animations))
+      setStatus(`已更新触发规则 ${ruleId}`)
+    } catch (error) {
+      setStatus(messageFromError(error, '更新触发规则失败'))
+    } finally {
+      setWorking(false)
+    }
+  }
+
   const onInspectPetPack = async () => {
     setWorking(true)
     setStatus('')
@@ -381,6 +395,7 @@ export function useActionsPane() {
     onClearInspection,
     onImport,
     onDelete,
+    onSetTriggerRuleEnabled,
     onDeleteTriggerRule,
     onInspectPetPack,
     onClearPetPackInspection,

@@ -845,6 +845,59 @@ test('action service removes persisted trigger rules by id', () => {
   assert.equal(savedConfig.triggerRules.length, 0)
 })
 
+test('action service toggles persisted trigger rules by id', () => {
+  let savedConfig = null
+  const service = createActionService({
+    projectRoot: '/app/openpet',
+    loadLegacyAnimations: () => savedConfig || ({
+      defaultAction: 'idle',
+      clickAction: 'idle',
+      actions: [
+        {
+          id: 'idle',
+          label: 'Idle',
+          kind: 'idle',
+          loop: true,
+          frameCount: 16,
+          frameMs: 95,
+          frameWidth: 191,
+          frameHeight: 453,
+          sprite: 'cat_anime/sprites/idle.png'
+        },
+        {
+          id: 'wave',
+          label: 'Wave',
+          kind: 'custom',
+          loop: false,
+          frameCount: 8,
+          frameMs: 90,
+          frameWidth: 192,
+          frameHeight: 208,
+          sprite: 'cat_anime/sprites/wave.png'
+        }
+      ],
+      triggerRules: [{
+        id: 'rule:state:wave',
+        type: 'state',
+        actionId: 'wave',
+        enabled: true,
+        condition: { stateKey: 'posture', equals: 'resting' }
+      }]
+    }),
+    saveLegacyAnimations: (config) => {
+      savedConfig = config
+      return config
+    }
+  })
+
+  const disabled = service.setTriggerRuleEnabled('rule:state:wave', false)
+  const enabled = service.setTriggerRuleEnabled('rule:state:wave', true)
+
+  assert.equal(disabled.triggerRules[0].enabled, false)
+  assert.equal(enabled.triggerRules[0].enabled, true)
+  assert.equal(savedConfig.triggerRules[0].enabled, true)
+})
+
 test('action service rejects unsafe trigger proposal inbox mutations', () => {
   const service = createActionService({
     projectRoot: '/app/openpet',
@@ -888,6 +941,10 @@ test('action service rejects unsafe trigger proposal inbox mutations', () => {
   )
   assert.throws(
     () => service.removeTriggerRule('../bad'),
+    /safe id/
+  )
+  assert.throws(
+    () => service.setTriggerRuleEnabled('../bad', true),
     /safe id/
   )
   assert.throws(

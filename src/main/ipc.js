@@ -1070,6 +1070,23 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     return createActionsMutationResult(animations)
   })
 
+  ipcMainService.handle(IPC.ACTIONS_SET_TRIGGER_RULE_ENABLED, async (_event, payload) => {
+    if (!actionService?.setTriggerRuleEnabled) throw new Error('Action trigger rule toggle is not available')
+    const animations = actionService.setTriggerRuleEnabled(payload?.ruleId, payload?.enabled)
+    recordAppLog({
+      scope: 'actions',
+      level: 'info',
+      actor: 'user',
+      event: 'actions.trigger-rule.toggled',
+      message: 'Action trigger rule enabled state updated',
+      details: {
+        ruleId: String(payload?.ruleId || ''),
+        enabled: Boolean(payload?.enabled)
+      }
+    })
+    return createActionsMutationResult(animations)
+  })
+
   ipcMainService.handle(IPC.ACTIONS_DELETE, async (_event, payload) => {
     await actionImportService.deleteAction(payload.actionId)
     reloadAndSendAnimations(getPetWindow, petService)

@@ -52,6 +52,7 @@ const IPC = Object.freeze({
   ACTIONS_SUBMIT_TRIGGER_PROPOSAL: 'actions:submit-trigger-proposal',
   ACTIONS_ACCEPT_TRIGGER_PROPOSAL: 'actions:accept-trigger-proposal',
   ACTIONS_REJECT_TRIGGER_PROPOSAL: 'actions:reject-trigger-proposal',
+  ACTIONS_SET_TRIGGER_RULE_ENABLED: 'actions:set-trigger-rule-enabled',
   ACTIONS_DELETE_TRIGGER_RULE: 'actions:delete-trigger-rule',
   ACTIONS_DELETE: 'actions:delete',
   PET_PACKS_LIST: 'pet-packs:list',

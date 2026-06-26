@@ -643,6 +643,28 @@ const createActionService = ({ petPackService, loadPetPack, loadLegacyAnimations
     })
   }
 
+  const setTriggerRuleEnabled = (ruleId, enabled) => {
+    const id = normalizeTriggerProposalId(ruleId, 'trigger rule id')
+    const current = getMutableConfig()
+    let found = false
+    const nextRules = (current.triggerRules || []).map((rule) => {
+      const normalized = normalizeTriggerRule(rule)
+      if (normalized.id !== id) return normalized
+      found = true
+      return {
+        ...normalized,
+        enabled: Boolean(enabled)
+      }
+    })
+    if (!found) {
+      throw new Error(`Trigger rule does not exist: ${id}`)
+    }
+    return persistMutableConfig({
+      ...current,
+      triggerRules: nextRules
+    })
+  }
+
   return {
     getPetPack,
     getConfig,
@@ -657,7 +679,8 @@ const createActionService = ({ petPackService, loadPetPack, loadLegacyAnimations
     submitTriggerProposal,
     acceptTriggerProposalItem,
     rejectTriggerProposalItem,
-    removeTriggerRule
+    removeTriggerRule,
+    setTriggerRuleEnabled
   }
 }
 

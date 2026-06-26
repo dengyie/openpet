@@ -35,6 +35,7 @@ export interface ActionsPaneProps {
   onClearInspection: () => void | Promise<void>
   onImport: () => void | Promise<void>
   onDelete: (actionId: string) => void | Promise<void>
+  onSetTriggerRuleEnabled: (ruleId: string, enabled: boolean) => void | Promise<void>
   onDeleteTriggerRule: (ruleId: string) => void | Promise<void>
   onInspectPetPack: () => void | Promise<void>
   onClearPetPackInspection: () => void | Promise<void>
@@ -202,11 +203,13 @@ function TriggerRuleList({
   rules,
   actions,
   working,
+  onSetEnabled,
   onDelete
 }: {
   rules: ActionTriggerRule[]
   actions: ActionEntry[]
   working: boolean
+  onSetEnabled: (ruleId: string, enabled: boolean) => void | Promise<void>
   onDelete: (ruleId: string) => void | Promise<void>
 }) {
   if (!rules.length) {
@@ -254,6 +257,14 @@ function TriggerRuleList({
               </div>
               <p>{summary}</p>
               <div className="inline-action">
+                <button
+                  type="button"
+                  className="ghost"
+                  disabled={working}
+                  onClick={() => onSetEnabled(rule.id, !rule.enabled)}
+                >
+                  {rule.enabled ? '停用规则' : '启用规则'}
+                </button>
                 <button type="button" className="danger-text" disabled={working} onClick={() => onDelete(rule.id)}>
                   删除规则
                 </button>
@@ -461,6 +472,7 @@ export function ActionsPane({
   onClearInspection,
   onImport,
   onDelete,
+  onSetTriggerRuleEnabled,
   onDeleteTriggerRule,
   onInspectPetPack,
   onClearPetPackInspection,
@@ -637,6 +649,7 @@ export function ActionsPane({
           rules={actionsConfig.triggerRules || []}
           actions={actionsConfig.actions}
           working={working}
+          onSetEnabled={onSetTriggerRuleEnabled}
           onDelete={onDeleteTriggerRule}
         />
       </div>

@@ -246,6 +246,47 @@ test.describe('Control Center smoke', () => {
     await expect(rulesCard).toContainText('暂无已保存规则')
   })
 
+  test('toggles persisted trigger rules in the Actions pane', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.sessionStorage.setItem('openpet.controlCenter.demoState', JSON.stringify({
+        actionsConfig: {
+          defaultAction: 'idle',
+          clickAction: 'wave',
+          actions: [
+            { id: 'idle', label: 'Idle', kind: 'idle', loop: true, frameCount: 1, frameMs: 120, frameWidth: 8, frameHeight: 8 },
+            { id: 'wave', label: 'Wave', kind: 'click', loop: false, frameCount: 1, frameMs: 100, frameWidth: 8, frameHeight: 8 }
+          ],
+          triggerProposalInbox: [],
+          triggerRules: [
+            {
+              id: 'rule:state:wave',
+              type: 'state',
+              actionId: 'wave',
+              enabled: true,
+              condition: {
+                stateKey: 'posture',
+                equals: 'resting'
+              }
+            }
+          ]
+        }
+      }))
+    })
+
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Actions' }).click()
+
+    const rulesCard = page.locator('[aria-label="已保存触发规则"]')
+    await expect(rulesCard).toContainText('启用')
+    await rulesCard.getByRole('button', { name: '停用规则' }).click()
+    await expect(page.locator('.status-line')).toContainText('已更新触发规则')
+    await expect(rulesCard).toContainText('停用')
+
+    await rulesCard.getByRole('button', { name: '启用规则' }).click()
+    await expect(page.locator('.status-line')).toContainText('已更新触发规则')
+    await expect(rulesCard).toContainText('启用')
+  })
+
   test('persists Pet settings in the demo API session', async ({ page }) => {
     await page.goto('/')
 

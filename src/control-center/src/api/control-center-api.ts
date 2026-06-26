@@ -1140,6 +1140,16 @@ const demoApi: ControlCenterApi = {
     writeDemoState()
     return { animations: cloneActionsConfig(demoState.actionsConfig), proposal: nextProposal }
   },
+  setActionTriggerRuleEnabled: async (ruleId, enabled) => {
+    demoState.actionsConfig = cloneActionsConfig({
+      ...demoState.actionsConfig,
+      triggerRules: (demoState.actionsConfig.triggerRules || []).map((rule) => (
+        rule.id === ruleId ? { ...rule, enabled } : rule
+      ))
+    })
+    writeDemoState()
+    return { animations: cloneActionsConfig(demoState.actionsConfig) }
+  },
   deleteActionTriggerRule: async (ruleId) => {
     demoState.actionsConfig = cloneActionsConfig({
       ...demoState.actionsConfig,
