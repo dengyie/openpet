@@ -205,13 +205,75 @@ test('ai talk service preserves existing behavior tool request when enabled', as
       }
     },
     aiTalkStore: createStore(),
-    petPackService: createPetPackService({ id: 'legacy-cat' })
+    petPackService: createPetPackService({
+      id: 'legacy-cat',
+      actions: [
+        { id: 'wave', kind: 'greeting', label: 'Wave' }
+      ]
+    })
   })
 
   const result = await service.chat({ message: 'Hi' })
 
   assert.equal(requests[0].tools[0].function.name, 'openpet_behavior')
+  const actionCandidatesPrompt = requests[0].messages.find((message) => /Current pet action candidates/.test(message.content))
+  assert.ok(actionCandidatesPrompt)
+  assert.match(actionCandidatesPrompt.content, /- wave \(kind=greeting\): Wave/)
   assert.deepEqual(result.behaviorIntent, { intent: 'greet', confidence: 0.8 })
+})
+
+test('ai talk service injects current pet action candidates only when behavior tools are enabled', async () => {
+  const requests = []
+  const service = createAiTalkService({
+    aiService: {
+      getConfig: () => ({ enabled: true, behavior: { enabled: true, useTools: true } }),
+      complete: async (request) => {
+        requests.push(request)
+        return { reply: '好的', behaviorIntent: { intent: 'focus', confidence: 0.6 } }
+      }
+    },
+    aiTalkStore: createStore(),
+    petPackService: createPetPackService({
+      id: 'legacy-cat',
+      actions: [
+        { id: 'idle', kind: 'idle', label: 'Idle' },
+        { id: 'wave', kind: 'greeting', label: 'Wave' }
+      ]
+    })
+  })
+
+  await service.chat({ message: '开始吧' })
+
+  assert.equal(requests[0].tools.length, 1)
+  const actionCandidatesPrompt = requests[0].messages.find((message) => /Current pet action candidates/.test(message.content))
+  assert.ok(actionCandidatesPrompt)
+  assert.match(actionCandidatesPrompt.content, /- idle \(kind=idle\): Idle/)
+  assert.match(actionCandidatesPrompt.content, /- wave \(kind=greeting\): Wave/)
+})
+
+test('ai talk service does not inject action candidates when behavior tools are disabled', async () => {
+  const requests = []
+  const service = createAiTalkService({
+    aiService: {
+      getConfig: () => ({ enabled: true, behavior: { enabled: false, useTools: true } }),
+      complete: async (request) => {
+        requests.push(request)
+        return { reply: '好的' }
+      }
+    },
+    aiTalkStore: createStore(),
+    petPackService: createPetPackService({
+      id: 'legacy-cat',
+      actions: [
+        { id: 'wave', kind: 'greeting', label: 'Wave' }
+      ]
+    })
+  })
+
+  await service.chat({ message: '开始吧' })
+
+  assert.equal(requests[0].tools.length, 0)
+  assert.equal(requests[0].messages.some((message) => /Current pet action candidates/.test(message.content)), false)
 })
 
 test('ai talk service injects recent pet activity without polluting transcript or memory extraction', async () => {

@@ -25,6 +25,7 @@ const MAX_STORED_MESSAGE_CHARS = 8000
 const MAX_USER_MESSAGE_CHARS = 4000
 const BEHAVIOR_TOOL_NAME = 'openpet_behavior'
 const LEGACY_BEHAVIOR_TOOL_NAME = 'ibot_behavior'
+const BEHAVIOR_DISPLAY_MODES = Object.freeze(['bubble', 'silent', 'narration'])
 
 const HISTORY_ROLES = new Set(['user', 'assistant'])
 
@@ -62,11 +63,16 @@ const parseBehaviorToolArguments = (value) => {
   try {
     const parsed = JSON.parse(value)
     if (!isPlainObject(parsed)) return null
+    const displayMode = typeof parsed.displayMode === 'string' && BEHAVIOR_DISPLAY_MODES.includes(parsed.displayMode)
+      ? parsed.displayMode
+      : 'bubble'
     return {
       intent: typeof parsed.intent === 'string' ? parsed.intent : '',
       actionId: typeof parsed.actionId === 'string' ? parsed.actionId : '',
       confidence: Number.isFinite(Number(parsed.confidence)) ? Number(parsed.confidence) : 0,
-      bubbleText: typeof parsed.bubbleText === 'string' ? parsed.bubbleText : ''
+      bubbleText: typeof parsed.bubbleText === 'string' ? parsed.bubbleText : '',
+      reason: typeof parsed.reason === 'string' ? parsed.reason : '',
+      displayMode
     }
   } catch (_) {
     return null
@@ -108,7 +114,16 @@ const getBehaviorToolDefinition = () => ({
         intent: { type: 'string' },
         actionId: { type: 'string' },
         confidence: { type: 'number' },
-        bubbleText: { type: 'string' }
+        bubbleText: { type: 'string' },
+        reason: {
+          type: 'string',
+          description: 'Why this action suggestion fits the current reply and action candidates.'
+        },
+        displayMode: {
+          type: 'string',
+          enum: [...BEHAVIOR_DISPLAY_MODES],
+          description: 'bubble = speak normally, silent = action-only, narration = short narrated speech.'
+        }
       },
       required: ['intent', 'confidence']
     }
@@ -571,6 +586,7 @@ const createAiService = ({
 }
 
 module.exports = {
+  BEHAVIOR_DISPLAY_MODES,
   DEFAULT_AI_CONFIG,
   DEFAULT_MAX_CONVERSATIONS,
   DEFAULT_MAX_HISTORY_MESSAGES,

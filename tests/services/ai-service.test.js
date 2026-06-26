@@ -377,12 +377,72 @@ test('ai service sends behavior tool definition and parses tool call intent', as
   const result = await service.chat({ message: 'Finish it' })
 
   assert.equal(requests[0].tools[0].function.name, 'openpet_behavior')
+  assert.deepEqual(requests[0].tools[0].function.parameters.properties.displayMode.enum, ['bubble', 'silent', 'narration'])
   assert.equal(result.reply, '完成了')
   assert.deepEqual(result.behaviorIntent, {
     intent: 'success',
     actionId: 'done',
     confidence: 0.9,
-    bubbleText: '完成了'
+    bubbleText: '完成了',
+    reason: '',
+    displayMode: 'bubble'
+  })
+})
+
+test('ai service parses upgraded behavior tool fields when present', async () => {
+  const service = createAiService({
+    settingsService: createSettingsService({
+      ai: {
+        enabled: true,
+        provider: 'openai-compatible',
+        baseUrl: 'https://example.test/v1',
+        model: 'example-model',
+        apiKeyRef: 'ai.default',
+        systemPrompt: '',
+        behavior: {
+          enabled: true,
+          useTools: true
+        }
+      }
+    }),
+    secretService: {
+      getSecretValue: () => 'sk-test',
+      setSecret: () => {}
+    },
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => ({
+        choices: [{
+          message: {
+            content: '',
+            tool_calls: [{
+              function: {
+                name: 'openpet_behavior',
+                arguments: JSON.stringify({
+                  intent: 'focus',
+                  actionId: 'idle',
+                  confidence: 0.72,
+                  bubbleText: '我陪你专注一下',
+                  reason: 'The reply should stay calm and low-motion.',
+                  displayMode: 'silent'
+                })
+              }
+            }]
+          }
+        }]
+      })
+    })
+  })
+
+  const result = await service.chat({ message: '陪我专注' })
+
+  assert.deepEqual(result.behaviorIntent, {
+    intent: 'focus',
+    actionId: 'idle',
+    confidence: 0.72,
+    bubbleText: '我陪你专注一下',
+    reason: 'The reply should stay calm and low-motion.',
+    displayMode: 'silent'
   })
 })
 
@@ -436,7 +496,9 @@ test('ai service accepts legacy ibot_behavior tool calls for compatibility', asy
     intent: 'greeting',
     actionId: 'wave',
     confidence: 0.8,
-    bubbleText: '你好'
+    bubbleText: '你好',
+    reason: '',
+    displayMode: 'bubble'
   })
 })
 

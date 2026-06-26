@@ -112,6 +112,25 @@ const compileRecentPetActivityPrompt = (utterances = []) => {
   ].join('\n')
 }
 
+const compileBehaviorActionCandidatesPrompt = (actions = []) => {
+  if (!Array.isArray(actions) || !actions.length) return ''
+  const lines = actions
+    .map((action) => {
+      const actionId = normalizeString(action?.id)
+      if (!actionId) return ''
+      const kind = normalizeString(action?.kind) || 'custom'
+      const label = normalizeString(action?.label)
+      return `- ${actionId} (kind=${kind})${label ? `: ${label}` : ''}`
+    })
+    .filter(Boolean)
+  if (!lines.length) return ''
+  return [
+    '# Current pet action candidates',
+    'Only use actionId values from this list. If none fit, leave actionId empty.',
+    ...lines
+  ].join('\n')
+}
+
 const buildMemoryExtractionMessages = ({ userMessage, assistantReply, petPackId, persona }) => [
   {
     role: 'system',
@@ -414,6 +433,12 @@ const createAiTalkService = ({ aiService, aiTalkStore, petPackService, appLogSer
     return []
   }
 
+  const getBehaviorActionCandidates = (manifest) => (
+    Array.isArray(manifest?.actions)
+      ? manifest.actions
+      : []
+  )
+
   const listRecentMemoryJobs = (petPackId) => {
     if (typeof aiTalkStore.getState !== 'function') return []
     const state = aiTalkStore.getState()
@@ -611,14 +636,18 @@ const createAiTalkService = ({ aiService, aiTalkStore, petPackService, appLogSer
         const memoryContextPrompt = compileMemoryContextPrompt(memoryContext)
         const recentPetActivity = getRecentPetActivity(petPackId)
         const recentPetActivityPrompt = compileRecentPetActivityPrompt(recentPetActivity)
+        const behaviorToolEnabled = config.behavior?.enabled && config.behavior?.useTools !== false
+        const behaviorActionCandidates = behaviorToolEnabled ? getBehaviorActionCandidates(manifest) : []
+        const behaviorActionCandidatesPrompt = compileBehaviorActionCandidatesPrompt(behaviorActionCandidates)
         const messages = [
           { role: 'system', content: compileSystemPrompt({ personaPrompt, globalPrompt: config.systemPrompt }) },
           ...(memoryContextPrompt ? [{ role: 'system', content: memoryContextPrompt }] : []),
           ...(recentPetActivityPrompt ? [{ role: 'system', content: recentPetActivityPrompt }] : []),
+          ...(behaviorActionCandidatesPrompt ? [{ role: 'system', content: behaviorActionCandidatesPrompt }] : []),
           ...getRecentMessages(history).map(({ role, content }) => ({ role, content })),
           userMessage
         ]
-        const tools = config.behavior?.enabled && config.behavior?.useTools !== false
+        const tools = behaviorToolEnabled
           ? [getBehaviorToolDefinition()]
           : []
         Object.assign(diagnostics, {
@@ -628,6 +657,7 @@ const createAiTalkService = ({ aiService, aiTalkStore, petPackService, appLogSer
           messagesCount: messages.length,
           memoryContextCount: memoryContext.length,
           recentPetActivityCount: recentPetActivity.length,
+          behaviorActionCandidateCount: behaviorActionCandidates.length,
           toolsCount: tools.length,
           memoryEnabled: config.memory?.enabled === true,
           behaviorEnabled: config.behavior?.enabled === true
