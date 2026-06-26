@@ -28,6 +28,7 @@ const { createPluginBridgeHandlersController } = require('./plugin-bridge-handle
 const { createPluginAssetPathController } = require('./plugin-asset-path-controller')
 const { createPluginListingController } = require('./plugin-listing-controller')
 const { createPluginPolicyController } = require('./plugin-policy-controller')
+const { createPluginManagementController } = require('./plugin-management-controller')
 
 const STORAGE_KEY_PATTERN = /^[a-zA-Z0-9_.:-]{1,128}$/
 const MAX_PLUGIN_STORAGE_BYTES = 64 * 1024
@@ -429,14 +430,6 @@ const createPluginService = ({ settingsService, petService, actionService, actio
 
   const createPluginBridgeHandlers = bridgeHandlersController.createHandlers
 
-  const clearStorage = (pluginId) => {
-    const plugin = getPlugins().find((candidate) => candidate.manifest.id === pluginId)
-    if (!plugin) throw new Error(`Plugin not found: ${pluginId}`)
-    configStorageController.clearStorage(pluginId)
-    appendLog({ pluginId, level: 'info', message: 'Plugin storage cleared' })
-    return listPlugins().find((candidate) => candidate.id === pluginId)
-  }
-
   const listingController = createPluginListingController({
     getSetupRuntime: (pluginId, setupId) => setupRuntimeManager.getRuntime(pluginId, setupId),
     getServiceRuntime: (pluginId, serviceId) => serviceRuntimeManager.getRuntime(pluginId, serviceId),
@@ -637,76 +630,6 @@ const createPluginService = ({ settingsService, petService, actionService, actio
 
   const stopPluginCommands = (pluginId) => commandRuntimeManager.stopPlugin(pluginId)
 
-  const setEnabled = (pluginId, enabled) => {
-    if (enabled) assertPluginAllowed(pluginId)
-    if (!enabled) {
-      stopPluginCommands(pluginId)
-      stopPluginServices(pluginId)
-      stopPluginSetups(pluginId)
-    }
-    const settings = settingsService.get()
-    const nextSettings = {
-      ...settings,
-      plugins: {
-        ...(settings.plugins || {}),
-        enabled: {
-          ...(settings.plugins?.enabled || {}),
-          [pluginId]: Boolean(enabled)
-        }
-      }
-    }
-    settingsService.save(nextSettings)
-    appendLog({
-      pluginId,
-      level: 'info',
-      message: enabled ? 'Plugin enabled' : 'Plugin disabled'
-    })
-    return listPlugins().find((plugin) => plugin.id === pluginId)
-  }
-
-  const saveConfig = (pluginId, config = {}) => {
-    const plugin = getPlugins().find((candidate) => candidate.manifest.id === pluginId)
-    if (!plugin) throw new Error(`Plugin not found: ${pluginId}`)
-    if (!plugin.configSchema) throw new Error('Plugin does not declare a config schema')
-    configStorageController.saveConfig(pluginId, plugin.configSchema, config)
-    appendLog({ pluginId, level: 'info', message: 'Plugin config saved' })
-    return listPlugins().find((candidate) => candidate.id === pluginId)
-  }
-
-  const saveServiceHealthPolicy = (pluginId, serviceId, policy = {}) => {
-    const plugin = findPluginForService(pluginId)
-    const serviceEntry = getServiceEntry(plugin, serviceId)
-    if (!serviceEntry.health?.url) throw new Error('Plugin service health check is not configured')
-    const normalizedPolicy = normalizeServiceHealthPolicy(policy)
-    const settings = settingsService.get()
-    settingsService.save({
-      ...settings,
-      plugins: {
-        ...(settings.plugins || {}),
-        serviceHealthPolicies: {
-          ...(settings.plugins?.serviceHealthPolicies || {}),
-          [pluginId]: {
-            ...(settings.plugins?.serviceHealthPolicies?.[pluginId] || {}),
-            [serviceId]: normalizedPolicy
-          }
-        }
-      }
-    })
-
-    const runtime = serviceRuntimeManager.getRuntime(pluginId, serviceId)
-    if (runtime) {
-      clearServiceHealthSchedule(runtime)
-      scheduleServiceHealthCheck(pluginId, serviceId, runtime, serviceEntry)
-    }
-    appendLog({
-      pluginId,
-      commandId: `service:${serviceId}`,
-      level: 'info',
-      message: normalizedPolicy.enabled ? 'Service health policy saved' : 'Service health policy cleared'
-    })
-    return listPlugins().find((candidate) => candidate.id === pluginId)
-  }
-
   const runtimeSdkController = createPluginRuntimeSdkController({
     getConfig: getPluginConfig,
     getStorage: getPluginStorage,
@@ -748,6 +671,30 @@ const createPluginService = ({ settingsService, petService, actionService, actio
     openExternal,
     getDashboardEntry: resolutionController.getDashboardEntry
   })
+
+  const managementController = createPluginManagementController({
+    settingsService,
+    assertPluginAllowed,
+    stopPluginCommands,
+    stopPluginServices,
+    stopPluginSetups,
+    appendLog,
+    listPlugins,
+    getPlugins,
+    saveConfig: configStorageController.saveConfig,
+    clearStorage: configStorageController.clearStorage,
+    findPluginForService,
+    getServiceEntry,
+    normalizeServiceHealthPolicy,
+    getServiceRuntime: (pluginId, serviceId) => serviceRuntimeManager.getRuntime(pluginId, serviceId),
+    clearServiceHealthSchedule,
+    scheduleServiceHealthCheck
+  })
+
+  const setEnabled = managementController.setEnabled
+  const saveConfig = managementController.saveConfig
+  const saveServiceHealthPolicy = managementController.saveServiceHealthPolicy
+  const clearStorage = managementController.clearStorage
 
   const runCommand = async (pluginId, commandId, payload = {}) => {
     try {
