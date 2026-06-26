@@ -42,7 +42,7 @@ test('creator studio example manifest declares hybrid creator workflow entries',
 
   assert.equal(manifest.id, 'openpet.creator-studio')
   assert.equal(manifest.profile, 'hybrid')
-  assert.deepEqual(manifest.permissions, ['pet-pack:import', 'pet:say', 'model:image-generate', 'assets:generate'])
+  assert.deepEqual(manifest.permissions, ['pet-pack:import', 'pet:say', 'model:image-generate', 'assets:generate', 'actions:write'])
   assert.deepEqual(manifest.commands.map((command) => command.id), [
     'create-run',
     'draft-task',
@@ -1301,6 +1301,32 @@ test('creator studio import-approved-action imports approved single-action frame
     routes: [{
       path: '/creator/assets/import-frames',
       handler: () => ({ body: { ok: true, result: { importedAction: { id: 'shy-spin' } } } })
+    }, {
+      path: '/creator/actions/submit-trigger-proposal',
+      handler: ({ payload }) => ({
+        body: {
+          ok: true,
+          proposal: {
+            id: 'proposal:click:shy-spin:test',
+            actionId: payload.actionId,
+            type: payload.type,
+            binding: payload.binding,
+            sourcePluginId: payload.sourcePluginId,
+            sourceRunId: payload.sourceRunId,
+            sourceCommandId: payload.sourceCommandId,
+            message: payload.message,
+            status: 'pending',
+            resultCode: '',
+            resultMessage: '',
+            rejectionReason: '',
+            createdAt: '2026-06-20T00:01:00.000Z',
+            updatedAt: '2026-06-20T00:01:00.000Z',
+            acceptedAt: '',
+            rejectedAt: ''
+          },
+          actions: { defaultAction: 'idle', clickAction: 'wave', actions: [] }
+        }
+      })
     }]
   })
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
@@ -1323,12 +1349,19 @@ test('creator studio import-approved-action imports approved single-action frame
     assert.equal(imported.json.run.status, 'imported')
     assert.equal(imported.json.run.importedActionId, 'shy-spin')
     assert.equal(imported.json.triggerProposal.type, 'click')
+    assert.equal(imported.json.triggerProposalSubmission.ok, true)
+    assert.equal(imported.json.triggerProposalSubmission.proposal.actionId, 'shy-spin')
     assert.equal(stored.importStatus, 'imported')
     assert.equal(requests[0].url, '/creator/assets/import-frames')
+    assert.equal(requests[1].url, '/creator/actions/submit-trigger-proposal')
     assert.equal(requests[0].payload.dataRelativePath, 'runs/demo/frames/actions/shy-spin')
     assert.equal(requests[0].payload.actionId, 'shy-spin')
     assert.equal(requests[0].payload.label, '害羞转圈')
+    assert.equal(requests[1].payload.sourcePluginId, 'openpet.creator-studio')
+    assert.equal(requests[1].payload.sourceRunId, run.runId)
+    assert.equal(requests[1].payload.sourceCommandId, 'import-approved-action')
     assert.equal(JSON.stringify(requests[0].payload).includes(dataDir), false)
+    assert.equal(JSON.stringify(requests[1].payload).includes(dataDir), false)
   } finally {
     server.closeAllConnections?.()
     await new Promise((resolve) => server.close(resolve))
@@ -1401,6 +1434,32 @@ test('creator studio import-approved-action rejects failed action frame QA befor
     routes: [{
       path: '/creator/assets/import-frames',
       handler: () => ({ body: { ok: true, result: { importedAction: { id: 'shy-spin' } } } })
+    }, {
+      path: '/creator/actions/submit-trigger-proposal',
+      handler: () => ({
+        body: {
+          ok: true,
+          proposal: {
+            id: 'proposal:click:shy-spin:test',
+            actionId: 'shy-spin',
+            type: 'click',
+            binding: 'clickAction',
+            sourcePluginId: 'openpet.creator-studio',
+            sourceRunId: actionRun.runId,
+            sourceCommandId: 'import-approved-action',
+            message: 'Import this action as the click trigger',
+            status: 'pending',
+            resultCode: '',
+            resultMessage: '',
+            rejectionReason: '',
+            createdAt: '2026-06-20T00:01:00.000Z',
+            updatedAt: '2026-06-20T00:01:00.000Z',
+            acceptedAt: '',
+            rejectedAt: ''
+          },
+          actions: { defaultAction: 'idle', clickAction: 'wave', actions: [] }
+        }
+      })
     }]
   })
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
@@ -1423,6 +1482,115 @@ test('creator studio import-approved-action rejects failed action frame QA befor
     assert.match(imported.json.error, /QA must pass/)
     assert.equal(stored.importStatus, 'not-imported')
     assert.equal(requests.length, 0)
+  } finally {
+    server.closeAllConnections?.()
+    await new Promise((resolve) => server.close(resolve))
+  }
+})
+
+test('creator studio import-approved-action preserves imported state when trigger proposal submission fails', async () => {
+  const { createRun, readRun, updateRunStatus } = require('../../examples/plugins/creator-studio/lib/run-store')
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-import-action-partial-'))
+  const framesDir = path.join(dataDir, 'runs/demo/frames/actions/shy-spin')
+  const qaDir = path.join(dataDir, 'runs/demo/qa')
+  fs.mkdirSync(framesDir, { recursive: true })
+  fs.mkdirSync(qaDir, { recursive: true })
+  await sharp({
+    create: {
+      width: 192,
+      height: 208,
+      channels: 4,
+      background: { r: 240, g: 120, b: 140, alpha: 1 }
+    }
+  }).png().toFile(path.join(framesDir, '0001.png'))
+  fs.writeFileSync(
+    path.join(qaDir, 'action-frame-validation.json'),
+    `${JSON.stringify(createActionFrameQa(), null, 2)}\n`
+  )
+  const run = createRun({
+    dataDir,
+    input: {
+      petName: 'Action Import Partial Cat',
+      petId: 'action-import-partial-cat',
+      backend: 'cloud',
+      prompt: '点击害羞转圈',
+      generationTask: {
+        mode: 'single-action',
+        targetPet: 'current',
+        styleSource: 'currentPet',
+        actions: [{
+          actionId: 'shy-spin',
+          name: '害羞转圈',
+          motionPrompt: '点击害羞转圈',
+          frameCount: 1,
+          triggerProposal: { type: 'click', binding: 'clickAction' }
+        }]
+      }
+    }
+  })
+  updateRunStatus({
+    dataDir,
+    runId: run.runId,
+    status: 'approved',
+    patch: {
+      reviewStatus: 'approved',
+      currentStep: 'approved',
+      artifacts: {
+        actionFrames: {
+          actionId: 'shy-spin',
+          name: '害羞转圈',
+          framesDir,
+          qa: path.join(qaDir, 'action-frame-validation.json'),
+          frameCount: 1,
+          frameWidth: 192,
+          frameHeight: 208,
+          triggerProposal: { type: 'click', binding: 'clickAction' }
+        }
+      }
+    },
+    now: () => '2026-06-20T00:01:00.000Z'
+  })
+  const { server, requests } = createBridgeServer({
+    routes: [{
+      path: '/creator/assets/import-frames',
+      handler: () => ({ body: { ok: true, result: { importedAction: { id: 'shy-spin' } } } })
+    }, {
+      path: '/creator/actions/submit-trigger-proposal',
+      handler: () => ({
+        statusCode: 500,
+        body: {
+          ok: false,
+          error: 'Host trigger proposal inbox is unavailable'
+        }
+      })
+    }]
+  })
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const port = server.address().port
+
+  try {
+    const imported = await runCreatorCommandAsync({
+      command: 'import-approved-action',
+      dataDir,
+      payload: { runId: run.runId },
+      env: {
+        OPENPET_BRIDGE_URL: `http://127.0.0.1:${port}`,
+        OPENPET_BRIDGE_TOKEN: 'bridge-token'
+      }
+    })
+    const stored = readRun({ dataDir, runId: run.runId })
+
+    assert.equal(imported.status, 0)
+    assert.equal(imported.json.ok, true)
+    assert.equal(imported.json.run.status, 'imported')
+    assert.equal(imported.json.run.importedActionId, 'shy-spin')
+    assert.equal(imported.json.run.currentStep, 'imported-trigger-proposal-pending')
+    assert.equal(imported.json.triggerProposalSubmission, null)
+    assert.match(imported.json.triggerProposalSubmissionError, /Host trigger proposal inbox is unavailable/)
+    assert.equal(stored.importStatus, 'imported')
+    assert.equal(stored.currentStep, 'imported-trigger-proposal-pending')
+    assert.equal(requests[0].url, '/creator/assets/import-frames')
+    assert.equal(requests[1].url, '/creator/actions/submit-trigger-proposal')
   } finally {
     server.closeAllConnections?.()
     await new Promise((resolve) => server.close(resolve))
@@ -1779,6 +1947,32 @@ test('creator studio import-approved-action skips pet-pack runs when inferring l
     routes: [{
       path: '/creator/assets/import-frames',
       handler: () => ({ body: { ok: true, result: { importedAction: { id: 'shy-spin' } } } })
+    }, {
+      path: '/creator/actions/submit-trigger-proposal',
+      handler: () => ({
+        body: {
+          ok: true,
+          proposal: {
+            id: 'proposal:click:shy-spin:test',
+            actionId: 'shy-spin',
+            type: 'click',
+            binding: 'clickAction',
+            sourcePluginId: 'openpet.creator-studio',
+            sourceRunId: actionRun.runId,
+            sourceCommandId: 'import-approved-action',
+            message: 'Import this action as the click trigger',
+            status: 'pending',
+            resultCode: '',
+            resultMessage: '',
+            rejectionReason: '',
+            createdAt: '2026-06-20T00:01:00.000Z',
+            updatedAt: '2026-06-20T00:01:00.000Z',
+            acceptedAt: '',
+            rejectedAt: ''
+          },
+          actions: { defaultAction: 'idle', clickAction: 'wave', actions: [] }
+        }
+      })
     }]
   })
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
@@ -1800,6 +1994,7 @@ test('creator studio import-approved-action skips pet-pack runs when inferring l
     assert.equal(imported.json.run.runId, actionRun.runId)
     assert.equal(storedActionRun.importStatus, 'imported')
     assert.equal(requests[0].payload.dataRelativePath, `runs/${actionRun.runId}/frames/actions/shy-spin`)
+    assert.equal(requests[1].url, '/creator/actions/submit-trigger-proposal')
   } finally {
     server.closeAllConnections?.()
     await new Promise((resolve) => server.close(resolve))

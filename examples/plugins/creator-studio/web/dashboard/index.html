@@ -435,7 +435,7 @@
             $('import-handoff-panel').innerHTML = [
               '<div class="handoff">',
               '<strong>Approved. Ready for host-owned import.</strong>',
-              '<p>Run the Creator Studio command <code>Import Approved Action</code> from Control Center → Plugins. The dashboard service cannot import directly because the OpenPet bridge token is only issued to command runs.</p>',
+              '<p>Run the Creator Studio command <code>Import Approved Action</code> from Control Center → Plugins. It imports the frames and submits the trigger proposal to the host inbox, because the dashboard service cannot use the OpenPet bridge directly.</p>',
               '</div>'
             ].join('')
           } else if (run.status === 'imported') {

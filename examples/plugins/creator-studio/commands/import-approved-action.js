@@ -73,6 +73,22 @@ runCommand(async (context) => {
     actionId: actionFrames.actionId,
     label: actionFrames.name || actionFrames.actionId
   })
+  const triggerProposal = actionFrames.triggerProposal || { type: 'unbound' }
+  let submittedTriggerProposal = null
+  let triggerProposalSubmissionError = ''
+  try {
+    submittedTriggerProposal = await callBridge('/creator/actions/submit-trigger-proposal', {
+      actionId: actionFrames.actionId,
+      type: triggerProposal.type,
+      binding: triggerProposal.binding,
+      message: triggerProposal.notes || `Imported action ${actionFrames.actionId}`,
+      sourcePluginId: 'openpet.creator-studio',
+      sourceRunId: runId,
+      sourceCommandId: 'import-approved-action'
+    })
+  } catch (error) {
+    triggerProposalSubmissionError = error.message || 'Trigger proposal submission failed'
+  }
   const run = updateRunStatus({
     dataDir,
     runId,
@@ -80,13 +96,17 @@ runCommand(async (context) => {
     patch: {
       importStatus: 'imported',
       importedActionId: actionFrames.actionId,
-      currentStep: 'imported'
+      currentStep: triggerProposalSubmissionError ? 'imported-trigger-proposal-pending' : 'imported'
     }
   })
   return {
-    message: `Imported action ${actionFrames.actionId}`,
+    message: triggerProposalSubmissionError
+      ? `Imported action ${actionFrames.actionId}; trigger proposal submission is pending`
+      : `Imported action ${actionFrames.actionId}`,
     run,
     imported,
-    triggerProposal: actionFrames.triggerProposal || { type: 'unbound' }
+    triggerProposal,
+    triggerProposalSubmission: submittedTriggerProposal,
+    ...(triggerProposalSubmissionError ? { triggerProposalSubmissionError } : {})
   }
 })

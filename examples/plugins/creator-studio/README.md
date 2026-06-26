@@ -12,7 +12,7 @@ Current commands:
 - `run-step`: generate fixture, full-pet, or single-action output and QA metadata for a run.
 - `approve-run`: mark a run approved.
 - `import-approved-pet`: ask OpenPet to inspect and import the approved output.
-- `import-approved-action`: ask OpenPet to import approved single-action frames through the host-owned creator-tools bridge.
+- `import-approved-action`: ask OpenPet to import approved single-action frames and submit the trigger proposal to the host-owned creator-tools bridge.
 - `export-bundle`: return the generated `.codex-pet.zip` output details.
 
 The dashboard service exposes review data through loopback-only routes. Frame previews and repairs stay inside the Creator Studio run workspace; dashboard responses use data-relative artifact paths and preview URLs rather than raw filesystem paths.

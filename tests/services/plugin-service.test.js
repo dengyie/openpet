@@ -536,6 +536,89 @@ test('declaration-only creator action bridge exposes action state and validation
   assert.equal(applyResponse.body.actions.actions.find((action) => action.id === 'wave').label, 'Wave Hello')
 })
 
+test('declaration-only creator action bridge submits trigger proposals into the host inbox', async () => {
+  const spawned = []
+  const child = createFakeServiceProcess()
+  const submitted = []
+  const actionService = {
+    submitTriggerProposal: (payload) => {
+      submitted.push(payload)
+      return {
+        proposal: {
+          id: 'proposal:click:wave:test',
+          actionId: payload.actionId,
+          type: payload.type,
+          binding: payload.binding,
+          sourcePluginId: payload.sourcePluginId,
+          sourceRunId: payload.sourceRunId,
+          sourceCommandId: payload.sourceCommandId,
+          message: payload.message,
+          status: 'pending',
+          resultCode: '',
+          resultMessage: '',
+          rejectionReason: '',
+          createdAt: '2026-06-22T00:00:00.000Z',
+          updatedAt: '2026-06-22T00:00:00.000Z',
+          acceptedAt: '',
+          rejectedAt: ''
+        },
+        animations: {
+          defaultAction: 'idle',
+          clickAction: 'wave',
+          actions: []
+        }
+      }
+    }
+  }
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: createBridgeAwarePetService(),
+    actionService,
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir({
+      profile: 'creator-tools',
+      permissions: ['actions:read', 'actions:write']
+    })],
+    spawnCommandProcess: (file, args, options) => {
+      spawned.push({ file, args, options })
+      return child
+    }
+  })
+
+  const commandRun = service.runCommand('weather-declaration', 'announce')
+  await waitFor(() => spawned.length === 1)
+  const baseUrl = spawned[0].options.env.OPENPET_BRIDGE_URL
+  const token = spawned[0].options.env.OPENPET_BRIDGE_TOKEN
+
+  const response = await requestBridge(`${baseUrl}/creator/actions/submit-trigger-proposal`, {
+    method: 'POST',
+    token,
+    body: {
+      actionId: 'wave',
+      type: 'click',
+      binding: 'clickAction',
+      message: 'Import this action as the click trigger',
+      sourcePluginId: 'openpet.creator-studio',
+      sourceRunId: 'run-1',
+      sourceCommandId: 'import-approved-action'
+    }
+  })
+
+  child.stdout.write('{"ok":true}\n')
+  child.emit('exit', 0, null)
+  await commandRun
+
+  assert.equal(response.status, 200)
+  assert.equal(response.body.ok, true)
+  assert.equal(response.body.proposal.actionId, 'wave')
+  assert.equal(submitted.length, 1)
+  assert.equal(submitted[0].sourcePluginId, 'openpet.creator-studio')
+  assert.equal(submitted[0].sourceRunId, 'run-1')
+  assert.equal(submitted[0].sourceCommandId, 'import-approved-action')
+})
+
 test('declaration-only creator action bridge rejects missing permissions', async () => {
   const spawned = []
   const child = createFakeServiceProcess()

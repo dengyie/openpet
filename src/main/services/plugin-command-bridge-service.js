@@ -70,6 +70,7 @@ const JSON_ROUTE_HANDLERS = {
   '/pet/event': 'petEvent',
   '/creator/actions/validate': 'creatorActionsValidate',
   '/creator/actions/apply': 'creatorActionsApply',
+  '/creator/actions/submit-trigger-proposal': 'creatorActionsSubmitTriggerProposal',
   '/creator/pack-manifest/validate': 'creatorPackManifestValidate',
   '/creator/pack-manifest/apply': 'creatorPackManifestApply',
   '/creator/assets/inspect-frames': 'creatorAssetsInspectFrames',

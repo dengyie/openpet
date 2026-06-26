@@ -382,6 +382,13 @@ const createPluginService = ({ settingsService, petService, actionService, actio
       const actions = actionService.applyCreatorActionMutation(payload)
       return { ok: true, actions }
     },
+    creatorActionsSubmitTriggerProposal: async (payload = {}) => {
+      assertPermission(plugin.manifest, 'actions:write')
+      if (!actionService?.submitTriggerProposal) throw new Error('Creator action trigger proposal submission is not available')
+      appendLog({ pluginId: plugin.manifest.id, commandId, level: 'info', message: 'Bridge creator.actions submit-trigger-proposal invoked' })
+      const result = actionService.submitTriggerProposal(payload)
+      return { ok: true, ...result }
+    },
     creatorPackManifestRead: async () => {
       assertPermission(plugin.manifest, 'pack-manifest:read')
       if (!petPackService?.getActiveCreatorPackManifest) throw new Error('Creator pack manifest read is not available')
