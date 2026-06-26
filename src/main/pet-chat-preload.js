@@ -6,13 +6,15 @@ const IPC = {
   PET_CHAT_SET_ALWAYS_ON_TOP: 'pet-chat:set-always-on-top',
   PET_CHAT_OPEN_SETTINGS: 'pet-chat:open-settings',
   PET_CHAT_SEND_MESSAGE: 'pet-chat:send-message',
-  PET_CHAT_STATE_CHANGED: 'pet-chat:state-changed'
+  PET_CHAT_STATE_CHANGED: 'pet-chat:state-changed',
+  PET_BUBBLE_CHAT_OPEN: 'pet-bubble-chat:open'
 }
 
 contextBridge.exposeInMainWorld('petChatAPI', {
   getState: () => ipcRenderer.invoke(IPC.PET_CHAT_GET_STATE),
   hide: () => ipcRenderer.send(IPC.PET_CHAT_HIDE),
   setAlwaysOnTop: (alwaysOnTop) => ipcRenderer.invoke(IPC.PET_CHAT_SET_ALWAYS_ON_TOP, { alwaysOnTop: Boolean(alwaysOnTop) }),
+  openBubbleChat: () => ipcRenderer.invoke(IPC.PET_BUBBLE_CHAT_OPEN),
   openSettings: () => ipcRenderer.send(IPC.PET_CHAT_OPEN_SETTINGS),
   sendMessage: (payload) => ipcRenderer.invoke(IPC.PET_CHAT_SEND_MESSAGE, payload),
   onStateChanged: (callback) => {

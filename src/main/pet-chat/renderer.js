@@ -1,4 +1,5 @@
 const statusEl = document.getElementById('window-status')
+const bubbleChatButton = document.getElementById('bubble-chat-button')
 const topmostButton = document.getElementById('topmost-button')
 const settingsButton = document.getElementById('settings-button')
 const closeButton = document.getElementById('close-button')
@@ -89,6 +90,15 @@ const refreshState = async () => {
 topmostButton.addEventListener('click', async () => {
   const nextAlwaysOnTop = !topmostButton.classList.contains('active')
   renderWindowState(await window.petChatAPI.setAlwaysOnTop(nextAlwaysOnTop))
+})
+
+bubbleChatButton.addEventListener('click', async () => {
+  try {
+    await window.petChatAPI.openBubbleChat?.()
+    window.petChatAPI.hide()
+  } catch (_) {
+    // Keep the full chat window available when the bubble handoff fails.
+  }
 })
 
 settingsButton.addEventListener('click', () => {
