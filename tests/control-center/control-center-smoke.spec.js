@@ -507,6 +507,25 @@ test.describe('Control Center smoke', () => {
     await expect(page.getByTestId('image-model-compatibility')).toContainText('不会强制发送 background 参数')
   })
 
+  test('shows chat provider model discovery results in the demo API', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: 'AI' }).click()
+
+    const chatProviderSection = await expandAiSection(page, '聊天 Provider')
+    await page.getByRole('textbox', { name: 'Base URL', exact: true }).fill('https://healthy-models.example.test/v1')
+    await page.getByRole('textbox', { name: 'Model', exact: true }).fill('deepseek-chat')
+    await chatProviderSection.getByRole('button', { name: '保存聊天 Provider' }).click()
+
+    const apiKeyRow = page.locator('.field-row').filter({ has: page.getByText('API Key', { exact: true }) })
+    await apiKeyRow.getByPlaceholder('输入 API Key').fill('sk-chat-demo-5678')
+    await apiKeyRow.getByRole('button', { name: '保存密钥' }).click()
+    await chatProviderSection.getByRole('button', { name: '测试已保存配置' }).click()
+
+    await expect(page.getByTestId('chat-model-discovery')).toContainText('模型列表探测成功')
+    await expect(page.getByTestId('chat-model-discovery')).toContainText('deepseek-chat')
+    await expect(page.getByTestId('chat-model-discovery')).toContainText('已包含当前模型')
+  })
+
   test('persists pet persona override and follows the active pet-pack in the demo API', async ({ page }) => {
     await page.goto('/')
     await page.getByRole('button', { name: 'AI' }).click()

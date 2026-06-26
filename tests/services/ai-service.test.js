@@ -812,6 +812,7 @@ test('ai service times out stalled provider requests', async () => {
 
 test('ai service testConnection validates provider response', async () => {
   const logs = []
+  const requests = []
   const service = createAiService({
     settingsService: createSettingsService({
       ai: {
@@ -827,10 +828,28 @@ test('ai service testConnection validates provider response', async () => {
       getSecretValue: () => 'sk-test',
       setSecret: () => {}
     },
-    fetchImpl: async () => ({
-      ok: true,
-      json: async () => ({ choices: [{ message: { content: 'ok' } }] })
-    }),
+    fetchImpl: async (url) => {
+      requests.push(url)
+      if (url.endsWith('/chat/completions')) {
+        return {
+          ok: true,
+          json: async () => ({ choices: [{ message: { content: 'ok' } }] })
+        }
+      }
+      if (url.endsWith('/models')) {
+        return {
+          ok: true,
+          json: async () => ({
+            data: [
+              { id: 'gpt-4o-mini' },
+              { id: 'example-model' },
+              { id: 'deepseek-chat' }
+            ]
+          })
+        }
+      }
+      throw new Error(`Unexpected url: ${url}`)
+    },
     appLogService: { record: (entry) => logs.push(entry) }
   })
 
@@ -843,11 +862,61 @@ test('ai service testConnection validates provider response', async () => {
   assert.equal(result.hasApiKey, true)
   assert.equal(result.reply, 'ok')
   assert.equal(result.code, 'ok')
+  assert.equal(result.modelsProbe, 'ok')
+  assert.deepEqual(result.availableModels, ['gpt-4o-mini', 'example-model', 'deepseek-chat'])
+  assert.equal(result.currentModelDiscovered, true)
   assert.equal(typeof result.elapsedMs, 'number')
+  assert.deepEqual(requests, [
+    'https://example.test/v1/chat/completions',
+    'https://example.test/v1/models'
+  ])
   assert.deepEqual(logs.map((entry) => entry.event).filter((event) => event.startsWith('ai.settings.')), [
     'ai.settings.connection-test.started',
     'ai.settings.connection-test.completed'
   ])
+})
+
+test('ai service testConnection degrades safely when models probe is unavailable', async () => {
+  const service = createAiService({
+    settingsService: createSettingsService({
+      ai: {
+        enabled: false,
+        provider: 'openai-compatible',
+        baseUrl: 'https://models-unavailable.example.test/v1',
+        model: 'example-model',
+        apiKeyRef: 'ai.default',
+        systemPrompt: ''
+      }
+    }),
+    secretService: {
+      getSecretValue: () => 'sk-test',
+      setSecret: () => {}
+    },
+    fetchImpl: async (url) => {
+      if (url.endsWith('/chat/completions')) {
+        return {
+          ok: true,
+          json: async () => ({ choices: [{ message: { content: 'ok' } }] })
+        }
+      }
+      if (url.endsWith('/models')) {
+        return {
+          ok: false,
+          status: 404,
+          json: async () => ({})
+        }
+      }
+      throw new Error(`Unexpected url: ${url}`)
+    }
+  })
+
+  const result = await service.testConnection()
+
+  assert.equal(result.ok, true)
+  assert.equal(result.code, 'ok')
+  assert.equal(result.modelsProbe, 'unavailable')
+  assert.deepEqual(result.availableModels, [])
+  assert.equal(result.currentModelDiscovered, false)
 })
 
 test('ai service testConnection returns missing key failure metadata', async () => {

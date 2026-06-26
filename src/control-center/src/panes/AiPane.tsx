@@ -123,6 +123,55 @@ const renderImageModelDiscovery = (result: ImageGenerationHealthCheckResult | nu
   )
 }
 
+const renderChatModelDiscovery = (result: AiConnectionTestResult | null, currentModel: string) => {
+  const normalizedCurrentModel = String(currentModel || '').trim()
+  if (!result) {
+    return (
+      <div className="provider-feedback" data-testid="chat-model-discovery">
+        <strong>模型列表探测</strong>
+        <span>运行“测试已保存配置”后，这里会显示聊天 Provider 的 /models 探测结果。</span>
+      </div>
+    )
+  }
+
+  const discoveredModels = Array.isArray(result.availableModels) ? result.availableModels : []
+  if (result.modelsProbe === 'ok') {
+    const currentModelIncluded = normalizedCurrentModel ? discoveredModels.includes(normalizedCurrentModel) : false
+    return (
+      <div className={`provider-feedback ${result.ok ? 'ok' : ''}`} data-testid="chat-model-discovery">
+        <strong>模型列表探测成功</strong>
+        <span>共发现 {discoveredModels.length} 个模型。</span>
+        <span>{currentModelIncluded ? '已包含当前模型' : '当前模型未出现在探测列表中'}</span>
+        {discoveredModels.length ? (
+          <div className="model-chip-list">
+            {discoveredModels.map((modelName) => (
+              <code key={modelName} className="model-chip">{modelName}</code>
+            ))}
+          </div>
+        ) : (
+          <span>Provider 可达，但没有返回模型列表内容。</span>
+        )}
+      </div>
+    )
+  }
+
+  if (result.modelsProbe === 'unavailable') {
+    return (
+      <div className="provider-feedback" data-testid="chat-model-discovery">
+        <strong>模型列表探测不可用</strong>
+        <span>当前 Provider 可达，但没有开放 /models；请手动确认模型名称。</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className={`provider-feedback ${result.ok ? 'ok' : 'error'}`} data-testid="chat-model-discovery">
+      <strong>模型列表探测未返回结果</strong>
+      <span>{result.message || '本次连接测试没有拿到模型列表。'}</span>
+    </div>
+  )
+}
+
 const CollapsibleAiSection = ({
   title,
   note,
@@ -528,6 +577,8 @@ export function AiPane({
             ) : null}
           </div>
         ) : null}
+
+        {renderChatModelDiscovery(connectionTestResult, config.model)}
 
         <div className="section-actions provider-actions-bottom">
           <button type="button" className="ghost" onClick={onTest} disabled={saving}>

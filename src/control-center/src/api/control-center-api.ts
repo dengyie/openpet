@@ -1229,17 +1229,56 @@ const demoApi: ControlCenterApi = {
       updatedAt: new Date().toISOString()
     }
   },
-  testAiConnection: async () => ({
-    ok: true,
-    provider: demoState.aiConfig.provider,
-    baseUrl: demoState.aiConfig.baseUrl,
-    model: demoState.aiConfig.model,
-    hasApiKey: demoState.aiConfig.hasApiKey,
-    elapsedMs: 12,
-    reply: 'ok',
-    code: 'ok',
-    message: 'AI provider connection test succeeded'
-  }),
+  testAiConnection: async () => {
+    if (!demoState.aiConfig.hasApiKey) {
+      return {
+        ok: false,
+        provider: demoState.aiConfig.provider,
+        baseUrl: demoState.aiConfig.baseUrl,
+        model: demoState.aiConfig.model,
+        hasApiKey: false,
+        elapsedMs: 12,
+        code: 'missing_api_key',
+        message: 'AI API key is not configured',
+        modelsProbe: 'failed',
+        availableModels: [],
+        currentModelDiscovered: false
+      }
+    }
+    if (/models-unavailable|combo\.example\.test|ai\.example\.test/i.test(demoState.aiConfig.baseUrl)) {
+      return {
+        ok: true,
+        provider: demoState.aiConfig.provider,
+        baseUrl: demoState.aiConfig.baseUrl,
+        model: demoState.aiConfig.model,
+        hasApiKey: true,
+        elapsedMs: 12,
+        reply: 'ok',
+        code: 'ok',
+        message: 'AI provider connection test succeeded',
+        modelsProbe: 'unavailable',
+        availableModels: [],
+        currentModelDiscovered: false
+      }
+    }
+    const availableModels = /healthy-models/i.test(demoState.aiConfig.baseUrl)
+      ? ['gpt-4o-mini', 'deepseek-chat', 'openpet-chat-test']
+      : ['gpt-4o-mini']
+    return {
+      ok: true,
+      provider: demoState.aiConfig.provider,
+      baseUrl: demoState.aiConfig.baseUrl,
+      model: demoState.aiConfig.model,
+      hasApiKey: true,
+      elapsedMs: 12,
+      reply: 'ok',
+      code: 'ok',
+      message: 'AI provider connection test succeeded',
+      modelsProbe: 'ok',
+      availableModels,
+      currentModelDiscovered: availableModels.includes(demoState.aiConfig.model)
+    }
+  },
   getAiPersonaProfile: async () => createDemoPersonaProfile(demoState.petPacks, demoState.aiConfig, demoState.aiPersonaOverrides),
   generateAiPersonaDraft: async ({ instruction } = {}) => {
     const profile = createDemoPersonaProfile(demoState.petPacks, demoState.aiConfig, demoState.aiPersonaOverrides)

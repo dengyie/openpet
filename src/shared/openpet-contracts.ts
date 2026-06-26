@@ -1926,6 +1926,9 @@ export interface AiConnectionTestResult {
   reply?: string
   code?: string
   message?: string
+  modelsProbe?: 'ok' | 'unavailable' | 'failed'
+  availableModels?: string[]
+  currentModelDiscovered?: boolean
 }
 
 export interface ImageGenerationConfigViewState {

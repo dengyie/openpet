@@ -290,6 +290,79 @@ const classifyConnectionError = (error) => {
   return { code: 'network_error', message: 'AI provider request failed' }
 }
 
+const probeAvailableModels = async ({ config, fetchImpl, apiKey, requestTimeoutMs }) => {
+  if (config.provider !== 'openai-compatible') {
+    return {
+      modelsProbe: 'failed',
+      availableModels: [],
+      currentModelDiscovered: false
+    }
+  }
+  if (typeof fetchImpl !== 'function') {
+    return {
+      modelsProbe: 'failed',
+      availableModels: [],
+      currentModelDiscovered: false
+    }
+  }
+
+  let response
+  const timeout = createTimeoutController(requestTimeoutMs)
+  try {
+    response = await fetchImpl(`${config.baseUrl}/models`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      signal: timeout.signal
+    })
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      return {
+        modelsProbe: 'failed',
+        availableModels: [],
+        currentModelDiscovered: false
+      }
+    }
+    return {
+      modelsProbe: 'failed',
+      availableModels: [],
+      currentModelDiscovered: false
+    }
+  } finally {
+    timeout.clear()
+  }
+
+  if (!response.ok) {
+    if ([401, 403, 404, 405, 501].includes(Number(response.status) || 0)) {
+      return {
+        modelsProbe: 'unavailable',
+        availableModels: [],
+        currentModelDiscovered: false
+      }
+    }
+    return {
+      modelsProbe: 'failed',
+      availableModels: [],
+      currentModelDiscovered: false
+    }
+  }
+
+  const data = await response.json().catch(() => ({}))
+  const availableModels = Array.isArray(data?.data)
+    ? data.data
+      .map((entry) => (typeof entry?.id === 'string' ? entry.id.trim() : ''))
+      .filter(Boolean)
+    : []
+
+  return {
+    modelsProbe: 'ok',
+    availableModels,
+    currentModelDiscovered: availableModels.includes(String(config.model || '').trim())
+  }
+}
+
 const createAiService = ({
   settingsService,
   secretService,
@@ -534,7 +607,8 @@ const createAiService = ({
 
   const testConnection = async () => {
     const config = getRawConfig()
-    const hasApiKey = Boolean(secretService.getSecretValue(config.apiKeyRef))
+    const apiKey = secretService.getSecretValue(config.apiKeyRef)
+    const hasApiKey = Boolean(apiKey)
     const startedAt = Date.now()
     const baseResult = {
       provider: config.provider,
@@ -555,13 +629,20 @@ const createAiService = ({
           { role: 'user', content: 'Reply with ok.' }
         ]
       })
+      const modelProbe = await probeAvailableModels({
+        config,
+        fetchImpl,
+        apiKey,
+        requestTimeoutMs
+      })
       const response = {
         ok: true,
         ...baseResult,
         elapsedMs: Date.now() - startedAt,
         reply: String(result.reply || '').slice(0, 120),
         code: 'ok',
-        message: 'AI provider connection test succeeded'
+        message: 'AI provider connection test succeeded',
+        ...modelProbe
       }
       recordLog({
         scope: 'ai-settings',
@@ -571,7 +652,9 @@ const createAiService = ({
         details: {
           ...baseResult,
           elapsedMs: response.elapsedMs,
-          replyChars: response.reply.length
+          replyChars: response.reply.length,
+          modelsProbe: response.modelsProbe || 'failed',
+          availableModelsCount: Array.isArray(response.availableModels) ? response.availableModels.length : 0
         }
       })
       return response
