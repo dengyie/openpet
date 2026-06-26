@@ -131,7 +131,9 @@ Current state:
 
 P1 work:
 
-- Connect Creator Studio imports to submit generated trigger proposals into the host inbox instead of only showing them in the plugin dashboard.
+- Keep bridge route docs synchronized with actual route coverage and permission names.
+- Ensure Creator Studio dashboard cannot bypass command-scoped bridge tokens for privileged actions.
+- Document plugin-managed provider credentials as unsupported unless a future explicit trust model is designed.
 
 P2/P3:
 
@@ -185,10 +187,7 @@ Current state:
 
 P1 work:
 
-- Keep bridge route docs synchronized with actual route coverage and permission names.
 - Add targeted tests whenever a new route is added to prevent IPC/bridge drift.
-- Ensure Creator Studio dashboard cannot bypass command-scoped bridge tokens for privileged actions.
-- Document plugin-managed provider credentials as unsupported unless a future explicit trust model is designed.
 
 P2/P3:
 
