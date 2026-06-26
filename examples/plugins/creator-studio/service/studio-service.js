@@ -8,6 +8,7 @@ const { assertRunActionFrameQaPassed } = require('../lib/action-frame-qa')
 const { sanitizeCreativeBrief } = require('../lib/openpet-prompt-builder')
 const { answerTaskQuestion, confirmTaskRun, draftTaskRun } = require('../lib/task-workflow')
 const { FIXTURE_BACKEND, normalizeCreatorBackend, usesHostProviderBackend } = require('../lib/backend-mode')
+const { createPlaybackDiagnostics } = require('../lib/action-frame-playback')
 
 const SAFE_FRAME_FILE_PATTERN = /^\d{4}\.png$/
 
@@ -689,10 +690,26 @@ const getActionContactSheetPath = ({ dataDir, run, actionId }) => {
   return contactSheetPath
 }
 
+const readActionFrameQa = ({ dataDir, actionFrames }) => {
+  if (!actionFrames?.qa) return null
+  try {
+    const qaPath = assertPathInsideDataDir({
+      dataDir,
+      targetPath: actionFrames.qa,
+      label: 'Action frame QA'
+    })
+    if (!fs.existsSync(qaPath)) return null
+    return JSON.parse(fs.readFileSync(qaPath, 'utf-8'))
+  } catch (_) {
+    return null
+  }
+}
+
 const createActionReview = ({ dataDir, run }) => {
   const actionFrames = run.artifacts?.actionFrames
   const action = Array.isArray(run.generationTask?.actions) ? run.generationTask.actions[0] : null
   if (!actionFrames) return null
+  const qa = readActionFrameQa({ dataDir, actionFrames })
   const actionId = actionFrames.actionId
   const frameCount = actionFrames.frameCount || action?.frameCount || 0
   const previewFrames = Array.from({ length: Math.min(32, Math.max(0, Number(frameCount) || 0)) }, (_entry, index) => {
@@ -704,12 +721,18 @@ const createActionReview = ({ dataDir, run }) => {
       url: `/api/runs/${encodeURIComponent(run.runId)}/action-frames/${encodeURIComponent(actionId)}/${fileName}`
     }
   })
+  const playback = createPlaybackDiagnostics({
+    frameCount,
+    loop: Boolean(qa?.loop ?? action?.loop),
+    frameDurationsMs: qa?.playback?.frameDurationsMs
+  })
   return {
     actionId: createPublicText({ dataDir, value: actionId }),
     name: createPublicText({ dataDir, value: actionFrames.name || action?.name || actionFrames.actionId }),
     frameCount,
     frameWidth: actionFrames.frameWidth || 0,
     frameHeight: actionFrames.frameHeight || 0,
+    playback: createPublicLogValue({ dataDir, value: playback }),
     qa: toDataRelativePath({ dataDir, targetPath: actionFrames.qa }),
     contactSheet: toDataRelativePath({ dataDir, targetPath: actionFrames.contactSheet }),
     contactSheetUrl: actionFrames.contactSheet

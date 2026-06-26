@@ -2,6 +2,7 @@ const fs = require('fs')
 const path = require('path')
 const sharp = require('sharp')
 const { resolveGeneratedImagePath } = require('./real-atlas-builder')
+const { createPlaybackDiagnostics } = require('./action-frame-playback')
 
 const SAFE_ACTION_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/
 const FRAME_WIDTH = 192
@@ -265,6 +266,10 @@ const buildActionFramesFromGeneratedImage = async ({
     frames
   })
   const qaPath = path.join(safeQaDir, 'action-frame-validation.json')
+  const playback = createPlaybackDiagnostics({
+    frameCount,
+    loop: Boolean(action?.loop)
+  })
   writeJson(qaPath, {
     ok: true,
     actionId,
@@ -274,6 +279,7 @@ const buildActionFramesFromGeneratedImage = async ({
     frameWidth: FRAME_WIDTH,
     frameHeight: FRAME_HEIGHT,
     loop: Boolean(action?.loop),
+    playback,
     triggerProposal: action?.triggerProposal || { type: 'unbound' },
     contactSheetRelativePath: toDataRelativePath({ dataDir, targetPath: contactSheetPath }),
     frames,
@@ -359,6 +365,11 @@ const repairActionFrameFromGeneratedImage = async ({
     qaDir: safeQaDir,
     frames
   })
+  const playback = createPlaybackDiagnostics({
+    frameCount,
+    loop: Boolean(currentQa.loop ?? action?.loop),
+    frameDurationsMs: currentQa.playback?.frameDurationsMs
+  })
   writeJson(qaPath, {
     ...currentQa,
     ok: qaComplete,
@@ -367,6 +378,7 @@ const repairActionFrameFromGeneratedImage = async ({
     frameCount,
     frameWidth: FRAME_WIDTH,
     frameHeight: FRAME_HEIGHT,
+    playback,
     contactSheetRelativePath: toDataRelativePath({ dataDir, targetPath: contactSheetPath }),
     frames,
     warnings: nextWarnings,

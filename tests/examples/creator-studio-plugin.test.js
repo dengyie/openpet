@@ -946,6 +946,18 @@ test('creator studio run-step command uses host bridge for provider generation w
     assert.equal(frameQa.ok, true)
     assert.equal(frameQa.sourceRelativePath, `runs/${created.json.run.runId}/frames/base/0001.png`)
     assert.equal(frameQa.actionId, actionFrames.actionId)
+    assert.equal(frameQa.playback.loop, true)
+    assert.equal(frameQa.playback.frameDurationsMs.length, 12)
+    assert.equal(frameQa.playback.frameDurationsMs.every((duration) => duration === 120), true)
+    assert.equal(frameQa.playback.totalDurationMs, 1440)
+    assert.equal(frameQa.playback.timeline.length, 12)
+    assert.deepEqual(frameQa.playback.timeline[0], {
+      fileName: '0001.png',
+      frameIndex: 0,
+      durationMs: 120,
+      startMs: 0,
+      endMs: 120
+    })
     assert.equal(JSON.stringify(frameQa).includes(dataDir), false)
     assert.match(requests[1].payload.prompt, /OpenPet desktop pet sprite asset/)
     assert.match(requests[1].payload.prompt, /Canvas And Boundary Rules/)
@@ -2069,6 +2081,10 @@ test('creator studio dashboard asset exists and service script is declared', () 
   assert.match(html, /Wizard Steps/)
   assert.match(html, /id="wizard-steps-panel"/)
   assert.match(html, /id="run-logs"/)
+  assert.match(html, /id="playback-panel"/)
+  assert.match(html, /renderPlaybackPanel/)
+  assert.match(html, /playback-preview/)
+  assert.match(html, /timeline/)
   assert.equal(html.includes('safe fixture output for import'), false)
   assert.equal(html.includes('apiKey'), false)
   assert.equal(/\bsk-[A-Za-z0-9_-]+/.test(html), false)
@@ -2188,6 +2204,27 @@ test('creator studio service exposes run detail and logs for dashboard clients',
     assert.equal(detail.actionReview.previewFrames.length, 8)
     assert.equal(detail.actionReview.previewFrames[0].fileName, '0001.png')
     assert.equal(detail.actionReview.previewFrames[0].url, `/api/runs/${encodeURIComponent(run.runId)}/action-frames/shy-spin/0001.png`)
+    assert.equal(detail.actionReview.playback.loop, false)
+    assert.equal(detail.actionReview.playback.totalDurationMs, 1060)
+    assert.equal(detail.actionReview.playback.holdLastFrameMs, 220)
+    assert.equal(detail.actionReview.playback.frameDurationsMs.length, 8)
+    assert.equal(detail.actionReview.playback.frameDurationsMs[0], 120)
+    assert.equal(detail.actionReview.playback.frameDurationsMs[7], 220)
+    assert.equal(detail.actionReview.playback.timeline.length, 8)
+    assert.deepEqual(detail.actionReview.playback.timeline[0], {
+      fileName: '0001.png',
+      frameIndex: 0,
+      durationMs: 120,
+      startMs: 0,
+      endMs: 120
+    })
+    assert.deepEqual(detail.actionReview.playback.timeline[7], {
+      fileName: '0008.png',
+      frameIndex: 7,
+      durationMs: 220,
+      startMs: 840,
+      endMs: 1060
+    })
     assert.equal(detail.actionReview.qa, `runs/${run.runId}/qa/action-frame-validation.json`)
     assert.equal(detail.run.artifacts.actionFrames.framesDir, undefined)
     assert.equal(detail.run.artifacts.actionFrames.qa, `runs/${run.runId}/qa/action-frame-validation.json`)

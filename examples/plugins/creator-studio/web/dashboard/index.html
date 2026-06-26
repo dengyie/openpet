@@ -343,6 +343,65 @@
         font-size: 11px;
       }
 
+      .playback-preview {
+        display: grid;
+        gap: 12px;
+      }
+
+      .playback-stage {
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background:
+          linear-gradient(45deg, rgba(39, 63, 67, 0.08) 25%, transparent 25%),
+          linear-gradient(-45deg, rgba(39, 63, 67, 0.08) 25%, transparent 25%),
+          linear-gradient(45deg, transparent 75%, rgba(39, 63, 67, 0.08) 75%),
+          linear-gradient(-45deg, transparent 75%, rgba(39, 63, 67, 0.08) 75%),
+          #fffef8;
+        background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+        background-size: 20px 20px;
+        overflow: hidden;
+        padding: 12px;
+      }
+
+      .playback-stage img {
+        display: block;
+        width: min(240px, 100%);
+        margin: 0 auto;
+        aspect-ratio: 192 / 208;
+        object-fit: contain;
+      }
+
+      .playback-meta {
+        display: grid;
+        gap: 6px;
+      }
+
+      .timeline {
+        display: grid;
+        gap: 8px;
+      }
+
+      .timeline-row {
+        display: grid;
+        grid-template-columns: 64px minmax(0, 1fr) 70px;
+        gap: 10px;
+        align-items: center;
+      }
+
+      .timeline-bar {
+        height: 10px;
+        border-radius: 999px;
+        background: rgba(39, 63, 67, 0.12);
+        overflow: hidden;
+      }
+
+      .timeline-fill {
+        display: block;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, var(--accent) 0%, #efb06e 100%);
+      }
+
       @media (max-width: 820px) {
         main {
           padding: 20px;
@@ -445,6 +504,10 @@
           <h2>QA</h2>
           <section id="qa-panel">No generated QA yet.</section>
         </section>
+        <section>
+          <h2>Playback Preview</h2>
+          <section id="playback-panel">Generate action frames to inspect playback timing.</section>
+        </section>
         <section id="action-review">
           <h2>Single Action Review</h2>
           <section id="action-review-panel">Generated action frames and action-frame-validation.json will appear here before import.</section>
@@ -457,8 +520,16 @@
     </main>
 
     <script>
-      const state = { run: null, actionReview: null, runs: [] }
+      const state = { run: null, actionReview: null, runs: [], playbackTimer: null, playbackSession: 0 }
       const $ = (id) => document.getElementById(id)
+
+      const stopPlaybackPreview = () => {
+        if (state.playbackTimer) {
+          clearTimeout(state.playbackTimer)
+          state.playbackTimer = null
+        }
+        state.playbackSession += 1
+      }
 
       const setStatus = (message, kind = '') => {
         $('status-line').textContent = message
@@ -553,6 +624,77 @@
           `<button type="button" class="secondary" data-repair-frame="${escapeHtml(frame.fileName)}">Repair</button>` +
           `</figure>`
         )).join('')}</div>`
+      }
+
+      const renderPlaybackPanel = (review) => {
+        const playback = review?.playback || {}
+        const frames = Array.isArray(review?.previewFrames) ? review.previewFrames : []
+        const timeline = Array.isArray(playback.timeline) ? playback.timeline : []
+        if (!frames.length || !timeline.length) {
+          return 'Generate action frames to inspect playback timing.'
+        }
+        const maxDurationMs = Math.max(...timeline.map((entry) => Number(entry.durationMs) || 0), 1)
+        return [
+          '<div class="playback-preview">',
+          '<div class="playback-stage">',
+          `<img id="playback-preview-image" alt="Playback preview frame" src="${escapeHtml(frameSrc(frames[0]))}">`,
+          '</div>',
+          '<div class="playback-meta" id="playback-meta">',
+          `<strong>${escapeHtml(playback.loop ? 'Looping playback' : 'One-shot playback')}</strong>`,
+          `<span>Total duration: ${escapeHtml(playback.totalDurationMs || 0)} ms</span>`,
+          `<span>Last-frame hold: ${escapeHtml(playback.holdLastFrameMs || 0)} ms</span>`,
+          '</div>',
+          '<button type="button" id="replay-playback-button" class="secondary">Replay preview</button>',
+          '<div class="timeline">',
+          ...timeline.map((entry) => {
+            const widthPercent = Math.max(8, Math.round(((Number(entry.durationMs) || 0) / maxDurationMs) * 100))
+            return (
+              `<div class="timeline-row">` +
+              `<span>${escapeHtml(entry.fileName)}</span>` +
+              `<div class="timeline-bar"><span class="timeline-fill" style="width:${widthPercent}%"></span></div>` +
+              `<span>${escapeHtml(entry.durationMs)} ms</span>` +
+              `</div>`
+            )
+          }),
+          '</div>',
+          '</div>'
+        ].join('')
+      }
+
+      const startPlaybackPreview = (review) => {
+        stopPlaybackPreview()
+        const playback = review?.playback || {}
+        const frames = Array.isArray(review?.previewFrames) ? review.previewFrames : []
+        const durations = Array.isArray(playback.frameDurationsMs) ? playback.frameDurationsMs : []
+        const image = $('playback-preview-image')
+        const meta = $('playback-meta')
+        if (!image || !frames.length || !durations.length) return
+        const session = state.playbackSession + 1
+        state.playbackSession = session
+
+        const showFrame = (frameIndex) => {
+          if (state.playbackSession !== session) return
+          const safeIndex = frameIndex % frames.length
+          const frame = frames[safeIndex]
+          image.src = frameSrc(frame)
+          image.alt = `Playback preview ${frame.fileName}`
+          if (meta) {
+            meta.innerHTML = [
+              `<strong>${escapeHtml(playback.loop ? 'Looping playback' : 'One-shot playback')}</strong>`,
+              `<span>Frame ${escapeHtml(safeIndex + 1)} / ${escapeHtml(frames.length)}</span>`,
+              `<span>Current duration: ${escapeHtml(durations[safeIndex] || 0)} ms</span>`,
+              `<span>Total duration: ${escapeHtml(playback.totalDurationMs || 0)} ms</span>`
+            ].join('')
+          }
+          const nextIndex = safeIndex + 1
+          if (!playback.loop && nextIndex >= frames.length) {
+            state.playbackTimer = null
+            return
+          }
+          state.playbackTimer = setTimeout(() => showFrame(nextIndex), Math.max(1, Number(durations[safeIndex]) || 120))
+        }
+
+        showFrame(0)
       }
 
       const renderRecoveryPanel = (run) => {
@@ -762,6 +904,7 @@
           $('workflow-guidance-panel').textContent = 'Use fixture for workflow QA first. Before provider smoke, go to Control Center -> AI -> Test saved image Provider.'
           $('prompt-provenance-panel').textContent = 'Host prompt preview appears after provider generation.'
           $('qa-panel').textContent = 'No generated QA yet.'
+          $('playback-panel').textContent = 'Generate action frames to inspect playback timing.'
           $('action-review-panel').textContent = 'Generated action frames and action-frame-validation.json will appear here before import.'
           $('import-handoff-panel').textContent = 'Generate and approve an action to unlock host-owned import.'
           $('run-logs').textContent = 'No logs yet.'
@@ -769,6 +912,7 @@
           $('generate-button').disabled = true
           $('generate-button').textContent = 'Generate action'
           $('approve-button').disabled = true
+          stopPlaybackPreview()
           return
         }
         const action = run.generationTask.actions[0]
@@ -802,6 +946,7 @@
         const actionReview = state.actionReview
         if (actionFrames) {
           $('qa-panel').textContent = `Frame QA written: ${actionFrames.qa || 'action-frame-validation.json'}`
+          $('playback-panel').innerHTML = renderPlaybackPanel(actionReview)
           $('action-review-panel').innerHTML = [
             `<strong>${escapeHtml(actionFrames.name || actionFrames.actionId)}</strong>`,
             `<p>Frames: ${escapeHtml(actionFrames.frameCount)} at ${escapeHtml(actionFrames.frameWidth)}x${escapeHtml(actionFrames.frameHeight)}</p>`,
@@ -812,10 +957,13 @@
             renderContactSheet(actionReview),
             renderFramePreview(actionReview)
           ].join('')
+          startPlaybackPreview(actionReview)
           $('import-handoff-panel').innerHTML = renderImportHandoff(run, actionFrames)
         } else {
           $('qa-panel').textContent = run.artifacts?.actionTaskQa ? `QA written: ${run.artifacts.actionTaskQa}` : 'No generated QA yet.'
+          $('playback-panel').textContent = 'Generate action frames to inspect playback timing.'
           $('action-review-panel').textContent = 'Generated action frames and action-frame-validation.json will appear here before import.'
+          stopPlaybackPreview()
           $('import-handoff-panel').innerHTML = renderImportHandoff(run)
         }
       }
@@ -876,6 +1024,12 @@
         } catch (error) {
           setStatus(error.message, 'error')
         }
+      })
+
+      $('playback-panel').addEventListener('click', (event) => {
+        if (event.target?.id !== 'replay-playback-button') return
+        if (!state.actionReview) return
+        startPlaybackPreview(state.actionReview)
       })
 
       $('confirm-button').addEventListener('click', async () => {
