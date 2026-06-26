@@ -526,6 +526,20 @@ test.describe('Control Center smoke', () => {
     await expect(page.getByTestId('chat-model-discovery')).toContainText('已包含当前模型')
   })
 
+  test('shows chat model compatibility hints for default and custom models in the demo API', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: 'AI' }).click()
+
+    const chatProviderSection = await expandAiSection(page, '聊天 Provider')
+    await expect(page.getByTestId('chat-model-compatibility')).toContainText('gpt-4o-mini')
+    await expect(page.getByTestId('chat-model-compatibility')).toContainText('OpenAI 官方兼容模式')
+
+    await page.getByRole('textbox', { name: 'Model', exact: true }).fill('deepseek-chat')
+    await expect(page.getByTestId('chat-model-compatibility')).toContainText('deepseek-chat')
+    await expect(page.getByTestId('chat-model-compatibility')).toContainText('OpenAI-compatible 聊天模式')
+    await expect(chatProviderSection).toContainText('聊天 Provider')
+  })
+
   test('persists pet persona override and follows the active pet-pack in the demo API', async ({ page }) => {
     await page.goto('/')
     await page.getByRole('button', { name: 'AI' }).click()

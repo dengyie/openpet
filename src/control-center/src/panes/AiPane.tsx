@@ -74,6 +74,26 @@ const describeImageModelCompatibility = (model: string) => {
   }
 }
 
+const describeChatModelCompatibility = (model: string) => {
+  const normalizedModel = String(model || '').trim()
+  if (!normalizedModel) {
+    return {
+      title: '聊天模型兼容提示',
+      summary: '填写聊天 Model 后，这里会显示当前 OpenAI-compatible 聊天接口的兼容提示。'
+    }
+  }
+  if (normalizedModel === 'gpt-4o-mini') {
+    return {
+      title: `${normalizedModel} OpenAI 官方兼容模式`,
+      summary: '默认按 OpenAI chat/completions 兼容请求发送，适合作为基础联通性测试模型。'
+    }
+  }
+  return {
+    title: `${normalizedModel} OpenAI-compatible 聊天模式`,
+    summary: 'OpenPet 会按 OpenAI-compatible chat/completions 方式发送 system/user 消息、可选 tools 和 JSON body；请确认当前网关对该模型的字段兼容性。'
+  }
+}
+
 const renderImageModelDiscovery = (result: ImageGenerationHealthCheckResult | null, currentModel: string) => {
   const normalizedCurrentModel = String(currentModel || '').trim()
   if (!result) {
@@ -413,6 +433,7 @@ export function AiPane({
   ].filter(Boolean).join(' · ')
   const imageTargetSummary = `${activeImageGenerationConfig.provider} · ${activeImageGenerationConfig.baseUrl} · ${activeImageGenerationConfig.model} · ${activeImageGenerationConfig.hasApiKey ? 'API key saved' : 'API key missing'}`
   const imageModelCompatibility = describeImageModelCompatibility(imageGenerationConfig.model)
+  const chatModelCompatibility = describeChatModelCompatibility(config.model)
   const applyChatProviderPreset = (preset: typeof chatProviderPresets[number]) => onChange({
     provider: 'openai-compatible',
     baseUrl: preset.baseUrl,
@@ -579,6 +600,11 @@ export function AiPane({
         ) : null}
 
         {renderChatModelDiscovery(connectionTestResult, config.model)}
+
+        <div className="provider-feedback" data-testid="chat-model-compatibility">
+          <strong>{chatModelCompatibility.title}</strong>
+          <span>{chatModelCompatibility.summary}</span>
+        </div>
 
         <div className="section-actions provider-actions-bottom">
           <button type="button" className="ghost" onClick={onTest} disabled={saving}>
