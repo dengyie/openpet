@@ -160,6 +160,10 @@ export const defaultPetChatState = {
     ttlMs: 0,
     updatedAt: ''
   },
+  bubbleChat: {
+    visible: false,
+    hasWindow: false
+  },
   messages: []
 } satisfies PetChatStateViewState
 

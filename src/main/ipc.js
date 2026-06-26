@@ -260,6 +260,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
 
   const getPetChatState = () => {
     const windowState = petChatWindowService?.getState?.() || {}
+    const bubbleChatState = petBubbleChatWindowService?.getState?.() || { visible: false, hasWindow: false }
     const config = aiService?.getConfig?.() || {}
     let profile = {}
     let messages = []
@@ -295,6 +296,10 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
           : (enabled ? '请先在 Control Center 保存 AI API Key' : '请先在 Control Center 启用 AI Provider')
       },
       bubble: lastPetBubble,
+      bubbleChat: {
+        visible: Boolean(bubbleChatState.visible),
+        hasWindow: Boolean(bubbleChatState.hasWindow)
+      },
       messages: sanitizeChatMessages(messages)
     }
   }

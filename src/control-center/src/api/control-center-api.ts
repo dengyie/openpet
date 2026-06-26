@@ -290,6 +290,10 @@ const createDemoPetChatState = (): PetChatStateViewState => {
         : '请先在 Control Center 启用 AI Provider'
     },
     bubble: demoState.petChatBubble,
+    bubbleChat: {
+      visible: false,
+      hasWindow: false
+    },
     messages: demoState.petChatMessages
   })
 }

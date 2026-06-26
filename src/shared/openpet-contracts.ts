@@ -1843,6 +1843,7 @@ export interface PetChatStateViewState {
     reason: string
   }
   bubble: PetChatBubbleViewState
+  bubbleChat: PetBubbleChatWindowStateViewState
   messages: ChatMessage[]
 }
 

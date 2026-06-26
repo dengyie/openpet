@@ -900,6 +900,10 @@ export function AiPane({
               <span>{petChatState.bubble.text}</span>
             </div>
           ) : null}
+          <div className="readonly-row" data-testid="ai-bubble-chat-state">
+            <strong>默认气泡聊天</strong>
+            <span>{petChatState.bubbleChat.visible ? '当前已显示' : '当前未显示'}</span>
+          </div>
           <div className="chat-transcript" aria-live="polite">
             {chatMessages.length === 0 ? (
               <div className="empty-chat">暂无对话</div>

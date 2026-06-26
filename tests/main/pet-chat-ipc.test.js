@@ -113,6 +113,9 @@ test('pet chat state exposes provider readiness and current pet-pack main conver
     },
     petChatWindowService: {
       getState: () => ({ alwaysOnTop: true, visible: true, hasWindow: true })
+    },
+    petBubbleChatWindowService: {
+      getState: () => ({ visible: true, hasWindow: true })
     }
   })
 
@@ -124,6 +127,7 @@ test('pet chat state exposes provider readiness and current pet-pack main conver
   assert.equal(state.ai.baseUrl, 'http://127.0.0.1:8317/v1')
   assert.deepEqual(state.petPack, { id: 'legacy-cat', displayName: 'Legacy Cat' })
   assert.deepEqual(state.bubble, { text: '', source: '', ttlMs: 0, updatedAt: '' })
+  assert.deepEqual(state.bubbleChat, { visible: true, hasWindow: true })
   assert.deepEqual(state.messages, [{ id: 'm1', role: 'assistant', content: 'hello', createdAt: '2026-06-24T00:00:00.000Z' }])
   assert.deepEqual(conversationRequests, [''])
 })
