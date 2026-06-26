@@ -35,6 +35,8 @@ type ChatProviderPreset = {
   model?: string
 }
 
+type ProviderFamily = 'openai' | 'openrouter' | 'together' | 'lm-studio' | 'vllm' | 'local-gateway' | 'generic-openai-compatible'
+
 const imageProviderPresets: readonly ImageProviderPreset[] = [
   {
     id: 'openai',
@@ -129,8 +131,20 @@ const chatProviderPresets: readonly ChatProviderPreset[] = [
   }
 ] as const
 
-const describeImageModelCompatibility = (model: string) => {
+const detectProviderFamily = (baseUrl: string): ProviderFamily => {
+  const normalized = String(baseUrl || '').trim().toLowerCase()
+  if (normalized.includes('api.openai.com')) return 'openai'
+  if (normalized.includes('openrouter.ai')) return 'openrouter'
+  if (normalized.includes('api.together.xyz')) return 'together'
+  if (normalized.includes('127.0.0.1:1234') || normalized.includes('localhost:1234')) return 'lm-studio'
+  if (normalized.includes('127.0.0.1:8000') || normalized.includes('localhost:8000')) return 'vllm'
+  if (normalized.includes('127.0.0.1:8317') || normalized.includes('localhost:8317')) return 'local-gateway'
+  return 'generic-openai-compatible'
+}
+
+const describeImageModelCompatibility = (baseUrl: string, model: string) => {
   const normalizedModel = String(model || '').trim()
+  const providerFamily = detectProviderFamily(baseUrl)
   if (!normalizedModel) {
     return {
       title: '图片模型兼容提示',
@@ -138,9 +152,32 @@ const describeImageModelCompatibility = (model: string) => {
     }
   }
   if (normalizedModel === 'gpt-image-2') {
+    const familyPrefix = providerFamily === 'openai'
+      ? 'OpenAI 官方'
+      : providerFamily === 'local-gateway'
+        ? '当前本地/代理网关'
+        : '当前 Provider'
     return {
       title: `${normalizedModel} 透明背景模式`,
-      summary: 'Creator Studio 请求透明输出时，不会强制发送 background 参数；由 provider 原生行为决定透明背景能力。'
+      summary: `${familyPrefix} 使用 ${normalizedModel} 时，Creator Studio 不会强制发送 background 参数；透明背景能力由当前 provider 的原生行为决定。`
+    }
+  }
+  if (providerFamily === 'openrouter') {
+    return {
+      title: `${normalizedModel} OpenRouter 图片兼容模式`,
+      summary: 'OpenPet 会按 OpenAI-compatible 图片请求发送 background 和 b64_json；请确认当前 OpenRouter 路由已映射到支持透明背景和该参数形状的图片模型。'
+    }
+  }
+  if (providerFamily === 'together') {
+    return {
+      title: `${normalizedModel} Together 图片兼容模式`,
+      summary: 'OpenPet 会按 OpenAI-compatible 图片请求发送 background 和 b64_json；请确认 Together 侧当前模型支持透明背景参数和返回格式。'
+    }
+  }
+  if (providerFamily === 'local-gateway' || providerFamily === 'lm-studio' || providerFamily === 'vllm') {
+    return {
+      title: `${normalizedModel} 本地网关图片兼容模式`,
+      summary: 'OpenPet 会按 OpenAI-compatible 图片请求发送 background=transparent 或 white，并附带 b64_json 输出；请确认当前本地网关完整支持 images/generations 与透明背景参数。'
     }
   }
   return {
@@ -149,8 +186,9 @@ const describeImageModelCompatibility = (model: string) => {
   }
 }
 
-const describeChatModelCompatibility = (model: string) => {
+const describeChatModelCompatibility = (baseUrl: string, model: string) => {
   const normalizedModel = String(model || '').trim()
+  const providerFamily = detectProviderFamily(baseUrl)
   if (!normalizedModel) {
     return {
       title: '聊天模型兼容提示',
@@ -158,9 +196,40 @@ const describeChatModelCompatibility = (model: string) => {
     }
   }
   if (normalizedModel === 'gpt-4o-mini') {
+    const familyPrefix = providerFamily === 'openai' ? 'OpenAI 官方' : '当前 Provider'
     return {
       title: `${normalizedModel} OpenAI 官方兼容模式`,
-      summary: '默认按 OpenAI chat/completions 兼容请求发送，适合作为基础联通性测试模型。'
+      summary: `${familyPrefix} 下默认按 OpenAI chat/completions 兼容请求发送，适合作为基础联通性测试模型。`
+    }
+  }
+  if (providerFamily === 'openrouter') {
+    return {
+      title: `${normalizedModel} OpenRouter 聊天兼容模式`,
+      summary: 'OpenPet 会按 OpenAI-compatible chat/completions 请求发送消息；请确认当前 OpenRouter 路由已映射到该聊天模型，并检查额外 provider 选项是否仍需在网关侧配置。'
+    }
+  }
+  if (providerFamily === 'together') {
+    return {
+      title: `${normalizedModel} Together 聊天兼容模式`,
+      summary: 'OpenPet 会按 OpenAI-compatible chat/completions 请求发送消息；请确认 Together 当前模型支持标准消息字段和返回结构。'
+    }
+  }
+  if (providerFamily === 'lm-studio') {
+    return {
+      title: `${normalizedModel} LM Studio 聊天兼容模式`,
+      summary: 'OpenPet 会按本地 OpenAI-compatible chat/completions 请求发送消息；请先在 LM Studio 打开本地服务并确认当前模型已加载。'
+    }
+  }
+  if (providerFamily === 'vllm') {
+    return {
+      title: `${normalizedModel} vLLM 聊天兼容模式`,
+      summary: 'OpenPet 会按 OpenAI-compatible chat/completions 请求发送消息；请确认当前 vLLM 服务已暴露对应模型并兼容标准消息字段。'
+    }
+  }
+  if (providerFamily === 'local-gateway') {
+    return {
+      title: `${normalizedModel} 本地网关聊天兼容模式`,
+      summary: 'OpenPet 会按 OpenAI-compatible chat/completions 请求发送消息；请确认当前本地或代理网关已把该模型名正确路由到后端提供者。'
     }
   }
   return {
@@ -511,8 +580,8 @@ export function AiPane({
     hasUnsavedApiKeyDraft ? '密钥草稿未保存' : ''
   ].filter(Boolean).join(' · ')
   const imageTargetSummary = `${activeImageGenerationConfig.provider} · ${activeImageGenerationConfig.baseUrl} · ${activeImageGenerationConfig.model} · ${activeImageGenerationConfig.hasApiKey ? 'API key saved' : 'API key missing'}`
-  const imageModelCompatibility = describeImageModelCompatibility(imageGenerationConfig.model)
-  const chatModelCompatibility = describeChatModelCompatibility(config.model)
+  const imageModelCompatibility = describeImageModelCompatibility(imageGenerationConfig.baseUrl, imageGenerationConfig.model)
+  const chatModelCompatibility = describeChatModelCompatibility(config.baseUrl, config.model)
   const applyChatProviderPreset = (preset: typeof chatProviderPresets[number]) => onChange({
     provider: 'openai-compatible',
     baseUrl: preset.baseUrl,

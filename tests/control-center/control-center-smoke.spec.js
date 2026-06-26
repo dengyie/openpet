@@ -597,6 +597,15 @@ test.describe('Control Center smoke', () => {
     await page.getByRole('button', { name: 'AI' }).click()
 
     const imageProviderSection = await expandAiSection(page, '图片 Provider')
+    await imageProviderSection.getByRole('button', { name: /Together/ }).click()
+    await page.getByLabel('图片 Model').fill('black-forest-labs/flux-schnell')
+    await expect(page.getByTestId('image-model-compatibility')).toContainText('Together 图片兼容模式')
+    await expect(page.getByTestId('image-model-compatibility')).toContainText('Together')
+
+    await imageProviderSection.getByRole('button', { name: /OpenRouter/ }).click()
+    await expect(page.getByTestId('image-model-compatibility')).toContainText('OpenRouter 图片兼容模式')
+    await expect(page.getByTestId('image-model-compatibility')).toContainText('OpenRouter 路由')
+
     await imageProviderSection.getByRole('button', { name: /OpenAI 官方/ }).click()
     await page.getByLabel('图片 Base URL').fill('https://healthy-models.example.test/v1')
     await page.getByLabel('图片 Model').fill('openpet-image-test')
@@ -645,9 +654,19 @@ test.describe('Control Center smoke', () => {
     await expect(page.getByTestId('chat-model-compatibility')).toContainText('gpt-4o-mini')
     await expect(page.getByTestId('chat-model-compatibility')).toContainText('OpenAI 官方兼容模式')
 
+    await chatProviderSection.getByRole('button', { name: 'LM Studio' }).click()
+    await page.getByRole('textbox', { name: 'Model', exact: true }).fill('qwen2.5-7b-instruct')
+    await expect(page.getByTestId('chat-model-compatibility')).toContainText('LM Studio 聊天兼容模式')
+    await expect(page.getByTestId('chat-model-compatibility')).toContainText('打开本地服务')
+
+    await chatProviderSection.getByRole('button', { name: 'OpenRouter' }).click()
+    await expect(page.getByTestId('chat-model-compatibility')).toContainText('OpenRouter 聊天兼容模式')
+    await expect(page.getByTestId('chat-model-compatibility')).toContainText('OpenRouter 路由')
+
     await page.getByRole('textbox', { name: 'Model', exact: true }).fill('deepseek-chat')
+    await chatProviderSection.getByRole('button', { name: 'Together' }).click()
     await expect(page.getByTestId('chat-model-compatibility')).toContainText('deepseek-chat')
-    await expect(page.getByTestId('chat-model-compatibility')).toContainText('OpenAI-compatible 聊天模式')
+    await expect(page.getByTestId('chat-model-compatibility')).toContainText('Together 聊天兼容模式')
     await expect(chatProviderSection).toContainText('聊天 Provider')
   })
 
