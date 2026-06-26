@@ -19,6 +19,7 @@ const { createPluginServiceLifecycleController } = require('./plugin-service-lif
 const { createPluginServiceLaunchController } = require('./plugin-service-launch-controller')
 const { createPluginCommandEntryProcessController } = require('./plugin-command-entry-process-controller')
 const { createPluginSetupProcessController } = require('./plugin-setup-process-controller')
+const { createPluginCommandRunController } = require('./plugin-command-run-controller')
 
 const SDK_REGISTERED_COMMANDS = Symbol('openpet.registeredCommands')
 const STORAGE_KEY_PATTERN = /^[a-zA-Z0-9_.:-]{1,128}$/
@@ -1147,54 +1148,43 @@ const createPluginService = ({ settingsService, petService, actionService, actio
     })
   }
 
+  const commandRunController = createPluginCommandRunController({
+    appendLog,
+    createSdk,
+    getConfig: (pluginId) => getPluginConfig(pluginId, getPlugins().find((candidate) => candidate.manifest.id === pluginId)?.configSchema),
+    runLocalCommand: (args) => runLocalPluginCommand(args),
+    runCommandEntryProcess,
+    getCommandEntry,
+    getRegisteredCommands: (sdk) => sdk[SDK_REGISTERED_COMMANDS]?.() || {}
+  })
+
   const runCommand = async (pluginId, commandId, payload = {}) => {
     try {
       const plugin = getPlugins().find((candidate) => candidate.manifest.id === pluginId)
       if (!plugin) throw new Error(`Plugin not found: ${pluginId}`)
       assertPluginAllowed(plugin.manifest)
       if (!getEnabledMap()[pluginId]) throw new Error('Plugin is disabled')
-      appendLog({ pluginId, commandId, level: 'info', message: 'Command started' })
-      let result
-      const sdk = createSdk(plugin)
-      if (typeof plugin.activate === 'function') {
-        const returnedCommands = plugin.activate(sdk) || {}
-        const commands = {
-          ...returnedCommands,
-          ...(sdk[SDK_REGISTERED_COMMANDS]?.() || {})
-        }
-        const handler = commands[commandId]
-        if (typeof handler !== 'function') throw new Error(`Plugin command not found: ${commandId}`)
-        result = await handler(payload)
-      } else if (plugin.mainPath) {
-        result = await runLocalPluginCommand({
-          plugin,
-          sdk,
-          commandId,
-          payload,
-          config: getPluginConfig(plugin.manifest.id, plugin.configSchema)
-        })
-      } else if (plugin.manifest.entries?.commands?.length) {
-        const commandEntry = getCommandEntry(plugin, commandId)
-        result = await runCommandEntryProcess({
-          plugin,
-          commandEntry,
-          commandId,
-          payload,
-          config: getPluginConfig(plugin.manifest.id, plugin.configSchema)
-        })
-      } else {
-        throw new Error('Plugin is not runnable')
-      }
-      appendLog({ pluginId, commandId, level: 'info', message: 'Command completed' })
-      return result
-    } catch (error) {
-      if (error?.openpetLogged) throw error
-      appendLog({
+      return await commandRunController.run({
+        plugin,
         pluginId,
         commandId,
-        level: 'error',
-        message: error.message || 'Command failed'
+        payload
       })
+    } catch (error) {
+      if (error?.openpetLogged) throw error
+      const hasErrorLog = getLogs({
+        level: 'error',
+        pluginId,
+        commandId
+      }).some((entry) => entry.message === (error.message || 'Command failed'))
+      if (!hasErrorLog) {
+        appendLog({
+          pluginId,
+          commandId,
+          level: 'error',
+          message: error.message || 'Command failed'
+        })
+      }
       throw error
     }
   }
