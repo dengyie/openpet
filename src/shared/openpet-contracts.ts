@@ -472,6 +472,11 @@ export interface ActionsMutationResult {
   triggerProposal?: ActionTriggerProposalAcceptanceResult
 }
 
+export interface ActionTriggerRuleMutationResult {
+  animations: ActionsConfigViewState
+  rule: ActionTriggerRule
+}
+
 export interface BlocklistState {
   pluginIds: string[]
   packIds: string[]
@@ -2440,6 +2445,8 @@ export interface ControlCenterApi {
   submitActionTriggerProposal: (payload: ActionTriggerProposalAcceptanceRequest) => Promise<ActionsMutationResult>
   acceptActionTriggerProposal: (proposalId: string) => Promise<ActionsMutationResult>
   rejectActionTriggerProposal: (proposalId: string, reason?: string) => Promise<ActionsMutationResult>
+  setActionTriggerRuleStatus: (ruleId: string, status: ActionTriggerRuleStatus) => Promise<ActionTriggerRuleMutationResult>
+  deleteActionTriggerRule: (ruleId: string) => Promise<ActionTriggerRuleMutationResult>
   deleteAction: (actionId: string) => Promise<ActionsMutationResult>
   listPetPacks: () => Promise<PetPacksViewState>
   inspectPetPackDirectory: () => Promise<PetPackInspectionResult>

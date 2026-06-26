@@ -1079,6 +1079,50 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     return createActionsMutationResult(result.animations, { proposal: result.proposal })
   })
 
+  ipcMainService.handle(IPC.ACTIONS_UPDATE_TRIGGER_RULE, async (_event, payload) => {
+    if (!actionService?.setTriggerRuleStatus) throw new Error('Action trigger rule management is not available')
+    const result = actionService.setTriggerRuleStatus(payload?.ruleId, payload?.status)
+    recordAppLog({
+      scope: 'actions',
+      level: 'info',
+      actor: 'user',
+      event: 'actions.trigger-rule.updated',
+      message: 'Action trigger rule status updated',
+      details: {
+        ruleId: result.rule.id,
+        actionId: result.rule.actionId,
+        type: result.rule.type,
+        status: result.rule.status
+      }
+    })
+    return {
+      animations: result.animations,
+      rule: result.rule
+    }
+  })
+
+  ipcMainService.handle(IPC.ACTIONS_DELETE_TRIGGER_RULE, async (_event, payload) => {
+    if (!actionService?.deleteTriggerRule) throw new Error('Action trigger rule management is not available')
+    const result = actionService.deleteTriggerRule(payload?.ruleId)
+    recordAppLog({
+      scope: 'actions',
+      level: 'info',
+      actor: 'user',
+      event: 'actions.trigger-rule.deleted',
+      message: 'Action trigger rule deleted',
+      details: {
+        ruleId: result.rule.id,
+        actionId: result.rule.actionId,
+        type: result.rule.type,
+        status: result.rule.status
+      }
+    })
+    return {
+      animations: result.animations,
+      rule: result.rule
+    }
+  })
+
   ipcMainService.handle(IPC.ACTIONS_DELETE, async (_event, payload) => {
     await actionImportService.deleteAction(payload.actionId)
     reloadAndSendAnimations(getPetWindow, petService)

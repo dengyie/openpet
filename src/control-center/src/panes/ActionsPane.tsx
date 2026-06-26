@@ -5,6 +5,7 @@ import type {
   ActionTriggerProposalAcceptanceResult,
   ActionTriggerProposalPreviewResult,
   ActionTriggerRule,
+  ActionTriggerRuleStatus,
   ActionTriggerProposalType,
   ActionsConfigViewState,
   CompletedActionFrameInspectionResult,
@@ -45,6 +46,8 @@ export interface ActionsPaneProps {
   onApplyTriggerProposal: () => void | Promise<void>
   onAcceptTriggerProposal: (proposalId: string) => void | Promise<void>
   onRejectTriggerProposal: (proposalId: string) => void | Promise<void>
+  onSetTriggerRuleStatus: (ruleId: string, status: ActionTriggerRuleStatus) => void | Promise<void>
+  onDeleteTriggerRule: (ruleId: string) => void | Promise<void>
   triggerProposalType: ActionTriggerProposalType
   setTriggerProposalType: (value: ActionTriggerProposalType) => void
   triggerProposalNotes: string
@@ -114,10 +117,16 @@ const triggerProposalStatusLabel: Record<ActionTriggerProposalInboxItem['status'
 
 function TriggerRulesPanel({
   rules,
-  actions
+  actions,
+  working,
+  onSetTriggerRuleStatus,
+  onDeleteTriggerRule
 }: {
   rules: ActionTriggerRule[]
   actions: ActionEntry[]
+  working: boolean
+  onSetTriggerRuleStatus: (ruleId: string, status: ActionTriggerRuleStatus) => void | Promise<void>
+  onDeleteTriggerRule: (ruleId: string) => void | Promise<void>
 }) {
   const activeRules = [...rules].sort((left, right) => String(right.updatedAt || right.createdAt).localeCompare(String(left.updatedAt || left.createdAt)))
   if (!activeRules.length) {
@@ -161,6 +170,24 @@ function TriggerRulesPanel({
                 <span>Rule：{rule.id}</span>
                 {rule.sourcePluginId ? <span>来源：{rule.sourcePluginId}</span> : null}
                 {rule.sourceRunId ? <span>Run：{rule.sourceRunId}</span> : null}
+              </div>
+              <div className="inline-action">
+                <button
+                  type="button"
+                  className="ghost"
+                  disabled={working}
+                  onClick={() => onSetTriggerRuleStatus(rule.id, rule.status === 'active' ? 'disabled' : 'active')}
+                >
+                  {rule.status === 'active' ? '停用规则' : '启用规则'}
+                </button>
+                <button
+                  type="button"
+                  className="ghost"
+                  disabled={working}
+                  onClick={() => onDeleteTriggerRule(rule.id)}
+                >
+                  删除规则
+                </button>
               </div>
             </div>
           )
@@ -462,6 +489,8 @@ export function ActionsPane({
   onApplyTriggerProposal,
   onAcceptTriggerProposal,
   onRejectTriggerProposal,
+  onSetTriggerRuleStatus,
+  onDeleteTriggerRule,
   triggerProposalType,
   setTriggerProposalType,
   triggerProposalNotes,
@@ -637,6 +666,9 @@ export function ActionsPane({
         <TriggerRulesPanel
           rules={actionsConfig.triggerRules || []}
           actions={actionsConfig.actions}
+          working={working}
+          onSetTriggerRuleStatus={onSetTriggerRuleStatus}
+          onDeleteTriggerRule={onDeleteTriggerRule}
         />
       </div>
 

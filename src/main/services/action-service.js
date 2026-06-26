@@ -194,6 +194,12 @@ const normalizeTriggerRuleItem = (item = {}) => {
   }
 }
 
+const normalizeTriggerRuleStatus = (value) => {
+  if (value === 'disabled') return 'disabled'
+  if (value === 'active') return 'active'
+  throw new Error(`Unsupported trigger rule status: ${value || 'unknown'}`)
+}
+
 const normalizeTriggerProposalInboxItem = (item = {}) => {
   const actionId = typeof item.actionId === 'string' ? item.actionId : ''
   const type = typeof item.type === 'string' && TRIGGER_PROPOSAL_TYPES.has(item.type) ? item.type : 'unbound'
@@ -690,6 +696,43 @@ const createActionService = ({ petPackService, loadPetPack, loadLegacyAnimations
     return { proposal: nextProposal, animations }
   }
 
+  const findTriggerRuleItem = (ruleId) => {
+    const id = normalizeTriggerRuleId(ruleId)
+    const current = getMutableConfig()
+    const index = current.triggerRules.findIndex((item) => item.id === id)
+    if (index < 0) throw new Error(`Trigger rule does not exist: ${id}`)
+    return { current, index, rule: current.triggerRules[index] }
+  }
+
+  const setTriggerRuleStatus = (ruleId, status) => {
+    const nextStatus = normalizeTriggerRuleStatus(status)
+    const { current, index, rule } = findTriggerRuleItem(ruleId)
+    const updatedAt = now()
+    const nextRule = normalizeTriggerRuleItem({
+      ...rule,
+      status: nextStatus,
+      updatedAt
+    })
+    const triggerRules = current.triggerRules.map((item, itemIndex) => (
+      itemIndex === index ? nextRule : item
+    ))
+    const animations = persistMutableConfig({
+      ...current,
+      triggerRules
+    })
+    return { rule: nextRule, animations }
+  }
+
+  const deleteTriggerRule = (ruleId) => {
+    const { current, index, rule } = findTriggerRuleItem(ruleId)
+    const triggerRules = current.triggerRules.filter((_item, itemIndex) => itemIndex !== index)
+    const animations = persistMutableConfig({
+      ...current,
+      triggerRules
+    })
+    return { rule, animations }
+  }
+
   return {
     getPetPack,
     getConfig,
@@ -703,7 +746,9 @@ const createActionService = ({ petPackService, loadPetPack, loadLegacyAnimations
     previewTriggerProposal,
     submitTriggerProposal,
     acceptTriggerProposalItem,
-    rejectTriggerProposalItem
+    rejectTriggerProposalItem,
+    setTriggerRuleStatus,
+    deleteTriggerRule
   }
 }
 

@@ -193,6 +193,59 @@ test.describe('Control Center smoke', () => {
     await expect(clickAction).toHaveValue(beforeClickAction)
   })
 
+  test('manages host-owned trigger rules from the Actions UI', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.sessionStorage.setItem('openpet.controlCenter.demoState', JSON.stringify({
+        actionsConfig: {
+          defaultAction: 'idle',
+          clickAction: 'wave',
+          actions: [
+            { id: 'idle', label: 'Idle', kind: 'idle', loop: true, frameCount: 1, frameMs: 120, frameWidth: 8, frameHeight: 8 },
+            { id: 'wave', label: 'Wave', kind: 'click', loop: false, frameCount: 1, frameMs: 100, frameWidth: 8, frameHeight: 8 },
+            { id: 'sleep', label: 'Sleep', kind: 'idle', loop: true, frameCount: 1, frameMs: 140, frameWidth: 8, frameHeight: 8 }
+          ],
+          triggerProposalInbox: [],
+          triggerRules: [
+            {
+              id: 'rule:state:sleep:test',
+              actionId: 'sleep',
+              type: 'state',
+              status: 'active',
+              sourceProposalId: 'proposal:state:sleep:test',
+              sourcePluginId: 'openpet.creator-studio',
+              sourceRunId: 'run-demo-state',
+              sourceCommandId: 'import-approved-action',
+              message: 'Use Sleep when the pet enters idle focus mode.',
+              preview: 'State trigger rule can play sleep when a host state condition matches.',
+              createdAt: '2026-06-24T08:00:00.000Z',
+              updatedAt: '2026-06-24T08:00:00.000Z'
+            }
+          ]
+        }
+      }))
+    })
+
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Actions' }).click()
+
+    const rulesPanel = page.locator('[aria-label="触发规则"]')
+    const sleepRule = rulesPanel.locator('.trigger-inbox-item', { hasText: 'Sleep' })
+    await expect(sleepRule).toContainText('active')
+
+    await sleepRule.getByRole('button', { name: '停用规则' }).click()
+    await expect(page.locator('.status-line')).toContainText('已停用触发规则：rule:state:sleep:test')
+    await expect(sleepRule).toContainText('disabled')
+
+    await sleepRule.getByRole('button', { name: '启用规则' }).click()
+    await expect(page.locator('.status-line')).toContainText('已启用触发规则：rule:state:sleep:test')
+    await expect(sleepRule).toContainText('active')
+
+    page.once('dialog', (dialog) => dialog.accept())
+    await sleepRule.getByRole('button', { name: '删除规则' }).click()
+    await expect(page.locator('.status-line')).toContainText('已删除触发规则：rule:state:sleep:test')
+    await expect(rulesPanel).toContainText('暂无非点击触发规则')
+  })
+
   test('reviews queued trigger proposals from the Actions inbox', async ({ page }) => {
     await page.addInitScript(() => {
       window.sessionStorage.setItem('openpet.controlCenter.demoState', JSON.stringify({

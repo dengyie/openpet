@@ -5,6 +5,7 @@ import { messageFromError } from '../lib/errors'
 import type {
   ActionTriggerProposalAcceptanceResult,
   ActionTriggerProposalPreviewResult,
+  ActionTriggerRuleStatus,
   ActionTriggerProposalType,
   ActionsConfigViewState,
   CompletedActionFrameInspectionResult,
@@ -176,6 +177,37 @@ export function useActionsPane() {
       setStatus(`已拒绝触发提案：${response.proposal?.actionId || proposalId}`)
     } catch (error) {
       setStatus(messageFromError(error, '拒绝触发提案失败'))
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  const onSetTriggerRuleStatus = async (ruleId: string, status: ActionTriggerRuleStatus) => {
+    if (!ruleId) return
+    setWorking(true)
+    setStatus('')
+    try {
+      const response = await api.setActionTriggerRuleStatus(ruleId, status)
+      setActionsConfig(cloneActionsConfig(response.animations))
+      setStatus(`${status === 'disabled' ? '已停用' : '已启用'}触发规则：${ruleId}`)
+    } catch (error) {
+      setStatus(messageFromError(error, '更新触发规则失败'))
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  const onDeleteTriggerRule = async (ruleId: string) => {
+    if (!ruleId) return
+    if (!window.confirm(`删除触发规则 ${ruleId}？`)) return
+    setWorking(true)
+    setStatus('')
+    try {
+      const response = await api.deleteActionTriggerRule(ruleId)
+      setActionsConfig(cloneActionsConfig(response.animations))
+      setStatus(`已删除触发规则：${ruleId}`)
+    } catch (error) {
+      setStatus(messageFromError(error, '删除触发规则失败'))
     } finally {
       setWorking(false)
     }
@@ -397,6 +429,8 @@ export function useActionsPane() {
     onApplyTriggerProposal,
     onAcceptTriggerProposal,
     onRejectTriggerProposal,
+    onSetTriggerRuleStatus,
+    onDeleteTriggerRule,
     triggerProposalType,
     setTriggerProposalType: onChangeTriggerProposalType,
     triggerProposalNotes,

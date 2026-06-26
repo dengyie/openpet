@@ -7,6 +7,7 @@ import type {
   ActionFrameReinspectRequest,
   ActionTriggerProposalInboxStatus,
   ActionTriggerProposalType,
+  ActionTriggerRuleStatus,
   ActionsConfigViewState,
   AiChatRequest,
   AiConfigViewState,
@@ -1218,6 +1219,41 @@ const demoApi: ControlCenterApi = {
     })
     writeDemoState()
     return { animations: cloneActionsConfig(demoState.actionsConfig), proposal: nextProposal }
+  },
+  setActionTriggerRuleStatus: async (ruleId, status) => {
+    const rule = demoState.actionsConfig.triggerRules.find((item) => item.id === ruleId)
+    if (!rule) throw new Error('Trigger rule not found')
+    if (status !== 'active' && status !== 'disabled') {
+      throw new Error(`Unsupported trigger rule status: ${status || 'unknown'}`)
+    }
+    const nextStatus: ActionTriggerRuleStatus = status
+    const nextRule = {
+      ...rule,
+      status: nextStatus,
+      updatedAt: '2026-06-22T00:00:00.000Z'
+    }
+    demoState.actionsConfig = cloneActionsConfig({
+      ...demoState.actionsConfig,
+      triggerRules: demoState.actionsConfig.triggerRules.map((item) => item.id === ruleId ? nextRule : item)
+    })
+    writeDemoState()
+    return {
+      animations: cloneActionsConfig(demoState.actionsConfig),
+      rule: nextRule
+    }
+  },
+  deleteActionTriggerRule: async (ruleId) => {
+    const rule = demoState.actionsConfig.triggerRules.find((item) => item.id === ruleId)
+    if (!rule) throw new Error('Trigger rule not found')
+    demoState.actionsConfig = cloneActionsConfig({
+      ...demoState.actionsConfig,
+      triggerRules: demoState.actionsConfig.triggerRules.filter((item) => item.id !== ruleId)
+    })
+    writeDemoState()
+    return {
+      animations: cloneActionsConfig(demoState.actionsConfig),
+      rule
+    }
   },
   deleteAction: async () => ({ animations: cloneActionsConfig(demoState.actionsConfig) }),
   listPetPacks: async () => clonePetPacks(demoState.petPacks),
