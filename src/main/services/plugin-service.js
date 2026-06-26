@@ -18,6 +18,7 @@ const { createPluginServiceHealthController } = require('./plugin-service-health
 const { createPluginServiceLifecycleController } = require('./plugin-service-lifecycle-controller')
 const { createPluginServiceLaunchController } = require('./plugin-service-launch-controller')
 const { createPluginCommandEntryProcessController } = require('./plugin-command-entry-process-controller')
+const { createPluginSetupProcessController } = require('./plugin-setup-process-controller')
 
 const SDK_REGISTERED_COMMANDS = Symbol('openpet.registeredCommands')
 const STORAGE_KEY_PATTERN = /^[a-zA-Z0-9_.:-]{1,128}$/
@@ -959,6 +960,17 @@ const createPluginService = ({ settingsService, petService, actionService, actio
     commandProcessTimeoutMs
   })
 
+  const setupProcessController = createPluginSetupProcessController({
+    appendLog,
+    parseCommand: parseServiceCommand,
+    resolveCwd: resolveSetupCwd,
+    createEnv: createServiceProcessEnv,
+    spawnSetupProcess,
+    setRuntime: (runtime) => setupRuntimeManager.setRuntime(runtime),
+    attachStopHandler: (runtime) => setupRuntimeManager.attachStopHandler(runtime),
+    createRuntimeView: createSetupRuntimeView
+  })
+
   const stopPluginServices = (pluginId, options = {}) => serviceRuntimeManager.stopPlugin(pluginId, options)
 
   const stopPluginSetups = (pluginId, options = {}) => setupRuntimeManager.stopPlugin(pluginId, options)
@@ -1193,85 +1205,11 @@ const createPluginService = ({ settingsService, petService, actionService, actio
       const plugin = findPluginForService(pluginId)
       const setupEntry = getSetupEntry(plugin, setupId)
       setupRuntimeManager.assertNotActive(pluginId, setupId)
-      const { file, args } = parseServiceCommand(setupEntry.command)
-      const cwd = resolveSetupCwd(plugin.manifest, setupEntry.cwd)
-      const child = spawnSetupProcess(file, args, {
-        cwd,
-        detached: false,
-        env: createServiceProcessEnv(),
-        shell: false,
-        stdio: ['ignore', 'pipe', 'pipe'],
-        windowsHide: true
-      })
-      const runtime = setupRuntimeManager.setRuntime(setupRuntimeManager.attachStopHandler({
+      return setupProcessController.run({
         pluginId,
+        manifest: plugin.manifest,
         setupId,
-        status: 'running',
-        pid: Number(child.pid) || 0,
-        lastRunAt: new Date().toISOString(),
-        exitCode: null,
-        error: '',
-        child,
-        failStop: null
-      }))
-
-      appendLog({ pluginId, commandId, level: 'info', message: 'Setup started' })
-
-      return new Promise((resolve, reject) => {
-        let settled = false
-        const settle = (callback) => {
-          if (settled) return
-          settled = true
-          callback()
-        }
-        runtime.failStop = (error) => {
-          settle(() => reject(error))
-        }
-
-        child.stdout?.on?.('data', (chunk) => {
-          const message = String(chunk || '').trim()
-          if (message) appendLog({ pluginId, commandId, level: 'info', message: `Setup stdout: ${message}`.slice(0, 500) })
-        })
-        child.stderr?.on?.('data', (chunk) => {
-          const message = String(chunk || '').trim()
-          if (message) appendLog({ pluginId, commandId, level: 'error', message: `Setup stderr: ${message}`.slice(0, 500) })
-        })
-        child.on?.('error', (error) => {
-          settle(() => {
-            runtime.status = 'failed'
-            runtime.error = error.message || 'Plugin setup failed'
-            runtime.exitCode = null
-            runtime.lastRunAt = new Date().toISOString()
-            appendLog({ pluginId, commandId, level: 'error', message: 'Setup failed' })
-            reject(error)
-          })
-        })
-        child.on?.('exit', (code, signal) => {
-          settle(() => {
-            const exitCode = Number.isFinite(Number(code)) ? Number(code) : null
-            const stopRequested = runtime.status === 'stopping'
-            runtime.status = stopRequested
-              ? 'failed'
-              : (exitCode === 0 && !signal ? 'succeeded' : 'failed')
-            runtime.exitCode = exitCode
-            runtime.error = stopRequested
-              ? 'Setup stopped'
-              : (runtime.status === 'failed' ? (signal ? `Setup exited with signal ${signal}` : `Setup exited with code ${exitCode ?? 'unknown'}`) : '')
-            runtime.lastRunAt = new Date().toISOString()
-            appendLog({
-              pluginId,
-              commandId,
-              level: runtime.status === 'failed' ? 'error' : 'info',
-              message: stopRequested ? 'Setup stopped' : (runtime.status === 'failed' ? 'Setup failed' : 'Setup completed')
-            })
-            resolve({
-              ok: true,
-              pluginId,
-              setupId,
-              runtime: createSetupRuntimeView(runtime)
-            })
-          })
-        })
+        setupEntry
       })
     } catch (error) {
       appendLog({ pluginId, commandId, level: 'error', message: error.message || 'Setup failed' })
