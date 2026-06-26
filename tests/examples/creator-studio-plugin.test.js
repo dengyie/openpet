@@ -2124,6 +2124,15 @@ test('creator studio dashboard asset includes full-pet mode copy for generation 
   assert.match(html, /Generate pet pack/)
 })
 
+test('creator studio dashboard asset includes full-pet task preview summary copy', () => {
+  const dashboardPath = path.join(pluginRoot, 'web', 'dashboard', 'index.html')
+  const html = fs.readFileSync(dashboardPath, 'utf-8')
+
+  assert.match(html, /Character brief:/)
+  assert.match(html, /Planned actions:/)
+  assert.match(html, /Trigger plan:/)
+})
+
 test('creator studio service exposes full-pet review details for dashboard clients', async () => {
   const { createRun, updateRunStatus } = require('../../examples/plugins/creator-studio/lib/run-store')
   const { createCreatorStudioServer } = require('../../examples/plugins/creator-studio/service/studio-service')
@@ -2657,6 +2666,15 @@ test('creator studio service returns full-pet specific wizard and dashboard labe
   } finally {
     await new Promise((resolve) => server.close(resolve))
   }
+})
+
+test('creator studio dashboard task preview renders full-pet brief and action summary', () => {
+  const dashboardPath = path.join(pluginRoot, 'web', 'dashboard', 'index.html')
+  const html = fs.readFileSync(dashboardPath, 'utf-8')
+
+  assert.match(html, /isFullPetRun\(run\) && run\.generationTask\.characterBrief/)
+  assert.match(html, /actionSummaries/)
+  assert.match(html, /triggerSummaries/)
 })
 
 test('creator studio service rejects unknown api routes instead of falling back to dashboard html', async () => {

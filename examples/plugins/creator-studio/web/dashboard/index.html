@@ -542,6 +542,10 @@
       const $ = (id) => document.getElementById(id)
       const isFullPetRun = (run) => run?.generationTask?.mode === 'full-pet'
       const defaultGenerateLabel = (run = state.run) => (isFullPetRun(run) ? 'Generate pet pack' : 'Generate action')
+      const formatTriggerSummary = (triggerProposal = {}) => {
+        const type = triggerProposal?.type || 'unbound'
+        return triggerProposal?.binding ? `${type} (${triggerProposal.binding})` : type
+      }
 
       const stopPlaybackPreview = () => {
         if (state.playbackTimer) {
@@ -960,12 +964,36 @@
         $('wizard-steps-panel').innerHTML = renderWizardSteps(run)
         $('action-lane-panel').innerHTML = renderActionLane(run)
         $('next-step-panel').innerHTML = renderNextStep(run)
-        $('task-preview').innerHTML = [
-          `<strong>${escapeHtml(action.name)}</strong>`,
-          `<p>Mode: ${escapeHtml(run.generationTask.mode)} / Frames: ${escapeHtml(action.frameCount)} / Loop: ${action.loop ? 'yes' : 'no'}</p>`,
-          `<p>${escapeHtml(action.motionPrompt)}</p>`
-        ].join('')
-        $('trigger-panel').innerHTML = `<strong>${escapeHtml(action.triggerProposal.type)}</strong><p>${escapeHtml(action.triggerProposal.notes || 'No notes.')}</p>`
+        if (isFullPetRun(run) && run.generationTask.characterBrief) {
+          const actions = Array.isArray(run.generationTask.actions) ? run.generationTask.actions : []
+          const actionSummaries = actions.map((plannedAction) => (
+            `<li><strong>${escapeHtml(plannedAction.name)}</strong> - ${escapeHtml(plannedAction.motionPrompt)} ` +
+            `(${escapeHtml(plannedAction.frameCount)} frames / ${plannedAction.loop ? 'loop' : 'one-shot'})</li>`
+          )).join('')
+          const triggerSummaries = actions.map((plannedAction) => (
+            `<li><strong>${escapeHtml(plannedAction.name)}</strong> - ${escapeHtml(formatTriggerSummary(plannedAction.triggerProposal))}</li>`
+          )).join('')
+          $('task-preview').innerHTML = [
+            `<strong>${escapeHtml(run.input?.petName || 'Full Pet Task')}</strong>`,
+            `<p>Mode: ${escapeHtml(run.generationTask.mode)} / Actions: ${escapeHtml(actions.length)} / Style: ${escapeHtml(run.generationTask.styleSource || 'n/a')}</p>`,
+            `<p><strong>Character brief:</strong> ${escapeHtml(run.generationTask.characterBrief)}</p>`,
+            `<p><strong>Planned actions:</strong></p>`,
+            `<ul>${actionSummaries}</ul>`
+          ].join('')
+          $('trigger-panel').innerHTML = [
+            '<strong>Trigger plan</strong>',
+            '<p>Full-pet generation records trigger proposals per planned action for later host review.</p>',
+            `<p><strong>Trigger plan:</strong></p>`,
+            `<ul>${triggerSummaries}</ul>`
+          ].join('')
+        } else {
+          $('task-preview').innerHTML = [
+            `<strong>${escapeHtml(action.name)}</strong>`,
+            `<p>Mode: ${escapeHtml(run.generationTask.mode)} / Frames: ${escapeHtml(action.frameCount)} / Loop: ${action.loop ? 'yes' : 'no'}</p>`,
+            `<p>${escapeHtml(action.motionPrompt)}</p>`
+          ].join('')
+          $('trigger-panel').innerHTML = `<strong>${escapeHtml(action.triggerProposal.type)}</strong><p>${escapeHtml(action.triggerProposal.notes || 'No notes.')}</p>`
+        }
         if (question) {
           $('question-panel').innerHTML = question.options.map((option) => (
             `<button data-answer="${escapeHtml(option)}">${escapeHtml(option)}</button>`
