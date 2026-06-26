@@ -26,6 +26,7 @@ const { createPluginConfigStorageController } = require('./plugin-config-storage
 const { createPluginRuntimeSdkController } = require('./plugin-runtime-sdk-controller')
 const { createPluginBridgeHandlersController } = require('./plugin-bridge-handlers-controller')
 const { createPluginAssetPathController } = require('./plugin-asset-path-controller')
+const { createPluginListingController } = require('./plugin-listing-controller')
 
 const STORAGE_KEY_PATTERN = /^[a-zA-Z0-9_.:-]{1,128}$/
 const MAX_PLUGIN_STORAGE_BYTES = 64 * 1024
@@ -452,59 +453,22 @@ const createPluginService = ({ settingsService, petService, actionService, actio
     return listPlugins().find((candidate) => candidate.id === pluginId)
   }
 
-  const createRuntimeView = (runtime, serviceEntry = {}) => {
-    if (!runtime) {
-      return {
-        status: 'stopped',
-        health: createServiceHealthView({}, serviceEntry)
-      }
-    }
-    return {
-      status: runtime.status || 'stopped',
-      pid: runtime.pid || 0,
-      startedAt: runtime.startedAt || '',
-      stoppedAt: runtime.stoppedAt || '',
-      command: runtime.command || '',
-      cwd: runtime.cwd || '',
-      exitCode: Number.isFinite(runtime.exitCode) ? runtime.exitCode : null,
-      signal: runtime.signal || '',
-      error: runtime.error || '',
-      health: createServiceHealthView(runtime.health || {}, serviceEntry)
-    }
-  }
-
-  const createSetupRuntimeView = (runtime = {}) => ({
-    status: runtime.status || 'not-run',
-    lastRunAt: runtime.lastRunAt || '',
-    exitCode: Number.isFinite(runtime.exitCode) ? runtime.exitCode : null,
-    error: runtime.error || ''
+  const listingController = createPluginListingController({
+    getSetupRuntime: (pluginId, setupId) => setupRuntimeManager.getRuntime(pluginId, setupId),
+    getServiceRuntime: (pluginId, serviceId) => serviceRuntimeManager.getRuntime(pluginId, serviceId),
+    createHealthView: createServiceHealthView,
+    getHealthPolicy: getPluginServiceHealthPolicy,
+    getEnabledMap,
+    getPluginConfig,
+    getPluginStorageStats,
+    getPluginSignatureStatus,
+    getPluginPolicyStatus
   })
 
-  const decorateEntriesWithRuntime = (manifest) => ({
-    ...manifest.entries,
-    setup: (manifest.entries?.setup || []).map((setupEntry) => ({
-      ...setupEntry,
-      runtime: createSetupRuntimeView(setupRuntimeManager.getRuntime(manifest.id, setupEntry.id))
-    })),
-    services: (manifest.entries?.services || []).map((serviceEntry) => ({
-      ...serviceEntry,
-      healthPolicy: getPluginServiceHealthPolicy(manifest.id, serviceEntry.id),
-      runtime: createRuntimeView(serviceRuntimeManager.getRuntime(manifest.id, serviceEntry.id), serviceEntry)
-    }))
-  })
-
-  const listPlugins = () => getPlugins().map((plugin) => ({
-    ...plugin.manifest,
-    profile: plugin.manifest.profile || 'runtime',
-    entries: decorateEntriesWithRuntime(plugin.manifest),
-    enabled: Boolean(getEnabledMap()[plugin.manifest.id]),
-    runnable: typeof plugin.activate === 'function' || Boolean(plugin.mainPath) || Boolean(plugin.manifest.entries?.commands?.length),
-    signatureStatus: getPluginSignatureStatus(plugin.manifest),
-    blockStatus: getPluginPolicyStatus(plugin.manifest),
-    configSchema: plugin.configSchema,
-    config: getPluginConfig(plugin.manifest.id, plugin.configSchema),
-    storage: getPluginStorageStats(plugin.manifest.id)
-  }))
+  const createRuntimeView = listingController.createRuntimeView
+  const createSetupRuntimeView = listingController.createSetupRuntimeView
+  const decorateEntriesWithRuntime = listingController.decorateEntriesWithRuntime
+  const listPlugins = () => listingController.listPlugins(getPlugins())
 
   const resolvePluginEntryCwd = (manifest, cwd, label) => {
     if (!manifest.basePath) throw new Error('Plugin services require a local plugin directory')
