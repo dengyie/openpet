@@ -478,7 +478,7 @@ test.describe('Control Center smoke', () => {
     await expect(apiKeyRow).toContainText('已保存')
 
     await chatProviderSection.getByRole('button', { name: '测试已保存配置' }).click()
-    await expect(page.getByTestId('ai-provider-feedback')).toContainText('连接正常')
+    await expect(page.getByTestId('ai-provider-feedback')).toContainText('聊天 Provider 可达')
     await expect(page.getByTestId('ai-connection-result')).toContainText('连接测试通过')
     await expect(page.getByTestId('ai-connection-result')).toContainText('openpet-test-model')
 
@@ -511,7 +511,9 @@ test.describe('Control Center smoke', () => {
 
     await expect(page.locator('.readonly-row', { hasText: '当前生效配置' })).toContainText('https://combo.example.test/v1')
     await expect(page.locator('.readonly-row', { hasText: '当前生效配置' })).toContainText('combo-test-model')
-    await expect(page.getByTestId('ai-provider-feedback')).toContainText('openai-compatible · https://combo.example.test/v1 · combo-test-model')
+    await expect(page.getByTestId('ai-connection-result')).toContainText('Provider: openai-compatible')
+    await expect(page.getByTestId('ai-connection-result')).toContainText('Base URL: https://combo.example.test/v1')
+    await expect(page.getByTestId('ai-connection-result')).toContainText('Model: combo-test-model')
     await expect(page.locator('.field-row').filter({ has: page.getByText('API Key', { exact: true }) })).toContainText('已保存')
   })
 
