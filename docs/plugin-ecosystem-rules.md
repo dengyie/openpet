@@ -172,11 +172,19 @@ The current local bridge stays intentionally small:
 - `GET /creator/actions`
 - `POST /creator/actions/validate`
 - `POST /creator/actions/apply`
+- `POST /creator/trigger-proposals/submit`
 - `GET /creator/pack-manifest`
 - `POST /creator/pack-manifest/validate`
 - `POST /creator/pack-manifest/apply`
+- `POST /creator/assets/inspect-frames`
+- `POST /creator/assets/import-frames`
+- `POST /creator/assets/pick-frames/inspect`
+- `POST /creator/assets/pick-frames/import`
 - `POST /creator/pet-pack/inspect-output`
 - `POST /creator/pet-pack/import-output`
+- `GET /creator/model-settings`
+- `POST /creator/model-health-check`
+- `POST /creator/model-image-generate`
 
 The bridge is for integration convenience. It is not a complete SDK, not a full security broker, and not a reason to block extensions from using their own local capabilities.
 
@@ -193,6 +201,7 @@ The following capabilities are intentionally available to ordinary third-party a
 - package-local or user-approved frame inspection through `assets:inspect`;
 - package-local or user-approved frame import and sprite/action metadata generation through `assets:generate`;
 - approved full pet-pack import through `pet-pack:import`, where the extension provides an output path and OpenPet performs inspection, import, policy checks, and optional activation.
+- host-managed model settings reads, health checks, and bounded image generation during explicit command runs, without exposing OpenPet-owned provider credentials to the extension.
 
 These are not official-only powers. A community weather announcer, pet dialogue pack, pet personality helper, action editor, sprite generator, or local model workflow may request them when the package explains the user value and accepts the host boundary.
 
@@ -230,6 +239,7 @@ Third-party extensions may manage:
 OpenPet should not claim it can enumerate, audit, revoke, or delete every third-party secret or data file. Authors should disclose likely data locations and external dependencies in `manifest`, and OpenPet should show those declarations plainly.
 
 This is intentionally more welcoming than the older "no secrets in ordinary plugin config" posture. The new boundary is: OpenPet-owned config should be clear about whether it stores secrets, and extension-owned secrets must be disclosed and managed by the extension/user, not silently implied to be protected by OpenPet.
+For Creator Studio and similar host-mediated generation flows, plugin-managed provider credentials are currently unsupported: if generation is meant to use OpenPet's provider surface, the credentials stay in OpenPet main-process secret storage and the extension only receives a short-lived bridge token for bounded generation routes.
 
 ## 8. Setup, Dependencies, And Cleanup
 

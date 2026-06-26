@@ -83,7 +83,7 @@ OpenPet should preserve structural safety:
 
 `examples/plugins/creator-studio/` demonstrates a hybrid creator-tools extension. It creates durable pet-generation runs under `OPENPET_DATA_DIR`, produces a valid `codex-pet` fixture output, requires explicit approval, and imports the approved output through OpenPet's host-owned pet-pack bridge.
 
-The example intentionally uses a deterministic fixture backend first. Cloud and local model adapters can replace the fixture generator while keeping the same run workspace and review/import contract.
+The example intentionally uses a deterministic fixture backend first. Cloud and local model adapters can replace the fixture generator while keeping the same run workspace and review/import contract. When Creator Studio uses model-backed generation, that generation remains host-managed: the command gets a short-lived bridge token for bounded host routes, OpenPet keeps provider credentials in main-process secret storage, and plugin-managed provider credentials are currently unsupported in the author-facing trust model.
 
 ## Manifest Shape
 
@@ -248,6 +248,7 @@ Current bridge routes:
 - `GET /creator/actions`
 - `POST /creator/actions/validate`
 - `POST /creator/actions/apply`
+- `POST /creator/trigger-proposals/submit`
 - `GET /creator/pack-manifest`
 - `POST /creator/pack-manifest/validate`
 - `POST /creator/pack-manifest/apply`
@@ -257,6 +258,9 @@ Current bridge routes:
 - `POST /creator/assets/pick-frames/import`
 - `POST /creator/pet-pack/inspect-output`
 - `POST /creator/pet-pack/import-output`
+- `GET /creator/model-settings`
+- `POST /creator/model-health-check`
+- `POST /creator/model-image-generate`
 
 The bridge is loopback-only, token-gated, and valid only while the command run is active.
 
@@ -293,6 +297,7 @@ Current endpoint set:
 - `GET /creator/actions`
 - `POST /creator/actions/validate`
 - `POST /creator/actions/apply`
+- `POST /creator/trigger-proposals/submit`
 - `GET /creator/pack-manifest`
 - `POST /creator/pack-manifest/validate`
 - `POST /creator/pack-manifest/apply`
@@ -302,6 +307,9 @@ Current endpoint set:
 - `POST /creator/assets/pick-frames/import`
 - `POST /creator/pet-pack/inspect-output`
 - `POST /creator/pet-pack/import-output`
+- `GET /creator/model-settings`
+- `POST /creator/model-health-check`
+- `POST /creator/model-image-generate`
 
 Bridge rules:
 
@@ -316,6 +324,7 @@ Bridge rules:
 - creator-tools frame import/sprite generation is host-mediated, package-local, resource-limited, and does not grant raw filesystem writes or plugin-selected output paths;
 - creator-tools picker frame inspection/import is host-mediated and user-approved: the command can request a native folder picker, but selected absolute paths stay in the main process and are not returned to the bridge caller;
 - creator-tools full pet-pack import is host-mediated through `PetPackService`: the extension supplies a package-local or `OPENPET_DATA_DIR` relative approved output path, then OpenPet inspects, imports, applies policy checks, and optionally activates the pack;
+- creator-tools model settings, model health checks, and model image generation stay host-managed through the short-lived bridge; OpenPet-owned secrets remain in the main process, and plugin-managed provider credentials are not part of the current supported trust model;
 - setup entries, services, install, enable, and background health paths do not receive bridge access.
 
 Example bridge requests:
