@@ -549,6 +549,7 @@ test.describe('Control Center smoke', () => {
     await expect(page.getByTestId('ai-bubble-chat-state')).toContainText('当前未显示')
     await chatSection.getByRole('button', { name: '打开默认气泡聊天' }).click()
     await expect(page.locator('.status-line')).toContainText('已打开默认气泡聊天')
+    await expect(page.getByTestId('ai-bubble-chat-state')).toContainText('当前已显示')
     await chatSection.getByRole('button', { name: '打开扩展聊天面板' }).click()
     await expect(page.locator('.status-line')).toContainText('已打开扩展聊天面板')
   })

@@ -680,7 +680,14 @@ export function useAiPane(activeTab = 'ai') {
 
   const onOpenBubbleChat = async () => {
     try {
-      await api.openPetBubbleChat()
+      const bubbleChatState = await api.openPetBubbleChat()
+      setPetChatState((current) => clonePetChatState({
+        ...current,
+        bubbleChat: {
+          ...current.bubbleChat,
+          ...bubbleChatState
+        }
+      }))
       setStatus('已打开默认气泡聊天')
     } catch (error) {
       setStatus(messageFromError(error, '打开默认气泡聊天失败'))
