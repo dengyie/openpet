@@ -475,6 +475,22 @@ test.describe('Control Center smoke', () => {
     await expect(page.locator('.field-row').filter({ has: page.getByText('API Key', { exact: true }) })).toContainText('已保存')
   })
 
+  test('chat provider test surfaces optional models probe fallback without blocking setup', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: 'AI' }).click()
+    const chatProviderSection = await expandAiSection(page, '聊天 Provider')
+
+    await page.getByRole('textbox', { name: 'Base URL', exact: true }).fill('https://chat-models-unavailable.example.test/v1')
+    await page.getByRole('textbox', { name: 'Model', exact: true }).fill('fallback-model')
+    await chatProviderSection.getByRole('button', { name: '保存聊天 Provider' }).click()
+    await page.locator('.field-row').filter({ has: page.getByText('API Key', { exact: true }) }).getByRole('button', { name: '保存密钥' }).click()
+    await chatProviderSection.getByRole('button', { name: '测试已保存配置' }).click()
+
+    await expect(page.getByTestId('ai-provider-feedback')).toContainText('模型列表探测不可用')
+    await expect(page.getByTestId('ai-connection-result')).toContainText('fallback-model')
+    await expect(page.getByTestId('ai-connection-result')).toContainText('连接测试通过')
+  })
+
   test('chat provider presets fill common OpenAI-compatible endpoints without saving immediately', async ({ page }) => {
     await page.goto('/')
     await page.getByRole('button', { name: 'AI' }).click()

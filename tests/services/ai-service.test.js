@@ -966,3 +966,42 @@ test('ai service testConnection logs provider failures without leaking secrets o
   assert.equal(serializedLogs.includes('token=secret'), false)
   assert.match(serializedLogs, /ai\.settings\.connection-test\.failed/)
 })
+
+test('ai service testConnection treats optional chat /models probe failure as reachable provider', async () => {
+  const requests = []
+  const service = createAiService({
+    settingsService: createSettingsService({
+      ai: {
+        enabled: true,
+        provider: 'openai-compatible',
+        baseUrl: 'https://chat.example.test/v1',
+        model: 'example-model',
+        apiKeyRef: 'ai.default',
+        systemPrompt: ''
+      }
+    }),
+    secretService: {
+      getSecretValue: () => 'sk-test',
+      setSecret: () => {}
+    },
+    fetchImpl: async (url) => {
+      requests.push(url)
+      return {
+        ok: false,
+        status: 404,
+        json: async () => ({
+          error: {
+            message: 'not found'
+          }
+        })
+      }
+    }
+  })
+
+  const result = await service.testConnection()
+
+  assert.equal(result.ok, true)
+  assert.equal(result.code, 'provider_reachable_models_unavailable')
+  assert.equal(result.message, 'AI provider is reachable, but the optional /models probe is unavailable')
+  assert.equal(requests[0], 'https://chat.example.test/v1/models')
+})

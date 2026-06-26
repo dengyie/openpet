@@ -51,3 +51,22 @@ test('image provider compatibility hint explains transparent background support 
   assert.match(customModelHint, /transparent/i)
   assert.match(customModelHint, /兼容性取决于当前网关/i)
 })
+
+test('connection status copy maps optional chat models probe fallback into user-safe wording', async () => {
+  const { formatConnectionTestStatus } = aiProviderConfig
+
+  const text = formatConnectionTestStatus({
+    ok: true,
+    provider: 'openai-compatible',
+    baseUrl: 'https://chat.example.test/v1',
+    model: 'example-model',
+    hasApiKey: true,
+    elapsedMs: 15,
+    code: 'provider_reachable_models_unavailable',
+    message: 'AI provider is reachable, but the optional /models probe is unavailable'
+  })
+
+  assert.match(text, /连接测试通过/)
+  assert.match(text, /chat\.example\.test/)
+  assert.match(text, /example-model/)
+})

@@ -1205,15 +1205,29 @@ const demoApi: ControlCenterApi = {
     }
   },
   testAiConnection: async () => ({
-    ok: true,
-    provider: demoState.aiConfig.provider,
-    baseUrl: demoState.aiConfig.baseUrl,
-    model: demoState.aiConfig.model,
-    hasApiKey: demoState.aiConfig.hasApiKey,
-    elapsedMs: 12,
-    reply: 'ok',
-    code: 'ok',
-    message: 'AI provider connection test succeeded'
+    ...( /models-unavailable|chat-models-unavailable/i.test(demoState.aiConfig.baseUrl)
+      ? {
+          ok: true,
+          provider: demoState.aiConfig.provider,
+          baseUrl: demoState.aiConfig.baseUrl,
+          model: demoState.aiConfig.model,
+          hasApiKey: demoState.aiConfig.hasApiKey,
+          elapsedMs: 12,
+          reply: '',
+          code: 'provider_reachable_models_unavailable',
+          message: 'AI provider is reachable, but the optional /models probe is unavailable'
+        }
+      : {
+          ok: true,
+          provider: demoState.aiConfig.provider,
+          baseUrl: demoState.aiConfig.baseUrl,
+          model: demoState.aiConfig.model,
+          hasApiKey: demoState.aiConfig.hasApiKey,
+          elapsedMs: 12,
+          reply: 'ok',
+          code: 'ok',
+          message: 'AI provider connection test succeeded'
+        }),
   }),
   getAiPersonaProfile: async () => createDemoPersonaProfile(demoState.petPacks, demoState.aiConfig, demoState.aiPersonaOverrides),
   generateAiPersonaDraft: async ({ instruction } = {}) => {

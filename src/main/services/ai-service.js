@@ -227,6 +227,8 @@ const sanitizeDiagnosticText = (value) => String(value || '')
   .replace(/\bsk-[A-Za-z0-9_-]{8,}\b/g, '[redacted-secret]')
   .slice(0, 240)
 
+const isOptionalModelsProbeStatus = (status) => [404, 405, 501].includes(Number(status))
+
 const getSafeProviderErrorMessage = (status, code) => {
   const normalizedStatus = Number(status) || 0
   if (normalizedStatus === 401 || normalizedStatus === 403) return 'AI provider authentication failed'
@@ -514,7 +516,8 @@ const createAiService = ({
 
   const testConnection = async () => {
     const config = getRawConfig()
-    const hasApiKey = Boolean(secretService.getSecretValue(config.apiKeyRef))
+    const apiKey = secretService.getSecretValue(config.apiKeyRef)
+    const hasApiKey = Boolean(apiKey)
     const startedAt = Date.now()
     const baseResult = {
       provider: config.provider,
@@ -530,16 +533,72 @@ const createAiService = ({
       details: baseResult
     })
     try {
-      const result = await complete({
-        messages: [
-          { role: 'user', content: 'Reply with ok.' }
-        ]
-      })
-      const response = {
+      if (!apiKey) {
+        throw new Error('AI API key is not configured')
+      }
+      if (config.provider !== 'openai-compatible') {
+        throw new Error(`Unsupported AI provider: ${config.provider}`)
+      }
+      if (typeof fetchImpl !== 'function') throw new Error('fetch is not available')
+
+      const timeout = createTimeoutController(requestTimeoutMs)
+      let response
+      try {
+        response = await fetchImpl(`${config.baseUrl}/models`, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${apiKey}`
+          },
+          signal: timeout.signal
+        })
+      } catch (error) {
+        if (error?.name === 'AbortError') {
+          const timeoutError = new Error('AI provider request timed out')
+          timeoutError.name = 'AbortError'
+          throw timeoutError
+        }
+        throw error
+      } finally {
+        timeout.clear()
+      }
+
+      if (!response?.ok) {
+        if (isOptionalModelsProbeStatus(response?.status)) {
+          const probeFallback = {
+            ok: true,
+            ...baseResult,
+            elapsedMs: Date.now() - startedAt,
+            reply: '',
+            code: 'provider_reachable_models_unavailable',
+            message: 'AI provider is reachable, but the optional /models probe is unavailable'
+          }
+          recordLog({
+            scope: 'ai-settings',
+            level: 'info',
+            event: 'ai.settings.connection-test.completed',
+            message: 'AI provider connection test completed',
+            details: {
+              ...baseResult,
+              elapsedMs: probeFallback.elapsedMs,
+              status: response.status,
+              modelsProbe: 'unavailable'
+            }
+          })
+          return probeFallback
+        }
+        const data = await response.json().catch(() => ({}))
+        throw createProviderError({
+          message: data?.error?.message || `AI provider request failed with status ${response.status}`,
+          status: response.status,
+          code: data?.error?.code
+        })
+      }
+
+      const result = {
         ok: true,
         ...baseResult,
         elapsedMs: Date.now() - startedAt,
-        reply: String(result.reply || '').slice(0, 120),
+        reply: 'ok',
         code: 'ok',
         message: 'AI provider connection test succeeded'
       }
@@ -550,11 +609,13 @@ const createAiService = ({
         message: 'AI provider connection test completed',
         details: {
           ...baseResult,
-          elapsedMs: response.elapsedMs,
-          replyChars: response.reply.length
+          elapsedMs: result.elapsedMs,
+          replyChars: result.reply.length,
+          status: 200,
+          modelsProbe: 'ok'
         }
       })
-      return response
+      return result
     } catch (error) {
       const classified = classifyConnectionError(error)
       const response = {
