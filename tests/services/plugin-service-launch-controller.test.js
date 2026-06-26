@@ -71,6 +71,8 @@ test('launch controller assembles service spawn inputs with fixed options', () =
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true
   })
+  assert.equal(Object.prototype.hasOwnProperty.call(calls[0].options.env, 'OPENPET_BRIDGE_URL'), false)
+  assert.equal(Object.prototype.hasOwnProperty.call(calls[0].options.env, 'OPENPET_BRIDGE_TOKEN'), false)
 })
 
 test('launch controller propagates parser and cwd resolution failures', () => {

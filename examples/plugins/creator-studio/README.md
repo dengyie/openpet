@@ -18,3 +18,5 @@ Current commands:
 The dashboard service exposes review data through loopback-only routes. Frame previews and repairs stay inside the Creator Studio run workspace; dashboard responses use data-relative artifact paths and preview URLs rather than raw filesystem paths.
 
 The dashboard now also exposes provider smoke guidance for non-fixture runs so users can verify the host-owned Image Provider path through Control Center before trusting generated assets for production import.
+
+The dashboard service does not receive `OPENPET_BRIDGE_URL` or `OPENPET_BRIDGE_TOKEN`. Privileged bridge actions stay command-scoped, so approval/import handoff from the dashboard must route back through explicit OpenPet commands such as `Import Approved Action` or `Import Approved Pet`.

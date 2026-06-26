@@ -133,7 +133,7 @@ Current state:
 P1 work:
 
 - Keep bridge route docs synchronized with actual route coverage and permission names.
-- Ensure Creator Studio dashboard cannot bypass command-scoped bridge tokens for privileged actions.
+- Ensure Creator Studio dashboard cannot bypass command-scoped bridge tokens for privileged actions. Completed in current branch: declaration-only command runs still receive the short-lived bridge URL/token, service launch paths remain free of bridge secrets, and Creator Studio dashboard detail/log responses plus dashboard handoff copy now make the host-command boundary explicit instead of exposing privileged bridge access.
 - Document plugin-managed provider credentials as unsupported unless a future explicit trust model is designed.
 
 P2/P3:
