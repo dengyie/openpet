@@ -23,8 +23,8 @@ const { createPluginCommandRunController } = require('./plugin-command-run-contr
 const { createPluginDashboardOpenController } = require('./plugin-dashboard-open-controller')
 const { createPluginResolutionController } = require('./plugin-resolution-controller')
 const { createPluginConfigStorageController } = require('./plugin-config-storage-controller')
+const { createPluginRuntimeSdkController } = require('./plugin-runtime-sdk-controller')
 
-const SDK_REGISTERED_COMMANDS = Symbol('openpet.registeredCommands')
 const STORAGE_KEY_PATTERN = /^[a-zA-Z0-9_.:-]{1,128}$/
 const MAX_PLUGIN_STORAGE_BYTES = 64 * 1024
 const MAX_PLUGIN_STORAGE_VALUE_BYTES = 16 * 1024
@@ -1012,83 +1012,20 @@ const createPluginService = ({ settingsService, petService, actionService, actio
     return listPlugins().find((candidate) => candidate.id === pluginId)
   }
 
-  const createSdk = (plugin) => {
-    const manifest = plugin.manifest
-    const registeredCommands = {}
+  const runtimeSdkController = createPluginRuntimeSdkController({
+    getConfig: getPluginConfig,
+    getStorage: getPluginStorage,
+    saveStorage: savePluginStorage,
+    assertPermission,
+    assertStorageKey,
+    assertStorageValueSize,
+    runAiChat: runPluginAiChat,
+    runNetworkRequest: runPluginNetworkRequest,
+    petService,
+    cloneJsonValue
+  })
 
-    return {
-      [SDK_REGISTERED_COMMANDS]: () => registeredCommands,
-      config: {
-        get: (key) => {
-          const config = getPluginConfig(manifest.id, plugin.configSchema)
-          return key ? config[key] : { ...config }
-        }
-      },
-      storage: {
-        get: async (key, fallbackValue) => {
-          assertPermission(manifest, 'storage')
-          const storage = getPluginStorage(manifest.id)
-          if (key == null) return storage
-          assertStorageKey(key)
-          return hasOwn(storage, key) ? cloneJsonValue(storage[key], 'value') : fallbackValue
-        },
-        set: async (key, value) => {
-          assertPermission(manifest, 'storage')
-          assertStorageKey(key)
-          const storage = getPluginStorage(manifest.id)
-          const nextValue = cloneJsonValue(value, 'value')
-          assertStorageValueSize(nextValue)
-          savePluginStorage(manifest.id, { ...storage, [key]: nextValue })
-          return nextValue
-        },
-        remove: async (key) => {
-          assertPermission(manifest, 'storage')
-          assertStorageKey(key)
-          const storage = getPluginStorage(manifest.id)
-          delete storage[key]
-          savePluginStorage(manifest.id, storage)
-          return true
-        },
-        clear: async () => {
-          assertPermission(manifest, 'storage')
-          savePluginStorage(manifest.id, {})
-          return true
-        }
-      },
-      pet: {
-        say: async (payload) => {
-          assertPermission(manifest, 'pet:say')
-          const normalizedPayload = typeof payload === 'string' ? { text: payload } : { ...payload }
-          return petService.say({ ...normalizedPayload, source: `plugin:${manifest.id}` })
-        },
-        playAction: async (actionIdOrPayload) => {
-          assertPermission(manifest, 'pet:action')
-          const payload = typeof actionIdOrPayload === 'string'
-            ? { actionId: actionIdOrPayload }
-            : { ...actionIdOrPayload }
-          return petService.playAction({ ...payload, source: `plugin:${manifest.id}` })
-        },
-        setEvent: async (payload) => {
-          assertPermission(manifest, 'pet:event')
-          return petService.setEvent({ ...payload, source: `plugin:${manifest.id}` })
-        }
-      },
-      ai: {
-        chat: async (payload) => runPluginAiChat(manifest, payload)
-      },
-      network: {
-        fetch: async (url, options = {}) => runPluginNetworkRequest(manifest, { url, options })
-      },
-      commands: {
-        register: (command) => {
-          if (!command?.id) throw new Error('Plugin command id is required')
-          if (typeof command.handler !== 'function') throw new Error(`Plugin command handler is required: ${command.id}`)
-          registeredCommands[command.id] = command.handler
-          return command.id
-        }
-      }
-    }
-  }
+  const createSdk = runtimeSdkController.createSdk
 
   const runCommandEntryProcess = async ({ plugin, commandEntry, commandId, payload, config }) => {
     commandRuntimeManager.assertNotActive(plugin.manifest.id, commandId)
@@ -1108,7 +1045,7 @@ const createPluginService = ({ settingsService, petService, actionService, actio
     runLocalCommand: (args) => runLocalPluginCommand(args),
     runCommandEntryProcess,
     getCommandEntry,
-    getRegisteredCommands: (sdk) => sdk[SDK_REGISTERED_COMMANDS]?.() || {}
+    getRegisteredCommands: (sdk) => sdk[runtimeSdkController.registeredCommandsSymbol]?.() || {}
   })
 
   const dashboardOpenController = createPluginDashboardOpenController({
