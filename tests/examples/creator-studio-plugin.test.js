@@ -2348,6 +2348,41 @@ test('creator studio service exposes task review routes for dashboard clients', 
   }
 })
 
+test('creator studio service rejects unknown api routes instead of falling back to dashboard html', async () => {
+  const { createCreatorStudioServer } = require('../../examples/plugins/creator-studio/service/studio-service')
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-service-route-guard-'))
+  const dashboardPath = path.join(pluginRoot, 'web', 'dashboard', 'index.html')
+  const server = createCreatorStudioServer({ dataDir, dashboardPath })
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const port = server.address().port
+
+  try {
+    const healthCheckResponse = await fetch(`http://127.0.0.1:${port}/api/model-health-check`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}'
+    })
+    const importResponse = await fetch(`http://127.0.0.1:${port}/api/runs/demo-run/import-approved-action`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}'
+    })
+    const healthCheckBody = await healthCheckResponse.json()
+    const importBody = await importResponse.json()
+
+    assert.equal(healthCheckResponse.status, 404)
+    assert.equal(healthCheckBody.ok, false)
+    assert.match(healthCheckBody.error, /not found/i)
+    assert.equal(importResponse.status, 404)
+    assert.equal(importBody.ok, false)
+    assert.match(importBody.error, /not found/i)
+    assert.equal(healthCheckResponse.headers.get('content-type'), 'application/json; charset=utf-8')
+    assert.equal(importResponse.headers.get('content-type'), 'application/json; charset=utf-8')
+  } finally {
+    await new Promise((resolve) => server.close(resolve))
+  }
+})
+
 test('creator studio service exposes sanitized host prompt provenance for dashboard clients', async () => {
   const { createCreatorStudioServer } = require('../../examples/plugins/creator-studio/service/studio-service')
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-service-prompt-'))

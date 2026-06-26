@@ -777,6 +777,11 @@ const createCreatorStudioServer = ({ dataDir, dashboardPath }) => http.createSer
     }
   }
 
+  if (url.pathname.startsWith('/api/')) {
+    sendJson(response, 404, { ok: false, error: 'Not found' })
+    return
+  }
+
   sendHtml(response, dashboardPath)
 })
 
