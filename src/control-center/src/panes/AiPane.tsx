@@ -35,6 +35,15 @@ const imageProviderPresets = [
     model: 'gpt-image-2',
     timeoutMs: 120000,
     maxConcurrentJobs: 1
+  },
+  {
+    id: 'openpet-8317-gateway',
+    title: 'OpenPet 8317 网关',
+    description: '使用当前开发网关，图片默认 gpt-image-2；只填充 Provider 草稿，不覆盖密钥。',
+    baseUrl: 'http://127.0.0.1:8317/v1',
+    model: 'gpt-image-2',
+    timeoutMs: 120000,
+    maxConcurrentJobs: 1
   }
 ] as const
 
@@ -52,6 +61,13 @@ const chatProviderPresets = [
     description: '适合本机网关、反代或局域网模型服务；本地和云端共用同一套 Provider 配置。',
     baseUrl: 'http://127.0.0.1:8317/v1',
     model: 'gpt-4o-mini'
+  },
+  {
+    id: 'openpet-8317-gateway',
+    title: 'OpenPet 8317 网关',
+    description: '使用当前开发网关，聊天默认 gpt-5.5；只填充 Provider 草稿，不覆盖密钥。',
+    baseUrl: 'http://127.0.0.1:8317/v1',
+    model: 'gpt-5.5'
   }
 ] as const
 

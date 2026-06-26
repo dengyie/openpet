@@ -422,6 +422,34 @@ test.describe('Control Center smoke', () => {
     await expect(chatDraftStatusRow).toContainText('草稿未保存')
   })
 
+  test('applies OpenPet gateway provider presets without touching API key drafts', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: 'AI' }).click()
+
+    const chatProviderSection = await expandAiSection(page, '聊天 Provider')
+    await page.getByRole('textbox', { name: 'Base URL', exact: true }).fill('https://dirty-chat.example.test/v1')
+    await page.getByRole('textbox', { name: 'Model', exact: true }).fill('dirty-chat-model')
+    await page.getByPlaceholder('输入 API Key').fill('sk-chat-draft-secret')
+    await chatProviderSection.getByRole('button', { name: /OpenPet 8317 网关/ }).click()
+
+    await expect(page.getByRole('textbox', { name: 'Base URL', exact: true })).toHaveValue('http://127.0.0.1:8317/v1')
+    await expect(page.getByRole('textbox', { name: 'Model', exact: true })).toHaveValue('gpt-5.5')
+    await expect(page.getByPlaceholder('输入 API Key')).toHaveValue('sk-chat-draft-secret')
+
+    const imageProviderSection = await expandAiSection(page, '图片 Provider')
+    await page.getByLabel('图片 Base URL').fill('https://dirty-image.example.test/v1')
+    await page.getByLabel('图片 Model').fill('dirty-image-model')
+    const imageApiKeyRow = page.locator('.field-row', { hasText: '图片 API Key' })
+    await imageApiKeyRow.locator('input[type="password"]').fill('sk-image-draft-secret')
+    await imageProviderSection.getByRole('button', { name: /OpenPet 8317 网关/ }).click()
+
+    await expect(page.getByLabel('图片 Base URL')).toHaveValue('http://127.0.0.1:8317/v1')
+    await expect(page.getByLabel('图片 Model')).toHaveValue('gpt-image-2')
+    await expect(page.getByLabel('图片 Timeout MS')).toHaveValue('120000')
+    await expect(page.getByLabel('图片最大并发')).toHaveValue('1')
+    await expect(imageApiKeyRow.locator('input[type="password"]')).toHaveValue('sk-image-draft-secret')
+  })
+
   test('persists image generation config and supports key health actions in the demo API', async ({ page }) => {
     await page.goto('/')
     await page.getByRole('button', { name: 'AI' }).click()
