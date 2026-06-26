@@ -3370,3 +3370,112 @@ test('creator studio service rejects invalid dashboard JSON bodies', async () =>
     await new Promise((resolve) => server.close(resolve))
   }
 })
+
+test('creator studio service exposes full-pet validation recovery guidance for dashboard clients', async () => {
+  const { createCreatorStudioServer } = require('../../examples/plugins/creator-studio/service/studio-service')
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-full-pet-validation-retry-'))
+  const dashboardPath = path.join(pluginRoot, 'web', 'dashboard', 'index.html')
+  const server = createCreatorStudioServer({ dataDir, dashboardPath })
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const port = server.address().port
+  const bridgeServer = require('node:http').createServer((request, response) => {
+    let body = ''
+    request.on('data', (chunk) => { body += chunk })
+    request.on('end', () => {
+      const payload = body ? JSON.parse(body) : {}
+      response.writeHead(200, {
+        'Content-Type': 'application/json',
+        Connection: 'close'
+      })
+      if (request.url.endsWith('/creator/model-settings')) {
+        response.end(JSON.stringify({
+          ok: true,
+          config: {
+            provider: 'openai-compatible',
+            baseUrl: 'http://127.0.0.1:7860/v1',
+            model: 'local-custom-sprite-v2'
+          }
+        }))
+        return
+      }
+      const dataRelativePath = `runs/${payload.output.dataRelativeDir.split('/')[1]}/frames/base/0001.png`
+      const generatedPath = path.join(dataDir, dataRelativePath)
+      fs.mkdirSync(path.dirname(generatedPath), { recursive: true })
+      sharp({
+        create: {
+          width: 96,
+          height: 112,
+          channels: 4,
+          background: { r: 0, g: 0, b: 0, alpha: 0 }
+        }
+      })
+        .png()
+        .toFile(generatedPath)
+        .then(() => {
+          response.end(JSON.stringify({
+            ok: true,
+            result: {
+              ok: true,
+              backend: 'local',
+              model: 'local-custom-sprite-v2',
+              generatedAt: '2026-06-26T01:00:00.000Z',
+              outputs: [{
+                dataRelativePath,
+                mimeType: 'image/png',
+                sha256: 'invalid-visible-pixels-sha'
+              }]
+            }
+          }))
+        })
+        .catch((error) => {
+          response.end(JSON.stringify({ ok: false, error: error.message }))
+        })
+    })
+  })
+  await new Promise((resolve) => bridgeServer.listen(0, '127.0.0.1', resolve))
+  const bridgePort = bridgeServer.address().port
+  const previousBridgeUrl = process.env.OPENPET_BRIDGE_URL
+  const previousBridgeToken = process.env.OPENPET_BRIDGE_TOKEN
+  process.env.OPENPET_BRIDGE_URL = `http://127.0.0.1:${bridgePort}`
+  process.env.OPENPET_BRIDGE_TOKEN = 'bridge-token'
+
+  const postJsonResponse = async (pathname, body = {}) => {
+    const response = await fetch(`http://127.0.0.1:${port}${pathname}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+    return { response, body: await response.json() }
+  }
+
+  try {
+    const draft = await postJsonResponse('/api/tasks/draft', {
+      prompt: '帮我做一只软乎乎的橘猫桌宠，平时懒懒的，被点击会害羞转圈，偶尔会打哈欠。',
+      backend: 'local'
+    })
+    const runId = draft.body.run.runId
+    await postJsonResponse(`/api/runs/${runId}/confirm`)
+    const failed = await postJsonResponse(`/api/runs/${runId}/generate-action`)
+
+    assert.equal(failed.response.status, 500)
+    assert.equal(failed.body.ok, false)
+    assert.match(failed.body.error, /Generated image contains no visible pixels/)
+    assert.equal(failed.body.run.generationTask.mode, 'full-pet')
+    assert.equal(failed.body.run.recovery.canRetryGeneration, true)
+    assert.equal(failed.body.run.recovery.actionLabel, 'Retry generation')
+    assert.equal(failed.body.run.recovery.failureKind, 'validation')
+    assert.equal(
+      failed.body.run.recovery.guidance,
+      'The generated source image was empty. Adjust the prompt or model settings, then retry generation on this same run.'
+    )
+    assert.equal(failed.body.run.recovery.qaFocus, 'Check source image validation expectations before retrying.')
+  } finally {
+    if (previousBridgeUrl == null) delete process.env.OPENPET_BRIDGE_URL
+    else process.env.OPENPET_BRIDGE_URL = previousBridgeUrl
+    if (previousBridgeToken == null) delete process.env.OPENPET_BRIDGE_TOKEN
+    else process.env.OPENPET_BRIDGE_TOKEN = previousBridgeToken
+    bridgeServer.closeAllConnections?.()
+    await new Promise((resolve) => bridgeServer.close(resolve))
+    await new Promise((resolve) => server.close(resolve))
+  }
+})

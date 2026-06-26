@@ -811,7 +811,10 @@
             '<div class="meta-list">',
             `<span>Backend: ${escapeHtml(backend.backend || run.backend || 'unknown')}</span>`,
             `<span>State: ${escapeHtml(backend.state || 'failed')}</span>`,
+            `<span>Failure kind: ${escapeHtml(recovery.failureKind || 'provider')}</span>`,
             `<span>Reason: ${escapeHtml(recovery.failureReason || backend.message || run.error || 'Unknown failure')}</span>`,
+            `<span>Guidance: ${escapeHtml(recovery.guidance || 'Review the failure details, then retry generation on this same run.')}</span>`,
+            `<span>QA focus: ${escapeHtml(recovery.qaFocus || 'No QA artifacts were produced before the generation failure.')}</span>`,
             recovery.canRetryGeneration
               ? '<span>Retry generation will reuse this same run and preserve the confirmed task.</span>'
               : '<span>Retry is locked until the task is confirmed again.</span>',

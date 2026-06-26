@@ -187,15 +187,43 @@ const createDeveloperPrompt = ({ dataDir, run }) => {
   }
 }
 
+const classifyRecoveryFailure = (message = '') => {
+  const text = String(message || '')
+  if (/Generated image contains no visible pixels/i.test(text)) {
+    return {
+      failureKind: 'validation',
+      guidance: 'The generated source image was empty. Adjust the prompt or model settings, then retry generation on this same run.',
+      qaFocus: 'Check source image validation expectations before retrying.'
+    }
+  }
+  if (/Generated image could not be decoded|too large to process|path escaped|image is missing/i.test(text)) {
+    return {
+      failureKind: 'validation',
+      guidance: 'The generated source image failed validation before atlas review. Fix the provider output or prompt, then retry generation on this same run.',
+      qaFocus: 'Review source image validation details before retrying.'
+    }
+  }
+  return {
+    failureKind: 'provider',
+    guidance: 'Review the provider failure details, then retry generation on this same run when the backend is ready.',
+    qaFocus: 'No QA artifacts were produced before the generation failure.'
+  }
+}
+
 const createPublicRecovery = ({ dataDir, run }) => {
   const backendStatus = run.backendStatus || {}
   const canRetryGeneration = run.status === 'failed' && run.taskStatus === 'confirmed' && run.currentStep === 'generate'
   const isFullPet = run.generationTask?.mode === 'full-pet'
+  const failureReason = createPublicText({ dataDir, value: run.error || backendStatus.message || '' })
+  const classified = classifyRecoveryFailure(failureReason)
   return {
     canRetryGeneration,
     actionLabel: canRetryGeneration ? 'Retry generation' : (isFullPet ? 'Generate pet pack' : 'Generate action'),
     backend: createPublicLogValue({ dataDir, value: backendStatus }),
-    failureReason: createPublicText({ dataDir, value: run.error || backendStatus.message || '' })
+    failureReason,
+    failureKind: createPublicText({ dataDir, value: classified.failureKind }),
+    guidance: createPublicText({ dataDir, value: classified.guidance }),
+    qaFocus: createPublicText({ dataDir, value: classified.qaFocus })
   }
 }
 
