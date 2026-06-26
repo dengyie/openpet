@@ -167,11 +167,17 @@ const createImageUsageSummary = ({ run }) => {
 
 const createWizardState = ({ run }) => {
   const question = Array.isArray(run.generationTask?.questions) ? run.generationTask.questions[0] : null
+  const triggerProposalSubmissions = Array.isArray(run.triggerProposalSubmissions) ? run.triggerProposalSubmissions : []
   if (run.importStatus === 'imported') {
+    const nextStep = run.triggerProposalSubmissionError
+      ? 'Host import completed. Review the imported pet pack, then resolve the pending trigger proposal submissions in OpenPet.'
+      : (triggerProposalSubmissions.length > 0
+          ? 'Host import completed. Review the imported pet pack and the submitted trigger proposals in OpenPet.'
+          : 'Host import completed. Review the imported action or pet pack in OpenPet.')
     return {
       stage: 'imported',
       label: 'Imported',
-      nextStep: 'Host import completed. Review the imported action or pet pack in OpenPet.',
+      nextStep,
       taskStatus: String(run.taskStatus || ''),
       runStatus: String(run.status || ''),
       reviewStatus: String(run.reviewStatus || ''),

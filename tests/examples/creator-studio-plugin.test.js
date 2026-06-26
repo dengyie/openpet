@@ -1235,6 +1235,267 @@ test('creator studio import command regenerates stale fixture output when approv
   }
 })
 
+test('creator studio import-approved-pet submits generated trigger proposals through host bridge', async () => {
+  const { createRun, readRun, updateRunStatus } = require('../../examples/plugins/creator-studio/lib/run-store')
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-import-pet-trigger-'))
+  const outputDir = path.join(dataDir, 'runs/demo/outputs')
+  fs.mkdirSync(outputDir, { recursive: true })
+  const run = createRun({
+    dataDir,
+    input: {
+      petName: 'Trigger Pet Cat',
+      petId: 'trigger-pet-cat',
+      backend: 'cloud',
+      prompt: '做一只桌宠，点击挥手，空闲时偶尔打哈欠',
+      generationTask: {
+        mode: 'full-pet',
+        targetPet: 'new',
+        styleSource: 'textOnly',
+        characterBrief: 'Mint desktop cat',
+        actions: [
+          {
+            actionId: 'wave',
+            name: '挥手',
+            motionPrompt: '点击后挥手',
+            frameCount: 8,
+            triggerProposal: { type: 'click', binding: 'clickAction', notes: 'User asked for click trigger' }
+          },
+          {
+            actionId: 'yawn',
+            name: '打哈欠',
+            motionPrompt: '空闲时打哈欠',
+            frameCount: 8,
+            triggerProposal: { type: 'random', notes: 'Ambient idle action' }
+          }
+        ]
+      }
+    }
+  })
+  updateRunStatus({
+    dataDir,
+    runId: run.runId,
+    status: 'approved',
+    patch: {
+      reviewStatus: 'approved',
+      currentStep: 'approved',
+      artifacts: {
+        outputDir
+      }
+    },
+    now: () => '2026-06-20T00:01:00.000Z'
+  })
+  const { server, requests } = createBridgeServer({
+    routes: [
+      {
+        path: '/creator/pet-pack/inspect-output',
+        handler: () => ({ body: { ok: true, inspection: { valid: true, selectionId: 'selection-1' } } })
+      },
+      {
+        path: '/creator/pet-pack/import-output',
+        handler: () => ({ body: { ok: true, imported: { pack: { id: 'trigger-pet-cat' } }, activated: { activePackId: 'trigger-pet-cat' } } })
+      },
+      {
+        path: '/creator/actions/submit-trigger-proposal',
+        handler: ({ payload }) => ({
+          body: {
+            ok: true,
+            proposal: {
+              id: `proposal:${payload.type}:${payload.actionId}:test`,
+              actionId: payload.actionId,
+              type: payload.type,
+              binding: payload.binding || '',
+              sourcePluginId: payload.sourcePluginId,
+              sourceRunId: payload.sourceRunId,
+              sourceCommandId: payload.sourceCommandId,
+              message: payload.message,
+              status: 'pending',
+              resultCode: '',
+              resultMessage: '',
+              rejectionReason: '',
+              createdAt: '2026-06-20T00:01:00.000Z',
+              updatedAt: '2026-06-20T00:01:00.000Z',
+              acceptedAt: '',
+              rejectedAt: ''
+            },
+            actions: { defaultAction: 'idle', clickAction: 'wave', actions: [] }
+          }
+        })
+      }
+    ]
+  })
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const port = server.address().port
+
+  try {
+    const imported = await runCreatorCommandAsync({
+      command: 'import-approved-pet',
+      dataDir,
+      payload: { runId: run.runId, activate: true },
+      env: {
+        OPENPET_BRIDGE_URL: `http://127.0.0.1:${port}`,
+        OPENPET_BRIDGE_TOKEN: 'bridge-token'
+      }
+    })
+    const stored = readRun({ dataDir, runId: run.runId })
+
+    assert.equal(imported.status, 0)
+    assert.equal(imported.json.ok, true)
+    assert.equal(imported.json.run.status, 'imported')
+    assert.equal(imported.json.run.currentStep, 'imported')
+    assert.equal(imported.json.run.importedPackId, 'trigger-pet-cat')
+    assert.equal(imported.json.triggerProposalSubmissions.length, 2)
+    assert.equal(stored.triggerProposalSubmissions.length, 2)
+    assert.equal(requests[0].url, '/creator/pet-pack/inspect-output')
+    assert.equal(requests[1].url, '/creator/pet-pack/import-output')
+    assert.equal(requests[2].url, '/creator/actions/submit-trigger-proposal')
+    assert.equal(requests[3].url, '/creator/actions/submit-trigger-proposal')
+    assert.deepEqual(requests.slice(2).map((entry) => entry.payload.actionId), ['wave', 'yawn'])
+    assert.equal(requests[2].payload.sourcePluginId, 'openpet.creator-studio')
+    assert.equal(requests[2].payload.sourceRunId, run.runId)
+    assert.equal(requests[2].payload.sourceCommandId, 'import-approved-pet')
+    assert.equal(JSON.stringify(requests.slice(2).map((entry) => entry.payload)).includes(dataDir), false)
+  } finally {
+    server.closeAllConnections?.()
+    await new Promise((resolve) => server.close(resolve))
+  }
+})
+
+test('creator studio import-approved-pet preserves imported state when trigger proposal submission fails', async () => {
+  const { createRun, readRun, updateRunStatus } = require('../../examples/plugins/creator-studio/lib/run-store')
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-import-pet-partial-'))
+  const outputDir = path.join(dataDir, 'runs/demo/outputs')
+  fs.mkdirSync(outputDir, { recursive: true })
+  const run = createRun({
+    dataDir,
+    input: {
+      petName: 'Trigger Partial Cat',
+      petId: 'trigger-partial-cat',
+      backend: 'cloud',
+      prompt: '做一只桌宠，点击挥手，空闲时偶尔打哈欠',
+      generationTask: {
+        mode: 'full-pet',
+        targetPet: 'new',
+        styleSource: 'textOnly',
+        characterBrief: 'Mint desktop cat',
+        actions: [
+          {
+            actionId: 'wave',
+            name: '挥手',
+            motionPrompt: '点击后挥手',
+            frameCount: 8,
+            triggerProposal: { type: 'click', binding: 'clickAction' }
+          },
+          {
+            actionId: 'yawn',
+            name: '打哈欠',
+            motionPrompt: '空闲时打哈欠',
+            frameCount: 8,
+            triggerProposal: { type: 'random' }
+          }
+        ]
+      }
+    }
+  })
+  updateRunStatus({
+    dataDir,
+    runId: run.runId,
+    status: 'approved',
+    patch: {
+      reviewStatus: 'approved',
+      currentStep: 'approved',
+      artifacts: {
+        outputDir
+      }
+    },
+    now: () => '2026-06-20T00:01:00.000Z'
+  })
+  const { server, requests } = createBridgeServer({
+    routes: [
+      {
+        path: '/creator/pet-pack/inspect-output',
+        handler: () => ({ body: { ok: true, inspection: { valid: true, selectionId: 'selection-1' } } })
+      },
+      {
+        path: '/creator/pet-pack/import-output',
+        handler: () => ({ body: { ok: true, imported: { pack: { id: 'trigger-partial-cat' } }, activated: { activePackId: 'trigger-partial-cat' } } })
+      },
+      {
+        path: '/creator/actions/submit-trigger-proposal',
+        handler: ({ payload }) => {
+          if (payload.actionId === 'yawn') {
+            return {
+              statusCode: 500,
+              body: {
+                ok: false,
+                error: 'Host trigger proposal inbox is unavailable for yawn'
+              }
+            }
+          }
+          return {
+            body: {
+              ok: true,
+              proposal: {
+                id: `proposal:${payload.type}:${payload.actionId}:test`,
+                actionId: payload.actionId,
+                type: payload.type,
+                binding: payload.binding || '',
+                sourcePluginId: payload.sourcePluginId,
+                sourceRunId: payload.sourceRunId,
+                sourceCommandId: payload.sourceCommandId,
+                message: payload.message,
+                status: 'pending',
+                resultCode: '',
+                resultMessage: '',
+                rejectionReason: '',
+                createdAt: '2026-06-20T00:01:00.000Z',
+                updatedAt: '2026-06-20T00:01:00.000Z',
+                acceptedAt: '',
+                rejectedAt: ''
+              },
+              actions: { defaultAction: 'idle', clickAction: 'wave', actions: [] }
+            }
+          }
+        }
+      }
+    ]
+  })
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const port = server.address().port
+
+  try {
+    const imported = await runCreatorCommandAsync({
+      command: 'import-approved-pet',
+      dataDir,
+      payload: { runId: run.runId, activate: true },
+      env: {
+        OPENPET_BRIDGE_URL: `http://127.0.0.1:${port}`,
+        OPENPET_BRIDGE_TOKEN: 'bridge-token'
+      }
+    })
+    const stored = readRun({ dataDir, runId: run.runId })
+
+    assert.equal(imported.status, 0)
+    assert.equal(imported.json.ok, true)
+    assert.equal(imported.json.run.status, 'imported')
+    assert.equal(imported.json.run.currentStep, 'imported-trigger-proposal-pending')
+    assert.equal(imported.json.triggerProposalSubmissions.length, 1)
+    assert.match(imported.json.triggerProposalSubmissionError, /yawn: Host trigger proposal inbox is unavailable for yawn/)
+    assert.equal(stored.importStatus, 'imported')
+    assert.equal(stored.currentStep, 'imported-trigger-proposal-pending')
+    assert.equal(stored.triggerProposalSubmissions.length, 1)
+    assert.match(stored.triggerProposalSubmissionError, /yawn: Host trigger proposal inbox is unavailable for yawn/)
+    assert.deepEqual(requests.map((entry) => entry.url), [
+      '/creator/pet-pack/inspect-output',
+      '/creator/pet-pack/import-output',
+      '/creator/actions/submit-trigger-proposal',
+      '/creator/actions/submit-trigger-proposal'
+    ])
+  } finally {
+    server.closeAllConnections?.()
+    await new Promise((resolve) => server.close(resolve))
+  }
+})
+
 test('creator studio import-approved-action imports approved single-action frames through host bridge', async () => {
   const { createRun, readRun, updateRunStatus } = require('../../examples/plugins/creator-studio/lib/run-store')
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-import-action-'))

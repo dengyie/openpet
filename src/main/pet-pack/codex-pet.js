@@ -133,8 +133,8 @@ const normalizeCodexPetManifest = (manifest, { rootPath }) => {
     assetAuthor: manifest.assetAuthor,
     license: manifest.license,
     licenseUrl: manifest.licenseUrl,
-    defaultAction: 'idle',
-    clickAction: 'waving',
+    defaultAction: manifest.defaultAction || 'idle',
+    clickAction: manifest.clickAction || 'waving',
     actions: CODEX_ROWS.map((row) => ({
       id: row.id,
       label: row.label,
@@ -154,7 +154,9 @@ const normalizeCodexPetManifest = (manifest, { rootPath }) => {
         height: CODEX_ATLAS.height
       },
       sprite: spritesheetPath
-    }))
+    })),
+    ...(Array.isArray(manifest.triggerProposalInbox) ? { triggerProposalInbox: manifest.triggerProposalInbox } : {}),
+    ...(Array.isArray(manifest.triggerRules) ? { triggerRules: manifest.triggerRules } : {})
   })
 }
 

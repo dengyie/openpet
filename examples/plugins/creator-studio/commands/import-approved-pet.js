@@ -27,7 +27,49 @@ const regenerateApprovedFixtureOutput = async ({ current, runId }) => {
   return regenerated
 }
 
+const collectTriggerProposals = (run) => {
+  const actions = Array.isArray(run.generationTask?.actions) ? run.generationTask.actions : []
+  return actions
+    .filter((action) => action?.actionId)
+    .map((action) => ({
+      actionId: action.actionId,
+      type: action.triggerProposal?.type || 'unbound',
+      binding: action.triggerProposal?.binding,
+      message: action.triggerProposal?.notes || `Imported action ${action.actionId} from pet ${run.petId}`
+    }))
+}
+
+const submitTriggerProposals = async ({ run, runId, activate }) => {
+  const proposals = collectTriggerProposals(run)
+  if (proposals.length === 0) return { submissions: [], error: '' }
+  if (!activate) {
+    return {
+      submissions: [],
+      error: 'Trigger proposal submission requires activating the imported pet pack so the host can validate action bindings.'
+    }
+  }
+  const submissions = []
+  const errors = []
+  for (const proposal of proposals) {
+    try {
+      submissions.push(await callBridge('/creator/actions/submit-trigger-proposal', {
+        actionId: proposal.actionId,
+        type: proposal.type,
+        binding: proposal.binding,
+        message: proposal.message,
+        sourcePluginId: 'openpet.creator-studio',
+        sourceRunId: runId,
+        sourceCommandId: 'import-approved-pet'
+      }))
+    } catch (error) {
+      errors.push(`${proposal.actionId}: ${error.message || 'Trigger proposal submission failed'}`)
+    }
+  }
+  return { submissions, error: errors.join('; ') }
+}
+
 runCommand(async (context) => {
+  const activate = context.payload?.activate ?? context.config?.autoActivateAfterImport ?? true
   const runId = resolveRunId({
     dataDir: process.env.OPENPET_DATA_DIR,
     runId: context.payload?.runId,
@@ -51,7 +93,12 @@ runCommand(async (context) => {
   if (!inspection.inspection?.valid) throw new Error((inspection.inspection?.errors || []).join('; ') || 'Pet pack inspection failed')
   const imported = await callBridge('/creator/pet-pack/import-output', {
     selectionId: inspection.inspection.selectionId,
-    activate: context.payload?.activate ?? context.config?.autoActivateAfterImport ?? true
+    activate
+  })
+  const { submissions, error: triggerProposalSubmissionError } = await submitTriggerProposals({
+    run: current,
+    runId,
+    activate
   })
   const run = updateRunStatus({
     dataDir: process.env.OPENPET_DATA_DIR,
@@ -60,8 +107,18 @@ runCommand(async (context) => {
     patch: {
       importStatus: 'imported',
       importedPackId: imported.imported?.pack?.id || '',
-      currentStep: 'imported'
+      currentStep: triggerProposalSubmissionError ? 'imported-trigger-proposal-pending' : 'imported',
+      triggerProposalSubmissions: submissions,
+      triggerProposalSubmissionError
     }
   })
-  return { message: `Imported run ${runId}`, run, imported }
+  return {
+    message: triggerProposalSubmissionError
+      ? `Imported run ${runId}; trigger proposal submission is pending`
+      : `Imported run ${runId}`,
+    run,
+    imported,
+    triggerProposalSubmissions: submissions,
+    ...(triggerProposalSubmissionError ? { triggerProposalSubmissionError } : {})
+  }
 })

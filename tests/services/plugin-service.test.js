@@ -10,6 +10,7 @@ const { PassThrough } = require('stream')
 const sharp = require('sharp')
 
 const { createPluginService } = require('../../src/main/services/plugin-service')
+const { createActionService } = require('../../src/main/services/action-service')
 const { createActionImportService } = require('../../src/main/services/action-import-service')
 const { createPetPackService } = require('../../src/main/services/pet-pack-service')
 const { createMinimalWebp } = require('../../examples/plugins/creator-studio/lib/fake-hatch-pet')
@@ -1201,6 +1202,7 @@ test('creator studio example imports approved fixture pet through host bridge', 
     settingsService,
     petService: createBridgeAwarePetService(),
     petPackService,
+    actionService: createActionService({ petPackService }),
     officialPlugins: [],
     pluginDirs: [path.resolve(__dirname, '../../examples/plugins')]
   })
@@ -1305,6 +1307,70 @@ test('creator studio example imports approved host-bridged local pet through hos
     crypto.createHash('sha256').update(fs.readFileSync(path.join(userPacksDir, 'local-sprout-cat', 'spritesheet.webp'))).digest('hex'),
     crypto.createHash('sha256').update(createMinimalWebp()).digest('hex')
   )
+})
+
+test('creator studio example imports approved task-driven pet and persists trigger proposals on the imported pack', async () => {
+  const settingsService = createSettingsService({
+    plugins: { enabled: { 'openpet.creator-studio': true } },
+    petPacks: { activePackId: 'legacy-cat', installed: {} }
+  })
+  const userPacksDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-task-import-'))
+  const petPackService = createPetPackService({
+    settingsService,
+    userPacksDir,
+    projectRoot: '/app/openpet',
+    loadLegacyAnimations: () => ({ defaultAction: 'idle', clickAction: 'idle', actions: [] }),
+    now: () => new Date('2026-06-19T00:00:00.000Z')
+  })
+  const service = createPluginService({
+    settingsService,
+    petService: createBridgeAwarePetService(),
+    petPackService,
+    actionService: createActionService({ petPackService }),
+    officialPlugins: [],
+    pluginDirs: [path.resolve(__dirname, '../../examples/plugins')]
+  })
+
+  const createResult = await service.runCommand('openpet.creator-studio', 'create-run', {
+    petName: 'Task Driven Cat',
+    prompt: '做一只桌宠，点击挥手，空闲时偶尔打哈欠',
+    generationTask: {
+      mode: 'full-pet',
+      targetPet: 'new',
+      styleSource: 'textOnly',
+      characterBrief: 'Task driven cat',
+      actions: [
+        {
+          actionId: 'waving',
+          name: '挥手',
+          motionPrompt: '点击后挥手',
+          frameCount: 4,
+          triggerProposal: { type: 'click', binding: 'clickAction' }
+        },
+        {
+          actionId: 'review',
+          name: '打哈欠',
+          motionPrompt: '空闲时打哈欠',
+          frameCount: 6,
+          triggerProposal: { type: 'random' }
+        }
+      ]
+    }
+  })
+  const runId = createResult.result.run.runId
+  await service.runCommand('openpet.creator-studio', 'run-step', { runId })
+  await service.runCommand('openpet.creator-studio', 'approve-run', { runId })
+  const importResult = await service.runCommand('openpet.creator-studio', 'import-approved-pet', { runId, activate: true })
+  const importedManifest = JSON.parse(fs.readFileSync(path.join(userPacksDir, 'task-driven-cat', 'pet.json'), 'utf-8'))
+
+  assert.equal(importResult.ok, true)
+  assert.equal(importResult.result.ok, true)
+  assert.equal(importResult.result.run.importStatus, 'imported')
+  assert.equal(importResult.result.triggerProposalSubmissions.length, 2)
+  assert.equal(settingsService.get().petPacks.activePackId, 'task-driven-cat')
+  assert.equal(importedManifest.triggerProposalInbox.length, 2)
+  assert.equal(importedManifest.triggerProposalInbox[0].sourceCommandId, 'import-approved-pet')
+  assert.equal(importedManifest.triggerProposalInbox[1].type, 'random')
 })
 
 test('declaration-only creator asset inspection bridge rejects missing permissions', async () => {

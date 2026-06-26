@@ -73,7 +73,23 @@ test('loads a Codex-compatible pet manifest from a directory', async () => {
     id: 'codex-cat',
     displayName: 'Codex Cat',
     description: 'A generated Codex pet.',
-    spritesheetPath: 'spritesheet.webp'
+    spritesheetPath: 'spritesheet.webp',
+    clickAction: 'jumping',
+    triggerProposalInbox: [{
+      id: 'proposal:click:jumping:test',
+      actionId: 'jumping',
+      type: 'click',
+      binding: 'clickAction',
+      sourceCommandId: 'import-approved-pet',
+      status: 'pending'
+    }],
+    triggerRules: [{
+      id: 'rule:random:review',
+      type: 'random',
+      actionId: 'review',
+      enabled: true,
+      condition: { probability: 0.2 }
+    }]
   }))
 
   const pack = loadPetPackFromDirectory(root)
@@ -83,7 +99,9 @@ test('loads a Codex-compatible pet manifest from a directory', async () => {
   assert.equal(pack.manifest.id, 'codex-cat')
   assert.equal(pack.manifest.displayName, 'Codex Cat')
   assert.equal(pack.manifest.defaultAction, 'idle')
-  assert.equal(pack.manifest.clickAction, 'waving')
+  assert.equal(pack.manifest.clickAction, 'jumping')
+  assert.equal(pack.manifest.triggerProposalInbox[0].sourceCommandId, 'import-approved-pet')
+  assert.equal(pack.manifest.triggerRules[0].actionId, 'review')
   assert.deepEqual(pack.manifest.actions.map((action) => action.id), [
     'idle',
     'running-right',
