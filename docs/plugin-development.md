@@ -83,7 +83,7 @@ OpenPet should preserve structural safety:
 
 `examples/plugins/creator-studio/` demonstrates a hybrid creator-tools extension. It creates durable pet-generation runs under `OPENPET_DATA_DIR`, produces a valid `codex-pet` fixture output, requires explicit approval, and imports the approved output through OpenPet's host-owned pet-pack bridge.
 
-The example intentionally uses a deterministic fixture backend first. Cloud and local model adapters can replace the fixture generator while keeping the same run workspace and review/import contract. When Creator Studio uses model-backed generation, that generation remains host-managed: the command gets a short-lived bridge token for bounded host routes, OpenPet keeps provider credentials in main-process secret storage, and plugin-managed provider credentials are currently unsupported in the author-facing trust model.
+The example intentionally uses a deterministic fixture backend first. Creator Studio now treats model-backed generation as one host-owned `provider` path while still accepting legacy `cloud` / `local` inputs as compatibility aliases. When Creator Studio uses model-backed generation, that generation remains host-managed: the command gets a short-lived bridge token for bounded host routes, OpenPet keeps provider credentials in main-process secret storage, and plugin-managed provider credentials are currently unsupported in the author-facing trust model.
 
 ## Manifest Shape
 

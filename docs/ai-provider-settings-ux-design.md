@@ -529,7 +529,7 @@ Steps:
 
 - Provider presets for common OpenAI-compatible endpoints.
 - Per-provider model discovery from `/models` where supported.
-- Dedicated model-settings presentation for image generation, including clearer cloud/local trust copy and setup guidance.
+- Dedicated model-settings presentation for image generation, including clearer host-owned provider trust copy and setup guidance.
 - Connection test history with last success/failure timestamp.
 - Persona preset/import polish on top of the implemented pet-pack override preview.
 - Streaming chat response once the non-streaming provider settings flow is stable.
