@@ -391,6 +391,67 @@ function createFullPetReviewGate ({ dataDir, run }) {
   }
 }
 
+function createActionFrameReviewGate ({ dataDir, run }) {
+  if (!run.artifacts?.actionFrames) {
+    return {
+      qa: null,
+      reviewGate: {
+        status: 'ready',
+        ready: true,
+        reason: ''
+      },
+      qaWarnings: [],
+      repairs: [],
+      visiblePixelSummary: {
+        totalVisiblePixels: 0,
+        invalidFrameCount: 0
+      }
+    }
+  }
+
+  const qa = readActionFrameQa({ dataDir, actionFrames: run.artifacts.actionFrames })
+  const frames = Array.isArray(qa?.frames) ? qa.frames : []
+  const totalVisiblePixels = frames.reduce((sum, frame) => {
+    const visiblePixels = Number(frame?.visiblePixels)
+    return Number.isFinite(visiblePixels) && visiblePixels > 0
+      ? sum + visiblePixels
+      : sum
+  }, 0)
+  const invalidFrameCount = frames.reduce((count, frame) => {
+    const visiblePixels = Number(frame?.visiblePixels)
+    return !Number.isFinite(visiblePixels) || visiblePixels < 1
+      ? count + 1
+      : count
+  }, 0)
+
+  let reviewGate = {
+    status: 'ready',
+    ready: true,
+    reason: 'Action-frame QA passed. Review the generated frames and approve when the motion looks correct.'
+  }
+
+  try {
+    assertRunActionFrameQaPassed({ dataDir, run, operation: 'approval' })
+  } catch (_) {
+    reviewGate = {
+      status: 'blocked',
+      ready: false,
+      reason: 'Repair or regenerate frames before approval. Action-frame QA is blocked.'
+    }
+  }
+
+  return {
+    qa,
+    reviewGate,
+    qaWarnings: Array.isArray(qa?.warnings) ? qa.warnings : [],
+    repairs: Array.isArray(qa?.repairs) ? qa.repairs : [],
+    visiblePixelSummary: {
+      totalVisiblePixels,
+      invalidFrameCount
+    }
+  }
+}
+
 const createImportedFollowUp = (run) => {
   if (run.artifacts?.actionFrames) {
     if (run.triggerProposalSubmission?.ok === true) {
@@ -607,7 +668,10 @@ const createDashboardButtonStates = ({ dataDir, run }) => {
   const status = String(run.status || 'draft')
   const isFullPet = run.generationTask?.mode === 'full-pet'
   const fullPetReviewGate = createFullPetReviewGate({ dataDir, run })
-  const requiresRetryBeforeApproval = status === 'ready_for_review' && fullPetReviewGate.reviewGate.ready === false
+  const actionFrameReviewGate = createActionFrameReviewGate({ dataDir, run })
+  const fullPetApprovalBlocked = status === 'ready_for_review' && fullPetReviewGate.reviewGate.ready === false
+  const actionApprovalBlocked = status === 'ready_for_review' && actionFrameReviewGate.reviewGate.ready === false
+  const requiresRetryBeforeApproval = fullPetApprovalBlocked
   const canRetryGeneration = Boolean(
     run.recovery?.canRetryGeneration ||
     (status === 'failed' && taskStatus === 'confirmed') ||
@@ -619,7 +683,7 @@ const createDashboardButtonStates = ({ dataDir, run }) => {
   const generateEnabled = !hasPendingQuestion && taskStatus === 'confirmed' && ['draft', 'failed'].includes(status)
     ? true
     : !hasPendingQuestion && requiresRetryBeforeApproval && taskStatus === 'confirmed'
-  const approveEnabled = status === 'ready_for_review' && !requiresRetryBeforeApproval
+  const approveEnabled = status === 'ready_for_review' && !fullPetApprovalBlocked && !actionApprovalBlocked
 
   return {
     confirm: {
@@ -654,7 +718,9 @@ const createDashboardButtonStates = ({ dataDir, run }) => {
       enabled: approveEnabled,
       reason: approveEnabled
         ? 'QA is ready. Approve the run to unlock host-owned import.'
-        : requiresRetryBeforeApproval
+        : actionApprovalBlocked
+          ? actionFrameReviewGate.reviewGate.reason
+        : fullPetApprovalBlocked
           ? 'Retry generation before approval so QA matches the current generated image.'
           : status === 'imported'
           ? 'This run is already imported.'
@@ -1008,7 +1074,8 @@ const createActionReview = ({ dataDir, run }) => {
   const actionFrames = run.artifacts?.actionFrames
   const action = Array.isArray(run.generationTask?.actions) ? run.generationTask.actions[0] : null
   if (!actionFrames) return null
-  const qa = readActionFrameQa({ dataDir, actionFrames })
+  const reviewState = createActionFrameReviewGate({ dataDir, run })
+  const qa = reviewState.qa
   const actionId = actionFrames.actionId
   const frameCount = actionFrames.frameCount || action?.frameCount || 0
   const previewFrames = Array.from({ length: Math.min(32, Math.max(0, Number(frameCount) || 0)) }, (_entry, index) => {
@@ -1033,6 +1100,11 @@ const createActionReview = ({ dataDir, run }) => {
     frameHeight: actionFrames.frameHeight || 0,
     playback: createPublicLogValue({ dataDir, value: playback }),
     qa: toDataRelativePath({ dataDir, targetPath: actionFrames.qa }),
+    reviewGate: createPublicLogValue({ dataDir, value: reviewState.reviewGate }),
+    qaStatus: createPublicText({ dataDir, value: reviewState.reviewGate.status }),
+    qaWarnings: createPublicTextList({ dataDir, values: reviewState.qaWarnings }),
+    repairs: createPublicLogValue({ dataDir, value: reviewState.repairs }),
+    visiblePixelSummary: createPublicLogValue({ dataDir, value: reviewState.visiblePixelSummary }),
     contactSheet: toDataRelativePath({ dataDir, targetPath: actionFrames.contactSheet }),
     contactSheetUrl: actionFrames.contactSheet
       ? `/api/runs/${encodeURIComponent(run.runId)}/action-frames/${encodeURIComponent(actionId)}/contact-sheet.png`

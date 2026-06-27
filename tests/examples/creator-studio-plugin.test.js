@@ -3449,6 +3449,136 @@ test('creator studio service exposes run detail and logs for dashboard clients',
   }
 })
 
+test('creator studio service blocks single-action approval when action-frame qa is invalid', async () => {
+  const { createCreatorStudioServer } = require('../../examples/plugins/creator-studio/service/studio-service')
+  const { createRun, updateRunStatus } = require('../../examples/plugins/creator-studio/lib/run-store')
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-service-action-qa-blocked-'))
+  const dashboardPath = path.join(pluginRoot, 'web', 'dashboard', 'index.html')
+  const run = createRun({
+    dataDir,
+    input: {
+      petName: 'Blocked Review Cat',
+      prompt: 'Visible blocked action review',
+      backend: 'fixture',
+      generationTask: {
+        mode: 'single-action',
+        targetPet: 'current',
+        styleSource: 'currentPet',
+        actions: [{
+          actionId: 'shy-spin',
+          name: '害羞转圈',
+          motionPrompt: '点击后害羞转圈',
+          frameCount: 1,
+          triggerProposal: { type: 'click', binding: 'clickAction' }
+        }]
+      }
+    },
+    now: () => '2026-06-28T00:00:00.000Z'
+  })
+  const runDir = path.join(dataDir, 'runs', run.runId)
+  const sourceDir = path.join(runDir, 'frames', 'base')
+  const framesDir = path.join(runDir, 'frames', 'actions', 'shy-spin')
+  const qaDir = path.join(runDir, 'qa')
+  const qaPath = path.join(qaDir, 'action-frame-validation.json')
+  const contactSheetPath = path.join(qaDir, 'action-frame-contact-sheet.png')
+  fs.mkdirSync(sourceDir, { recursive: true })
+  fs.mkdirSync(framesDir, { recursive: true })
+  fs.mkdirSync(qaDir, { recursive: true })
+  await sharp({
+    create: {
+      width: 192,
+      height: 208,
+      channels: 4,
+      background: { r: 120, g: 80, b: 220, alpha: 1 }
+    }
+  }).png().toFile(path.join(sourceDir, '0001.png'))
+  await sharp({
+    create: {
+      width: 192,
+      height: 208,
+      channels: 4,
+      background: { r: 220, g: 170, b: 120, alpha: 1 }
+    }
+  }).png().toFile(path.join(framesDir, '0001.png'))
+  await sharp({
+    create: {
+      width: 192,
+      height: 208,
+      channels: 4,
+      background: { r: 245, g: 220, b: 200, alpha: 1 }
+    }
+  }).png().toFile(contactSheetPath)
+  fs.writeFileSync(qaPath, `${JSON.stringify({
+    ...createActionFrameQa({
+      actionId: 'shy-spin',
+      frameCount: 1,
+      ok: false,
+      visiblePixels: 0
+    }),
+    warnings: ['Frame 0001.png has no visible pixels.'],
+    playback: {
+      frameDurationsMs: [160]
+    },
+    contactSheetRelativePath: `runs/${run.runId}/qa/action-frame-contact-sheet.png`
+  }, null, 2)}\n`)
+  updateRunStatus({
+    dataDir,
+    runId: run.runId,
+    status: 'ready_for_review',
+    patch: {
+      taskStatus: 'confirmed',
+      currentStep: 'review',
+      reviewStatus: 'pending',
+      artifacts: {
+        generatedImage: {
+          ok: true,
+          backend: 'fixture',
+          model: 'fixture-image',
+          generatedAt: '2026-06-28T00:00:30.000Z',
+          outputs: [{
+            dataRelativePath: `runs/${run.runId}/frames/base/0001.png`,
+            mimeType: 'image/png',
+            sha256: 'service-blocked-action-review-sha'
+          }]
+        },
+        actionFrames: {
+          actionId: 'shy-spin',
+          name: '害羞转圈',
+          framesDir,
+          qa: qaPath,
+          contactSheet: contactSheetPath,
+          frameCount: 1,
+          frameWidth: 192,
+          frameHeight: 208,
+          triggerProposal: { type: 'click', binding: 'clickAction' }
+        }
+      }
+    },
+    now: () => '2026-06-28T00:00:40.000Z'
+  })
+
+  const server = createCreatorStudioServer({ dataDir, dashboardPath })
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const port = server.address().port
+
+  try {
+    const detail = await fetch(`http://127.0.0.1:${port}/api/runs/${run.runId}`).then((response) => response.json())
+
+    assert.equal(detail.ok, true)
+    assert.equal(detail.actionReview.reviewGate.ready, false)
+    assert.equal(detail.actionReview.reviewGate.status, 'blocked')
+    assert.match(detail.actionReview.reviewGate.reason, /repair or regenerate frames before approval/i)
+    assert.deepEqual(detail.actionReview.qaWarnings, ['Frame 0001.png has no visible pixels.'])
+    assert.equal(detail.actionReview.visiblePixelSummary.totalVisiblePixels, 0)
+    assert.equal(detail.actionReview.visiblePixelSummary.invalidFrameCount, 1)
+    assert.equal(detail.run.actionLane.buttonStates.approve.enabled, false)
+    assert.match(detail.run.actionLane.buttonStates.approve.reason, /repair or regenerate frames before approval/i)
+    assert.equal(JSON.stringify(detail).includes(dataDir), false)
+  } finally {
+    await new Promise((resolve) => server.close(resolve))
+  }
+})
+
 test('creator studio service exposes task review routes for dashboard clients', async () => {
   const { createCreatorStudioServer } = require('../../examples/plugins/creator-studio/service/studio-service')
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-service-task-'))

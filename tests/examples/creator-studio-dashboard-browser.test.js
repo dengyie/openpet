@@ -223,6 +223,106 @@ const seedImportedFailedActionRun = async (dataDir) => {
   return run
 }
 
+const seedBlockedActionReviewRun = async (dataDir) => {
+  const run = createRun({
+    dataDir,
+    input: {
+      prompt: '新增一个自定义动作：害羞转圈，点击后轻轻转一圈。',
+      originalPrompt: '新增一个自定义动作：害羞转圈，点击后轻轻转一圈。',
+      backend: 'local',
+      generationTask: {
+        mode: 'single-action',
+        actions: [{
+          actionId: 'shy-spin',
+          name: '害羞转圈',
+          motionPrompt: '先缩起来，再轻轻转一圈。',
+          loop: false,
+          frameCount: 1,
+          triggerProposal: { type: 'click', binding: 'clickAction' }
+        }]
+      }
+    },
+    now: () => '2026-06-28T01:20:00.000Z'
+  })
+  const runDir = path.join(dataDir, 'runs', run.runId)
+  const framesDir = path.join(runDir, 'frames', 'actions', 'shy-spin')
+  const qaDir = path.join(runDir, 'qa')
+  const baseDir = path.join(runDir, 'frames', 'base')
+  await writeSolidPng(path.join(framesDir, '0001.png'), {
+    width: 192,
+    height: 208,
+    background: { r: 248, g: 185, b: 150, alpha: 1 }
+  })
+  await writeSolidPng(path.join(qaDir, 'action-frame-contact-sheet.png'), {
+    width: 192,
+    height: 208,
+    background: { r: 255, g: 228, b: 210, alpha: 1 }
+  })
+  await writeSolidPng(path.join(baseDir, '0001.png'), {
+    width: 512,
+    height: 512,
+    background: { r: 242, g: 198, b: 162, alpha: 1 }
+  })
+  fs.writeFileSync(path.join(qaDir, 'action-frame-validation.json'), `${JSON.stringify({
+    ok: false,
+    actionId: 'shy-spin',
+    frameCount: 1,
+    frameWidth: 192,
+    frameHeight: 208,
+    frames: [{
+      fileName: '0001.png',
+      width: 192,
+      height: 208,
+      visiblePixels: 0
+    }],
+    warnings: ['Frame 0001.png has no visible pixels.'],
+    playback: {
+      frameDurationsMs: [160]
+    },
+    repairs: [{
+      fileName: '0001.png',
+      reason: 'Visible pixels dropped to zero after regeneration.'
+    }],
+    contactSheetRelativePath: `runs/${run.runId}/qa/action-frame-contact-sheet.png`
+  }, null, 2)}\n`)
+  updateRunStatus({
+    dataDir,
+    runId: run.runId,
+    status: 'ready_for_review',
+    patch: {
+      taskStatus: 'confirmed',
+      currentStep: 'review',
+      reviewStatus: 'pending',
+      artifacts: {
+        generatedImage: {
+          ok: true,
+          backend: 'local',
+          model: 'local-custom-sprite-v2',
+          generatedAt: '2026-06-28T01:21:00.000Z',
+          outputs: [{
+            dataRelativePath: `runs/${run.runId}/frames/base/0001.png`,
+            mimeType: 'image/png',
+            sha256: 'dashboard-blocked-action-sha'
+          }]
+        },
+        actionFrames: {
+          actionId: 'shy-spin',
+          name: '害羞转圈',
+          framesDir,
+          qa: path.join(qaDir, 'action-frame-validation.json'),
+          contactSheet: path.join(qaDir, 'action-frame-contact-sheet.png'),
+          frameCount: 1,
+          frameWidth: 192,
+          frameHeight: 208,
+          triggerProposal: { type: 'click', binding: 'clickAction' }
+        }
+      }
+    },
+    now: () => '2026-06-28T01:21:30.000Z'
+  })
+  return run
+}
+
 const seedImportedFullPetRun = async (dataDir) => {
   const run = createRun({
     dataDir,
@@ -395,6 +495,31 @@ test('creator studio dashboard drives a full-pet fixture run to the host import 
     assert.match(handoffText, /Command ID: import-approved-pet/i)
     assert.match(handoffText, /Payload JSON:/i)
     assert.match(handoffText, /"runId":"[^"]+"/i)
+  } finally {
+    await browser.close()
+    await new Promise((resolve) => server.close(resolve))
+  }
+})
+
+test('creator studio dashboard surfaces blocked single-action qa before approval', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-dashboard-browser-blocked-action-'))
+  const run = await seedBlockedActionReviewRun(dataDir)
+  const server = await openDashboardServer(dataDir)
+  const { browser, page } = await openDashboardPage(server)
+
+  try {
+    await page.waitForFunction(() => document.querySelector('#run-select')?.value?.length > 0)
+    await page.locator('#run-select').selectOption(run.runId)
+    await page.waitForFunction((expectedRunId) => document.querySelector('#run-select')?.value === expectedRunId, run.runId)
+
+    const reviewText = await page.locator('#action-review-panel').textContent()
+    assert.match(reviewText, /QA blocked/i)
+    assert.match(reviewText, /Repair or regenerate frames before approval/i)
+    assert.match(reviewText, /Frame 0001\.png has no visible pixels/i)
+    assert.match(reviewText, /Invalid frames: 1/i)
+    assert.match(reviewText, /Repairs logged: 1/i)
+    assert.equal(await page.locator('#approve-button').isDisabled(), true)
+    assert.match(await page.locator('#import-handoff-panel').textContent(), /repair any bad frame, then approve the action/i)
   } finally {
     await browser.close()
     await new Promise((resolve) => server.close(resolve))

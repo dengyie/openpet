@@ -767,6 +767,39 @@
         ].join('')
       }
 
+      const renderActionReview = (review, run, actionFrames, action) => {
+        if (!actionFrames) return 'Generated action frames and action-frame-validation.json will appear here before import.'
+        const reviewGate = review?.reviewGate || {}
+        const qaWarnings = Array.isArray(review?.qaWarnings) ? review.qaWarnings : []
+        const repairs = Array.isArray(review?.repairs) ? review.repairs : []
+        const visiblePixelSummary = review?.visiblePixelSummary || {}
+        return [
+          renderImportedReviewNotice(run),
+          reviewGate.ready === false
+            ? [
+                '<div class="notice error">',
+                '<strong>QA blocked.</strong>',
+                `<p>${escapeHtml(reviewGate.reason || 'Repair or regenerate frames before approval.')}</p>`,
+                `<p>Invalid frames: ${escapeHtml(visiblePixelSummary.invalidFrameCount || 0)}</p>`,
+                `<p>Repairs logged: ${escapeHtml(repairs.length)}</p>`,
+                qaWarnings.length
+                  ? `<p>Warnings: ${escapeHtml(qaWarnings.join(' | '))}</p>`
+                  : '',
+                '</div>'
+              ].join('')
+            : '',
+          `<strong>${escapeHtml(actionFrames.name || actionFrames.actionId)}</strong>`,
+          `<p>Frames: ${escapeHtml(actionFrames.frameCount)} at ${escapeHtml(actionFrames.frameWidth)}x${escapeHtml(actionFrames.frameHeight)}</p>`,
+          `<p>QA: ${escapeHtml(actionFrames.qa || 'action-frame-validation.json')}</p>`,
+          review?.contactSheet ? `<p>Contact sheet: ${escapeHtml(review.contactSheet)}</p>` : '',
+          `<p>Trigger proposal is review-only: ${escapeHtml((actionFrames.triggerProposal || action.triggerProposal).type)}</p>`,
+          `<p>Review status: ${escapeHtml(run.reviewStatus || 'pending')} / Import status: ${escapeHtml(run.importStatus || 'not-imported')}</p>`,
+          `<p>Visible pixels: ${escapeHtml(visiblePixelSummary.totalVisiblePixels || 0)}</p>`,
+          renderContactSheet(review),
+          renderFramePreview(review)
+        ].join('')
+      }
+
       const renderFullPetReview = (review, run) => {
         if (!review?.spritesheetUrl) return 'Generated pet-pack review artifacts will appear here before import.'
         const sourceValidation = review?.sourceImageValidation || {}
@@ -1257,17 +1290,7 @@
         if (actionFrames) {
           $('qa-panel').textContent = `Frame QA written: ${actionFrames.qa || 'action-frame-validation.json'}`
           $('playback-panel').innerHTML = renderPlaybackPanel(actionReview)
-          $('action-review-panel').innerHTML = [
-            renderImportedReviewNotice(run),
-            `<strong>${escapeHtml(actionFrames.name || actionFrames.actionId)}</strong>`,
-            `<p>Frames: ${escapeHtml(actionFrames.frameCount)} at ${escapeHtml(actionFrames.frameWidth)}x${escapeHtml(actionFrames.frameHeight)}</p>`,
-            `<p>QA: ${escapeHtml(actionFrames.qa || 'action-frame-validation.json')}</p>`,
-            actionReview?.contactSheet ? `<p>Contact sheet: ${escapeHtml(actionReview.contactSheet)}</p>` : '',
-            `<p>Trigger proposal is review-only: ${escapeHtml((actionFrames.triggerProposal || action.triggerProposal).type)}</p>`,
-            `<p>Review status: ${escapeHtml(run.reviewStatus || 'pending')} / Import status: ${escapeHtml(run.importStatus || 'not-imported')}</p>`,
-            renderContactSheet(actionReview),
-            renderFramePreview(actionReview)
-          ].join('')
+          $('action-review-panel').innerHTML = renderActionReview(actionReview, run, actionFrames, action)
           $('full-pet-review-panel').textContent = 'Generated pet-pack review artifacts will appear here before import.'
           startPlaybackPreview(actionReview)
           $('import-handoff-panel').innerHTML = renderImportHandoff(run, actionFrames)
