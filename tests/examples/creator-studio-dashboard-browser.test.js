@@ -8,6 +8,7 @@ const { chromium } = require('@playwright/test')
 const sharp = require('sharp')
 
 const { createCreatorStudioServer } = require('../../examples/plugins/creator-studio/service/studio-service')
+const { createMinimalWebp } = require('../../examples/plugins/creator-studio/lib/fake-hatch-pet')
 
 const openDashboardServer = async (dataDir) => {
   const dashboardPath = path.join(__dirname, '../../examples/plugins/creator-studio/web/dashboard/index.html')
@@ -102,6 +103,115 @@ test('creator studio dashboard drives a full-pet fixture run to the host import 
     assert.match(handoffText, /Command ID: import-approved-pet/i)
     assert.match(handoffText, /Payload JSON:/i)
     assert.match(handoffText, /"runId":"[^"]+"/i)
+  } finally {
+    await browser.close()
+    await new Promise((resolve) => server.close(resolve))
+  }
+})
+
+test('creator studio dashboard surfaces full-pet qa source mismatch before approval', async () => {
+  const { createRun, updateRunStatus } = require('../../examples/plugins/creator-studio/lib/run-store')
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-dashboard-browser-full-pet-mismatch-'))
+  const run = createRun({
+    dataDir,
+    input: {
+      petName: 'Mismatch Dashboard Cat',
+      petId: 'mismatch-dashboard-cat',
+      prompt: '生成一只完整的新桌宠。',
+      originalPrompt: '生成一只完整的新桌宠。',
+      backend: 'cloud',
+      generationTask: {
+        mode: 'full-pet',
+        targetPet: 'new',
+        styleSource: 'textOnly',
+        characterBrief: '一只需要显示 mismatch 提示的桌宠。',
+        actions: [{
+          actionId: 'idle',
+          name: 'Idle',
+          motionPrompt: 'neutral idle pose',
+          loop: true,
+          frameCount: 12,
+          triggerProposal: { type: 'state', binding: 'idle' }
+        }]
+      }
+    },
+    now: () => '2026-06-27T00:30:00.000Z'
+  })
+  const outputDir = path.join(dataDir, 'runs', run.runId, 'outputs')
+  const qaDir = path.join(dataDir, 'runs', run.runId, 'qa')
+  const currentSourceDir = path.join(dataDir, 'runs', run.runId, 'frames', 'base')
+  fs.mkdirSync(outputDir, { recursive: true })
+  fs.mkdirSync(qaDir, { recursive: true })
+  fs.mkdirSync(currentSourceDir, { recursive: true })
+  await sharp({
+    create: {
+      width: 192,
+      height: 208,
+      channels: 4,
+      background: { r: 210, g: 140, b: 80, alpha: 1 }
+    }
+  }).png().toFile(path.join(currentSourceDir, '0001.png'))
+  fs.writeFileSync(path.join(outputDir, 'spritesheet.webp'), createMinimalWebp())
+  fs.writeFileSync(path.join(outputDir, 'pet.json'), `${JSON.stringify({
+    id: 'mismatch-dashboard-cat',
+    displayName: 'Mismatch Dashboard Cat',
+    spritesheetPath: 'spritesheet.webp'
+  }, null, 2)}\n`)
+  fs.writeFileSync(path.join(qaDir, 'atlas-validation.json'), `${JSON.stringify({
+    ok: true,
+    width: 1536,
+    height: 1872,
+    visiblePixels: 6400,
+    warnings: []
+  }, null, 2)}\n`)
+  fs.writeFileSync(path.join(qaDir, 'source-image-validation.json'), `${JSON.stringify({
+    ok: true,
+    sourceRelativePath: `runs/${run.runId}/frames/base/stale-source.png`,
+    width: 1024,
+    height: 1024,
+    visiblePixels: 1000,
+    warnings: []
+  }, null, 2)}\n`)
+  updateRunStatus({
+    dataDir,
+    runId: run.runId,
+    status: 'ready_for_review',
+    patch: {
+      taskStatus: 'confirmed',
+      currentStep: 'review',
+      reviewStatus: 'pending',
+      artifacts: {
+        outputDir,
+        petJson: path.join(outputDir, 'pet.json'),
+        spritesheet: path.join(outputDir, 'spritesheet.webp'),
+        qa: path.join(qaDir, 'atlas-validation.json'),
+        sourceImageQa: path.join(qaDir, 'source-image-validation.json'),
+        generatedImage: {
+          outputs: [{
+            mimeType: 'image/png',
+            dataRelativePath: `runs/${run.runId}/frames/base/0001.png`
+          }]
+        }
+      }
+    },
+    now: () => '2026-06-27T00:30:30.000Z'
+  })
+  const server = await openDashboardServer(dataDir)
+  const { browser, page } = await openDashboardPage(server)
+
+  try {
+    await page.waitForFunction(() => document.querySelector('#run-select')?.value?.length > 0)
+    const reviewText = await page.locator('#full-pet-review-panel').textContent()
+    assert.match(reviewText, /QA source image does not match the current generated image/i)
+    assert.match(reviewText, /Retry generation on this same run before approval/i)
+    assert.match(reviewText, /stale-source\.png/i)
+    assert.match(reviewText, /0001\.png/i)
+
+    await page.locator('#approve-button').click()
+    await page.waitForFunction(() => /Full-pet QA source path must match the current generated image before approval/.test(document.querySelector('#status-line').textContent))
+
+    const postApproveReviewText = await page.locator('#full-pet-review-panel').textContent()
+    assert.match(postApproveReviewText, /QA source image does not match the current generated image/i)
   } finally {
     await browser.close()
     await new Promise((resolve) => server.close(resolve))

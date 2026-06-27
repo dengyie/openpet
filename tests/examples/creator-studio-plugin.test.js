@@ -3124,6 +3124,123 @@ test('creator studio service exposes full-pet review details for dashboard clien
   }
 })
 
+test('creator studio service rejects full-pet approval when qa source path mismatches current generated image', async () => {
+  const { createRun, readRun, updateRunStatus } = require('../../examples/plugins/creator-studio/lib/run-store')
+  const { createCreatorStudioServer } = require('../../examples/plugins/creator-studio/service/studio-service')
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-full-pet-approve-mismatch-'))
+  const dashboardPath = path.join(pluginRoot, 'web', 'dashboard', 'index.html')
+  const run = createRun({
+    dataDir,
+    input: {
+      petName: 'Mismatch Approval Cat',
+      petId: 'mismatch-approval-cat',
+      prompt: '生成一只完整的新桌宠。',
+      originalPrompt: '生成一只完整的新桌宠。',
+      backend: 'cloud',
+      generationTask: {
+        mode: 'full-pet',
+        targetPet: 'new',
+        styleSource: 'textOnly',
+        characterBrief: '一只需要校验 mismatch 的桌宠。',
+        actions: [{
+          actionId: 'idle',
+          name: 'Idle',
+          motionPrompt: 'neutral idle pose',
+          loop: true,
+          frameCount: 12,
+          triggerProposal: { type: 'state', binding: 'idle' }
+        }]
+      }
+    },
+    now: () => '2026-06-27T00:10:00.000Z'
+  })
+  const outputDir = path.join(dataDir, 'runs', run.runId, 'outputs')
+  const qaDir = path.join(dataDir, 'runs', run.runId, 'qa')
+  const currentSourceDir = path.join(dataDir, 'runs', run.runId, 'frames', 'base')
+  fs.mkdirSync(outputDir, { recursive: true })
+  fs.mkdirSync(qaDir, { recursive: true })
+  fs.mkdirSync(currentSourceDir, { recursive: true })
+  await sharp({
+    create: {
+      width: 192,
+      height: 208,
+      channels: 4,
+      background: { r: 220, g: 150, b: 90, alpha: 1 }
+    }
+  }).png().toFile(path.join(currentSourceDir, '0001.png'))
+  fs.writeFileSync(path.join(outputDir, 'spritesheet.webp'), createMinimalWebp())
+  fs.writeFileSync(path.join(outputDir, 'pet.json'), `${JSON.stringify({
+    id: 'mismatch-approval-cat',
+    displayName: 'Mismatch Approval Cat',
+    spritesheetPath: 'spritesheet.webp'
+  }, null, 2)}\n`)
+  fs.writeFileSync(path.join(qaDir, 'atlas-validation.json'), `${JSON.stringify({
+    ok: true,
+    width: 1536,
+    height: 1872,
+    visiblePixels: 6400,
+    warnings: []
+  }, null, 2)}\n`)
+  fs.writeFileSync(path.join(qaDir, 'source-image-validation.json'), `${JSON.stringify({
+    ok: true,
+    sourceRelativePath: `runs/${run.runId}/frames/base/stale-source.png`,
+    width: 1024,
+    height: 1024,
+    visiblePixels: 1000,
+    warnings: []
+  }, null, 2)}\n`)
+  updateRunStatus({
+    dataDir,
+    runId: run.runId,
+    status: 'ready_for_review',
+    patch: {
+      taskStatus: 'confirmed',
+      currentStep: 'review',
+      reviewStatus: 'pending',
+      artifacts: {
+        outputDir,
+        petJson: path.join(outputDir, 'pet.json'),
+        spritesheet: path.join(outputDir, 'spritesheet.webp'),
+        qa: path.join(qaDir, 'atlas-validation.json'),
+        sourceImageQa: path.join(qaDir, 'source-image-validation.json'),
+        generatedImage: {
+          outputs: [{
+            mimeType: 'image/png',
+            dataRelativePath: `runs/${run.runId}/frames/base/0001.png`
+          }]
+        }
+      }
+    },
+    now: () => '2026-06-27T00:10:30.000Z'
+  })
+  const server = createCreatorStudioServer({ dataDir, dashboardPath })
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const port = server.address().port
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/api/runs/${run.runId}/approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}'
+    })
+    const body = await response.json()
+    const stored = readRun({ dataDir, runId: run.runId })
+
+    assert.equal(response.status, 400)
+    assert.equal(body.ok, false)
+    assert.match(body.error, /Full-pet QA source path must match the current generated image before approval/)
+    assert.equal(stored.status, 'ready_for_review')
+    assert.equal(stored.reviewStatus, 'pending')
+    assert.equal(body.fullPetReview.sourceImageMatchesCurrent, false)
+    assert.equal(body.fullPetReview.currentSourceImage, `runs/${run.runId}/frames/base/0001.png`)
+    assert.equal(body.fullPetReview.qaSourceImage, `runs/${run.runId}/frames/base/stale-source.png`)
+    assert.match(body.fullPetReview.reviewGate.reason, /Retry generation on this same run before approval/i)
+    assert.equal(JSON.stringify(body).includes(dataDir), false)
+  } finally {
+    await new Promise((resolve) => server.close(resolve))
+  }
+})
+
 test('creator studio service exposes run detail and logs for dashboard clients', async () => {
   const { appendRunLog, createRun, updateRunStatus } = require('../../examples/plugins/creator-studio/lib/run-store')
   const { createCreatorStudioServer } = require('../../examples/plugins/creator-studio/service/studio-service')

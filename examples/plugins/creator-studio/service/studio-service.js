@@ -5,6 +5,7 @@ const { appendRunLog, listRuns, readRun, readRunLogs, updateRunStatus } = requir
 const { runGenerationStep } = require('../lib/backend-runner')
 const { repairActionFrameFromGeneratedImage } = require('../lib/action-frame-builder')
 const { assertRunActionFrameQaPassed } = require('../lib/action-frame-qa')
+const { assertRunFullPetQaPassed } = require('../lib/full-pet-qa')
 const { sanitizeCreativeBrief } = require('../lib/openpet-prompt-builder')
 const { answerTaskQuestion, confirmTaskRun, draftTaskRun, updateTaskDraft } = require('../lib/task-workflow')
 const { FIXTURE_BACKEND, normalizeCreatorBackend, usesHostProviderBackend } = require('../lib/backend-mode')
@@ -64,7 +65,8 @@ const sendError = (response, error, { dataDir } = {}) => {
     error: createPublicText({ dataDir, value: error.message || 'Creator Studio service failed' }),
     ...(error.run ? {
       run: createPublicRun({ dataDir, run: error.run }),
-      actionReview: createActionReview({ dataDir, run: error.run })
+      actionReview: createActionReview({ dataDir, run: error.run }),
+      fullPetReview: createFullPetReview({ dataDir, run: error.run })
     } : {})
   })
 }
@@ -124,6 +126,11 @@ const createPublicLogValue = ({ dataDir, value }) => {
 }
 
 const createPublicLogEntry = ({ dataDir, entry }) => createPublicLogValue({ dataDir, value: entry })
+
+const normalizeRelativeArtifactPath = (value) => {
+  if (typeof value !== 'string') return ''
+  return value.trim().replace(/\\/g, '/')
+}
 
 const normalizeEstimatedCostUsd = (value) => {
   const numeric = Number(value)
@@ -906,6 +913,7 @@ const createFullPetReview = ({ dataDir, run }) => {
   if (run.artifacts?.actionFrames) return null
   if (run.generationTask?.mode !== 'full-pet') return null
   const artifacts = run.artifacts || {}
+  const requiresCurrentSourceMatch = usesHostProviderBackend(run.backend || run.input?.backend)
   const sourceImageValidation = readJsonArtifact({
     dataDir,
     targetPath: artifacts.sourceImageQa,
@@ -916,10 +924,33 @@ const createFullPetReview = ({ dataDir, run }) => {
     targetPath: artifacts.qa,
     label: 'Full-pet atlas QA'
   })
-  const sourceImage = createPublicText({
+  const currentSourceImage = createPublicText({
     dataDir,
-    value: sourceImageValidation?.sourceRelativePath || artifacts.generatedImage?.outputs?.[0]?.dataRelativePath || ''
+    value: artifacts.generatedImage?.outputs?.[0]?.dataRelativePath || ''
   })
+  const qaSourceImage = createPublicText({
+    dataDir,
+    value: sourceImageValidation?.sourceRelativePath || ''
+  })
+  const normalizedCurrentSourceImage = normalizeRelativeArtifactPath(currentSourceImage)
+  const normalizedQaSourceImage = normalizeRelativeArtifactPath(qaSourceImage)
+  const sourceImageMatchesCurrent = !requiresCurrentSourceMatch || Boolean(
+    normalizedCurrentSourceImage &&
+    normalizedQaSourceImage &&
+    normalizedCurrentSourceImage === normalizedQaSourceImage
+  )
+  const reviewGate = sourceImageMatchesCurrent
+    ? {
+        status: 'ready',
+        ready: true,
+        reason: 'Full-pet review artifacts match the current generated image. You can approve the run when QA looks correct.'
+      }
+    : {
+        status: 'blocked',
+        ready: false,
+        reason: 'QA source image does not match the current generated image. Retry generation on this same run before approval or import.'
+      }
+  const sourceImage = currentSourceImage || qaSourceImage
   return {
     petId: createPublicText({ dataDir, value: run.petId || '' }),
     displayName: createPublicText({ dataDir, value: run.input?.petName || run.petId || '' }),
@@ -931,6 +962,11 @@ const createFullPetReview = ({ dataDir, run }) => {
     sourceImageQa: toDataRelativePath({ dataDir, targetPath: artifacts.sourceImageQa }),
     actionTaskQa: toDataRelativePath({ dataDir, targetPath: artifacts.actionTaskQa }),
     sourceImage,
+    currentSourceImage,
+    qaSourceImage,
+    requiresCurrentSourceMatch,
+    sourceImageMatchesCurrent,
+    reviewGate,
     sourceImageValidation: createPublicLogValue({ dataDir, value: sourceImageValidation }),
     atlasValidation: createPublicLogValue({ dataDir, value: atlasValidation }),
     spritesheetUrl: artifacts.spritesheet
@@ -1023,7 +1059,15 @@ const handlePost = async ({ request, response, dataDir, url }) => {
       if (current.status !== 'ready_for_review') {
         throw new Error(`Run must be ready_for_review before approval: ${current.status}`)
       }
-      assertRunActionFrameQaPassed({ dataDir, run: current, operation: 'approval' })
+      try {
+        assertRunActionFrameQaPassed({ dataDir, run: current, operation: 'approval' })
+        if (usesHostProviderBackend(current.backend || current.input?.backend)) {
+          assertRunFullPetQaPassed({ dataDir, run: current, operation: 'approval' })
+        }
+      } catch (error) {
+        error.run = current
+        throw error
+      }
       const run = updateRunStatus({
         dataDir,
         runId,
@@ -1042,6 +1086,7 @@ const handlePost = async ({ request, response, dataDir, url }) => {
         ok: true,
         run: createPublicRun({ dataDir, run }),
         actionReview: createActionReview({ dataDir, run }),
+        fullPetReview: createFullPetReview({ dataDir, run }),
         importCommand: run.artifacts?.actionFrames ? 'import-approved-action' : 'import-approved-pet'
       })
       return true

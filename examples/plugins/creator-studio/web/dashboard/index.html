@@ -754,12 +754,30 @@
         if (!review?.spritesheetUrl) return 'Generated pet-pack review artifacts will appear here before import.'
         const sourceValidation = review?.sourceImageValidation || {}
         const atlasValidation = review?.atlasValidation || {}
+        const reviewGate = review?.reviewGate || {}
+        const showsMismatch = review?.sourceImageMatchesCurrent === false
         return [
+          showsMismatch
+            ? [
+                '<div class="notice error">',
+                '<strong>QA source image does not match the current generated image.</strong>',
+                `<p>${escapeHtml(reviewGate.reason || 'Retry generation on this same run before approval or import.')}</p>`,
+                `<p>Current generated source: ${escapeHtml(review.currentSourceImage || 'not available')}</p>`,
+                `<p>QA source reference: ${escapeHtml(review.qaSourceImage || 'not available')}</p>`,
+                '</div>'
+              ].join('')
+            : '',
           '<div class="notice">',
           `<strong>${escapeHtml(review.displayName || review.petId || 'Generated pet')}</strong>`,
           `<p>Bundle: ${escapeHtml(review.bundle || 'not available')}</p>`,
           `<p>Manifest: ${escapeHtml(review.petJson || 'not available')}</p>`,
           `<p>Source image: ${escapeHtml(review.sourceImage || 'not available')}</p>`,
+          review.currentSourceImage && review.currentSourceImage !== review.sourceImage
+            ? `<p>Current generated source: ${escapeHtml(review.currentSourceImage)}</p>`
+            : '',
+          review.qaSourceImage && review.qaSourceImage !== review.sourceImage
+            ? `<p>QA source reference: ${escapeHtml(review.qaSourceImage)}</p>`
+            : '',
           review.sourceImageQa ? `<p>Source QA: ${escapeHtml(review.sourceImageQa)}</p>` : '',
           `<p>Atlas QA: ${escapeHtml(review.qa || 'not available')}</p>`,
           review.actionTaskQa ? `<p>Task QA: ${escapeHtml(review.actionTaskQa)}</p>` : '',
@@ -1404,6 +1422,14 @@
           await refreshRunList()
           setStatus(`Run approved. Use the ${payload.importCommand || 'import'} plugin command for host-owned import.`, 'ok')
         } catch (error) {
+          if (error.payload?.run) {
+            state.run = error.payload.run
+            state.actionReview = error.payload.actionReview || null
+            state.fullPetReview = error.payload.fullPetReview || null
+            renderRun()
+            await refreshLogs()
+            await refreshRunList()
+          }
           setStatus(error.message, 'error')
         }
       })
