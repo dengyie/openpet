@@ -20,6 +20,14 @@ const MAX_RECENT_PET_ACTIVITY_ITEMS = 6
 const MAX_RECENT_PET_ACTIVITY_CHARS = 1200
 const MAX_BUBBLE_SEGMENTS = 3
 const MAX_BUBBLE_SEGMENT_CHARS = 80
+const RECENT_HISTORY_MEMORY_MATCH_WINDOW = 6
+const MIN_MEMORY_CONTEXT_SCORE = 0.5
+const MEMORY_TOKEN_ALIAS_GROUPS = [
+  ['focus', 'focused', '专注', '工作', 'focus work'],
+  ['jasmine', '茉莉', '茉莉花茶', 'jasmine tea'],
+  ['tea', '茶', '花茶'],
+  ['rain', 'rainy', '下雨', '雨天']
+]
 
 const normalizeString = (value) => (typeof value === 'string' ? value.trim() : '')
 
@@ -367,6 +375,104 @@ const sanitizeDiagnosticText = (value) => String(value || '')
   .replace(/\bsk-[A-Za-z0-9_-]{8,}\b/g, '[redacted-secret]')
   .slice(0, 240)
 
+const tokenizeForMemoryScore = (value) => {
+  const normalized = normalizeString(value).toLowerCase()
+  const tokens = new Set(
+    normalized
+      .split(/[^a-z0-9\u4e00-\u9fff]+/i)
+      .map((token) => token.trim())
+      .filter((token) => token.length >= 2)
+  )
+  for (const aliasGroup of MEMORY_TOKEN_ALIAS_GROUPS) {
+    const matched = aliasGroup.some((alias) => normalized.includes(alias.toLowerCase()))
+    if (!matched) continue
+    for (const alias of aliasGroup) {
+      const token = alias.toLowerCase().trim()
+      if (token.length >= 2) tokens.add(token)
+    }
+  }
+  return Array.from(tokens)
+}
+
+const calculateRecencyBoost = (timestamp, nowMs) => {
+  const time = Date.parse(timestamp || '')
+  if (!Number.isFinite(time)) return 0
+  const ageMs = Math.max(0, nowMs - time)
+  const dayMs = 24 * 60 * 60 * 1000
+  if (ageMs <= dayMs) return 0.12
+  if (ageMs <= 7 * dayMs) return 0.08
+  if (ageMs <= 30 * dayMs) return 0.04
+  return 0
+}
+
+const calculateLastUsedPenalty = (timestamp, nowMs) => {
+  const time = Date.parse(timestamp || '')
+  if (!Number.isFinite(time)) return 0
+  const ageMs = Math.max(0, nowMs - time)
+  const hourMs = 60 * 60 * 1000
+  if (ageMs <= hourMs) return -0.18
+  if (ageMs <= 6 * hourMs) return -0.1
+  if (ageMs <= 24 * hourMs) return -0.04
+  return 0
+}
+
+const scoreMemoryContext = ({ memory, currentTokens, historyTokens, nowMs }) => {
+  const textTokens = tokenizeForMemoryScore(memory.text)
+  const tagTokens = Array.isArray(memory.tags) ? memory.tags.flatMap((tag) => tokenizeForMemoryScore(tag)) : []
+  const combinedTokens = new Set([...textTokens, ...tagTokens])
+  let directMatches = 0
+  let historyMatches = 0
+  for (const token of combinedTokens) {
+    if (currentTokens.has(token)) directMatches += 1
+    else if (historyTokens.has(token)) historyMatches += 1
+  }
+  const scopeBoost = memory.scope === 'petPack' ? 0.14 : 0.06
+  const directBoost = Math.min(0.45, directMatches * 0.18)
+  const historyBoost = Math.min(0.18, historyMatches * 0.06)
+  const importanceBoost = Math.max(0, Number(memory.importance) || 0) * 0.28
+  const confidenceBoost = Math.max(0, Number(memory.confidence) || 0) * 0.2
+  const useCountBoost = Math.min(0.08, Math.log10((Math.max(0, Number(memory.useCount) || 0) + 1)) * 0.08)
+  const recencyBoost = calculateRecencyBoost(memory.lastEvidenceAt || memory.updatedAt || memory.createdAt, nowMs)
+  const lastUsedPenalty = calculateLastUsedPenalty(memory.lastUsedAt, nowMs)
+  const unmatchedPetPackPenalty = (directMatches === 0 && historyMatches === 0 && memory.scope === 'petPack') ? -0.14 : 0
+  return Number((
+    scopeBoost +
+    directBoost +
+    historyBoost +
+    importanceBoost +
+    confidenceBoost +
+    useCountBoost +
+    recencyBoost +
+    lastUsedPenalty +
+    unmatchedPetPackPenalty
+  ).toFixed(6))
+}
+
+const selectRelevantMemories = ({ memories = [], userMessage = '', history = [], limit = MAX_MEMORY_CONTEXT_ITEMS } = {}) => {
+  const currentTokens = new Set(tokenizeForMemoryScore(userMessage))
+  const historyTokens = new Set(
+    getRecentMessages(history, RECENT_HISTORY_MEMORY_MATCH_WINDOW)
+      .flatMap((message) => tokenizeForMemoryScore(message?.content || ''))
+  )
+  const nowMs = Date.now()
+  return (Array.isArray(memories) ? memories : [])
+    .map((memory, index) => ({
+      memory,
+      index,
+      score: scoreMemoryContext({ memory, currentTokens, historyTokens, nowMs })
+    }))
+    .sort((a, b) => {
+      if (a.score !== b.score) return b.score - a.score
+      const updatedOrder = String(b.memory.lastEvidenceAt || b.memory.updatedAt || b.memory.createdAt || '')
+        .localeCompare(String(a.memory.lastEvidenceAt || a.memory.updatedAt || a.memory.createdAt || ''))
+      if (updatedOrder !== 0) return updatedOrder
+      return a.index - b.index
+    })
+    .filter(({ score }) => score >= MIN_MEMORY_CONTEXT_SCORE)
+    .slice(0, Math.max(0, Number(limit) || 0))
+    .map(({ memory }) => memory)
+}
+
 const splitTalkConversationId = (conversationId) => {
   const normalized = normalizeString(conversationId)
   const match = normalized.match(/^(.+:.+):(main)$/)
@@ -473,10 +579,15 @@ const createAiTalkService = ({ aiService, aiTalkStore, petPackService, appLogSer
     }
   }
 
-  const getMemoryContext = ({ petPackId, userMessage, history }) => {
+  const getMemoryContext = ({ petPackId, userMessage = '', history = [] }) => {
     if (typeof aiTalkStore.listMemories !== 'function') return []
-    const candidates = aiTalkStore.listMemories({ petPackId, limit: 0 })
-    return rankMemoryContext({ memories: candidates, userMessage, history })
+    const memories = aiTalkStore.listMemories({ petPackId, limit: 0 })
+    return selectRelevantMemories({
+      memories,
+      userMessage,
+      history,
+      limit: MAX_MEMORY_CONTEXT_ITEMS
+    })
   }
 
   const markMemoryContextUsed = ({ petPackId, conversationId, memories }) => {

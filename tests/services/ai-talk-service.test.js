@@ -707,7 +707,7 @@ test('ai talk service ranks memory context by current relevance and marks inject
   )))
 })
 
-test('ai talk service ranks Chinese memory text without requiring whitespace tokenization', async () => {
+test('ai talk service ranks Chinese and alias-based memory text without requiring whitespace tokenization', async () => {
   const requests = []
   const store = createStore()
   const created = store.applyMemoryOperations({
@@ -718,24 +718,38 @@ test('ai talk service ranks Chinese memory text without requiring whitespace tok
       {
         operation: 'create',
         scope: 'global',
-        text: 'User likes unrelated opera trivia.',
-        tags: ['opera'],
-        confidence: 1,
-        importance: 1,
-        reason: 'high confidence but unrelated'
-      },
-      {
-        operation: 'create',
-        scope: 'global',
         text: '用户喜欢茉莉花茶，工作前喝会更安心。',
         tags: ['茉莉花茶', 'preference'],
         confidence: 0.4,
         importance: 0.4,
         reason: 'directly relevant Chinese preference'
+      },
+      {
+        operation: 'create',
+        scope: 'petPack',
+        text: 'Mochi and the user use jasmine tea as a focus reset ritual.',
+        tags: ['jasmine', 'focus', 'tea'],
+        confidence: 0.8,
+        importance: 0.6,
+        reason: 'relationship cue'
+      },
+      {
+        operation: 'create',
+        scope: 'petPack',
+        text: 'Mochi celebrates rainy days with playful window chats.',
+        tags: ['weather', 'rain'],
+        confidence: 0.85,
+        importance: 0.65,
+        reason: 'unrelated cue'
       }
     ]
   })
-  const teaMemoryId = created.applied.at(-1).id
+  const teaMemory = created.applied.find((memory) => memory.scope === 'global')
+  const jasmineMemory = created.applied.find((memory) => memory.scope === 'petPack')
+  assert.ok(teaMemory)
+  assert.ok(jasmineMemory)
+  const teaMemoryId = teaMemory.id
+  const jasmineMemoryId = jasmineMemory.id
   const service = createAiTalkService({
     aiService: {
       getConfig: () => ({
@@ -745,7 +759,7 @@ test('ai talk service ranks Chinese memory text without requiring whitespace tok
       }),
       complete: async (request) => {
         requests.push(request)
-        return { reply: '先喝口茶，我陪你进入专注。' }
+        return { reply: '先喝口茉莉花茶，我们慢慢专注。' }
       }
     },
     aiTalkStore: store,
@@ -755,8 +769,12 @@ test('ai talk service ranks Chinese memory text without requiring whitespace tok
   await service.chat({ message: '今天想喝茉莉花茶，然后准备专注一下' })
 
   const memoryPrompt = requests[0].messages.find((message) => message.content.includes('# Relevant Memories')).content
-  assert.match(memoryPrompt, /^# Relevant Memories\n1\. \[global user\] 用户喜欢茉莉花茶/m)
+  assert.match(memoryPrompt, /^# Relevant Memories\n1\. \[pet-pack relationship\] Mochi and the user use jasmine tea as a focus reset ritual\./m)
+  assert.match(memoryPrompt, /\n2\. \[global user\] 用户喜欢茉莉花茶，工作前喝会更安心。/m)
+  assert.doesNotMatch(requests[0].messages[1].content, /rainy days/)
   assert.equal(store.getState().memories[teaMemoryId].useCount, 1)
+  assert.equal(store.getState().memories[jasmineMemoryId].useCount, 1)
+  assert.equal(store.getState().memories[jasmineMemoryId].lastUsedAt, '2026-06-20T00:00:00.000Z')
 })
 
 test('ai talk service exposes and manages memory profile without reinjecting deleted memories', async () => {

@@ -500,6 +500,7 @@ const createAiTalkStore = ({ storePath, now = () => new Date().toISOString() } =
       const next = normalizeExistingMemory({
         ...memory,
         lastUsedAt: timestamp,
+        updatedAt: timestamp,
         useCount: Math.max(0, Number(memory.useCount) || 0) + 1
       })
       state.memories[id] = next
