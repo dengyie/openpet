@@ -98,3 +98,25 @@ test('live docs describe Creator Studio imported follow-up routing by outcome', 
     )
   }
 })
+
+test('live docs describe phase-aware imported review surfaces for Creator Studio', () => {
+  const todoArchitecture = readText('docs/openpet-current-todo-architecture.md')
+  const developmentSummary = readText('docs/development-summary.md')
+  const handoff = readText('docs/HANDOFF.md')
+  const projectStatusReview = readText('docs/project-status-review.md')
+
+  const phaseAwarePattern = /imported review (?:guidance|surfaces?)|phase-aware imported review|approval-only QA|pre-import QA|repair controls?|retry generation cues?/i
+
+  for (const [name, content] of [
+    ['openpet-current-todo-architecture.md', todoArchitecture],
+    ['development-summary.md', developmentSummary],
+    ['HANDOFF.md', handoff],
+    ['project-status-review.md', projectStatusReview]
+  ]) {
+    assert.match(
+      content,
+      phaseAwarePattern,
+      `${name} should mention that imported Creator Studio review surfaces no longer mix pre-import QA, repair, or retry cues`
+    )
+  }
+})

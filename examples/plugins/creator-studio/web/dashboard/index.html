@@ -703,14 +703,17 @@
         ].join('')
       }
 
-      const renderFramePreview = (review) => {
+      const renderFramePreview = (review, run) => {
         const frames = Array.isArray(review?.previewFrames) ? review.previewFrames : []
         if (!frames.length) return '<p>No frame previews available yet.</p>'
+        const canRepairFrames = run?.status === 'ready_for_review'
         return `<div class="contact-sheet">${frames.map((frame) => (
           `<figure class="frame-card">` +
           `<img alt="${escapeHtml(frame.fileName)}" src="${escapeHtml(frameSrc(frame))}">` +
           `<span>${escapeHtml(frame.fileName)}</span>` +
-          `<button type="button" class="secondary" data-repair-frame="${escapeHtml(frame.fileName)}">Repair</button>` +
+          (canRepairFrames
+            ? `<button type="button" class="secondary" data-repair-frame="${escapeHtml(frame.fileName)}">Repair</button>`
+            : '') +
           `</figure>`
         )).join('')}</div>`
       }
@@ -753,6 +756,7 @@
       const renderImportedReviewNotice = (run) => {
         if (run?.status !== 'imported') return ''
         const importGuidance = run?.workflowGuidance?.import || {}
+        const followUp = importGuidance.followUp || {}
         const resultCard = importGuidance.resultCard || {}
         const entries = Array.isArray(resultCard.entries) ? resultCard.entries : []
         return [
@@ -762,6 +766,12 @@
           entries.map((entry) => `<p>${escapeHtml(entry.label || 'Result')}: ${escapeHtml(entry.value || '')}</p>`).join(''),
           resultCard.reviewLocation
             ? `<p>Review location: ${escapeHtml(resultCard.reviewLocation)}</p>`
+            : '',
+          followUp.label
+            ? `<p>Follow-up: ${escapeHtml(followUp.label)}${followUp.location ? ` (${escapeHtml(followUp.location)})` : ''}</p>`
+            : '',
+          followUp.reason
+            ? `<p>${escapeHtml(followUp.reason)}</p>`
             : '',
           '</div>'
         ].join('')
@@ -775,7 +785,7 @@
         const visiblePixelSummary = review?.visiblePixelSummary || {}
         return [
           renderImportedReviewNotice(run),
-          reviewGate.ready === false
+          run?.status === 'ready_for_review' && reviewGate.ready === false
             ? [
                 '<div class="notice error">',
                 '<strong>QA blocked.</strong>',
@@ -796,7 +806,7 @@
           `<p>Review status: ${escapeHtml(run.reviewStatus || 'pending')} / Import status: ${escapeHtml(run.importStatus || 'not-imported')}</p>`,
           `<p>Visible pixels: ${escapeHtml(visiblePixelSummary.totalVisiblePixels || 0)}</p>`,
           renderContactSheet(review),
-          renderFramePreview(review)
+          renderFramePreview(review, run)
         ].join('')
       }
 
@@ -1045,6 +1055,7 @@
         const guidance = run?.workflowGuidance || {}
         const generation = guidance.generation || {}
         const importGuidance = guidance.import || {}
+        const followUp = importGuidance.followUp || {}
         const usageSummary = generation.usageSummary || {}
         const checklist = Array.isArray(generation.smokeChecklist) ? generation.smokeChecklist : []
         const checklistHtml = checklist.length
@@ -1061,6 +1072,12 @@
           `<p>${escapeHtml(importGuidance.summary || 'Approve the run before host-owned import.')}</p>`,
           importGuidance.triggerProposalSummary
             ? `<p>${escapeHtml(importGuidance.triggerProposalSummary)}</p>`
+            : '',
+          followUp.label
+            ? `<p>Follow-up: ${escapeHtml(followUp.label)}${followUp.location ? ` -> ${escapeHtml(followUp.location)}` : ''}</p>`
+            : '',
+          followUp.reason
+            ? `<p>${escapeHtml(followUp.reason)}</p>`
             : '',
           '</div>'
         ].join('')
@@ -1149,9 +1166,10 @@
         ].join('')
       }
 
-      const renderImportHandoff = (run, actionFrames = null) => {
+      const renderImportHandoff = (run, actionFrames = null, actionReview = null, fullPetReview = null) => {
         const importGuidance = run?.workflowGuidance?.import || {}
         const handoff = importGuidance.handoff || {}
+        const followUp = importGuidance.followUp || {}
         if (run?.status === 'approved' && handoff.commandTitle) {
           return [
             '<div class="handoff">',
@@ -1172,22 +1190,51 @@
             importGuidance.triggerProposalSummary
               ? `<p>${escapeHtml(importGuidance.triggerProposalSummary)}</p>`
               : '<p>The output has been handed to OpenPet through the host import bridge.</p>',
+            followUp.label
+              ? `<p>Follow-up: ${escapeHtml(followUp.label)}${followUp.location ? ` -> ${escapeHtml(followUp.location)}` : ''}</p>`
+              : '',
+            followUp.reason
+              ? `<p>${escapeHtml(followUp.reason)}</p>`
+              : '',
             renderImportedResultCard(run),
             '</div>'
           ].join('')
         }
         if (!actionFrames && run?.generationTask?.mode === 'full-pet') {
           if (run?.status === 'ready_for_review') {
+            const reviewGate = fullPetReview?.reviewGate || {}
+            if (reviewGate.ready === false) {
+              return [
+                '<div class="notice error">',
+                '<strong>QA blocked.</strong>',
+                `<p>${escapeHtml(reviewGate.reason || 'Retry generation on this same run before approval or import.')}</p>`,
+                '<p>Retry generation on this same run before approval or import.</p>',
+                '</div>'
+              ].join('')
+            }
             return escapeHtml(importGuidance.summary || 'Review the generated pet-pack output and approve the run before host-owned pet import.')
           }
           return 'Generate and approve the pet-pack output to unlock host-owned pet import.'
         }
-        if (actionFrames) return 'Review the generated frames, repair any bad frame, then approve the action.'
+        if (actionFrames) {
+          const reviewGate = actionReview?.reviewGate || {}
+          if (run?.status === 'ready_for_review' && reviewGate.ready === false) {
+            return [
+              '<div class="notice error">',
+              '<strong>QA blocked.</strong>',
+              `<p>${escapeHtml(reviewGate.reason || 'Repair or regenerate frames before approval.')}</p>`,
+              '<p>Repair the bad frames or regenerate the action before approval.</p>',
+              '</div>'
+            ].join('')
+          }
+          return 'Review the generated frames, repair any bad frame, then approve the action.'
+        }
         return 'Generate action frames before action import handoff.'
       }
 
       const renderImportedResultCard = (run) => {
         const resultCard = run?.workflowGuidance?.import?.resultCard || {}
+        const followUp = run?.workflowGuidance?.import?.followUp || {}
         const entries = Array.isArray(resultCard.entries) ? resultCard.entries : []
         if (!resultCard.available || !entries.length) return ''
         return [
@@ -1199,6 +1246,12 @@
           )),
           resultCard.reviewLocation
             ? `<span>Review location: ${escapeHtml(resultCard.reviewLocation)}</span>`
+            : '',
+          followUp.label
+            ? `<span>Follow-up: ${escapeHtml(followUp.label)}${followUp.location ? ` -> ${escapeHtml(followUp.location)}` : ''}</span>`
+            : '',
+          followUp.reason
+            ? `<span>${escapeHtml(followUp.reason)}</span>`
             : '',
           '</div>',
           '</div>'
@@ -1293,7 +1346,7 @@
           $('action-review-panel').innerHTML = renderActionReview(actionReview, run, actionFrames, action)
           $('full-pet-review-panel').textContent = 'Generated pet-pack review artifacts will appear here before import.'
           startPlaybackPreview(actionReview)
-          $('import-handoff-panel').innerHTML = renderImportHandoff(run, actionFrames)
+          $('import-handoff-panel').innerHTML = renderImportHandoff(run, actionFrames, actionReview, fullPetReview)
         } else {
           $('qa-panel').textContent = run.artifacts?.actionTaskQa ? `QA written: ${run.artifacts.actionTaskQa}` : 'No generated QA yet.'
           $('playback-panel').textContent = isFullPetRun(run)
@@ -1304,7 +1357,7 @@
             : 'Generated action frames and action-frame-validation.json will appear here before import.'
           $('full-pet-review-panel').innerHTML = renderFullPetReview(fullPetReview, run)
           stopPlaybackPreview()
-          $('import-handoff-panel').innerHTML = renderImportHandoff(run)
+          $('import-handoff-panel').innerHTML = renderImportHandoff(run, null, null, fullPetReview)
         }
       }
 

@@ -3571,6 +3571,13 @@ test('creator studio service blocks single-action approval when action-frame qa 
     assert.deepEqual(detail.actionReview.qaWarnings, ['Frame 0001.png has no visible pixels.'])
     assert.equal(detail.actionReview.visiblePixelSummary.totalVisiblePixels, 0)
     assert.equal(detail.actionReview.visiblePixelSummary.invalidFrameCount, 1)
+    assert.equal(detail.run.wizardState.phase, 'ready-for-review')
+    assert.equal(detail.run.wizardState.nextStep.label, 'Review and repair frames')
+    assert.match(detail.run.wizardState.nextStep.reason, /repair buttons in the frame review panel/i)
+    assert.equal(detail.run.wizardState.nextStep.blocked, false)
+    assert.equal(detail.run.actionLane.dashboardAction.available, false)
+    assert.equal(detail.run.actionLane.dashboardAction.label, 'Review and repair frames')
+    assert.match(detail.run.actionLane.dashboardAction.reason, /repair buttons in the frame review panel/i)
     assert.equal(detail.run.actionLane.buttonStates.approve.enabled, false)
     assert.match(detail.run.actionLane.buttonStates.approve.reason, /repair or regenerate frames before approval/i)
     assert.equal(JSON.stringify(detail).includes(dataDir), false)
@@ -4250,6 +4257,68 @@ test('creator studio service exposes workflow guidance for fixture and imported 
     const importedDetail = await fetch(`http://127.0.0.1:${port}/api/runs/${importedRun.runId}`).then((response) => response.json())
     const importedFailedActionDetail = await fetch(`http://127.0.0.1:${port}/api/runs/${importedFailedActionRun.runId}`).then((response) => response.json())
     const importedPetDetail = await fetch(`http://127.0.0.1:${port}/api/runs/${importedPetRun.runId}`).then((response) => response.json())
+    const importedMissingSubmissionRun = createRun({
+      dataDir,
+      input: {
+        prompt: 'Imported action without recorded trigger proposal submission.',
+        originalPrompt: 'Imported action without recorded trigger proposal submission.',
+        backend: 'provider',
+        generationTask: {
+          mode: 'single-action',
+          targetPet: 'current',
+          styleSource: 'currentPet',
+          actions: [{
+            actionId: 'missing-trigger-record',
+            name: 'Missing Trigger Record',
+            motionPrompt: 'wave once',
+            loop: false,
+            frameCount: 1,
+            triggerProposal: { type: 'click', binding: 'clickAction' }
+          }]
+        }
+      },
+      now: () => '2026-06-26T00:03:45.000Z'
+    })
+    updateRunStatus({
+      dataDir,
+      runId: importedMissingSubmissionRun.runId,
+      status: 'imported',
+      patch: {
+        taskStatus: 'confirmed',
+        currentStep: 'imported',
+        reviewStatus: 'approved',
+        importStatus: 'imported',
+        importedActionId: 'missing-trigger-record',
+        artifacts: {
+          generatedImage: {
+            ok: true,
+            backend: 'provider',
+            model: 'gpt-image-2',
+            generatedAt: '2026-06-26T00:03:50.000Z',
+            usage: {
+              estimatedCostUsd: 0.009
+            },
+            outputs: [{
+              dataRelativePath: `runs/${importedMissingSubmissionRun.runId}/frames/base/0001.png`,
+              mimeType: 'image/png',
+              sha256: 'imported-missing-trigger-record-sha'
+            }]
+          },
+          actionFrames: {
+            actionId: 'missing-trigger-record',
+            name: 'Missing Trigger Record',
+            qa: path.join(dataDir, 'runs', importedRun.runId, 'qa', 'action-frame-validation.json'),
+            contactSheet: path.join(dataDir, 'runs', importedRun.runId, 'qa', 'action-frame-contact-sheet.png'),
+            frameCount: 1,
+            frameWidth: 192,
+            frameHeight: 208,
+            triggerProposal: { type: 'click', binding: 'clickAction' }
+          }
+        }
+      },
+      now: () => '2026-06-26T00:03:55.000Z'
+    })
+    const importedMissingSubmissionDetail = await fetch(`http://127.0.0.1:${port}/api/runs/${importedMissingSubmissionRun.runId}`).then((response) => response.json())
     const importedSerialized = JSON.stringify(importedDetail)
     const importedFailedSerialized = JSON.stringify(importedFailedActionDetail)
     const importedPetSerialized = JSON.stringify(importedPetDetail)
@@ -4281,6 +4350,11 @@ test('creator studio service exposes workflow guidance for fixture and imported 
       { label: 'Trigger proposal', value: importedDetail.run.workflowGuidance.import.triggerProposalSummary }
     ])
     assert.equal(importedDetail.run.workflowGuidance.import.resultCard.reviewLocation, 'Actions -> Trigger Proposal Inbox')
+    assert.deepEqual(importedDetail.run.workflowGuidance.import.followUp, {
+      label: 'Review trigger proposal',
+      location: 'Actions -> Trigger Proposal Inbox',
+      reason: 'The action import is complete. Review the submitted trigger proposal in Actions -> Trigger Proposal Inbox.'
+    })
     assert.equal(importedDetail.run.wizardState.phase, 'imported')
     assert.deepEqual(importedDetail.run.wizardState.steps.map((step) => `${step.key}:${step.status}`), [
       'draft:complete',
@@ -4311,6 +4385,11 @@ test('creator studio service exposes workflow guidance for fixture and imported 
     assert.equal(importedFailedActionDetail.run.workflowGuidance.import.triggerProposalSummary.includes('127.0.0.1:8787'), false)
     assert.equal(importedFailedActionDetail.run.workflowGuidance.import.resultCard.available, true)
     assert.equal(importedFailedActionDetail.run.workflowGuidance.import.resultCard.reviewLocation, 'Control Center -> Plugins')
+    assert.equal(importedFailedActionDetail.run.workflowGuidance.import.followUp.label, 'Review import handoff')
+    assert.equal(importedFailedActionDetail.run.workflowGuidance.import.followUp.location, 'Control Center -> Plugins')
+    assert.match(importedFailedActionDetail.run.workflowGuidance.import.followUp.reason, /proposal write failed/i)
+    assert.match(importedFailedActionDetail.run.workflowGuidance.import.followUp.reason, /\[redacted-local-url\]/i)
+    assert.equal(importedFailedActionDetail.run.workflowGuidance.import.followUp.reason.includes('127.0.0.1:8787'), false)
     assert.match(importedFailedActionDetail.run.workflowGuidance.import.resultCard.entries[1].value, /handoff failed/i)
     assert.match(importedFailedActionDetail.run.workflowGuidance.import.resultCard.entries[1].value, /proposal write failed/i)
     assert.match(importedFailedActionDetail.run.workflowGuidance.import.resultCard.entries[1].value, /\[redacted-token\]/i)
@@ -4343,6 +4422,11 @@ test('creator studio service exposes workflow guidance for fixture and imported 
       { label: 'Activated pack', value: 'imported-pet-guidance-cat' }
     ])
     assert.equal(importedPetDetail.run.workflowGuidance.import.resultCard.reviewLocation, 'OpenPet')
+    assert.deepEqual(importedPetDetail.run.workflowGuidance.import.followUp, {
+      label: 'Review imported result',
+      location: 'OpenPet',
+      reason: 'The host-owned import is complete. Review the imported result inside OpenPet.'
+    })
     assert.equal(importedPetDetail.run.importedPackId, 'imported-pet-guidance-cat')
     assert.equal(importedPetDetail.run.activatedPackId, 'imported-pet-guidance-cat')
     assert.equal(importedPetDetail.run.wizardState.phase, 'imported')
@@ -4355,6 +4439,15 @@ test('creator studio service exposes workflow guidance for fixture and imported 
     assert.equal(importedPetDetail.run.actionLane.hostAction.location, 'OpenPet')
     assert.equal(importedPetSerialized.includes('127.0.0.1:7860'), false)
     assert.equal(importedPetSerialized.includes(dataDir), false)
+
+    assert.equal(importedMissingSubmissionDetail.ok, true)
+    assert.equal(importedMissingSubmissionDetail.run.workflowGuidance.import.triggerProposalStatus, 'missing')
+    assert.match(importedMissingSubmissionDetail.run.workflowGuidance.import.triggerProposalSummary, /no trigger proposal handoff record was saved/i)
+    assert.equal(importedMissingSubmissionDetail.run.workflowGuidance.import.triggerProposalSummary.includes('runs during Import Approved Action'), false)
+    assert.equal(importedMissingSubmissionDetail.run.workflowGuidance.import.followUp.label, 'Review import handoff')
+    assert.match(importedMissingSubmissionDetail.run.workflowGuidance.import.followUp.reason, /no trigger proposal handoff record was saved/i)
+    assert.equal(importedMissingSubmissionDetail.run.workflowGuidance.import.resultCard.reviewLocation, 'Control Center -> Plugins')
+    assert.match(importedMissingSubmissionDetail.run.workflowGuidance.import.resultCard.entries[1].value, /no trigger proposal handoff record was saved/i)
   } finally {
     await new Promise((resolve) => server.close(resolve))
   }
@@ -4481,6 +4574,8 @@ test('creator studio service exposes safe import handoff guidance for approved d
     assert.equal(actionDetail.run.actionLane.hostAction.label, 'Import Approved Action')
     assert.match(actionDetail.run.actionLane.hostAction.location, /Control Center -> Plugins/i)
     assert.match(actionDetail.run.actionLane.buttonStates.approve.reason, /already approved/i)
+    assert.match(actionDetail.run.actionLane.buttonStates.approve.reason, /Control Center -> Plugins/i)
+    assert.doesNotMatch(actionDetail.run.actionLane.buttonStates.approve.reason, /OpenPet/i)
 
     assert.equal(petDetail.ok, true)
     assert.equal(petHandoff.ready, true)
@@ -4495,6 +4590,8 @@ test('creator studio service exposes safe import handoff guidance for approved d
     assert.equal(petDetail.run.actionLane.dashboardAction.available, false)
     assert.equal(petDetail.run.actionLane.hostAction.required, true)
     assert.equal(petDetail.run.actionLane.hostAction.label, 'Import Approved Pet')
+    assert.match(petDetail.run.actionLane.buttonStates.approve.reason, /Control Center -> Plugins/i)
+    assert.doesNotMatch(petDetail.run.actionLane.buttonStates.approve.reason, /OpenPet/i)
 
     assert.equal(serialized.includes(dataDir), false)
     assert.equal(serialized.includes('bridge-token'), false)

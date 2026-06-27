@@ -416,6 +416,96 @@ const seedImportedFullPetRun = async (dataDir) => {
   return run
 }
 
+const seedImportedActionRunWithoutTriggerSubmission = async (dataDir) => {
+  const run = createRun({
+    dataDir,
+    input: {
+      prompt: 'Imported action without recorded trigger proposal submission.',
+      originalPrompt: 'Imported action without recorded trigger proposal submission.',
+      backend: 'provider',
+      generationTask: {
+        mode: 'single-action',
+        targetPet: 'current',
+        styleSource: 'currentPet',
+        actions: [{
+          actionId: 'missing-trigger-record',
+          name: 'Missing Trigger Record',
+          motionPrompt: 'wave once',
+          loop: false,
+          frameCount: 1,
+          triggerProposal: { type: 'click', binding: 'clickAction' }
+        }]
+      }
+    },
+    now: () => '2026-06-27T01:13:00.000Z'
+  })
+  const runDir = path.join(dataDir, 'runs', run.runId)
+  const framesDir = path.join(runDir, 'frames', 'actions', 'missing-trigger-record')
+  const qaDir = path.join(runDir, 'qa')
+  const baseDir = path.join(runDir, 'frames', 'base')
+  await writeSolidPng(path.join(framesDir, '0001.png'), {
+    width: 192,
+    height: 208,
+    background: { r: 222, g: 185, b: 150, alpha: 1 }
+  })
+  await writeSolidPng(path.join(qaDir, 'action-frame-contact-sheet.png'), {
+    width: 192,
+    height: 208,
+    background: { r: 255, g: 234, b: 214, alpha: 1 }
+  })
+  await writeSolidPng(path.join(baseDir, '0001.png'), {
+    width: 512,
+    height: 512,
+    background: { r: 244, g: 206, b: 170, alpha: 1 }
+  })
+  fs.writeFileSync(path.join(qaDir, 'action-frame-validation.json'), `${JSON.stringify({
+    ok: true,
+    loop: false,
+    warnings: [],
+    playback: {
+      frameDurationsMs: [160]
+    }
+  }, null, 2)}\n`)
+  updateRunStatus({
+    dataDir,
+    runId: run.runId,
+    status: 'imported',
+    patch: {
+      taskStatus: 'confirmed',
+      currentStep: 'imported',
+      reviewStatus: 'approved',
+      importStatus: 'imported',
+      importedActionId: 'missing-trigger-record',
+      artifacts: {
+        generatedImage: {
+          ok: true,
+          backend: 'provider',
+          model: 'gpt-image-2',
+          generatedAt: '2026-06-27T01:14:00.000Z',
+          outputs: [{
+            dataRelativePath: `runs/${run.runId}/frames/base/0001.png`,
+            mimeType: 'image/png',
+            sha256: 'dashboard-imported-missing-trigger-record-sha'
+          }]
+        },
+        actionFrames: {
+          actionId: 'missing-trigger-record',
+          name: 'Missing Trigger Record',
+          framesDir,
+          qa: path.join(qaDir, 'action-frame-validation.json'),
+          contactSheet: path.join(qaDir, 'action-frame-contact-sheet.png'),
+          frameCount: 1,
+          frameWidth: 192,
+          frameHeight: 208,
+          triggerProposal: { type: 'click', binding: 'clickAction' }
+        }
+      }
+    },
+    now: () => '2026-06-27T01:15:00.000Z'
+  })
+  return run
+}
+
 test('creator studio dashboard drives a single-action fixture run to the host import handoff', async () => {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-dashboard-browser-'))
   const dashboardPath = path.join(__dirname, '../../examples/plugins/creator-studio/web/dashboard/index.html')
@@ -518,8 +608,27 @@ test('creator studio dashboard surfaces blocked single-action qa before approval
     assert.match(reviewText, /Frame 0001\.png has no visible pixels/i)
     assert.match(reviewText, /Invalid frames: 1/i)
     assert.match(reviewText, /Repairs logged: 1/i)
+
+    const nextStepText = await page.locator('#next-step-panel').textContent()
+    assert.doesNotMatch(nextStepText, /Approve run/i)
+    assert.match(nextStepText, /Review and repair frames/i)
+    assert.match(nextStepText, /repair buttons in the frame review panel/i)
+
+    const actionLaneText = await page.locator('#action-lane-panel').textContent()
+    assert.match(actionLaneText, /Dashboard action: Review and repair frames/i)
+    assert.match(actionLaneText, /repair buttons in the frame review panel/i)
+    assert.match(actionLaneText, /not directly available from a dashboard button right now/i)
+
     assert.equal(await page.locator('#approve-button').isDisabled(), true)
-    assert.match(await page.locator('#import-handoff-panel').textContent(), /repair any bad frame, then approve the action/i)
+
+    const handoffText = await page.locator('#import-handoff-panel').textContent()
+    assert.match(handoffText, /QA blocked/i)
+    assert.match(handoffText, /repair the bad frames or regenerate the action before approval/i)
+
+    const workflowGuidanceText = await page.locator('#workflow-guidance-panel').textContent()
+    assert.match(workflowGuidanceText, /Import state: review-required/i)
+    assert.match(workflowGuidanceText, /Repair or regenerate frames before approval/i)
+    assert.doesNotMatch(workflowGuidanceText, /Review QA and approve the run before host-owned action import/i)
   } finally {
     await browser.close()
     await new Promise((resolve) => server.close(resolve))
@@ -538,11 +647,22 @@ test('creator studio dashboard shows imported action review completion details',
     const handoffText = await page.locator('#import-handoff-panel').textContent()
     assert.match(handoffText, /Imported result details/i)
     assert.match(handoffText, /Review location: Actions -> Trigger Proposal Inbox/i)
+    assert.match(handoffText, /Follow-up: Review trigger proposal/i)
+    assert.match(handoffText, /The action import is complete\. Review the submitted trigger proposal/i)
+
+    const workflowGuidanceText = await page.locator('#workflow-guidance-panel').textContent()
+    assert.match(workflowGuidanceText, /Follow-up: Review trigger proposal/i)
+    assert.match(workflowGuidanceText, /Actions -> Trigger Proposal Inbox/i)
 
     const reviewText = await page.locator('#action-review-panel').textContent()
     assert.match(reviewText, /Import completed/i)
     assert.match(reviewText, /Imported action: shy-spin/i)
     assert.match(reviewText, /Actions -> Trigger Proposal Inbox/i)
+    assert.match(reviewText, /Follow-up: Review trigger proposal/i)
+    assert.match(reviewText, /The action import is complete\. Review the submitted trigger proposal/i)
+    assert.doesNotMatch(reviewText, /QA blocked/i)
+    assert.doesNotMatch(reviewText, /Repair or regenerate frames before approval/i)
+    assert.doesNotMatch(reviewText, /Repair/i)
 
     const nextStepText = await page.locator('#next-step-panel').textContent()
     assert.match(nextStepText, /Review trigger proposal/i)
@@ -569,6 +689,7 @@ test('creator studio dashboard shows imported action handoff failure details', a
     const handoffText = await page.locator('#import-handoff-panel').textContent()
     assert.match(handoffText, /Imported result details/i)
     assert.match(handoffText, /Review location: Control Center -> Plugins/i)
+    assert.match(handoffText, /Follow-up: Review import handoff/i)
     assert.match(handoffText, /proposal write failed/i)
     assert.match(handoffText, /\[redacted-token\]/i)
     assert.match(handoffText, /\[redacted-path\]/i)
@@ -577,14 +698,29 @@ test('creator studio dashboard shows imported action handoff failure details', a
     assert.equal(handoffText.includes('/Users/mango/private/proposal.json'), false)
     assert.equal(handoffText.includes('127.0.0.1:8787'), false)
 
+    const workflowGuidanceText = await page.locator('#workflow-guidance-panel').textContent()
+    assert.match(workflowGuidanceText, /Follow-up: Review import handoff/i)
+    assert.match(workflowGuidanceText, /Control Center -> Plugins/i)
+    assert.match(workflowGuidanceText, /proposal write failed/i)
+    assert.match(workflowGuidanceText, /\[redacted-token\]/i)
+    assert.match(workflowGuidanceText, /\[redacted-path\]/i)
+    assert.match(workflowGuidanceText, /\[redacted-local-url\]/i)
+    assert.equal(workflowGuidanceText.includes('bridge-secret'), false)
+    assert.equal(workflowGuidanceText.includes('/Users/mango/private/proposal.json'), false)
+    assert.equal(workflowGuidanceText.includes('127.0.0.1:8787'), false)
+
     const reviewText = await page.locator('#action-review-panel').textContent()
     assert.match(reviewText, /Import completed/i)
     assert.match(reviewText, /Imported action: shy-spin/i)
     assert.match(reviewText, /Control Center -> Plugins/i)
+    assert.match(reviewText, /Follow-up: Review import handoff/i)
     assert.match(reviewText, /proposal write failed/i)
     assert.match(reviewText, /\[redacted-token\]/i)
     assert.match(reviewText, /\[redacted-path\]/i)
     assert.match(reviewText, /\[redacted-local-url\]/i)
+    assert.doesNotMatch(reviewText, /QA blocked/i)
+    assert.doesNotMatch(reviewText, /Repair or regenerate frames before approval/i)
+    assert.doesNotMatch(reviewText, /Repair/i)
     assert.equal(reviewText.includes('bridge-secret'), false)
     assert.equal(reviewText.includes('/Users/mango/private/proposal.json'), false)
     assert.equal(reviewText.includes('127.0.0.1:8787'), false)
@@ -628,12 +764,26 @@ test('creator studio dashboard shows imported full-pet review completion details
     const handoffText = await page.locator('#import-handoff-panel').textContent()
     assert.match(handoffText, /Imported result details/i)
     assert.match(handoffText, /Imported pet pack: imported-review-cat/i)
+    assert.match(handoffText, /Follow-up: Review imported result/i)
+    assert.match(handoffText, /Review the imported result inside OpenPet/i)
+
+    const resultCardText = await page.locator('#import-handoff-panel .notice').last().textContent()
+    assert.match(resultCardText, /Follow-up: Review imported result/i)
+    assert.match(resultCardText, /Review the imported result inside OpenPet/i)
+
+    const workflowGuidanceText = await page.locator('#workflow-guidance-panel').textContent()
+    assert.match(workflowGuidanceText, /Follow-up: Review imported result/i)
+    assert.match(workflowGuidanceText, /OpenPet/i)
 
     const reviewText = await page.locator('#full-pet-review-panel').textContent()
     assert.match(reviewText, /Import completed/i)
     assert.match(reviewText, /Imported pet pack: imported-review-cat/i)
     assert.match(reviewText, /Activated pack: imported-review-cat/i)
     assert.match(reviewText, /Review location: OpenPet/i)
+    assert.match(reviewText, /Follow-up: Review imported result/i)
+    assert.match(reviewText, /Review the imported result inside OpenPet/i)
+    assert.doesNotMatch(reviewText, /QA blocked/i)
+    assert.doesNotMatch(reviewText, /Retry generation on this same run before approval or import/i)
 
     const nextStepText = await page.locator('#next-step-panel').textContent()
     assert.match(nextStepText, /Review imported result/i)
@@ -642,6 +792,51 @@ test('creator studio dashboard shows imported full-pet review completion details
     const actionLaneText = await page.locator('#action-lane-panel').textContent()
     assert.match(actionLaneText, /Host-owned action: Review imported result/i)
     assert.match(actionLaneText, /Location: OpenPet/i)
+  } finally {
+    await browser.close()
+    await new Promise((resolve) => server.close(resolve))
+  }
+})
+
+test('creator studio dashboard shows imported action missing trigger handoff record details', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-dashboard-browser-imported-action-missing-trigger-'))
+  await seedImportedActionRunWithoutTriggerSubmission(dataDir)
+  const server = await openDashboardServer(dataDir)
+  const { browser, page } = await openDashboardPage(server)
+
+  try {
+    await page.waitForFunction(() => document.querySelector('#run-select')?.value?.length > 0)
+
+    const handoffText = await page.locator('#import-handoff-panel').textContent()
+    assert.match(handoffText, /Imported result details/i)
+    assert.match(handoffText, /Follow-up: Review import handoff/i)
+    assert.match(handoffText, /no trigger proposal handoff record was saved/i)
+    assert.equal(handoffText.includes('runs during Import Approved Action'), false)
+
+    const workflowGuidanceText = await page.locator('#workflow-guidance-panel').textContent()
+    assert.match(workflowGuidanceText, /Follow-up: Review import handoff/i)
+    assert.match(workflowGuidanceText, /Control Center -> Plugins/i)
+    assert.match(workflowGuidanceText, /no trigger proposal handoff record was saved/i)
+    assert.equal(workflowGuidanceText.includes('runs during Import Approved Action'), false)
+
+    const reviewText = await page.locator('#action-review-panel').textContent()
+    assert.match(reviewText, /Import completed/i)
+    assert.match(reviewText, /Control Center -> Plugins/i)
+    assert.match(reviewText, /Follow-up: Review import handoff/i)
+    assert.match(reviewText, /no trigger proposal handoff record was saved/i)
+    assert.doesNotMatch(reviewText, /QA blocked/i)
+    assert.doesNotMatch(reviewText, /Repair or regenerate frames before approval/i)
+    assert.doesNotMatch(reviewText, /Repair/i)
+    assert.equal(reviewText.includes('runs during Import Approved Action'), false)
+
+    const nextStepText = await page.locator('#next-step-panel').textContent()
+    assert.match(nextStepText, /Review import handoff/i)
+    assert.match(nextStepText, /no trigger proposal handoff record was saved/i)
+
+    const actionLaneText = await page.locator('#action-lane-panel').textContent()
+    assert.match(actionLaneText, /Host-owned action: Review import handoff/i)
+    assert.match(actionLaneText, /Control Center -> Plugins/i)
+    assert.match(actionLaneText, /no trigger proposal handoff record was saved/i)
   } finally {
     await browser.close()
     await new Promise((resolve) => server.close(resolve))
@@ -750,6 +945,13 @@ test('creator studio dashboard surfaces full-pet qa source mismatch before appro
     assert.match(await page.locator('#next-step-panel').textContent(), /Retry generation/i)
     assert.equal(await page.locator('#approve-button').isDisabled(), true)
     assert.match(await page.locator('#action-lane-panel').textContent(), /Retry generation before approval/i)
+    const handoffText = await page.locator('#import-handoff-panel').textContent()
+    assert.match(handoffText, /QA blocked/i)
+    assert.match(handoffText, /Retry generation on this same run before approval or import/i)
+    const workflowGuidanceText = await page.locator('#workflow-guidance-panel').textContent()
+    assert.match(workflowGuidanceText, /Import state: review-required/i)
+    assert.match(workflowGuidanceText, /Retry generation on this same run before approval/i)
+    assert.doesNotMatch(workflowGuidanceText, /Review the generated pet-pack output and approve the run before host-owned pet import/i)
   } finally {
     await browser.close()
     await new Promise((resolve) => server.close(resolve))

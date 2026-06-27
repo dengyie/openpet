@@ -471,6 +471,13 @@ const createImportedFollowUp = (run) => {
           : 'The action import completed, but trigger proposal handoff failed. Review the command output in Control Center -> Plugins before applying trigger rules.'
       }
     }
+    if (!run.triggerProposalSubmission) {
+      return {
+        label: 'Review import handoff',
+        location: 'Control Center -> Plugins',
+        reason: 'The action import completed, but no trigger proposal handoff record was saved. Review the command output in Control Center -> Plugins before applying trigger rules.'
+      }
+    }
     return {
       label: 'Review import handoff',
       location: 'Control Center -> Plugins',
@@ -492,7 +499,9 @@ const createWizardState = ({ dataDir, run }) => {
   const status = String(run.status || 'draft')
   const isFullPet = run.generationTask?.mode === 'full-pet'
   const fullPetReviewGate = createFullPetReviewGate({ dataDir, run })
+  const actionFrameReviewGate = createActionFrameReviewGate({ dataDir, run })
   const requiresRetryBeforeApproval = status === 'ready_for_review' && fullPetReviewGate.reviewGate.ready === false
+  const requiresActionRepairBeforeApproval = status === 'ready_for_review' && actionFrameReviewGate.reviewGate.ready === false
   let phase = 'draft'
   let summary = 'Draft a task to create a run snapshot.'
   let nextStepLabel = 'Draft task'
@@ -516,7 +525,11 @@ const createWizardState = ({ dataDir, run }) => {
     nextStepReason = 'Use the same run to retry generation after checking the failure details.'
   } else if (status === 'ready_for_review') {
     phase = 'ready-for-review'
-    if (requiresRetryBeforeApproval) {
+    if (requiresActionRepairBeforeApproval) {
+      summary = 'Review found invalid action frames. Repair them in the frame review panel or regenerate before approval.'
+      nextStepLabel = 'Review and repair frames'
+      nextStepReason = 'Use the repair buttons in the frame review panel or regenerate this run before approval.'
+    } else if (requiresRetryBeforeApproval) {
       summary = 'Review shows stale QA source artifacts. Retry generation on this same run before approval.'
       nextStepLabel = 'Retry generation'
       nextStepReason = 'Retry generation on this same run before approval so QA matches the current generated image.'
@@ -722,10 +735,10 @@ const createDashboardButtonStates = ({ dataDir, run }) => {
           ? actionFrameReviewGate.reviewGate.reason
         : fullPetApprovalBlocked
           ? 'Retry generation before approval so QA matches the current generated image.'
-          : status === 'imported'
+        : status === 'imported'
           ? 'This run is already imported.'
           : status === 'approved'
-            ? 'This run is already approved. Finish host-owned import in OpenPet.'
+            ? 'This run is already approved. Finish host-owned import in Control Center -> Plugins.'
             : status === 'failed'
               ? 'Retry generation before approval.'
               : 'Generation review must complete before approval.'
@@ -851,6 +864,9 @@ const createWorkflowGuidance = ({ dataDir, run }) => {
       ]
   const hasActionFrames = Boolean(run.artifacts?.actionFrames)
   const importCommand = resolveImportCommand(run)
+  const importedFollowUp = run.status === 'imported'
+    ? createImportedFollowUp(run)
+    : null
   let importStatus = 'not-ready'
   let importSummary = hasActionFrames
     ? 'Approve the run before using Import Approved Action from Control Center -> Plugins.'
@@ -880,15 +896,26 @@ const createWorkflowGuidance = ({ dataDir, run }) => {
         triggerProposalSummary = handoffError
           ? `Action import succeeded, but trigger proposal handoff failed: ${handoffError}. Re-run import or inspect the command output before applying trigger rules.`
           : 'Action import succeeded, but trigger proposal handoff failed. Re-run import or inspect the command output before applying trigger rules.'
+      } else {
+        triggerProposalStatus = 'missing'
+        triggerProposalSummary = 'Action import succeeded, but no trigger proposal handoff record was saved. Review the command output in Control Center -> Plugins before applying trigger rules.'
       }
     } else if (run.activatedPackId) {
       triggerProposalSummary = `Activated pack: ${run.activatedPackId}.`
     }
   } else if (run.status === 'ready_for_review') {
     importStatus = 'review-required'
-    importSummary = hasActionFrames
-      ? 'Review QA and approve the run before host-owned action import.'
-      : 'Review the generated pet-pack output and approve the run before host-owned pet import.'
+    if (hasActionFrames) {
+      if (createActionFrameReviewGate({ dataDir, run }).reviewGate.ready === false) {
+        importSummary = 'Repair or regenerate frames before approval or host-owned action import.'
+      } else {
+        importSummary = 'Review QA and approve the run before host-owned action import.'
+      }
+    } else if (createFullPetReviewGate({ dataDir, run }).reviewGate.ready === false) {
+      importSummary = 'Retry generation on this same run before approval or import so QA matches the current generated image.'
+    } else {
+      importSummary = 'Review the generated pet-pack output and approve the run before host-owned pet import.'
+    }
   }
 
   const resultCard = createImportedResultCard({
@@ -911,6 +938,16 @@ const createWorkflowGuidance = ({ dataDir, run }) => {
       command: createPublicText({ dataDir, value: importCommand }),
       handoff: createImportHandoff({ dataDir, run, importStatus }),
       summary: createPublicText({ dataDir, value: importSummary }),
+      followUp: importedFollowUp
+        ? createPublicLogValue({
+            dataDir,
+            value: {
+              label: importedFollowUp.label,
+              location: importedFollowUp.location,
+              reason: importedFollowUp.reason
+            }
+          })
+        : undefined,
       importedActionId: createPublicText({ dataDir, value: run.importedActionId || '' }),
       triggerProposalStatus: createPublicText({ dataDir, value: triggerProposalStatus }),
       triggerProposalSummary: createPublicText({ dataDir, value: triggerProposalSummary }),
