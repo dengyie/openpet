@@ -316,6 +316,26 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     petChatWindowService?.sendStateChanged?.(state)
   }
 
+  const notifyControlCenterActivePetPackChanged = (activePackId) => {
+    const normalizedActivePackId = normalizeMessageText(activePackId)
+    if (!normalizedActivePackId) return
+    const settingsWindow = browserWindowService.getAllWindows?.().find?.((candidate) => {
+      try {
+        return !candidate.isDestroyed?.() && candidate.webContents?.getURL?.().includes?.('control-center')
+      } catch (_) {
+        return false
+      }
+    })
+    settingsWindow?.webContents?.send?.(IPC.PET_PACKS_ACTIVE_CHANGED, { activePackId: normalizedActivePackId })
+  }
+
+  const refreshPetPackScopedChatState = ({ reason = 'pet-pack-changed' } = {}) => {
+    refreshBubbleChatItems({ reason })
+    const state = getPetChatState()
+    notifyPetChatStateChanged(state)
+    return state
+  }
+
   const refreshBubbleChatItems = ({ reason = 'refresh' } = {}) => {
     if (!petBubbleChatWindowService?.refreshItems) return petBubbleChatWindowService?.getState?.() || null
     let conversationMessages = []
@@ -1209,6 +1229,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     reloadAndSendAnimations(getPetWindow, petService)
     const animations = petService.getPreviewAnimations()
     const petPacks = petPackService.listPacks()
+    refreshPetPackScopedChatState({ reason: 'pet-pack-set-active' })
     notifyActivePetPackChanged(event, result)
     return createPetPackMutationResult(result, petPacks, animations)
   })

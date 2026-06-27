@@ -336,6 +336,21 @@ export function useAiPane(activeTab = 'ai') {
   }, [activeTab])
 
   useEffect(() => {
+    const unsubscribe = api.onActivePetPackChanged?.(({ activePackId }) => {
+      if (!activePackId) return
+      void loadPersonaProfile().catch(() => {})
+      void loadMemoryProfile().catch(() => {})
+      void loadPetChatState().catch(() => {})
+      setGeneratedPersonaDraft(null)
+      setPersonaGenerationInstruction('')
+      setStatus('')
+    })
+    return () => {
+      if (typeof unsubscribe === 'function') unsubscribe()
+    }
+  }, [])
+
+  useEffect(() => {
     if (activeTab !== 'ai' || typeof window === 'undefined' || typeof document === 'undefined') return
     const handleWindowFocus = () => { void refreshBubbleChatState().catch(() => {}) }
     const handleVisibilityChange = () => {

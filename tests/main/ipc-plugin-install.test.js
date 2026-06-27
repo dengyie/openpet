@@ -1394,6 +1394,9 @@ test('pet pack mutation handlers return refreshed pet pack views and active anim
   const animations = { defaultAction: 'idle', clickAction: 'happy', actions: [{ id: 'idle', label: 'Idle' }] }
   const calls = []
   const petWindowMessages = []
+  const chatStateChanges = []
+  const bubbleRefreshCalls = []
+  const controlCenterMessages = []
   const services = createRequiredServices({
     pluginInstallService: {
       inspectPluginPackage: () => ({}),
@@ -1422,6 +1425,16 @@ test('pet pack mutation handlers return refreshed pet pack views and active anim
         send: (...args) => petWindowMessages.push(args)
       }
     }),
+    browserWindowService: {
+      fromWebContents: () => null,
+      getAllWindows: () => [{
+        isDestroyed: () => false,
+        webContents: {
+          getURL: () => 'app://-/control-center/index.html',
+          send: (...args) => controlCenterMessages.push(args)
+        }
+      }]
+    },
     petPackService: {
       listPacks: () => petPacks,
       inspectPackDirectory: () => ({}),
@@ -1441,6 +1454,21 @@ test('pet pack mutation handlers return refreshed pet pack views and active anim
         return {}
       }
     },
+    aiTalkService: {
+      getPersonaProfile: () => ({ petPackId: 'doro', petPackDisplayName: 'Doro' }),
+      getConversation: () => [{ id: 'a1', role: 'assistant', content: 'hi from doro', createdAt: '2026-06-27T00:00:00.000Z' }]
+    },
+    petChatWindowService: {
+      getState: () => ({ alwaysOnTop: true, visible: true, hasWindow: true }),
+      sendStateChanged: (state) => chatStateChanges.push(state)
+    },
+    petBubbleChatWindowService: {
+      getState: () => ({ visible: true, hasWindow: true }),
+      refreshItems: (payload) => {
+        bubbleRefreshCalls.push(payload)
+        return { visible: true, items: payload.conversationMessages }
+      }
+    },
     ipcMainService: ipcMain
   })
 
@@ -1456,6 +1484,13 @@ test('pet pack mutation handlers return refreshed pet pack views and active anim
     ['set-active', 'doro'],
     ['remove', 'doro']
   ])
+  assert.deepEqual(bubbleRefreshCalls, [{
+    conversationMessages: [{ id: 'a1', role: 'assistant', content: 'hi from doro', createdAt: '2026-06-27T00:00:00.000Z' }],
+    reason: 'pet-pack-set-active'
+  }])
+  assert.equal(chatStateChanges.length, 1)
+  assert.deepEqual(chatStateChanges[0].petPack, { id: 'doro', displayName: 'Doro' })
+  assert.deepEqual(controlCenterMessages, [[IPC.PET_PACKS_ACTIVE_CHANGED, { activePackId: 'doro' }]])
   assert.equal(petWindowMessages.length, 2)
   assert.equal(petWindowMessages[0][0], IPC.PET_ANIMATIONS_CHANGED)
   assert.equal(petWindowMessages[1][0], IPC.PET_ANIMATIONS_CHANGED)

@@ -768,6 +768,11 @@ const syncDemoStateFromStorage = () => {
 }
 const demoCatalogSelections = new Map<string, CatalogInstallSelection>()
 let demoManualPluginSelection: string | null = null
+const demoActivePetPackListeners = new Set<(payload: { activePackId: string }) => void>()
+const emitDemoActivePetPackChanged = () => {
+  const payload = { activePackId: demoState.petPacks.activePackId }
+  for (const listener of demoActivePetPackListeners) listener(payload)
+}
 const demoCursorAssetUrl = `data:image/svg+xml;utf8,${encodeURIComponent(`
 <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
   <path d="M9 5l23 21h-11l8 17-6 3-8-17-8 8z" fill="#111827"/>
@@ -1347,6 +1352,7 @@ const demoApi: ControlCenterApi = {
       activePackId: packId
     })
     writeDemoState()
+    emitDemoActivePetPackChanged()
     const activePack = getActiveDemoPetPack()
     return {
       pack: activePack,
@@ -1635,6 +1641,13 @@ const demoApi: ControlCenterApi = {
     }, null, 2)
   },
   openPetChatWindow: async () => createDemoPetChatState(),
+  onActivePetPackChanged: (callback) => {
+    if (typeof callback !== 'function') return () => {}
+    demoActivePetPackListeners.add(callback)
+    return () => {
+      demoActivePetPackListeners.delete(callback)
+    }
+  },
   sendPetChatMessage: sendDemoPetChatMessage,
   getAiBehavior: async () => cloneAiConfig(demoState.aiConfig).behavior,
   saveAiBehavior: async (config) => {
