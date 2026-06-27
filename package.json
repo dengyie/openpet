@@ -30,6 +30,7 @@
     "create-packaged-runtime-smoke-report": "node scripts/create-packaged-runtime-smoke-report.js",
     "create-packaged-runtime-smoke-runbook": "node scripts/create-packaged-runtime-smoke-runbook.js",
     "run-packaged-runtime-smoke": "node scripts/run-packaged-runtime-smoke.js",
+    "run-ai-talk-local-smoke": "node scripts/run-ai-talk-local-smoke.js",
     "update-packaged-runtime-smoke-report": "node scripts/update-packaged-runtime-smoke-report.js",
     "validate-packaged-runtime-smoke-report": "node scripts/validate-packaged-runtime-smoke-report.js",
     "create-release-evidence-archive-manifest": "node scripts/create-release-evidence-archive-manifest.js",
