@@ -22,3 +22,25 @@ test('active TODO doc describes the current AI pane layout truthfully', () => {
     'openpet-current-todo-architecture.md should not keep the older AI pane wording once the layout copy changed'
   )
 })
+
+test('active TODO doc describes the AI provider smoke evidence entrypoint truthfully', () => {
+  const todoArchitecture = readText('docs/openpet-current-todo-architecture.md')
+
+  assert.match(
+    todoArchitecture,
+    /npm run smoke:ai-provider -- --base-url <url> --api-key-env <env> --chat-model <model>/i,
+    'openpet-current-todo-architecture.md should document the repeatable AI provider smoke command'
+  )
+
+  assert.match(
+    todoArchitecture,
+    /keeps image generation opt-in|image generation opt-in/i,
+    'openpet-current-todo-architecture.md should keep real image generation behind an explicit opt-in boundary'
+  )
+
+  assert.match(
+    todoArchitecture,
+    /without raw API keys|without exposing API keys/i,
+    'openpet-current-todo-architecture.md should describe the sanitized API key boundary'
+  )
+})
