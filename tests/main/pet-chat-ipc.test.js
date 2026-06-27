@@ -184,7 +184,10 @@ test('pet chat send uses shared control-center entrypoint and compact pet bubble
 
   const result = await ipcMain.handlers.get(IPC.PET_CHAT_SEND_MESSAGE)(null, { message: prompt })
 
-  assert.deepEqual(talkCalls, [{ message: prompt, entrypoint: 'control-center' }])
+  assert.equal(talkCalls.length, 1)
+  assert.equal(talkCalls[0].message, prompt)
+  assert.equal(talkCalls[0].entrypoint, 'control-center')
+  assert.match(talkCalls[0].requestId, /^chat-/)
   assert.equal(result.conversationId, 'control-center:legacy-cat:main')
   assert.equal(result.reply, longReply)
   assert.deepEqual(result.bubbleSegments, bubbleSegments)
@@ -601,7 +604,10 @@ test('pet bubble chat send reuses shared AI Talk conversation and updates popup 
 
   const result = await ipcMain.handlers.get(IPC.PET_BUBBLE_CHAT_SEND_MESSAGE)(null, { message: prompt })
 
-  assert.deepEqual(talkCalls, [{ message: prompt, entrypoint: 'control-center' }])
+  assert.equal(talkCalls.length, 1)
+  assert.equal(talkCalls[0].message, prompt)
+  assert.equal(talkCalls[0].entrypoint, 'control-center')
+  assert.match(talkCalls[0].requestId, /^chat-/)
   assert.equal(result.conversationId, 'control-center:legacy-cat:main')
   assert.equal(result.reply, reply)
   assert.deepEqual(result.bubbleSegments, bubbleSegments)
@@ -624,6 +630,9 @@ test('pet bubble chat send reuses shared AI Talk conversation and updates popup 
     'ai-chat.ipc.completed',
     'pet-bubble-chat.message.completed'
   ])
+  const requestIds = logs.map((entry) => entry.details?.requestId).filter(Boolean)
+  assert.equal(requestIds.length >= 4, true)
+  assert.equal(new Set(requestIds).size, 1)
 })
 
 test('pet chat send refreshes bubble chat items from the shared main conversation', async () => {

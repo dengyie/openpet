@@ -11,7 +11,7 @@ const { createPetPackService } = require('../src/main/services/pet-pack-service'
 const { createPetUtteranceLogService } = require('../src/main/services/pet-utterance-log-service')
 const { createEventBus } = require('../src/main/services/event-bus')
 const { createPetService } = require('../src/main/services/pet-service')
-const { createPetBubbleChatWindowManager } = require('../src/main/pet-bubble-chat-window')
+const { createPetBubbleChatWindowManager, createBubbleRequestId } = require('../src/main/pet-bubble-chat-window')
 
 const DEFAULT_OUTPUT_DIR = path.join(__dirname, '..', 'release', 'ai-talk-local-smoke')
 const DEFAULT_LOG_LIMIT = 20
@@ -375,12 +375,20 @@ const createBubbleDispatchHarness = ({
 
   return {
     dispatchAiReply(result = {}) {
-      latestConversationMessages = Array.isArray(result.messages) ? result.messages : []
       const bubbleText = createPetBubbleText(result.reply, result.behaviorIntent, result.bubbleSegments)
+      const requestId = createBubbleRequestId()
+      latestConversationMessages = Array.isArray(result.messages)
+        ? result.messages.map((message, index, list) => (
+            message?.role === 'assistant' && index === list.length - 1
+              ? { ...message, requestId }
+              : message
+          ))
+        : []
       if (!bubbleText) {
         return {
           attempted: false,
           reason: 'empty-bubble-text',
+          requestId,
           petSayReceived: false,
           bubbleStateVisible: false,
           dialogueCount: 0,
@@ -390,12 +398,16 @@ const createBubbleDispatchHarness = ({
           refreshCount: 0
         }
       }
-      petService.say({ text: bubbleText, source: 'ai' })
+      petService.say({ text: bubbleText, source: 'ai', requestId })
       const state = bubbleManager.getState()
       const items = Array.isArray(state.items) ? state.items : []
       const latestItem = items.at(-1) || null
+      const correlatedLogs = typeof appLogService?.read === 'function'
+        ? appLogService.read({ limit: 50 }).filter((entry) => entry?.details?.requestId === requestId)
+        : []
       return {
         attempted: true,
+        requestId,
         bubbleTextChars: bubbleText.length,
         bubblePreview: sanitizeText(bubbleText, 120),
         petSayReceived: Boolean(observedSayPayload?.text),
@@ -406,7 +418,9 @@ const createBubbleDispatchHarness = ({
         noticeCount: items.filter((item) => item?.kind === 'notice').length,
         latestItemRole: sanitizeText(latestItem?.role || '', 40),
         latestItemSource: sanitizeText(latestItem?.source || '', 80),
-        refreshCount: bubbleRefreshCount
+        refreshCount: bubbleRefreshCount,
+        correlatedLogCount: correlatedLogs.length,
+        correlatedLogEvents: correlatedLogs.map((entry) => sanitizeText(entry.event || '', 120))
       }
     }
   }

@@ -12,6 +12,7 @@ const { sanitizeDetails } = require('./services/app-log-service')
 const { normalizeCursorSettingsState } = require('../shared/cursor-library')
 const { choosePetContextMenuPoint, estimatePetContextMenuSize } = require('./pet-context-menu')
 const { showPetContextMenuWindow } = require('./pet-context-menu-window')
+const { createBubbleRequestId } = require('./pet-bubble-chat-window')
 const {
   createActionFrameImportResult,
   createActionTriggerProposalPreviewResult,
@@ -404,6 +405,9 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     const requestPayload = entrypoint && !payload?.entrypoint
       ? { ...payload, entrypoint }
       : payload
+    const requestId = typeof requestPayload?.requestId === 'string' && requestPayload.requestId.trim()
+      ? requestPayload.requestId.trim().slice(0, 120)
+      : createBubbleRequestId()
     const startedAt = Date.now()
     const messageChars = typeof requestPayload?.message === 'string' ? requestPayload.message.trim().length : 0
     const requestedConversationId = typeof requestPayload?.conversationId === 'string' ? requestPayload.conversationId.slice(0, 160) : ''
@@ -415,6 +419,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
       message: 'AI chat IPC request received',
       details: {
         source,
+        requestId,
         requestedConversationId,
         messageChars,
         service: aiTalkService ? 'ai-talk' : 'ai'
@@ -433,10 +438,11 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
           message: 'AI chat bubble dispatching to pet service',
           details: {
             source,
+            requestId,
             textChars: bubbleText.length
           }
         })
-        const sayResult = petService.say({ text: bubbleText, source: 'ai' })
+        const sayResult = petService.say({ text: bubbleText, source: 'ai', requestId })
         recordAppLog({
           scope: 'ai-chat',
           level: 'info',
@@ -445,6 +451,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
           message: 'AI chat bubble dispatched to pet service',
           details: {
             source,
+            requestId,
             textChars: String(sayResult?.text || '').length,
             hasTtl: Number.isFinite(Number(sayResult?.ttlMs))
           }
@@ -468,6 +475,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
           message: 'AI chat IPC request completed',
           details: {
             source,
+            requestId,
             requestedConversationId,
             conversationId: result.conversationId || '',
             elapsedMs: Date.now() - startedAt,
@@ -491,6 +499,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
         message: 'AI chat IPC request completed',
         details: {
           source,
+          requestId,
           requestedConversationId,
           conversationId: result.conversationId || '',
           elapsedMs: Date.now() - startedAt,
@@ -511,6 +520,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
         message: 'AI chat IPC request failed',
         details: {
           source,
+          requestId,
           requestedConversationId,
           elapsedMs: Date.now() - startedAt,
           errorName: sanitizeDiagnosticText(error?.name || 'Error'),
@@ -803,6 +813,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
   ipcMainService.handle(IPC.PET_BUBBLE_CHAT_SEND_MESSAGE, async (_event, payload = {}) => {
     const startedAt = Date.now()
     const message = typeof payload?.message === 'string' ? payload.message.trim() : ''
+    const requestId = createBubbleRequestId()
     recordAppLog({
       scope: 'pet-bubble-chat',
       level: 'info',
@@ -810,6 +821,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
       event: 'pet-bubble-chat.message.started',
       message: 'Pet bubble chat message started',
       details: {
+        requestId,
         messageChars: message.length
       }
     })
@@ -819,7 +831,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
         sending: true,
         lastUserMessage: { text: message }
       })
-      const result = await runAiChatRequest({ message, entrypoint: 'control-center' }, { source: 'bubble-chat' })
+      const result = await runAiChatRequest({ message, entrypoint: 'control-center', requestId }, { source: 'bubble-chat' })
       petBubbleChatWindowService?.setSendingState?.({
         sending: false,
         lastUserMessage: { text: message },
@@ -833,6 +845,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
         event: 'pet-bubble-chat.message.completed',
         message: 'Pet bubble chat message completed',
         details: {
+          requestId,
           elapsedMs: Date.now() - startedAt,
           conversationId: result.conversationId || '',
           replyChars: String(result.reply || '').length,
@@ -857,6 +870,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
         event: 'pet-bubble-chat.message.failed',
         message: 'Pet bubble chat message failed',
         details: {
+          requestId,
           elapsedMs: Date.now() - startedAt,
           errorName: sanitizeDiagnosticText(error?.name || 'Error'),
           errorMessage: safeMessage,
@@ -891,6 +905,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     const startedAt = Date.now()
     const message = typeof payload?.message === 'string' ? payload.message.trim() : ''
     const source = payload?.source === 'control-center' ? 'control-center' : 'pet-chat'
+    const requestId = createBubbleRequestId()
     recordAppLog({
       scope: 'pet-chat',
       level: 'info',
@@ -899,12 +914,13 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
       message: 'Pet chat message started',
       details: {
         source,
+        requestId,
         messageChars: message.length
       }
     })
     try {
       assertPetChatReady()
-      const result = await runAiChatRequest({ message, entrypoint: 'control-center' }, { source })
+      const result = await runAiChatRequest({ message, entrypoint: 'control-center', requestId }, { source })
       refreshBubbleChatItems({ reason: 'pet-chat-send' })
       const state = getPetChatState()
       recordAppLog({
@@ -915,6 +931,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
         message: 'Pet chat message completed',
         details: {
           source,
+          requestId,
           elapsedMs: Date.now() - startedAt,
           conversationId: result.conversationId || '',
           messageCount: Array.isArray(result.messages) ? result.messages.length : 0,
@@ -932,6 +949,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
         message: 'Pet chat message failed',
         details: {
           source,
+          requestId,
           elapsedMs: Date.now() - startedAt,
           errorName: sanitizeDiagnosticText(error?.name || 'Error'),
           errorMessage: error?.providerStatus

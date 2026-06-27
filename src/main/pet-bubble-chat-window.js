@@ -136,6 +136,8 @@ const createBubbleItemId = ({ kind, source, createdAt, text }) => {
   return `bubble:${kind}:${Math.abs(hash).toString(36)}`
 }
 
+const createBubbleRequestId = () => `chat-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+
 const normalizeBubbleChatItem = (payload = {}) => {
   const message = normalizeMessagePayload(payload)
   if (!message) return null
@@ -155,6 +157,7 @@ const normalizeBubbleChatItem = (payload = {}) => {
     createdAt,
     conversationId: typeof payload.conversationId === 'string' ? payload.conversationId : '',
     messageId: typeof payload.messageId === 'string' ? payload.messageId : '',
+    requestId: typeof payload.requestId === 'string' ? payload.requestId.slice(0, 120) : '',
     status: ['sending', 'sent', 'failed'].includes(payload.status) ? payload.status : 'sent',
     ttlMs: message.ttlMs,
     petPackId: message.petPackId
@@ -175,6 +178,7 @@ const normalizeConversationMessage = (message = {}, index = 0) => {
     createdAt,
     conversationId: typeof message.conversationId === 'string' ? message.conversationId : '',
     messageId: typeof message.id === 'string' ? message.id : '',
+    requestId: typeof message.requestId === 'string' ? message.requestId.slice(0, 120) : '',
     status: 'sent'
   }
 }
@@ -451,13 +455,14 @@ const createPetBubbleChatWindowManager = ({
       level: 'debug',
       event: 'pet-bubble-chat.items.updated',
       message: 'Pet bubble chat items updated',
-      details: {
-        reason,
-        itemCount: items.length,
-        noticeCount: normalizedNotices.length,
-        conversationMessageCount: Array.isArray(conversationMessages) ? conversationMessages.length : 0
-      }
-    })
+        details: {
+          reason,
+          itemCount: items.length,
+          noticeCount: normalizedNotices.length,
+          conversationMessageCount: Array.isArray(conversationMessages) ? conversationMessages.length : 0,
+          requestId: typeof state.message?.requestId === 'string' ? state.message.requestId : ''
+        }
+      })
     return getState()
   }
 
@@ -482,7 +487,8 @@ const createPetBubbleChatWindowManager = ({
         details: {
           source: item.source,
           textChars: item.text.length,
-          noticeCount: noticeItems.length
+          noticeCount: noticeItems.length,
+          requestId: item.requestId || ''
         }
       })
       return getState()
@@ -503,7 +509,8 @@ const createPetBubbleChatWindowManager = ({
           enabled: Boolean(settings.enabled),
           autoPopup: Boolean(settings.autoPopup),
           source: String(payload?.source || '').slice(0, 120),
-          textChars: String(payload?.text || '').length
+          textChars: String(payload?.text || '').length,
+          requestId: typeof payload?.requestId === 'string' ? payload.requestId.slice(0, 120) : ''
         }
       })
       if (state.visible) hide({ source: 'settings-disabled' })
@@ -514,7 +521,14 @@ const createPetBubbleChatWindowManager = ({
     appendNoticeOrDialogue(message)
     const win = ensureWindow()
     syncToPetWindow()
-    patchState({ message, visible: true })
+    patchState({
+      message: {
+        ...(state.message || {}),
+        ...message,
+        requestId: typeof payload?.requestId === 'string' ? payload.requestId.slice(0, 120) : (state.message?.requestId || '')
+      },
+      visible: true
+    })
     win.showInactive?.()
     recordLog({
       level: 'info',
@@ -523,7 +537,8 @@ const createPetBubbleChatWindowManager = ({
       details: {
         source: message.source,
         textChars: message.text.length,
-        ttlMs: message.ttlMs
+        ttlMs: message.ttlMs,
+        requestId: typeof payload?.requestId === 'string' ? payload.requestId.slice(0, 120) : ''
       }
     })
     scheduleAutoHide()
@@ -615,6 +630,7 @@ module.exports = {
   calculateBubbleTtlMs,
   buildBubbleChatItems,
   classifyBubbleChatKind,
+  createBubbleRequestId,
   createPetBubbleChatWindowManager,
   createDialogueItemsFromMessages,
   normalizeBubbleChatSettings,

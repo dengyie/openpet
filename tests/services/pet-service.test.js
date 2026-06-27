@@ -73,11 +73,12 @@ test('pet service emits say events through the runtime event bus', () => {
   assert.deepEqual(service.say({ text: 'hi', source: 'test' }), {
     text: 'hi',
     ttlMs: undefined,
-    source: 'test'
+    source: 'test',
+    requestId: undefined
   })
   assert.deepEqual(events, [[
     'pet:say',
-    { text: 'hi', ttlMs: undefined, source: 'test' }
+    { text: 'hi', ttlMs: undefined, source: 'test', requestId: undefined }
   ]])
 })
 

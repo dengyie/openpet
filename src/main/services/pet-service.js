@@ -22,8 +22,8 @@ const createPetService = ({ eventBus, settingsService, actionService }) => {
 
   const getAction = (actionId) => actionService.getAction(actionId)
 
-  const say = ({ text, ttlMs, source } = {}) => {
-    const payload = { text: String(text || ''), ttlMs, source }
+  const say = ({ text, ttlMs, source, requestId } = {}) => {
+    const payload = { text: String(text || ''), ttlMs, source, requestId }
     eventBus?.emit(PET_SAY, payload)
     return payload
   }
