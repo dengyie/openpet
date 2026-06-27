@@ -308,6 +308,27 @@ const createAiTalkStore = ({ storePath, now = () => new Date().toISOString() } =
     return getMessages(sessionId, conversationId)
   }
 
+  const importMessagesIfEmpty = (sessionId, conversationId = 'main', messages = []) => {
+    const conversationKey = `${sessionId}:${conversationId}`
+    if (!state.conversations[conversationKey]) throw new Error(`AI talk conversation does not exist: ${conversationKey}`)
+    const current = state.messages[conversationKey] || []
+    if (current.length) return []
+    const timestamp = now()
+    const normalized = normalizeMessages(messages).map((message, index) => ({
+      ...message,
+      id: message.id || createMessageId({ sessionId, conversationId, index }),
+      createdAt: message.createdAt || timestamp
+    }))
+    if (!normalized.length) return []
+    state.messages[conversationKey] = normalized
+    state.conversations[conversationKey] = {
+      ...state.conversations[conversationKey],
+      updatedAt: timestamp
+    }
+    persist()
+    return getMessages(sessionId, conversationId)
+  }
+
   const getPersonaOverride = (petPackId) => {
     const key = typeof petPackId === 'string' ? petPackId.trim() : ''
     if (!key) return {}
@@ -760,6 +781,7 @@ const createAiTalkStore = ({ storePath, now = () => new Date().toISOString() } =
     getPersonaOverride,
     getState,
     exportTraceDiagnostics,
+    importMessagesIfEmpty,
     listRecentPetUtterances,
     listMemories,
     markMemoriesUsed,

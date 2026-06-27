@@ -117,6 +117,87 @@ test('ai talk service isolates main conversation history by active pet pack', as
   assert.ok(!requests[2].messages.some((message) => message.content === 'sprout one'))
 })
 
+test('ai talk service migrates legacy control-center conversation into the active pet-pack main thread when empty', async () => {
+  const logs = []
+  const requests = []
+  const store = createStore()
+  const service = createAiTalkService({
+    aiService: {
+      getConversation: (conversationId) => (
+        conversationId === 'control-center'
+          ? [
+              { role: 'user', content: 'old hello' },
+              { role: 'assistant', content: 'old reply' }
+            ]
+          : []
+      ),
+      complete: async (request) => {
+        requests.push(request)
+        return { reply: 'new reply' }
+      }
+    },
+    aiTalkStore: store,
+    petPackService: createPetPackService({ id: 'mochi-cat' }),
+    appLogService: { record: (entry) => logs.push(entry) }
+  })
+
+  const historyBeforeChat = service.getConversation()
+  const result = await service.chat({ message: 'continue' })
+
+  assert.deepEqual(historyBeforeChat.map((message) => message.content), ['old hello', 'old reply'])
+  assert.deepEqual(requests[0].messages.map((message) => message.content), [
+    requests[0].messages[0].content,
+    'old hello',
+    'old reply',
+    'continue'
+  ])
+  assert.deepEqual(result.messages.map((message) => message.content), ['old hello', 'old reply', 'continue', 'new reply'])
+  assert.match(JSON.stringify(logs), /ai-talk\.legacy-conversation\.migrated/)
+})
+
+test('ai talk service does not overwrite existing ai talk history with legacy control-center conversation', async () => {
+  const store = createStore()
+  store.ensureMainConversation({ entrypoint: 'control-center', petPackId: 'mochi-cat', personaHash: 'hash-a' })
+  store.appendMessages('control-center:mochi-cat', 'main', [
+    { role: 'user', content: 'new-store hello' },
+    { role: 'assistant', content: 'new-store reply' }
+  ])
+  const service = createAiTalkService({
+    aiService: {
+      getConversation: () => [
+        { role: 'user', content: 'legacy hello' },
+        { role: 'assistant', content: 'legacy reply' }
+      ],
+      complete: async () => ({ reply: 'continued' })
+    },
+    aiTalkStore: store,
+    petPackService: createPetPackService({ id: 'mochi-cat' })
+  })
+
+  const history = service.getConversation()
+
+  assert.deepEqual(history.map((message) => message.content), ['new-store hello', 'new-store reply'])
+})
+
+test('ai talk service does not migrate legacy control-center history into a non-active pet-pack conversation id', () => {
+  const store = createStore()
+  store.ensureMainConversation({ entrypoint: 'control-center', petPackId: 'sprout-cat', personaHash: 'hash-a' })
+  const service = createAiTalkService({
+    aiService: {
+      getConversation: () => [
+        { role: 'user', content: 'legacy hello' },
+        { role: 'assistant', content: 'legacy reply' }
+      ]
+    },
+    aiTalkStore: store,
+    petPackService: createPetPackService({ id: 'mochi-cat' })
+  })
+
+  const history = service.getConversation('control-center:sprout-cat:main')
+
+  assert.deepEqual(history, [])
+})
+
 test('ai talk service rejects chat when ai config is disabled', async () => {
   const service = createAiTalkService({
     aiService: {

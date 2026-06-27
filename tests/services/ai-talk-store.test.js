@@ -47,6 +47,27 @@ test('ai talk store persists and returns cloned messages by conversation scope',
   assert.deepEqual(reloaded.getMessages(sprout.sessionId, sprout.conversationId).map((message) => message.content), ['Hi sprout'])
 })
 
+test('ai talk store imports legacy messages only when the target conversation is empty', () => {
+  const store = createAiTalkStore({ storePath: createTempStorePath(), now: () => '2026-06-20T00:00:00.000Z' })
+  const { sessionId, conversationId } = store.ensureMainConversation({
+    entrypoint: 'control-center',
+    petPackId: 'legacy-cat',
+    personaHash: 'hash-a'
+  })
+
+  const imported = store.importMessagesIfEmpty(sessionId, conversationId, [
+    { role: 'user', content: '旧对话 1' },
+    { role: 'assistant', content: '旧回复 1' }
+  ])
+  const skipped = store.importMessagesIfEmpty(sessionId, conversationId, [
+    { role: 'user', content: '不该覆盖' }
+  ])
+
+  assert.deepEqual(imported.map((message) => message.content), ['旧对话 1', '旧回复 1'])
+  assert.deepEqual(skipped, [])
+  assert.deepEqual(store.getMessages(sessionId, conversationId).map((message) => message.content), ['旧对话 1', '旧回复 1'])
+})
+
 test('ai talk store backs up corrupt data and starts from a safe empty state', () => {
   const storePath = createTempStorePath()
   fs.mkdirSync(path.dirname(storePath), { recursive: true })

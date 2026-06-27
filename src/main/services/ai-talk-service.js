@@ -480,6 +480,15 @@ const splitTalkConversationId = (conversationId) => {
   return { sessionId: match[1], conversationId: match[2] }
 }
 
+const getPetPackIdFromSessionId = (sessionId) => {
+  const normalized = normalizeString(sessionId)
+  if (!normalized) return ''
+  const [, ...rest] = normalized.split(':')
+  return normalizeString(rest.join(':'))
+}
+
+const isControlCenterSessionId = (sessionId) => normalizeString(sessionId).startsWith('control-center:')
+
 const createAiTalkService = ({ aiService, aiTalkStore, petPackService, appLogService, petUtteranceLogService = null } = {}) => {
   if (!aiService) throw new Error('aiService is required')
   if (!aiTalkStore) throw new Error('aiTalkStore is required')
@@ -815,7 +824,18 @@ const createAiTalkService = ({ aiService, aiTalkStore, petPackService, appLogSer
 
   const getConversation = (conversationId) => {
     const parsed = splitTalkConversationId(conversationId)
-    if (parsed) return aiTalkStore.getMessages(parsed.sessionId, parsed.conversationId)
+    if (parsed) {
+      const { petPackId: activePetPackId } = resolveActivePack()
+      const requestedPetPackId = getPetPackIdFromSessionId(parsed.sessionId)
+      if (requestedPetPackId === activePetPackId) {
+        migrateLegacyConversationIfNeeded({
+          sessionId: parsed.sessionId,
+          conversationId: parsed.conversationId,
+          petPackId: requestedPetPackId
+        })
+      }
+      return aiTalkStore.getMessages(parsed.sessionId, parsed.conversationId)
+    }
     const { manifest, petPackId } = resolveActivePack()
     const { personaHash } = resolvePersona(manifest, petPackId)
     migrateLegacyConversationIfNeeded({ manifest, petPackId, personaHash })
@@ -823,6 +843,11 @@ const createAiTalkService = ({ aiService, aiTalkStore, petPackService, appLogSer
       entrypoint: 'control-center',
       petPackId,
       personaHash
+    })
+    migrateLegacyConversationIfNeeded({
+      sessionId,
+      conversationId: mainConversationId,
+      petPackId
     })
     return aiTalkStore.getMessages(sessionId, mainConversationId)
   }
@@ -846,6 +871,11 @@ const createAiTalkService = ({ aiService, aiTalkStore, petPackService, appLogSer
         entrypoint,
         petPackId,
         personaHash
+      })
+      migrateLegacyConversationIfNeeded({
+        sessionId,
+        conversationId,
+        petPackId
       })
       const conversationPublicId = `${sessionId}:${conversationId}`
       return await enqueueConversation(conversationPublicId, async () => {
