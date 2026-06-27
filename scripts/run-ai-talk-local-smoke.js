@@ -9,9 +9,13 @@ const { createAiTalkStore } = require('../src/main/services/ai-talk-store')
 const { createAiTalkService } = require('../src/main/services/ai-talk-service')
 const { createPetPackService } = require('../src/main/services/pet-pack-service')
 const { createPetUtteranceLogService } = require('../src/main/services/pet-utterance-log-service')
+const { createEventBus } = require('../src/main/services/event-bus')
+const { createPetService } = require('../src/main/services/pet-service')
+const { createPetBubbleChatWindowManager } = require('../src/main/pet-bubble-chat-window')
 
 const DEFAULT_OUTPUT_DIR = path.join(__dirname, '..', 'release', 'ai-talk-local-smoke')
 const DEFAULT_LOG_LIMIT = 20
+const MAX_PET_BUBBLE_CHARS = 80
 
 const DEFAULT_AI_SETTINGS = {
   enabled: false,
@@ -87,6 +91,16 @@ const sanitizeError = (error) => ({
   providerStatus: Number(error?.providerStatus) || 0,
   providerCode: sanitizeText(error?.providerCode || '', 80)
 })
+
+const normalizeMessageText = (value) => String(value || '').trim().replace(/\s+/g, ' ')
+
+const createPetBubbleText = (reply, behaviorIntent, bubbleSegments = []) => {
+  const preferred = normalizeMessageText(behaviorIntent?.bubbleText)
+  const segmented = Array.isArray(bubbleSegments) ? normalizeMessageText(bubbleSegments[0]) : ''
+  const text = preferred || segmented || normalizeMessageText(reply)
+  if (text.length <= MAX_PET_BUBBLE_CHARS) return text
+  return `${text.slice(0, MAX_PET_BUBBLE_CHARS - 3)}...`
+}
 
 const readJsonIfExists = (filePath) => {
   try {
@@ -223,6 +237,181 @@ const readRelevantLogs = ({ appLogService, limit = DEFAULT_LOG_LIMIT } = {}) => 
     .slice(-limit)
 )
 
+const createNullActionService = () => ({
+  getConfig: () => ({ actions: [] }),
+  getAction: () => null
+})
+
+class HeadlessBubbleBrowserWindow {
+  constructor() {
+    this.visible = false
+    this.destroyed = false
+    this.listeners = new Map()
+    this.onceListeners = new Map()
+    this.bounds = { x: 0, y: 0, width: 340, height: 260 }
+    this.webContents = {
+      send: () => {}
+    }
+  }
+
+  emit(eventName, ...args) {
+    const entries = this.listeners.get(eventName) || []
+    for (const listener of [...entries]) listener(...args)
+    const onceEntries = this.onceListeners.get(eventName) || []
+    this.onceListeners.delete(eventName)
+    for (const listener of [...onceEntries]) listener(...args)
+  }
+
+  loadFile() {
+    return Promise.resolve()
+  }
+
+  show() {
+    this.visible = true
+    this.emit('ready-to-show')
+  }
+
+  showInactive() {
+    this.visible = true
+    this.emit('ready-to-show')
+  }
+
+  hide() {
+    this.visible = false
+  }
+
+  focus() {}
+
+  moveTop() {}
+
+  setVisibleOnAllWorkspaces() {}
+
+  setIgnoreMouseEvents() {}
+
+  setBounds(nextBounds = {}) {
+    for (const key of ['x', 'y', 'width', 'height']) {
+      if (Number.isFinite(Number(nextBounds[key]))) this.bounds[key] = Math.round(Number(nextBounds[key]))
+    }
+  }
+
+  getBounds() {
+    return { ...this.bounds }
+  }
+
+  isDestroyed() {
+    return this.destroyed
+  }
+
+  isVisible() {
+    return this.visible
+  }
+
+  on(eventName, listener) {
+    const entries = this.listeners.get(eventName) || []
+    entries.push(listener)
+    this.listeners.set(eventName, entries)
+  }
+
+  once(eventName, listener) {
+    const entries = this.onceListeners.get(eventName) || []
+    entries.push(listener)
+    this.onceListeners.set(eventName, entries)
+  }
+
+  destroy() {
+    if (this.destroyed) return
+    this.destroyed = true
+    this.emit('closed')
+  }
+}
+
+const createBubbleDispatchHarness = ({
+  settingsService,
+  appLogService,
+  petPackId,
+  createEventBusImpl = createEventBus,
+  createPetServiceImpl = createPetService,
+  createPetBubbleChatWindowManagerImpl = createPetBubbleChatWindowManager
+} = {}) => {
+  const eventBus = createEventBusImpl()
+  const petService = createPetServiceImpl({
+    eventBus,
+    settingsService,
+    actionService: createNullActionService()
+  })
+  let latestConversationMessages = []
+  let observedSayPayload = null
+  let bubbleRefreshCount = 0
+  const bubbleManager = createPetBubbleChatWindowManagerImpl({
+    settingsService,
+    appLogService,
+    BrowserWindow: HeadlessBubbleBrowserWindow,
+    screen: {
+      getDisplayMatching: () => ({
+        workArea: { x: 0, y: 0, width: 1440, height: 900 }
+      }),
+      getPrimaryDisplay: () => ({
+        workArea: { x: 0, y: 0, width: 1440, height: 900 }
+      })
+    },
+    getPetWindow: () => ({
+      isDestroyed: () => false,
+      getBounds: () => ({ x: 400, y: 420, width: 180, height: 220 })
+    })
+  })
+
+  petService.onSay((payload = {}) => {
+    observedSayPayload = payload
+    bubbleManager.showMessage({
+      ...payload,
+      petPackId
+    })
+    bubbleRefreshCount += 1
+    bubbleManager.refreshItems({
+      conversationMessages: latestConversationMessages,
+      reason: 'local-smoke-pet-say'
+    })
+  })
+
+  return {
+    dispatchAiReply(result = {}) {
+      latestConversationMessages = Array.isArray(result.messages) ? result.messages : []
+      const bubbleText = createPetBubbleText(result.reply, result.behaviorIntent, result.bubbleSegments)
+      if (!bubbleText) {
+        return {
+          attempted: false,
+          reason: 'empty-bubble-text',
+          petSayReceived: false,
+          bubbleStateVisible: false,
+          dialogueCount: 0,
+          noticeCount: 0,
+          latestItemRole: '',
+          latestItemSource: '',
+          refreshCount: 0
+        }
+      }
+      petService.say({ text: bubbleText, source: 'ai' })
+      const state = bubbleManager.getState()
+      const items = Array.isArray(state.items) ? state.items : []
+      const latestItem = items.at(-1) || null
+      return {
+        attempted: true,
+        bubbleTextChars: bubbleText.length,
+        bubblePreview: sanitizeText(bubbleText, 120),
+        petSayReceived: Boolean(observedSayPayload?.text),
+        petSaySource: sanitizeText(observedSayPayload?.source || '', 80),
+        bubbleStateVisible: Boolean(state.visible),
+        itemCount: items.length,
+        dialogueCount: items.filter((item) => item?.kind === 'dialogue').length,
+        noticeCount: items.filter((item) => item?.kind === 'notice').length,
+        latestItemRole: sanitizeText(latestItem?.role || '', 40),
+        latestItemSource: sanitizeText(latestItem?.source || '', 80),
+        refreshCount: bubbleRefreshCount
+      }
+    }
+  }
+}
+
 const runAiTalkLocalSmoke = async ({
   message,
   userDataDir = defaultUserDataDir(),
@@ -237,7 +426,10 @@ const runAiTalkLocalSmoke = async ({
   createAiTalkStoreImpl = createAiTalkStore,
   createAiTalkServiceImpl = createAiTalkService,
   createPetPackServiceImpl = createPetPackService,
-  createPetUtteranceLogServiceImpl = createPetUtteranceLogService
+  createPetUtteranceLogServiceImpl = createPetUtteranceLogService,
+  createEventBusImpl = createEventBus,
+  createPetServiceImpl = createPetService,
+  createPetBubbleChatWindowManagerImpl = createPetBubbleChatWindowManager
 } = {}) => {
   const content = String(message || '').trim()
   if (!content) throw new Error('Smoke message is required')
@@ -273,6 +465,15 @@ const runAiTalkLocalSmoke = async ({
 
   const config = typeof aiService.getConfig === 'function' ? aiService.getConfig() : {}
   const activePack = typeof petPackService.getActivePetPack === 'function' ? petPackService.getActivePetPack() : null
+  const activePetPackId = sanitizeText(activePack?.manifest?.id || 'legacy-cat', 80) || 'legacy-cat'
+  const bubbleDispatchHarness = createBubbleDispatchHarness({
+    settingsService,
+    appLogService,
+    petPackId: activePetPackId,
+    createEventBusImpl,
+    createPetServiceImpl,
+    createPetBubbleChatWindowManagerImpl
+  })
   const summary = {
     ok: false,
     generatedAt: now().toISOString(),
@@ -292,7 +493,7 @@ const runAiTalkLocalSmoke = async ({
       hasApiKey: Boolean(config.hasApiKey)
     },
     activePetPack: {
-      id: sanitizeText(activePack?.manifest?.id || '', 80),
+      id: activePetPackId,
       displayName: sanitizeText(activePack?.manifest?.displayName || '', 120)
     },
     connectionTest: {
@@ -302,6 +503,11 @@ const runAiTalkLocalSmoke = async ({
     chat: {
       ok: false,
       messageChars: content.length
+    },
+    bubbleDispatch: {
+      attempted: false,
+      petSayReceived: false,
+      bubbleStateVisible: false
     },
     traces: [],
     logs: []
@@ -331,6 +537,7 @@ const runAiTalkLocalSmoke = async ({
       behaviorIntentIntent: sanitizeText(result.behaviorIntent?.intent || '', 80),
       behaviorActionId: sanitizeText(result.behaviorIntent?.actionId || '', 80)
     }
+    summary.bubbleDispatch = bubbleDispatchHarness.dispatchAiReply(result)
 
     if (typeof aiTalkService.flushMemoryJobs === 'function') {
       await aiTalkService.flushMemoryJobs()
@@ -380,6 +587,7 @@ const main = async () => {
     logPath: result.logPath,
     connectionOk: result.connectionTest?.ok || false,
     chatOk: result.chat?.ok || false,
+    bubbleDispatchOk: Boolean(result.bubbleDispatch?.attempted && result.bubbleDispatch?.petSayReceived && result.bubbleDispatch?.bubbleStateVisible),
     conversationId: result.chat?.conversationId || '',
     replyPreview: result.chat?.replyPreview || '',
     error: result.error || null
