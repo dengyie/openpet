@@ -391,6 +391,36 @@ function createFullPetReviewGate ({ dataDir, run }) {
   }
 }
 
+const createImportedFollowUp = (run) => {
+  if (run.artifacts?.actionFrames) {
+    if (run.triggerProposalSubmission?.ok === true) {
+      return {
+        label: 'Review trigger proposal',
+        location: 'Actions -> Trigger Proposal Inbox',
+        reason: 'The action import is complete. Review the submitted trigger proposal in Actions -> Trigger Proposal Inbox.'
+      }
+    }
+    if (run.triggerProposalSubmission && run.triggerProposalSubmission.ok === false) {
+      return {
+        label: 'Review import handoff',
+        location: 'Control Center -> Plugins',
+        reason: 'The action import completed, but trigger proposal handoff failed. Review the command output in Control Center -> Plugins before applying trigger rules.'
+      }
+    }
+    return {
+      label: 'Review import handoff',
+      location: 'Control Center -> Plugins',
+      reason: 'The action import is complete. Review the import handoff details in Control Center -> Plugins.'
+    }
+  }
+
+  return {
+    label: 'Review imported result',
+    location: 'OpenPet',
+    reason: 'The host-owned import is complete. Review the imported result inside OpenPet.'
+  }
+}
+
 const createWizardState = ({ dataDir, run }) => {
   const backend = normalizeCreatorBackend(run.backend || run.input?.backend, FIXTURE_BACKEND)
   const prompt = run.input?.originalPrompt || run.input?.prompt || ''
@@ -438,10 +468,11 @@ const createWizardState = ({ dataDir, run }) => {
     nextStepReason = 'Use Control Center -> Plugins to run the host-owned import command.'
     nextStepBlocked = true
   } else if (status === 'imported') {
+    const importedFollowUp = createImportedFollowUp(run)
     phase = 'imported'
-    summary = 'Host-owned import is complete. Review the imported result inside OpenPet.'
-    nextStepLabel = 'Review imported result'
-    nextStepReason = 'The dashboard cannot apply post-import host actions; review the imported result inside OpenPet.'
+    summary = `Host-owned import is complete. ${importedFollowUp.reason}`
+    nextStepLabel = importedFollowUp.label
+    nextStepReason = `The dashboard cannot apply post-import host actions; ${importedFollowUp.reason}`
     nextStepBlocked = true
   } else if (taskStatus === 'confirmed') {
     phase = 'ready-to-generate'
@@ -697,11 +728,12 @@ const createActionLane = ({ dataDir, run, buttonStates, importHandoff }) => {
       reason: importHandoff.reason
     }
   } else if (status === 'imported') {
+    const importedFollowUp = createImportedFollowUp(run)
     hostAction = {
       required: true,
-      label: 'Review imported result',
-      location: 'OpenPet',
-      reason: 'The host-owned import is complete. Review the imported result inside OpenPet.'
+      label: importedFollowUp.label,
+      location: importedFollowUp.location,
+      reason: importedFollowUp.reason
     }
   }
 

@@ -4160,8 +4160,13 @@ test('creator studio service exposes workflow guidance for fixture and imported 
       'review:complete',
       'import:complete'
     ])
-    assert.equal(importedDetail.run.wizardState.nextStep.label, 'Review imported result')
+    assert.equal(importedDetail.run.wizardState.nextStep.label, 'Review trigger proposal')
     assert.equal(importedDetail.run.wizardState.nextStep.blocked, true)
+    assert.match(importedDetail.run.wizardState.nextStep.reason, /Actions -> Trigger Proposal Inbox/i)
+    assert.equal(importedDetail.run.actionLane.dashboardAction.available, false)
+    assert.equal(importedDetail.run.actionLane.hostAction.required, true)
+    assert.equal(importedDetail.run.actionLane.hostAction.label, 'Review trigger proposal')
+    assert.equal(importedDetail.run.actionLane.hostAction.location, 'Actions -> Trigger Proposal Inbox')
     assert.equal(importedSerialized.includes('127.0.0.1:7860'), false)
     assert.equal(importedSerialized.includes(dataDir), false)
 
@@ -4170,6 +4175,13 @@ test('creator studio service exposes workflow guidance for fixture and imported 
     assert.equal(importedFailedActionDetail.run.workflowGuidance.import.resultCard.available, true)
     assert.equal(importedFailedActionDetail.run.workflowGuidance.import.resultCard.reviewLocation, 'Control Center -> Plugins')
     assert.match(importedFailedActionDetail.run.workflowGuidance.import.resultCard.entries[1].value, /handoff failed/i)
+    assert.equal(importedFailedActionDetail.run.wizardState.nextStep.label, 'Review import handoff')
+    assert.equal(importedFailedActionDetail.run.wizardState.nextStep.blocked, true)
+    assert.match(importedFailedActionDetail.run.wizardState.nextStep.reason, /Control Center -> Plugins/i)
+    assert.equal(importedFailedActionDetail.run.actionLane.dashboardAction.available, false)
+    assert.equal(importedFailedActionDetail.run.actionLane.hostAction.required, true)
+    assert.equal(importedFailedActionDetail.run.actionLane.hostAction.label, 'Review import handoff')
+    assert.equal(importedFailedActionDetail.run.actionLane.hostAction.location, 'Control Center -> Plugins')
     assert.equal(importedFailedSerialized.includes(dataDir), false)
 
     assert.equal(importedPetDetail.ok, true)
@@ -4190,6 +4202,11 @@ test('creator studio service exposes workflow guidance for fixture and imported 
     assert.equal(importedPetDetail.run.wizardState.phase, 'imported')
     assert.equal(importedPetDetail.run.wizardState.nextStep.label, 'Review imported result')
     assert.equal(importedPetDetail.run.wizardState.nextStep.blocked, true)
+    assert.match(importedPetDetail.run.wizardState.nextStep.reason, /OpenPet/i)
+    assert.equal(importedPetDetail.run.actionLane.dashboardAction.available, false)
+    assert.equal(importedPetDetail.run.actionLane.hostAction.required, true)
+    assert.equal(importedPetDetail.run.actionLane.hostAction.label, 'Review imported result')
+    assert.equal(importedPetDetail.run.actionLane.hostAction.location, 'OpenPet')
     assert.equal(importedPetSerialized.includes('127.0.0.1:7860'), false)
     assert.equal(importedPetSerialized.includes(dataDir), false)
   } finally {

@@ -326,6 +326,14 @@ test('creator studio dashboard shows imported action review completion details',
     assert.match(reviewText, /Import completed/i)
     assert.match(reviewText, /Imported action: shy-spin/i)
     assert.match(reviewText, /Actions -> Trigger Proposal Inbox/i)
+
+    const nextStepText = await page.locator('#next-step-panel').textContent()
+    assert.match(nextStepText, /Review trigger proposal/i)
+    assert.match(nextStepText, /Actions -> Trigger Proposal Inbox/i)
+
+    const actionLaneText = await page.locator('#action-lane-panel').textContent()
+    assert.match(actionLaneText, /Host-owned action: Review trigger proposal/i)
+    assert.match(actionLaneText, /Actions -> Trigger Proposal Inbox/i)
   } finally {
     await browser.close()
     await new Promise((resolve) => server.close(resolve))
@@ -350,6 +358,14 @@ test('creator studio dashboard shows imported full-pet review completion details
     assert.match(reviewText, /Imported pet pack: imported-review-cat/i)
     assert.match(reviewText, /Activated pack: imported-review-cat/i)
     assert.match(reviewText, /Review location: OpenPet/i)
+
+    const nextStepText = await page.locator('#next-step-panel').textContent()
+    assert.match(nextStepText, /Review imported result/i)
+    assert.match(nextStepText, /OpenPet/i)
+
+    const actionLaneText = await page.locator('#action-lane-panel').textContent()
+    assert.match(actionLaneText, /Host-owned action: Review imported result/i)
+    assert.match(actionLaneText, /Location: OpenPet/i)
   } finally {
     await browser.close()
     await new Promise((resolve) => server.close(resolve))
