@@ -626,6 +626,30 @@ test('ai talk service preserves existing global system prompt as stable instruct
   assert.match(requests[0].messages[0].content, /# Pet Persona/)
 })
 
+test('ai talk service returns bubble segments while preserving the full assistant reply in transcript', async () => {
+  const longReply = '第一段先轻轻打个招呼，让用户知道我已经接住了问题。第二段补充一点安抚和陪伴感，再自然地推进到下一步建议。第三段把真正的行动建议收束清楚，避免单个气泡太长。'
+  const store = createStore()
+  const service = createAiTalkService({
+    aiService: {
+      getConfig: () => ({ enabled: true, behavior: { enabled: false, useTools: true } }),
+      complete: async () => ({ reply: longReply })
+    },
+    aiTalkStore: store,
+    petPackService: createPetPackService({ id: 'legacy-cat' })
+  })
+
+  const result = await service.chat({ message: '给我一点鼓励' })
+
+  assert.equal(result.reply, longReply)
+  assert.ok(Array.isArray(result.bubbleSegments))
+  assert.ok(result.bubbleSegments.length >= 2)
+  assert.ok(result.bubbleSegments.every((segment) => segment.length <= 72))
+  assert.deepEqual(
+    store.getMessages('control-center:legacy-cat', 'main').map((message) => message.content),
+    ['给我一点鼓励', longReply]
+  )
+})
+
 test('ai talk service returns reply before non-blocking memory extraction completes', async () => {
   const requests = []
   let finishExtraction

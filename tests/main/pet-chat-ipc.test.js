@@ -135,7 +135,7 @@ test('pet chat state exposes provider readiness and current pet-pack main conver
 test('pet chat send uses shared control-center entrypoint and compact pet bubble', async () => {
   const prompt = 'secret phrase should not be logged'
   const longReply = 'This is a very long desktop pet reply that should remain complete in the chat panel but short inside the speech bubble.'
-  const bubbleText = 'Short pet bubble line.'
+  const bubbleSegments = ['This is a very long desktop pet reply.', 'It should remain complete in the chat panel.']
   const talkCalls = []
   const sayCalls = []
   const logs = []
@@ -162,12 +162,7 @@ test('pet chat send uses shared control-center entrypoint and compact pet bubble
         return {
           conversationId: 'control-center:legacy-cat:main',
           reply: longReply,
-          bubble: {
-            text: bubbleText,
-            segments: [bubbleText],
-            displayMode: 'bubble',
-            source: 'assistant-reply'
-          },
+          bubbleSegments,
           messages: conversationMessages
         }
       }
@@ -192,12 +187,13 @@ test('pet chat send uses shared control-center entrypoint and compact pet bubble
   assert.deepEqual(talkCalls, [{ message: prompt, entrypoint: 'control-center' }])
   assert.equal(result.conversationId, 'control-center:legacy-cat:main')
   assert.equal(result.reply, longReply)
+  assert.deepEqual(result.bubbleSegments, bubbleSegments)
   assert.deepEqual(result.state.messages, conversationMessages)
-  assert.equal(result.state.bubble.text, bubbleText)
+  assert.equal(result.state.bubble.text, bubbleSegments[0])
   assert.equal(result.state.bubble.source, 'ai')
   assert.equal(sayCalls.length, 1)
   assert.equal(sayCalls[0].source, 'ai')
-  assert.equal(sayCalls[0].text, bubbleText)
+  assert.equal(sayCalls[0].text, bubbleSegments[0])
   assert.equal(JSON.stringify(logs).includes(prompt), false)
   assert.deepEqual(logs.map((entry) => entry.event), [
     'pet-chat.message.started',
@@ -510,6 +506,7 @@ test('pet bubble chat re-syncs to pet window on viewport and movement updates so
 test('pet bubble chat send reuses shared AI Talk conversation and updates popup state', async () => {
   const prompt = 'bubble secret prompt'
   const reply = 'bubble reply'
+  const bubbleSegments = ['bubble reply', 'follow up']
   const talkCalls = []
   const popupStates = []
   const refreshCalls = []
@@ -537,6 +534,7 @@ test('pet bubble chat send reuses shared AI Talk conversation and updates popup 
         return {
           conversationId: 'control-center:legacy-cat:main',
           reply,
+          bubbleSegments,
           messages: conversationMessages
         }
       }
@@ -566,6 +564,7 @@ test('pet bubble chat send reuses shared AI Talk conversation and updates popup 
   assert.deepEqual(talkCalls, [{ message: prompt, entrypoint: 'control-center' }])
   assert.equal(result.conversationId, 'control-center:legacy-cat:main')
   assert.equal(result.reply, reply)
+  assert.deepEqual(result.bubbleSegments, bubbleSegments)
   assert.deepEqual(result.state, {
     visible: true,
     refreshed: true,

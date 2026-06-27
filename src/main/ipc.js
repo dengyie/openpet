@@ -180,11 +180,10 @@ const normalizePetBubble = (payload = {}) => {
   }
 }
 
-const createPetBubbleText = (reply, behaviorIntent, bubble) => {
-  if (bubble?.displayMode === 'none') return ''
-  const segmented = normalizeMessageText(bubble?.text)
+const createPetBubbleText = (reply, behaviorIntent, bubbleSegments = []) => {
   const preferred = normalizeMessageText(behaviorIntent?.bubbleText)
-  const text = segmented || preferred || normalizeMessageText(reply)
+  const segmented = Array.isArray(bubbleSegments) ? normalizeMessageText(bubbleSegments[0]) : ''
+  const text = preferred || segmented || normalizeMessageText(reply)
   if (text.length <= MAX_PET_BUBBLE_CHARS) return text
   return `${text.slice(0, MAX_PET_BUBBLE_CHARS - 3)}...`
 }
@@ -361,7 +360,6 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
 
   const notifyActivePetPackChanged = (event, payload = {}) => {
     const state = getPetChatState()
-    notifyPetChatStateChanged(state)
     event?.sender?.send?.(IPC.PET_PACKS_ACTIVE_CHANGED, {
       activePackId: payload.activePackId || state.petPack.id || '',
       pack: payload.pack || null,
@@ -424,7 +422,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     })
     try {
       const result = await (aiTalkService || aiService).chat(requestPayload)
-      const bubbleText = createPetBubbleText(result.reply, result.behaviorIntent, result.bubble)
+      const bubbleText = createPetBubbleText(result.reply, result.behaviorIntent, result.bubbleSegments)
       const bubble = bubbleText ? capturePetBubble({ text: bubbleText, source: 'ai' }, { notify: false }) : lastPetBubble
       if (bubbleText) {
         recordAppLog({
@@ -475,6 +473,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
             elapsedMs: Date.now() - startedAt,
             replyChars: String(result.reply || '').length,
             bubbleChars: bubbleText.length,
+            bubbleSegmentCount: Array.isArray(result.bubbleSegments) ? result.bubbleSegments.length : 0,
             messageCount: Array.isArray(result.messages) ? result.messages.length : 0,
             behaviorMatched: Boolean(behavior?.matched),
             actionId: behavior?.actionId || ''
@@ -497,6 +496,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
           elapsedMs: Date.now() - startedAt,
           replyChars: String(result.reply || '').length,
           bubbleChars: bubbleText.length,
+          bubbleSegmentCount: Array.isArray(result.bubbleSegments) ? result.bubbleSegments.length : 0,
           messageCount: Array.isArray(result.messages) ? result.messages.length : 0,
           actionId: action?.actionId || ''
         }

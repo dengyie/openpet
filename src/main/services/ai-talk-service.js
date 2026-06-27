@@ -18,8 +18,8 @@ const MAX_MEMORY_RELEVANCE_HISTORY_MESSAGES = 6
 const MAX_USER_MESSAGE_CHARS = 4000
 const MAX_RECENT_PET_ACTIVITY_ITEMS = 6
 const MAX_RECENT_PET_ACTIVITY_CHARS = 1200
-const MAX_BUBBLE_SEGMENTS = 3
-const MAX_BUBBLE_SEGMENT_CHARS = 80
+const MAX_BUBBLE_SEGMENTS = 4
+const MAX_BUBBLE_SEGMENT_CHARS = 72
 const RECENT_HISTORY_MEMORY_MATCH_WINDOW = 6
 const MIN_MEMORY_CONTEXT_SCORE = 0.5
 const MEMORY_TOKEN_ALIAS_GROUPS = [
@@ -374,6 +374,74 @@ const rankMemoryContext = ({ memories = [], userMessage = '', history = [] } = {
 const sanitizeDiagnosticText = (value) => String(value || '')
   .replace(/\bsk-[A-Za-z0-9_-]{8,}\b/g, '[redacted-secret]')
   .slice(0, 240)
+
+const splitLongBubbleChunk = (value, maxChars = MAX_BUBBLE_SEGMENT_CHARS) => {
+  const text = normalizeString(value).replace(/\s+/g, ' ')
+  if (!text) return []
+  if (text.length <= maxChars) return [text]
+  const segments = []
+  let remaining = text
+  while (remaining.length > maxChars && segments.length < MAX_BUBBLE_SEGMENTS) {
+    const window = remaining.slice(0, maxChars + 1)
+    const preferredBreak = Math.max(
+      window.lastIndexOf('，'),
+      window.lastIndexOf(','),
+      window.lastIndexOf('、'),
+      window.lastIndexOf(' '),
+      window.lastIndexOf('：'),
+      window.lastIndexOf(':')
+    )
+    const breakIndex = preferredBreak >= Math.floor(maxChars * 0.5) ? preferredBreak + 1 : maxChars
+    const piece = normalizeString(remaining.slice(0, breakIndex))
+    if (piece) segments.push(piece)
+    remaining = normalizeString(remaining.slice(breakIndex))
+  }
+  if (remaining && segments.length < MAX_BUBBLE_SEGMENTS) segments.push(remaining)
+  if (remaining && segments.length >= MAX_BUBBLE_SEGMENTS) {
+    segments[MAX_BUBBLE_SEGMENTS - 1] = normalizeString(`${segments[MAX_BUBBLE_SEGMENTS - 1].slice(0, Math.max(0, maxChars - 3))}...`)
+  }
+  return segments.filter(Boolean)
+}
+
+const createBubbleSegments = (reply, maxSegments = MAX_BUBBLE_SEGMENTS, maxChars = MAX_BUBBLE_SEGMENT_CHARS) => {
+  const normalized = normalizeString(reply).replace(/\s+/g, ' ')
+  if (!normalized) return []
+  const sentenceCandidates = normalized.match(/[^。！？!?;\n]+[。！？!?;]?/g) || [normalized]
+  const segments = []
+  let current = ''
+  const flushCurrent = () => {
+    const piece = normalizeString(current)
+    if (piece) segments.push(piece)
+    current = ''
+  }
+  for (const rawCandidate of sentenceCandidates) {
+    const candidate = normalizeString(rawCandidate)
+    if (!candidate) continue
+    const next = current ? `${current} ${candidate}` : candidate
+    if (next.length <= maxChars) {
+      current = next
+      continue
+    }
+    if (current) flushCurrent()
+    if (candidate.length <= maxChars) {
+      current = candidate
+      continue
+    }
+    const splitCandidates = splitLongBubbleChunk(candidate, maxChars)
+    for (const piece of splitCandidates) {
+      if (segments.length >= maxSegments) break
+      segments.push(piece)
+    }
+    if (segments.length >= maxSegments) break
+  }
+  if (segments.length < maxSegments && current) flushCurrent()
+  const limited = segments.filter(Boolean).slice(0, maxSegments)
+  if (!limited.length) return [normalized.slice(0, maxChars)]
+  if (segments.length > maxSegments) {
+    limited[maxSegments - 1] = normalizeString(`${limited[maxSegments - 1].slice(0, Math.max(0, maxChars - 3))}...`)
+  }
+  return limited
+}
 
 const tokenizeForMemoryScore = (value) => {
   const normalized = normalizeString(value).toLowerCase()
@@ -929,6 +997,7 @@ const createAiTalkService = ({ aiService, aiTalkStore, petPackService, appLogSer
         const result = await aiService.complete({ messages, tools })
         const reply = normalizeString(result.reply)
         if (!reply) throw new Error('AI provider returned an empty response')
+        const bubbleSegments = createBubbleSegments(reply)
         const bubble = createReplyBubble({ reply, behaviorIntent: result.behaviorIntent })
         const nextMessages = aiTalkStore.appendMessages(sessionId, conversationId, [
           userMessage,
@@ -961,6 +1030,7 @@ const createAiTalkService = ({ aiService, aiTalkStore, petPackService, appLogSer
           conversationId: conversationPublicId,
           reply,
           bubble,
+          bubbleSegments,
           behaviorIntent: result.behaviorIntent || undefined,
           messages: nextMessages
         }
@@ -994,6 +1064,7 @@ const createAiTalkService = ({ aiService, aiTalkStore, petPackService, appLogSer
     exportTraceDiagnostics,
     flushMemoryJobs: () => Promise.allSettled(Array.from(pendingMemoryJobs)),
     getConversation,
+    createBubbleSegments,
     generatePersonaDraft,
     getMemoryProfile,
     getPersonaProfile,
