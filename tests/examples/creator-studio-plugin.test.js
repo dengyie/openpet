@@ -2925,10 +2925,8 @@ test('creator studio dashboard keeps full-pet review state when loading run deta
   const dashboardPath = path.join(pluginRoot, 'web', 'dashboard', 'index.html')
   const html = fs.readFileSync(dashboardPath, 'utf-8')
 
-  assert.match(
-    html,
-    /const state = \{ run: null, actionReview: null, fullPetReview: null, runs: \[], playbackTimer: null, playbackSession: 0 \}/
-  )
+  assert.match(html, /fullPetReview: null/)
+  assert.match(html, /generationInFlight: false/)
   assert.match(
     html,
     /state\.fullPetReview = payload\.fullPetReview \|\| null/
@@ -4021,6 +4019,166 @@ test('creator studio service exposes sanitized host prompt provenance for dashbo
     assert.equal(serializedDetail.includes(dataDir), false)
     assert.equal(bridgeRequests.at(-1).payload.prompt.includes('sk-test-secret'), false)
   } finally {
+    if (previousBridgeUrl == null) delete process.env.OPENPET_BRIDGE_URL
+    else process.env.OPENPET_BRIDGE_URL = previousBridgeUrl
+    if (previousBridgeToken == null) delete process.env.OPENPET_BRIDGE_TOKEN
+    else process.env.OPENPET_BRIDGE_TOKEN = previousBridgeToken
+    bridgeServer.closeAllConnections?.()
+    await new Promise((resolve) => bridgeServer.close(resolve))
+    await new Promise((resolve) => server.close(resolve))
+  }
+})
+
+test('creator studio service returns full-pet review with generation response', async () => {
+  const { createCreatorStudioServer } = require('../../examples/plugins/creator-studio/service/studio-service')
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-service-generate-full-pet-review-'))
+  const dashboardPath = path.join(pluginRoot, 'web', 'dashboard', 'index.html')
+  const server = createCreatorStudioServer({ dataDir, dashboardPath })
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const port = server.address().port
+  const postJson = (pathname, body = {}) => fetch(`http://127.0.0.1:${port}${pathname}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  }).then((response) => response.json())
+
+  try {
+    const draft = await postJson('/api/tasks/draft', {
+      prompt: '生成一只完整的新桌宠，要软乎乎的橘猫风格，包含 idle 动作。',
+      backend: 'fixture'
+    })
+    await postJson(`/api/runs/${draft.run.runId}/confirm`)
+    const generated = await postJson(`/api/runs/${draft.run.runId}/generate-action`)
+
+    assert.equal(generated.ok, true)
+    assert.equal(generated.run.generationTask.mode, 'full-pet')
+    assert.equal(generated.actionReview, null)
+    assert.equal(generated.fullPetReview.reviewGate.ready, true)
+    assert.match(generated.fullPetReview.outputDir, /^runs\//)
+    assert.equal(JSON.stringify(generated).includes(dataDir), false)
+  } finally {
+    await new Promise((resolve) => server.close(resolve))
+  }
+})
+
+test('creator studio service rejects duplicate generation while a run is already generating', async () => {
+  const { createCreatorStudioServer } = require('../../examples/plugins/creator-studio/service/studio-service')
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-service-generation-lock-'))
+  const dashboardPath = path.join(pluginRoot, 'web', 'dashboard', 'index.html')
+  const server = createCreatorStudioServer({ dataDir, dashboardPath })
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const port = server.address().port
+  let imageRequests = 0
+  let releaseFirstImage
+  const firstImageRequest = new Promise((resolve) => {
+    releaseFirstImage = resolve
+  })
+  let firstImageStarted
+  const firstImageStartedPromise = new Promise((resolve) => {
+    firstImageStarted = resolve
+  })
+  const bridgeServer = require('node:http').createServer((request, response) => {
+    let body = ''
+    request.on('data', (chunk) => { body += chunk })
+    request.on('end', () => {
+      const payload = body ? JSON.parse(body) : {}
+      response.setHeader('Content-Type', 'application/json')
+      if (request.url.endsWith('/creator/model-settings')) {
+        response.end(JSON.stringify({
+          ok: true,
+          config: {
+            provider: 'openai-compatible',
+            baseUrl: 'http://127.0.0.1:7860/v1',
+            model: 'local-custom-sprite-v2'
+          }
+        }))
+        return
+      }
+      if (request.url.endsWith('/creator/model-image-generate')) {
+        imageRequests += 1
+        const dataRelativePath = `runs/${payload.output.dataRelativeDir.split('/')[1]}/frames/base/0001.png`
+        const generatedPath = path.join(dataDir, dataRelativePath)
+        const sendGeneratedImage = () => {
+          fs.mkdirSync(path.dirname(generatedPath), { recursive: true })
+          sharp({
+            create: {
+              width: 96,
+              height: 112,
+              channels: 4,
+              background: { r: 255, g: 170, b: 90, alpha: 1 }
+            }
+          })
+            .png()
+            .toFile(generatedPath)
+            .then(() => {
+              response.end(JSON.stringify({
+                ok: true,
+                result: {
+                  ok: true,
+                  backend: 'provider',
+                  model: 'local-custom-sprite-v2',
+                  generatedAt: '2026-06-28T00:00:00.000Z',
+                  outputs: [{
+                    dataRelativePath,
+                    mimeType: 'image/png',
+                    sha256: `generation-lock-sha-${imageRequests}`
+                  }]
+                }
+              }))
+            })
+            .catch((error) => {
+              response.statusCode = 500
+              response.end(JSON.stringify({ ok: false, error: error.message }))
+            })
+        }
+        if (imageRequests === 1) {
+          firstImageStarted()
+          firstImageRequest.then(sendGeneratedImage)
+        } else {
+          sendGeneratedImage()
+        }
+        return
+      }
+      response.statusCode = 404
+      response.end(JSON.stringify({ ok: false, error: 'Unknown route' }))
+    })
+  })
+  await new Promise((resolve) => bridgeServer.listen(0, '127.0.0.1', resolve))
+  const previousBridgeUrl = process.env.OPENPET_BRIDGE_URL
+  const previousBridgeToken = process.env.OPENPET_BRIDGE_TOKEN
+  process.env.OPENPET_BRIDGE_URL = `http://127.0.0.1:${bridgeServer.address().port}`
+  process.env.OPENPET_BRIDGE_TOKEN = 'bridge-token'
+  const postJsonResponse = async (pathname, body = {}) => {
+    const response = await fetch(`http://127.0.0.1:${port}${pathname}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+    return { response, body: await response.json() }
+  }
+
+  try {
+    const draft = await postJsonResponse('/api/tasks/draft', {
+      prompt: '新增一个自定义动作：害羞转圈，点击后轻轻转一圈。',
+      backend: 'local'
+    })
+    const runId = draft.body.run.runId
+    await postJsonResponse(`/api/runs/${runId}/confirm`)
+    const firstGeneration = postJsonResponse(`/api/runs/${runId}/generate-action`)
+    await firstImageStartedPromise
+    const duplicate = await postJsonResponse(`/api/runs/${runId}/generate-action`)
+    releaseFirstImage()
+    const first = await firstGeneration
+
+    assert.equal(first.response.status, 200)
+    assert.equal(first.body.ok, true)
+    assert.equal(duplicate.response.status, 409)
+    assert.equal(duplicate.body.ok, false)
+    assert.match(duplicate.body.error, /already generating/i)
+    assert.equal(duplicate.body.run.status, 'generating')
+    assert.equal(imageRequests, 1)
+  } finally {
+    releaseFirstImage?.()
     if (previousBridgeUrl == null) delete process.env.OPENPET_BRIDGE_URL
     else process.env.OPENPET_BRIDGE_URL = previousBridgeUrl
     if (previousBridgeToken == null) delete process.env.OPENPET_BRIDGE_TOKEN

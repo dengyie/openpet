@@ -161,6 +161,12 @@ const buildHostGeneratedRunOutput = async ({ dataDir, run, generationResult, now
 const runGenerationStep = async ({ dataDir, runId, now = () => new Date().toISOString() }) => {
   const run = readRun({ dataDir, runId })
   const backend = normalizeCreatorBackend(run.backend || run.input?.backend, FIXTURE_BACKEND)
+  if (run.status === 'generating') {
+    const error = new Error(`Creator Studio run is already generating: ${runId}`)
+    error.statusCode = 409
+    error.run = run
+    throw error
+  }
   const startedAt = now()
   appendRunLog({
     dataDir,

@@ -602,7 +602,7 @@
     </main>
 
     <script>
-      const state = { run: null, actionReview: null, fullPetReview: null, runs: [], playbackTimer: null, playbackSession: 0 }
+      const state = { run: null, actionReview: null, fullPetReview: null, runs: [], playbackTimer: null, playbackSession: 0, generationInFlight: false }
       const $ = (id) => document.getElementById(id)
       const isFullPetRun = (run) => run?.generationTask?.mode === 'full-pet'
       const defaultGenerateLabel = (run = state.run) => (isFullPetRun(run) ? 'Generate pet pack' : 'Generate action')
@@ -1343,9 +1343,11 @@
         }
         const buttonStates = run.actionLane?.buttonStates || {}
         $('confirm-button').disabled = buttonStates.confirm ? !buttonStates.confirm.enabled : (Boolean(question) || run.taskStatus === 'confirmed')
-        $('generate-button').disabled = buttonStates.generate ? !buttonStates.generate.enabled : (Boolean(question) || run.taskStatus !== 'confirmed' || !['draft', 'failed'].includes(run.status))
-        $('generate-button').textContent = buttonStates.generate?.label || (run.recovery?.canRetryGeneration ? 'Retry generation' : defaultGenerateLabel(run))
-        $('approve-button').disabled = buttonStates.approve ? !buttonStates.approve.enabled : (run.status !== 'ready_for_review')
+        const generateDisabled = buttonStates.generate ? !buttonStates.generate.enabled : (Boolean(question) || run.taskStatus !== 'confirmed' || !['draft', 'failed'].includes(run.status))
+        const approveDisabled = buttonStates.approve ? !buttonStates.approve.enabled : (run.status !== 'ready_for_review')
+        $('generate-button').disabled = state.generationInFlight || generateDisabled
+        $('generate-button').textContent = state.generationInFlight ? 'Generating...' : (buttonStates.generate?.label || (run.recovery?.canRetryGeneration ? 'Retry generation' : defaultGenerateLabel(run)))
+        $('approve-button').disabled = state.generationInFlight || approveDisabled
         $('recovery-panel').innerHTML = renderRecoveryPanel(run)
         $('workflow-guidance-panel').innerHTML = renderWorkflowGuidance(run)
         $('prompt-provenance-panel').innerHTML = renderPromptProvenance(run)
@@ -1379,6 +1381,23 @@
         $('run-logs').textContent = (payload.logs || []).map((entry) => (
           `${entry.timestamp} ${entry.level} ${entry.event} ${entry.message}`
         )).join('\n') || 'No logs yet.'
+      }
+
+      const refreshSecondaryRunData = async () => {
+        const failures = []
+        try {
+          await refreshLogs()
+        } catch (error) {
+          failures.push(error)
+        }
+        try {
+          await refreshRunList()
+        } catch (error) {
+          failures.push(error)
+        }
+        if (failures.length) {
+          console.warn('Creator Studio secondary refresh failed:', failures.map((error) => error.message).join('; '))
+        }
       }
 
       $('draft-button').addEventListener('click', async () => {
@@ -1492,28 +1511,31 @@
       })
 
       $('generate-button').addEventListener('click', async () => {
-        if (!state.run?.runId) return
+        if (!state.run?.runId || state.generationInFlight) return
+        state.generationInFlight = true
+        renderRun()
         try {
           const payload = await postJson(`/api/runs/${encodeURIComponent(state.run.runId)}/generate-action`)
           state.run = payload.run
           state.actionReview = payload.actionReview || null
           state.fullPetReview = payload.fullPetReview || null
-          if (!state.actionReview) await fetchRunDetail()
+          if (!state.actionReview && !state.fullPetReview) await fetchRunDetail()
           renderRun()
           const outputLabel = isFullPetRun(payload.run) ? 'pet-pack' : 'action'
           setStatus(`Generated ${outputLabel} output in ${payload.outputDir || 'run workspace'}.`, 'ok')
-          await refreshLogs()
-          await refreshRunList()
+          await refreshSecondaryRunData()
         } catch (error) {
           if (error.payload?.run) {
             state.run = error.payload.run
             state.actionReview = error.payload.actionReview || null
             state.fullPetReview = error.payload.fullPetReview || null
             renderRun()
-            await refreshLogs()
-            await refreshRunList()
+            await refreshSecondaryRunData()
           }
           setStatus(error.message, 'error')
+        } finally {
+          state.generationInFlight = false
+          renderRun()
         }
       })
 

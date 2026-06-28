@@ -602,6 +602,57 @@ test('creator studio dashboard drives a full-pet fixture run to the host import 
   }
 })
 
+test('creator studio dashboard keeps generated status when secondary run-list refresh fails', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-dashboard-browser-refresh-failure-'))
+  const server = await openDashboardServer(dataDir)
+  const port = server.address().port
+  const { browser, page } = await openDashboardPage(server)
+  let failRunListRefresh = false
+  let failedRunListRefreshes = 0
+
+  await page.route('**/api/runs', async (route) => {
+    if (failRunListRefresh && route.request().method() === 'GET' && route.request().url().endsWith('/api/runs')) {
+      failedRunListRefreshes += 1
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: false, error: 'Run list unavailable' })
+      })
+      return
+    }
+    await route.continue()
+  })
+
+  try {
+    await page.goto(`http://127.0.0.1:${port}`)
+    await page.locator('#prompt-input').fill('新增一个自定义动作：原地打滚，动作要循环。')
+    await page.locator('#draft-button').click()
+
+    await page.waitForSelector('[data-answer="manual"]')
+    await page.locator('[data-answer="manual"]').click()
+    await page.waitForFunction(() => !document.querySelector('#confirm-button').disabled)
+
+    await page.locator('#confirm-button').click()
+    await page.waitForFunction(() => (
+      /Task confirmed/.test(document.querySelector('#status-line')?.textContent || '') &&
+      !document.querySelector('#generate-button')?.disabled
+    ))
+
+    failRunListRefresh = true
+    await page.locator('#generate-button').click()
+    await waitForGeneratedOutput(page, 'action')
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    assert.equal(failedRunListRefreshes, 1)
+    assert.match(await page.locator('#status-line').textContent(), /Generated action output/i)
+    assert.doesNotMatch(await page.locator('#status-line').textContent(), /Run list unavailable/i)
+    assert.match(await page.locator('#action-review-panel').textContent(), /Review status/i)
+  } finally {
+    await browser.close()
+    await new Promise((resolve) => server.close(resolve))
+  }
+})
+
 test('creator studio dashboard surfaces blocked single-action qa before approval', async () => {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-dashboard-browser-blocked-action-'))
   const run = await seedBlockedActionReviewRun(dataDir)

@@ -57,9 +57,11 @@ const readJsonBody = (request, maxBytes = 64 * 1024) => new Promise((resolve, re
 })
 
 const sendError = (response, error, { dataDir } = {}) => {
-  const statusCode = /valid JSON|too large|invalid|remaining questions|not pending|required|requires|must/i.test(error.message || '')
-    ? 400
-    : 500
+  const statusCode = Number.isInteger(error.statusCode)
+    ? error.statusCode
+    : /valid JSON|too large|invalid|remaining questions|not pending|required|requires|must/i.test(error.message || '')
+      ? 400
+      : 500
   sendJson(response, statusCode, {
     ok: false,
     error: createPublicText({ dataDir, value: error.message || 'Creator Studio service failed' }),
@@ -1322,6 +1324,7 @@ const handlePost = async ({ request, response, dataDir, url }) => {
         ok: true,
         run: createPublicRun({ dataDir, run: output.run }),
         actionReview: createActionReview({ dataDir, run: output.run }),
+        fullPetReview: createFullPetReview({ dataDir, run: output.run }),
         outputDir: toDataRelativePath({ dataDir, targetPath: output.outputDir })
       })
       return true
