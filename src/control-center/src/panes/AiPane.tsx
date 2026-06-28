@@ -4,6 +4,8 @@ import type {
   AiBehaviorResult,
   AiConfigViewState,
   AiConnectionTestResult,
+  AiTalkTraceDiagnosticsFilters,
+  ImageGenerationHealthCheckResult,
   AiMemoryItemViewState,
   AiMemoryProfileViewState,
   AiPersonaDraftViewState,
@@ -15,13 +17,49 @@ import type {
 import { Toggle } from '../components/Toggle'
 import { defaultImageGenerationConfig } from '../lib/defaults'
 
-const imageProviderPresets = [
+type ImageProviderPreset = {
+  id: string
+  title: string
+  description: string
+  baseUrl: string
+  model?: string
+  timeoutMs: number
+  maxConcurrentJobs: number
+}
+
+type ChatProviderPreset = {
+  id: string
+  title: string
+  description: string
+  baseUrl: string
+  model?: string
+}
+
+type ProviderFamily = 'openai' | 'openrouter' | 'together' | 'lm-studio' | 'vllm' | 'local-gateway' | 'generic-openai-compatible'
+
+const imageProviderPresets: readonly ImageProviderPreset[] = [
   {
     id: 'openai',
     title: 'OpenAI 官方',
     description: '使用官方 OpenAI 图片接口；API Key 保存在主进程。',
     baseUrl: 'https://api.openai.com/v1',
     model: 'gpt-image-2',
+    timeoutMs: 120000,
+    maxConcurrentJobs: 1
+  },
+  {
+    id: 'together',
+    title: 'Together',
+    description: '云端 OpenAI-compatible 图片网关；默认保留当前模型名，请按 Together 已开通模型调整。',
+    baseUrl: 'https://api.together.xyz/v1',
+    timeoutMs: 120000,
+    maxConcurrentJobs: 1
+  },
+  {
+    id: 'openrouter',
+    title: 'OpenRouter',
+    description: '云端 OpenAI-compatible 图片网关；默认保留当前模型名，请按 OpenRouter 实际可用模型调整。',
+    baseUrl: 'https://openrouter.ai/api/v1',
     timeoutMs: 120000,
     maxConcurrentJobs: 1
   },
@@ -33,8 +71,294 @@ const imageProviderPresets = [
     model: 'gpt-image-2',
     timeoutMs: 120000,
     maxConcurrentJobs: 1
+  },
+  {
+    id: 'openpet-8317-gateway',
+    title: 'OpenPet 8317 网关',
+    description: '使用当前开发网关，图片默认 gpt-image-2；只填充 Provider 草稿，不覆盖密钥。',
+    baseUrl: 'http://127.0.0.1:8317/v1',
+    model: 'gpt-image-2',
+    timeoutMs: 120000,
+    maxConcurrentJobs: 1
   }
 ] as const
+
+const chatProviderPresets: readonly ChatProviderPreset[] = [
+  {
+    id: 'openai',
+    title: 'OpenAI 官方',
+    description: '使用官方 OpenAI 聊天接口；API Key 保存在主进程。',
+    baseUrl: 'https://api.openai.com/v1',
+    model: 'gpt-4o-mini'
+  },
+  {
+    id: 'lm-studio',
+    title: 'LM Studio',
+    description: '本地 LM Studio OpenAI-compatible server；默认保留当前模型名，请按已加载模型调整。',
+    baseUrl: 'http://127.0.0.1:1234/v1'
+  },
+  {
+    id: 'vllm',
+    title: 'vLLM',
+    description: '自托管 vLLM OpenAI-compatible server；默认保留当前模型名，请按部署模型调整。',
+    baseUrl: 'http://127.0.0.1:8000/v1'
+  },
+  {
+    id: 'openrouter',
+    title: 'OpenRouter',
+    description: '云端 OpenAI-compatible 聚合网关；默认保留当前模型名，请按路由模型调整。',
+    baseUrl: 'https://openrouter.ai/api/v1'
+  },
+  {
+    id: 'together',
+    title: 'Together',
+    description: '云端 OpenAI-compatible 推理网关；默认保留当前模型名，请按 Together 模型列表调整。',
+    baseUrl: 'https://api.together.xyz/v1'
+  },
+  {
+    id: 'local-openai-compatible',
+    title: '本地/代理 OpenAI-compatible',
+    description: '适合本机网关、反代或局域网模型服务；本地和云端共用同一套 Provider 配置。',
+    baseUrl: 'http://127.0.0.1:8317/v1',
+    model: 'gpt-4o-mini'
+  },
+  {
+    id: 'openpet-8317-gateway',
+    title: 'OpenPet 8317 网关',
+    description: '使用当前开发网关，聊天默认 gpt-5.5；只填充 Provider 草稿，不覆盖密钥。',
+    baseUrl: 'http://127.0.0.1:8317/v1',
+    model: 'gpt-5.5'
+  }
+] as const
+
+const detectProviderFamily = (baseUrl: string): ProviderFamily => {
+  const normalized = String(baseUrl || '').trim().toLowerCase()
+  if (normalized.includes('api.openai.com')) return 'openai'
+  if (normalized.includes('openrouter.ai')) return 'openrouter'
+  if (normalized.includes('api.together.xyz')) return 'together'
+  if (normalized.includes('127.0.0.1:1234') || normalized.includes('localhost:1234')) return 'lm-studio'
+  if (normalized.includes('127.0.0.1:8000') || normalized.includes('localhost:8000')) return 'vllm'
+  if (normalized.includes('127.0.0.1:8317') || normalized.includes('localhost:8317')) return 'local-gateway'
+  return 'generic-openai-compatible'
+}
+
+const describeImageModelCompatibility = (baseUrl: string, model: string) => {
+  const normalizedModel = String(model || '').trim()
+  const providerFamily = detectProviderFamily(baseUrl)
+  if (!normalizedModel) {
+    return {
+      title: '图片模型兼容提示',
+      summary: '填写图片 Model 后，这里会显示透明背景请求的兼容提示。'
+    }
+  }
+  if (normalizedModel === 'gpt-image-2') {
+    const familyPrefix = providerFamily === 'openai'
+      ? 'OpenAI 官方'
+      : providerFamily === 'local-gateway'
+        ? '当前本地/代理网关'
+        : '当前 Provider'
+    return {
+      title: `${normalizedModel} 透明背景模式`,
+      summary: `${familyPrefix} 使用 ${normalizedModel} 时，Creator Studio 不会强制发送 background 参数；透明背景能力由当前 provider 的原生行为决定。`
+    }
+  }
+  if (providerFamily === 'openrouter') {
+    return {
+      title: `${normalizedModel} OpenRouter 图片兼容模式`,
+      summary: 'OpenPet 会按 OpenAI-compatible 图片请求发送 background 和 b64_json；请确认当前 OpenRouter 路由已映射到支持透明背景和该参数形状的图片模型。'
+    }
+  }
+  if (providerFamily === 'together') {
+    return {
+      title: `${normalizedModel} Together 图片兼容模式`,
+      summary: 'OpenPet 会按 OpenAI-compatible 图片请求发送 background 和 b64_json；请确认 Together 侧当前模型支持透明背景参数和返回格式。'
+    }
+  }
+  if (providerFamily === 'local-gateway' || providerFamily === 'lm-studio' || providerFamily === 'vllm') {
+    return {
+      title: `${normalizedModel} 本地网关图片兼容模式`,
+      summary: 'OpenPet 会按 OpenAI-compatible 图片请求发送 background=transparent 或 white，并附带 b64_json 输出；请确认当前本地网关完整支持 images/generations 与透明背景参数。'
+    }
+  }
+  return {
+    title: `${normalizedModel} OpenAI-compatible 透明背景模式`,
+    summary: 'Creator Studio 会按 OpenAI-compatible 方式发送 background=transparent 或 white，并附带 b64_json 输出；请确认当前模型支持 transparent 背景参数。'
+  }
+}
+
+const describeChatModelCompatibility = (baseUrl: string, model: string) => {
+  const normalizedModel = String(model || '').trim()
+  const providerFamily = detectProviderFamily(baseUrl)
+  if (!normalizedModel) {
+    return {
+      title: '聊天模型兼容提示',
+      summary: '填写聊天 Model 后，这里会显示当前 OpenAI-compatible 聊天接口的兼容提示。'
+    }
+  }
+  if (normalizedModel === 'gpt-4o-mini') {
+    const familyPrefix = providerFamily === 'openai' ? 'OpenAI 官方' : '当前 Provider'
+    return {
+      title: `${normalizedModel} OpenAI 官方兼容模式`,
+      summary: `${familyPrefix} 下默认按 OpenAI chat/completions 兼容请求发送，适合作为基础联通性测试模型。`
+    }
+  }
+  if (providerFamily === 'openrouter') {
+    return {
+      title: `${normalizedModel} OpenRouter 聊天兼容模式`,
+      summary: 'OpenPet 会按 OpenAI-compatible chat/completions 请求发送消息；请确认当前 OpenRouter 路由已映射到该聊天模型，并检查额外 provider 选项是否仍需在网关侧配置。'
+    }
+  }
+  if (providerFamily === 'together') {
+    return {
+      title: `${normalizedModel} Together 聊天兼容模式`,
+      summary: 'OpenPet 会按 OpenAI-compatible chat/completions 请求发送消息；请确认 Together 当前模型支持标准消息字段和返回结构。'
+    }
+  }
+  if (providerFamily === 'lm-studio') {
+    return {
+      title: `${normalizedModel} LM Studio 聊天兼容模式`,
+      summary: 'OpenPet 会按本地 OpenAI-compatible chat/completions 请求发送消息；请先在 LM Studio 打开本地服务并确认当前模型已加载。'
+    }
+  }
+  if (providerFamily === 'vllm') {
+    return {
+      title: `${normalizedModel} vLLM 聊天兼容模式`,
+      summary: 'OpenPet 会按 OpenAI-compatible chat/completions 请求发送消息；请确认当前 vLLM 服务已暴露对应模型并兼容标准消息字段。'
+    }
+  }
+  if (providerFamily === 'local-gateway') {
+    return {
+      title: `${normalizedModel} 本地网关聊天兼容模式`,
+      summary: 'OpenPet 会按 OpenAI-compatible chat/completions 请求发送消息；请确认当前本地或代理网关已把该模型名正确路由到后端提供者。'
+    }
+  }
+  return {
+    title: `${normalizedModel} OpenAI-compatible 聊天模式`,
+    summary: 'OpenPet 会按 OpenAI-compatible chat/completions 方式发送 system/user 消息、可选 tools 和 JSON body；请确认当前网关对该模型的字段兼容性。'
+  }
+}
+
+const renderImageModelDiscovery = (result: ImageGenerationHealthCheckResult | null, currentModel: string) => {
+  const normalizedCurrentModel = String(currentModel || '').trim()
+  if (!result) {
+    return (
+      <div className="provider-feedback" data-testid="image-model-discovery">
+        <strong>模型列表探测</strong>
+        <span>运行“检查图片健康”后，这里会显示 /models 探测结果。</span>
+      </div>
+    )
+  }
+
+  const discoveredModels = Array.isArray(result.availableModels) ? result.availableModels : []
+  if (result.modelsProbe === 'ok') {
+    const currentModelIncluded = normalizedCurrentModel ? discoveredModels.includes(normalizedCurrentModel) : false
+    return (
+      <div className={`provider-feedback ${result.ok ? 'ok' : ''}`} data-testid="image-model-discovery">
+        <strong>模型列表探测成功</strong>
+        <span>共发现 {discoveredModels.length} 个模型。</span>
+        <span>{currentModelIncluded ? '已包含当前模型' : '当前保存的图片 Model 未出现在探测列表中'}</span>
+        {discoveredModels.length ? (
+          <div className="model-chip-list">
+            {discoveredModels.map((modelName) => (
+              <code key={modelName} className="model-chip">{modelName}</code>
+            ))}
+          </div>
+        ) : (
+          <span>Provider 可达，但没有返回模型列表内容。</span>
+        )}
+      </div>
+    )
+  }
+
+  if (result.modelsProbe === 'unavailable') {
+    return (
+      <div className="provider-feedback" data-testid="image-model-discovery">
+        <strong>模型列表探测不可用</strong>
+        <span>当前 Provider 可达，但没有开放 /models；请手动确认模型名称。</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className={`provider-feedback ${result.ok ? 'ok' : 'error'}`} data-testid="image-model-discovery">
+      <strong>模型列表探测未返回结果</strong>
+      <span>{result.message || '本次健康检查没有拿到模型列表。'}</span>
+    </div>
+  )
+}
+
+const renderImageUsageSummary = (result: ImageGenerationHealthCheckResult | null) => {
+  const estimatedCost = result?.usage?.estimatedCostUsd
+  const hasUsage = result != null && result.usage != null && typeof estimatedCost === 'number'
+
+  if (!hasUsage) {
+    return (
+      <div className="provider-feedback" data-testid="image-usage-summary">
+        <strong>使用量摘要</strong>
+        <span>运行“检查图片健康”后，这里会显示本次健康检查返回的 usage 摘要（如有）。</span>
+      </div>
+    )
+  }
+
+  const formattedCost = Number.isFinite(estimatedCost) ? estimatedCost.toFixed(2) : '0.00'
+
+  return (
+    <div className={`provider-feedback ${result?.ok ? 'ok' : ''}`} data-testid="image-usage-summary">
+      <strong>使用量摘要</strong>
+      <span>{`当前健康检查返回的 usage.estimatedCostUsd：USD ${formattedCost}`}</span>
+      <span>这只是健康检查返回值，不代表完整生成流程的真实计费结算。</span>
+    </div>
+  )
+}
+
+const renderChatModelDiscovery = (result: AiConnectionTestResult | null, currentModel: string) => {
+  const normalizedCurrentModel = String(currentModel || '').trim()
+  if (!result) {
+    return (
+      <div className="provider-feedback" data-testid="chat-model-discovery">
+        <strong>模型列表探测</strong>
+        <span>运行“测试已保存配置”后，这里会显示聊天 Provider 的 /models 探测结果。</span>
+      </div>
+    )
+  }
+
+  const discoveredModels = Array.isArray(result.availableModels) ? result.availableModels : []
+  if (result.modelsProbe === 'ok') {
+    const currentModelIncluded = normalizedCurrentModel ? discoveredModels.includes(normalizedCurrentModel) : false
+    return (
+      <div className={`provider-feedback ${result.ok ? 'ok' : ''}`} data-testid="chat-model-discovery">
+        <strong>模型列表探测成功</strong>
+        <span>共发现 {discoveredModels.length} 个模型。</span>
+        <span>{currentModelIncluded ? '已包含当前模型' : '当前保存的聊天 Model 未出现在探测列表中'}</span>
+        {discoveredModels.length ? (
+          <div className="model-chip-list">
+            {discoveredModels.map((modelName) => (
+              <code key={modelName} className="model-chip">{modelName}</code>
+            ))}
+          </div>
+        ) : (
+          <span>Provider 可达，但没有返回模型列表内容。</span>
+        )}
+      </div>
+    )
+  }
+
+  if (result.modelsProbe === 'unavailable') {
+    return (
+      <div className="provider-feedback" data-testid="chat-model-discovery">
+        <strong>模型列表探测不可用</strong>
+        <span>当前 Provider 可达，但没有开放 /models；请手动确认模型名称。</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className={`provider-feedback ${result.ok ? 'ok' : 'error'}`} data-testid="chat-model-discovery">
+      <strong>模型列表探测未返回结果</strong>
+      <span>{result.message || '本次连接测试没有拿到模型列表。'}</span>
+    </div>
+  )
+}
 
 const CollapsibleAiSection = ({
   title,
@@ -137,6 +461,7 @@ export interface AiPaneProps {
   providerConfigValidationError: string
   connectionTestResult: AiConnectionTestResult | null
   imageProviderValidationError: string
+  imageHealthResult: ImageGenerationHealthCheckResult | null
   onChange: (partial: Partial<AiConfigViewState>) => void
   onChangeImageGeneration: (partial: Partial<ImageGenerationConfigViewState>) => void
   onSave: () => void | Promise<void>
@@ -185,7 +510,10 @@ export interface AiPaneProps {
   setReplayDraft: (value: string) => void
   replayResult: AiBehaviorResult | null
   onReplayBehaviorDecision: () => void | Promise<void>
+  traceDiagnosticsFilters: AiTalkTraceDiagnosticsFilters
+  onChangeTraceDiagnosticsFilters: (partial: AiTalkTraceDiagnosticsFilters) => void
   onExportBehaviorDiagnostics: () => void | Promise<void>
+  onExportAiTalkTraceDiagnostics: () => void | Promise<void>
   onClearBehaviorDecisions: () => void | Promise<void>
   onRefreshMemoryProfile: () => void | Promise<void>
   onDeleteMemory: (memoryId: string) => void | Promise<void>
@@ -208,6 +536,7 @@ export function AiPane({
   providerConfigValidationError,
   connectionTestResult,
   imageProviderValidationError,
+  imageHealthResult,
   onChange,
   onChangeImageGeneration,
   onSave,
@@ -256,7 +585,10 @@ export function AiPane({
   setReplayDraft,
   replayResult,
   onReplayBehaviorDecision,
+  traceDiagnosticsFilters,
+  onChangeTraceDiagnosticsFilters,
   onExportBehaviorDiagnostics,
+  onExportAiTalkTraceDiagnostics,
   onClearBehaviorDecisions,
   onRefreshMemoryProfile,
   onDeleteMemory,
@@ -274,10 +606,17 @@ export function AiPane({
     hasUnsavedApiKeyDraft ? '密钥草稿未保存' : ''
   ].filter(Boolean).join(' · ')
   const imageTargetSummary = `${activeImageGenerationConfig.provider} · ${activeImageGenerationConfig.baseUrl} · ${activeImageGenerationConfig.model} · ${activeImageGenerationConfig.hasApiKey ? 'API key saved' : 'API key missing'}`
+  const imageModelCompatibility = describeImageModelCompatibility(imageGenerationConfig.baseUrl, imageGenerationConfig.model)
+  const chatModelCompatibility = describeChatModelCompatibility(config.baseUrl, config.model)
+  const applyChatProviderPreset = (preset: typeof chatProviderPresets[number]) => onChange({
+    provider: 'openai-compatible',
+    baseUrl: preset.baseUrl,
+    ...(preset.model ? { model: preset.model } : {})
+  })
   const applyImageProviderPreset = (preset: typeof imageProviderPresets[number]) => onChangeImageGeneration({
     provider: 'openai-compatible',
     baseUrl: preset.baseUrl,
-    model: preset.model,
+    ...(preset.model ? { model: preset.model } : {}),
     timeoutMs: preset.timeoutMs,
     maxConcurrentJobs: preset.maxConcurrentJobs
   })
@@ -293,6 +632,13 @@ export function AiPane({
 
       <CollapsibleAiSection title="聊天 Provider" note="OpenAI-compatible 聊天模型配置" defaultOpen>
         <div className="section provider-summary" data-testid="ai-provider-summary">
+          <div className="provider-feedback" data-testid="chat-provider-boundary">
+            <strong>聊天 Provider 边界</strong>
+            <span>本地网关、代理服务和云端接口共用同一套 OpenAI-compatible 聊天 Provider 契约；切换环境只需要改 Base URL 和 Model。</span>
+            <span>“保存聊天 Provider”只写入当前配置；“测试已保存配置”只测试已保存的生效配置，不会偷用草稿。</span>
+            <span>API Key 只保存在 OpenPet host；renderer、dashboard 和普通插件都不能直接读取。</span>
+          </div>
+
           <div className="readonly-row">
             <strong>当前生效配置</strong>
             <span className="endpoint-text" data-testid="ai-provider-active-summary">{activeProviderSummary}</span>
@@ -347,6 +693,28 @@ export function AiPane({
               onChange={(event) => onChange({ model: event.target.value })}
             />
           </label>
+
+          <div className="field-row tall">
+            <div>
+              <div className="field-label">聊天 Provider 预设</div>
+              <div className="field-note">预设只填充 Base URL / 可安全默认的 Model；不会读取或覆盖 API Key。</div>
+            </div>
+            <div className="provider-preset-grid">
+              {chatProviderPresets.map((preset) => (
+                <button
+                  type="button"
+                  key={preset.id}
+                  className="provider-preset-card"
+                  onClick={() => applyChatProviderPreset(preset)}
+                  disabled={saving}
+                >
+                  <strong>{preset.title}</strong>
+                  <span>{preset.description}</span>
+                  <code>{preset.baseUrl}</code>
+                </button>
+              ))}
+            </div>
+          </div>
 
           <div className="field-row">
             <div>
@@ -412,6 +780,13 @@ export function AiPane({
           </div>
         ) : null}
 
+        {renderChatModelDiscovery(connectionTestResult, config.model)}
+
+        <div className="provider-feedback" data-testid="chat-model-compatibility">
+          <strong>{chatModelCompatibility.title}</strong>
+          <span>{chatModelCompatibility.summary}</span>
+        </div>
+
         <div className="section-actions provider-actions-bottom">
           <button type="button" className="ghost" onClick={onTest} disabled={saving}>
             测试已保存配置
@@ -419,52 +794,6 @@ export function AiPane({
           <button type="button" className="primary" onClick={onSave} disabled={saveDisabled}>
             {saving ? '保存中' : '保存聊天 Provider'}
           </button>
-        </div>
-      </CollapsibleAiSection>
-
-      <CollapsibleAiSection title="长期记忆" note="查看和管理自动抽取的用户与宠物关系记忆" defaultOpen>
-        <div className="section memory-section" data-testid="ai-memory-profile">
-          <div className="field-row">
-            <div>
-              <div className="field-label">当前宠物包</div>
-              <div className="field-note">{memoryProfile.petPackDisplayName} · {memoryProfile.petPackId}</div>
-            </div>
-            <div className="inline-action">
-              <button type="button" className="ghost" onClick={onRefreshMemoryProfile} disabled={saving}>
-                刷新记忆
-              </button>
-              <button type="button" className="danger-text" onClick={onClearPetPackMemories} disabled={saving || memoryProfile.petPackMemories.length === 0}>
-                清空当前宠物记忆
-              </button>
-            </div>
-          </div>
-
-          <div className="memory-grid">
-            <MemoryList
-              title="全局用户记忆"
-              memories={memoryProfile.globalMemories}
-              emptyText="暂无全局用户记忆"
-              saving={saving}
-              onDeleteMemory={onDeleteMemory}
-            />
-            <MemoryList
-              title="当前宠物关系记忆"
-              memories={memoryProfile.petPackMemories}
-              emptyText="暂无当前宠物关系记忆"
-              saving={saving}
-              onDeleteMemory={onDeleteMemory}
-            />
-          </div>
-
-          <div className="readonly-row">
-            <strong>最近记忆任务</strong>
-            {latestMemoryJob ? (
-              <span>
-                {latestMemoryJob.status} · applied {latestMemoryJob.appliedCount} · filtered {latestMemoryJob.filteredCount}
-                {latestMemoryJob.errorCode ? ` · ${latestMemoryJob.errorCode}` : ''}
-              </span>
-            ) : <span>暂无后台抽取任务</span>}
-          </div>
         </div>
       </CollapsibleAiSection>
 
@@ -479,6 +808,13 @@ export function AiPane({
         </div>
 
         <div className="section">
+          <div className="provider-feedback" data-testid="image-provider-boundary">
+            <strong>图片 Provider 边界</strong>
+            <span>本地网关、代理服务和云端接口共用同一套 OpenAI-compatible 图片 Provider 契约；切换环境只需要改 Base URL、Model 和超时配置。</span>
+            <span>“保存图片 Provider”只更新 host 配置；“检查图片健康”只检查当前已保存的图片 Provider，不会偷用草稿。</span>
+            <span>Creator Studio 只提交提示词和输出目录；Provider 调用、API Key、图片写入都由 OpenPet host 执行。</span>
+          </div>
+
           <div className="readonly-row">
             <strong>图片当前 Provider</strong>
             <span className="endpoint-text">{imageTargetSummary}</span>
@@ -497,7 +833,7 @@ export function AiPane({
           <div className="field-row tall">
             <div>
               <div className="field-label">图片 Provider 预设</div>
-              <div className="field-note">预设只填充 Base URL / Model / 超时；不会读取或覆盖 API Key。</div>
+              <div className="field-note">预设只填充 Base URL / 可安全默认的 Model / 超时；不会读取或覆盖 API Key。</div>
             </div>
             <div className="provider-preset-grid">
               {imageProviderPresets.map((preset) => (
@@ -526,6 +862,15 @@ export function AiPane({
               <span>{imageHealthStatus}</span>
             </div>
           ) : null}
+
+          {renderImageModelDiscovery(imageHealthResult, imageGenerationConfig.model)}
+
+          {renderImageUsageSummary(imageHealthResult)}
+
+          <div className="provider-feedback" data-testid="image-model-compatibility">
+            <strong>{imageModelCompatibility.title}</strong>
+            <span>{imageModelCompatibility.summary}</span>
+          </div>
 
           <label className="field-row">
             <span className="field-label">图片 Base URL</span>
@@ -602,6 +947,102 @@ export function AiPane({
                 清除图片密钥
               </button>
             </div>
+          </div>
+        </div>
+      </CollapsibleAiSection>
+
+      <CollapsibleAiSection title="长期记忆" note="查看和管理自动抽取的用户与宠物关系记忆">
+        <div className="section memory-section" data-testid="ai-memory-profile">
+          <div className="field-row">
+            <div>
+              <div className="field-label">当前宠物包</div>
+              <div className="field-note">{memoryProfile.petPackDisplayName} · {memoryProfile.petPackId}</div>
+            </div>
+            <div className="inline-action">
+              <button type="button" className="ghost" onClick={onRefreshMemoryProfile} disabled={saving}>
+                刷新记忆
+              </button>
+              <button type="button" className="ghost" onClick={onExportAiTalkTraceDiagnostics}>
+                导出 AI Talk Trace
+              </button>
+              <button type="button" className="danger-text" onClick={onClearPetPackMemories} disabled={saving || memoryProfile.petPackMemories.length === 0}>
+                清空当前宠物记忆
+              </button>
+            </div>
+          </div>
+
+          <div className="field-row">
+            <div>
+              <div className="field-label">Trace 导出范围</div>
+              <div className="field-note">导出 redacted 诊断时，可缩小到当前宠物包或当前主会话。</div>
+            </div>
+            <select
+              className="text-input"
+              value={traceDiagnosticsFilters.conversationId
+                ? 'conversation'
+                : (traceDiagnosticsFilters.petPackId ? 'petPack' : 'all')}
+              onChange={(event) => {
+                const nextMode = event.target.value
+                if (nextMode === 'conversation') {
+                  onChangeTraceDiagnosticsFilters({
+                    petPackId: petChatState.petPack.id || memoryProfile.petPackId,
+                    conversationId: petChatState.conversationId || `control-center:${memoryProfile.petPackId}:main`
+                  })
+                  return
+                }
+                if (nextMode === 'petPack') {
+                  onChangeTraceDiagnosticsFilters({
+                    petPackId: petChatState.petPack.id || memoryProfile.petPackId,
+                    conversationId: ''
+                  })
+                  return
+                }
+                onChangeTraceDiagnosticsFilters({ petPackId: '', conversationId: '' })
+              }}
+              data-testid="ai-trace-filter-select"
+            >
+              <option value="all">全部 AI Talk 数据</option>
+              <option value="petPack">仅当前宠物包</option>
+              <option value="conversation">仅当前主会话</option>
+            </select>
+          </div>
+
+          <div className="readonly-row">
+            <strong>当前 Trace 过滤</strong>
+            <span>
+              {traceDiagnosticsFilters.conversationId
+                ? `会话 ${traceDiagnosticsFilters.conversationId}`
+                : traceDiagnosticsFilters.petPackId
+                  ? `宠物包 ${traceDiagnosticsFilters.petPackId}`
+                  : '不过滤，导出全部'}
+            </span>
+          </div>
+
+          <div className="memory-grid">
+            <MemoryList
+              title="全局用户记忆"
+              memories={memoryProfile.globalMemories}
+              emptyText="暂无全局用户记忆"
+              saving={saving}
+              onDeleteMemory={onDeleteMemory}
+            />
+            <MemoryList
+              title="当前宠物关系记忆"
+              memories={memoryProfile.petPackMemories}
+              emptyText="暂无当前宠物关系记忆"
+              saving={saving}
+              onDeleteMemory={onDeleteMemory}
+            />
+          </div>
+
+          <div className="readonly-row">
+            <strong>最近记忆任务</strong>
+            {latestMemoryJob ? (
+              <span>
+                {latestMemoryJob.status} · applied {latestMemoryJob.appliedCount} · filtered {latestMemoryJob.filteredCount}
+                {latestMemoryJob.errorCode ? ` · ${latestMemoryJob.errorCode}` : ''}
+              </span>
+            ) : <span>暂无后台抽取任务</span>}
           </div>
         </div>
       </CollapsibleAiSection>
@@ -863,6 +1304,8 @@ export function AiPane({
                   <div className="behavior-decision-meta">
                     {decision.ruleId ? <span>{decision.ruleId}</span> : null}
                     {decision.actionId ? <span>{decision.actionId}</span> : null}
+                    {decision.displayMode ? <span>display: {decision.displayMode}</span> : null}
+                    {decision.providerReason ? <span>provider: {decision.providerReason}</span> : null}
                     {decision.cooldown ? <span>cooldown</span> : null}
                     {decision.fallback ? <span>fallback</span> : null}
                   </div>

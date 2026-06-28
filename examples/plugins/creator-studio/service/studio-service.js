@@ -4,7 +4,12 @@ const path = require('path')
 const { appendRunLog, listRuns, readRun, readRunLogs, updateRunStatus } = require('../lib/run-store')
 const { runGenerationStep } = require('../lib/backend-runner')
 const { repairActionFrameFromGeneratedImage } = require('../lib/action-frame-builder')
-const { answerTaskQuestion, confirmTaskRun, draftTaskRun } = require('../lib/task-workflow')
+const { assertRunActionFrameQaPassed } = require('../lib/action-frame-qa')
+const { assertRunFullPetQaPassed } = require('../lib/full-pet-qa')
+const { sanitizeCreativeBrief } = require('../lib/openpet-prompt-builder')
+const { answerTaskQuestion, confirmTaskRun, draftTaskRun, updateTaskDraft } = require('../lib/task-workflow')
+const { FIXTURE_BACKEND, normalizeCreatorBackend, usesHostProviderBackend } = require('../lib/backend-mode')
+const { createPlaybackDiagnostics } = require('../lib/action-frame-playback')
 
 const SAFE_FRAME_FILE_PATTERN = /^\d{4}\.png$/
 
@@ -15,6 +20,11 @@ const sendJson = (response, statusCode, body) => {
 
 const sendPng = (response, filePath) => {
   response.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'no-store' })
+  fs.createReadStream(filePath).pipe(response)
+}
+
+const sendWebp = (response, filePath) => {
+  response.writeHead(200, { 'Content-Type': 'image/webp', 'Cache-Control': 'no-store' })
   fs.createReadStream(filePath).pipe(response)
 }
 
@@ -46,11 +56,19 @@ const readJsonBody = (request, maxBytes = 64 * 1024) => new Promise((resolve, re
   request.on('error', reject)
 })
 
-const sendError = (response, error) => {
+const sendError = (response, error, { dataDir } = {}) => {
   const statusCode = /valid JSON|too large|invalid|remaining questions|not pending|required|requires|must/i.test(error.message || '')
     ? 400
     : 500
-  sendJson(response, statusCode, { ok: false, error: error.message || 'Creator Studio service failed' })
+  sendJson(response, statusCode, {
+    ok: false,
+    error: createPublicText({ dataDir, value: error.message || 'Creator Studio service failed' }),
+    ...(error.run ? {
+      run: createPublicRun({ dataDir, run: error.run }),
+      actionReview: createActionReview({ dataDir, run: error.run }),
+      fullPetReview: createFullPetReview({ dataDir, run: error.run })
+    } : {})
+  })
 }
 
 const assertPathInsideDataDir = ({ dataDir, targetPath, label }) => {
@@ -93,8 +111,10 @@ const toPublicLogString = ({ dataDir, value }) => {
     : text
 }
 
+const createPublicText = ({ dataDir, value }) => sanitizeCreativeBrief(toPublicLogString({ dataDir, value }))
+
 const createPublicLogValue = ({ dataDir, value }) => {
-  if (typeof value === 'string') return toPublicLogString({ dataDir, value })
+  if (typeof value === 'string') return createPublicText({ dataDir, value })
   if (Array.isArray(value)) return value.map((entry) => createPublicLogValue({ dataDir, value: entry }))
   if (value && typeof value === 'object') {
     return Object.fromEntries(Object.entries(value).map(([key, entry]) => [
@@ -106,6 +126,835 @@ const createPublicLogValue = ({ dataDir, value }) => {
 }
 
 const createPublicLogEntry = ({ dataDir, entry }) => createPublicLogValue({ dataDir, value: entry })
+
+const normalizeRelativeArtifactPath = (value) => {
+  if (typeof value !== 'string') return ''
+  return value.trim().replace(/\\/g, '/')
+}
+
+const normalizeEstimatedCostUsd = (value) => {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric) || numeric < 0) return null
+  return numeric
+}
+
+const formatEstimatedCostUsd = (value) => {
+  const estimatedCostUsd = normalizeEstimatedCostUsd(value)
+  if (estimatedCostUsd === null) return ''
+  return `$${estimatedCostUsd.toFixed(4)}`
+}
+
+const createPublicPromptPreview = ({ dataDir, promptPreview = {} }) => {
+  const text = createPublicText({ dataDir, value: promptPreview.text || '' })
+  return {
+    text,
+    truncated: Boolean(promptPreview.truncated),
+    maxLength: Number(promptPreview.maxLength || text.length)
+  }
+}
+
+const createPublicPromptBuilder = ({ dataDir, promptBuilder = {} }) => {
+  const sections = Array.isArray(promptBuilder.sections)
+    ? promptBuilder.sections.map((section) => createPublicText({ dataDir, value: section }))
+    : []
+  const warnings = Array.isArray(promptBuilder.warnings)
+    ? promptBuilder.warnings.map((warning) => createPublicText({ dataDir, value: warning }))
+    : []
+  return {
+    version: Number(promptBuilder.version || promptBuilder.promptBuilderVersion || 0),
+    mode: createPublicText({ dataDir, value: promptBuilder.mode || '' }),
+    actionId: createPublicText({ dataDir, value: promptBuilder.actionId || '' }),
+    sections,
+    warnings,
+    promptPreview: createPublicPromptPreview({ dataDir, promptPreview: promptBuilder.promptPreview })
+  }
+}
+
+const createPublicModelSnapshot = ({ dataDir, modelSnapshot = {} }) => {
+  if (!modelSnapshot || typeof modelSnapshot !== 'object') return undefined
+  return createPublicLogValue({ dataDir, value: modelSnapshot })
+}
+
+const createDeveloperPrompt = ({ dataDir, run }) => {
+  const generatedImage = run.artifacts?.generatedImage || null
+  const promptBuilder = generatedImage?.promptBuilder || null
+  if (!promptBuilder) {
+    return {
+      available: false,
+      source: 'host-model-bridge',
+      message: 'Prompt provenance appears after a host-generated run completes.'
+    }
+  }
+  return {
+    available: true,
+    source: 'host-model-bridge',
+    modelSnapshot: createPublicModelSnapshot({ dataDir, modelSnapshot: generatedImage.modelSnapshot || run.modelSnapshot }),
+    promptBuilder: createPublicPromptBuilder({ dataDir, promptBuilder }),
+    promptPreview: createPublicPromptPreview({ dataDir, promptPreview: promptBuilder.promptPreview || {} })
+  }
+}
+
+const classifyRecoveryFailure = (message = '') => {
+  const text = String(message || '')
+  if (/Generated image contains no visible pixels/i.test(text)) {
+    return {
+      failureKind: 'validation',
+      guidance: 'The generated source image was empty. Adjust the prompt or model settings, then retry generation on this same run.',
+      qaFocus: 'Check source image validation expectations before retrying.'
+    }
+  }
+  if (/Generated image could not be decoded|too large to process|path escaped|image is missing/i.test(text)) {
+    return {
+      failureKind: 'validation',
+      guidance: 'The generated source image failed validation before atlas review. Fix the provider output or prompt, then retry generation on this same run.',
+      qaFocus: 'Review source image validation details before retrying.'
+    }
+  }
+  return {
+    failureKind: 'provider',
+    guidance: 'Review the provider failure details, then retry generation on this same run when the backend is ready.',
+    qaFocus: 'No QA artifacts were produced before the generation failure.'
+  }
+}
+
+const createPublicRecovery = ({ dataDir, run }) => {
+  const backendStatus = run.backendStatus || {}
+  const canRetryGeneration = run.status === 'failed' && run.taskStatus === 'confirmed' && run.currentStep === 'generate'
+  const isFullPet = run.generationTask?.mode === 'full-pet'
+  const failureReason = createPublicText({ dataDir, value: run.error || backendStatus.message || '' })
+  const classified = classifyRecoveryFailure(failureReason)
+  return {
+    canRetryGeneration,
+    actionLabel: canRetryGeneration ? 'Retry generation' : (isFullPet ? 'Generate pet pack' : 'Generate action'),
+    backend: createPublicLogValue({ dataDir, value: backendStatus }),
+    failureReason,
+    failureKind: createPublicText({ dataDir, value: classified.failureKind }),
+    guidance: createPublicText({ dataDir, value: classified.guidance }),
+    qaFocus: createPublicText({ dataDir, value: classified.qaFocus })
+  }
+}
+
+const createGenerationUsageSummary = ({ run }) => {
+  const estimatedCostUsd = normalizeEstimatedCostUsd(run.artifacts?.generatedImage?.usage?.estimatedCostUsd)
+  if (estimatedCostUsd === null) {
+    return {
+      available: false,
+      estimatedCostUsd: null,
+      displayCost: ''
+    }
+  }
+  return {
+    available: true,
+    estimatedCostUsd,
+    displayCost: formatEstimatedCostUsd(estimatedCostUsd)
+  }
+}
+
+const WIZARD_STEPS = [
+  { key: 'draft', label: 'Draft' },
+  { key: 'follow-up', label: 'Follow-up' },
+  { key: 'confirm', label: 'Confirm' },
+  { key: 'generate', label: 'Generate' },
+  { key: 'review', label: 'Review' },
+  { key: 'import', label: 'Import' }
+]
+
+const createWizardSteps = (phase) => {
+  const statusByKey = {
+    draft: 'upcoming',
+    'follow-up': 'upcoming',
+    confirm: 'upcoming',
+    generate: 'upcoming',
+    review: 'upcoming',
+    import: 'upcoming'
+  }
+
+  if (phase === 'draft') {
+    statusByKey.draft = 'current'
+  } else if (phase === 'needs-input') {
+    statusByKey.draft = 'complete'
+    statusByKey['follow-up'] = 'current'
+  } else if (phase === 'ready-for-confirmation') {
+    statusByKey.draft = 'complete'
+    statusByKey['follow-up'] = 'complete'
+    statusByKey.confirm = 'current'
+  } else if (phase === 'ready-to-generate') {
+    statusByKey.draft = 'complete'
+    statusByKey['follow-up'] = 'complete'
+    statusByKey.confirm = 'complete'
+    statusByKey.generate = 'current'
+  } else if (phase === 'failed') {
+    statusByKey.draft = 'complete'
+    statusByKey['follow-up'] = 'complete'
+    statusByKey.confirm = 'complete'
+    statusByKey.generate = 'blocked'
+  } else if (phase === 'ready-for-review') {
+    statusByKey.draft = 'complete'
+    statusByKey['follow-up'] = 'complete'
+    statusByKey.confirm = 'complete'
+    statusByKey.generate = 'complete'
+    statusByKey.review = 'current'
+  } else if (phase === 'approved') {
+    statusByKey.draft = 'complete'
+    statusByKey['follow-up'] = 'complete'
+    statusByKey.confirm = 'complete'
+    statusByKey.generate = 'complete'
+    statusByKey.review = 'complete'
+    statusByKey.import = 'blocked'
+  } else if (phase === 'imported') {
+    statusByKey.draft = 'complete'
+    statusByKey['follow-up'] = 'complete'
+    statusByKey.confirm = 'complete'
+    statusByKey.generate = 'complete'
+    statusByKey.review = 'complete'
+    statusByKey.import = 'complete'
+  }
+
+  return WIZARD_STEPS.map((step) => ({
+    ...step,
+    status: statusByKey[step.key] || 'upcoming'
+  }))
+}
+
+function createFullPetReviewGate ({ dataDir, run }) {
+  if (run.artifacts?.actionFrames) {
+    return {
+      requiresCurrentSourceMatch: false,
+      currentSourceImage: '',
+      qaSourceImage: '',
+      sourceImageMatchesCurrent: true,
+      sourceImageValidation: null,
+      reviewGate: {
+        status: 'ready',
+        ready: true,
+        reason: ''
+      }
+    }
+  }
+
+  if (run.generationTask?.mode !== 'full-pet') {
+    return {
+      requiresCurrentSourceMatch: false,
+      currentSourceImage: '',
+      qaSourceImage: '',
+      sourceImageMatchesCurrent: true,
+      sourceImageValidation: null,
+      reviewGate: {
+        status: 'ready',
+        ready: true,
+        reason: ''
+      }
+    }
+  }
+
+  const artifacts = run.artifacts || {}
+  const requiresCurrentSourceMatch = usesHostProviderBackend(run.backend || run.input?.backend)
+  const sourceImageValidation = readJsonArtifact({
+    dataDir,
+    targetPath: artifacts.sourceImageQa,
+    label: 'Full-pet source image QA'
+  })
+  const currentSourceImage = createPublicText({
+    dataDir,
+    value: artifacts.generatedImage?.outputs?.[0]?.dataRelativePath || ''
+  })
+  const qaSourceImage = createPublicText({
+    dataDir,
+    value: sourceImageValidation?.sourceRelativePath || ''
+  })
+  const normalizedCurrentSourceImage = normalizeRelativeArtifactPath(currentSourceImage)
+  const normalizedQaSourceImage = normalizeRelativeArtifactPath(qaSourceImage)
+  const sourceImageMatchesCurrent = !requiresCurrentSourceMatch || Boolean(
+    normalizedCurrentSourceImage &&
+    normalizedQaSourceImage &&
+    normalizedCurrentSourceImage === normalizedQaSourceImage
+  )
+  const reviewGate = sourceImageMatchesCurrent
+    ? {
+        status: 'ready',
+        ready: true,
+        reason: 'Full-pet review artifacts match the current generated image. You can approve the run when QA looks correct.'
+      }
+    : {
+        status: 'blocked',
+        ready: false,
+        reason: 'QA source image does not match the current generated image. Retry generation on this same run before approval or import.'
+      }
+
+  return {
+    requiresCurrentSourceMatch,
+    currentSourceImage,
+    qaSourceImage,
+    sourceImageMatchesCurrent,
+    sourceImageValidation,
+    reviewGate
+  }
+}
+
+function createActionFrameReviewGate ({ dataDir, run }) {
+  if (!run.artifacts?.actionFrames) {
+    return {
+      qa: null,
+      reviewGate: {
+        status: 'ready',
+        ready: true,
+        reason: ''
+      },
+      qaWarnings: [],
+      repairs: [],
+      visiblePixelSummary: {
+        totalVisiblePixels: 0,
+        invalidFrameCount: 0
+      }
+    }
+  }
+
+  const qa = readActionFrameQa({ dataDir, actionFrames: run.artifacts.actionFrames })
+  const frames = Array.isArray(qa?.frames) ? qa.frames : []
+  const totalVisiblePixels = frames.reduce((sum, frame) => {
+    const visiblePixels = Number(frame?.visiblePixels)
+    return Number.isFinite(visiblePixels) && visiblePixels > 0
+      ? sum + visiblePixels
+      : sum
+  }, 0)
+  const invalidFrameCount = frames.reduce((count, frame) => {
+    const visiblePixels = Number(frame?.visiblePixels)
+    return !Number.isFinite(visiblePixels) || visiblePixels < 1
+      ? count + 1
+      : count
+  }, 0)
+
+  let reviewGate = {
+    status: 'ready',
+    ready: true,
+    reason: 'Action-frame QA passed. Review the generated frames and approve when the motion looks correct.'
+  }
+
+  try {
+    assertRunActionFrameQaPassed({ dataDir, run, operation: 'approval' })
+  } catch (_) {
+    reviewGate = {
+      status: 'blocked',
+      ready: false,
+      reason: 'Repair or regenerate frames before approval. Action-frame QA is blocked.'
+    }
+  }
+
+  return {
+    qa,
+    reviewGate,
+    qaWarnings: Array.isArray(qa?.warnings) ? qa.warnings : [],
+    repairs: Array.isArray(qa?.repairs) ? qa.repairs : [],
+    visiblePixelSummary: {
+      totalVisiblePixels,
+      invalidFrameCount
+    }
+  }
+}
+
+const createImportedFollowUp = (run) => {
+  if (run.artifacts?.actionFrames) {
+    if (run.triggerProposalSubmission?.ok === true) {
+      return {
+        label: 'Review trigger proposal',
+        location: 'Actions -> Trigger Proposal Inbox',
+        reason: 'The action import is complete. Review the submitted trigger proposal in Actions -> Trigger Proposal Inbox.'
+      }
+    }
+    if (run.triggerProposalSubmission && run.triggerProposalSubmission.ok === false) {
+      const handoffError = String(run.triggerProposalSubmission.error || '').trim()
+      return {
+        label: 'Review import handoff',
+        location: 'Control Center -> Plugins',
+        reason: handoffError
+          ? `The action import completed, but trigger proposal handoff failed: ${handoffError}. Review the command output in Control Center -> Plugins before applying trigger rules.`
+          : 'The action import completed, but trigger proposal handoff failed. Review the command output in Control Center -> Plugins before applying trigger rules.'
+      }
+    }
+    if (!run.triggerProposalSubmission) {
+      return {
+        label: 'Review import handoff',
+        location: 'Control Center -> Plugins',
+        reason: 'The action import completed, but no trigger proposal handoff record was saved. Review the command output in Control Center -> Plugins before applying trigger rules.'
+      }
+    }
+    return {
+      label: 'Review import handoff',
+      location: 'Control Center -> Plugins',
+      reason: 'The action import is complete. Review the import handoff details in Control Center -> Plugins.'
+    }
+  }
+
+  return {
+    label: 'Review imported result',
+    location: 'OpenPet',
+    reason: 'The host-owned import is complete. Review the imported result inside OpenPet.'
+  }
+}
+
+const createWizardState = ({ dataDir, run }) => {
+  const backend = normalizeCreatorBackend(run.backend || run.input?.backend, FIXTURE_BACKEND)
+  const prompt = run.input?.originalPrompt || run.input?.prompt || ''
+  const taskStatus = String(run.taskStatus || '')
+  const status = String(run.status || 'draft')
+  const isFullPet = run.generationTask?.mode === 'full-pet'
+  const fullPetReviewGate = createFullPetReviewGate({ dataDir, run })
+  const actionFrameReviewGate = createActionFrameReviewGate({ dataDir, run })
+  const requiresRetryBeforeApproval = status === 'ready_for_review' && fullPetReviewGate.reviewGate.ready === false
+  const requiresActionRepairBeforeApproval = status === 'ready_for_review' && actionFrameReviewGate.reviewGate.ready === false
+  let phase = 'draft'
+  let summary = 'Draft a task to create a run snapshot.'
+  let nextStepLabel = 'Draft task'
+  let nextStepReason = 'Start from a natural-language action prompt to draft a Creator Studio task.'
+  let nextStepBlocked = false
+
+  if (taskStatus === 'needs_input') {
+    phase = 'needs-input'
+    summary = 'Answer the pending follow-up question to unlock task confirmation.'
+    nextStepLabel = 'Answer follow-up'
+    nextStepReason = 'Choose one of the pending follow-up answers in the dashboard.'
+  } else if (taskStatus === 'ready_for_confirmation') {
+    phase = 'ready-for-confirmation'
+    summary = 'Confirm the drafted task before generation.'
+    nextStepLabel = 'Confirm task'
+    nextStepReason = 'The task is drafted. Confirm it to unlock generation.'
+  } else if (status === 'failed') {
+    phase = 'failed'
+    summary = 'Retry generation on this same run after reviewing the failure details.'
+    nextStepLabel = 'Retry generation'
+    nextStepReason = 'Use the same run to retry generation after checking the failure details.'
+  } else if (status === 'ready_for_review') {
+    phase = 'ready-for-review'
+    if (requiresActionRepairBeforeApproval) {
+      summary = 'Review found invalid action frames. Repair them in the frame review panel or regenerate before approval.'
+      nextStepLabel = 'Review and repair frames'
+      nextStepReason = 'Use the repair buttons in the frame review panel or regenerate this run before approval.'
+    } else if (requiresRetryBeforeApproval) {
+      summary = 'Review shows stale QA source artifacts. Retry generation on this same run before approval.'
+      nextStepLabel = 'Retry generation'
+      nextStepReason = 'Retry generation on this same run before approval so QA matches the current generated image.'
+    } else {
+      summary = 'Review QA artifacts and approve the run for host-owned import.'
+      nextStepLabel = 'Approve run'
+      nextStepReason = 'Review the QA and approve this run to unlock host-owned import.'
+    }
+  } else if (status === 'approved') {
+    phase = 'approved'
+    summary = 'Run the host-owned import command from Control Center -> Plugins.'
+    nextStepLabel = run.artifacts?.actionFrames ? 'Import Approved Action' : 'Import Approved Pet'
+    nextStepReason = 'Use Control Center -> Plugins to run the host-owned import command.'
+    nextStepBlocked = true
+  } else if (status === 'imported') {
+    const importedFollowUp = createImportedFollowUp(run)
+    phase = 'imported'
+    summary = `Host-owned import is complete. ${importedFollowUp.reason}`
+    nextStepLabel = importedFollowUp.label
+    nextStepReason = `The dashboard cannot apply post-import host actions; ${importedFollowUp.reason}`
+    nextStepBlocked = true
+  } else if (taskStatus === 'confirmed') {
+    phase = 'ready-to-generate'
+    summary = isFullPet
+      ? 'Run Generate pet pack to start host-owned generation.'
+      : 'Run Generate action to start host-owned generation.'
+    nextStepLabel = isFullPet ? 'Generate pet pack' : 'Generate action'
+    nextStepReason = 'Generation is unlocked for this confirmed task.'
+  }
+
+  return {
+    phase: createPublicText({ dataDir, value: phase }),
+    summary: createPublicText({ dataDir, value: summary }),
+    prompt: createPublicText({ dataDir, value: prompt }),
+    backend: createPublicText({ dataDir, value: backend }),
+    taskStatus: createPublicText({ dataDir, value: taskStatus || 'unknown' }),
+    currentStep: createPublicText({ dataDir, value: run.currentStep || 'draft' }),
+    reviewStatus: createPublicText({ dataDir, value: run.reviewStatus || 'pending' }),
+    importStatus: createPublicText({ dataDir, value: run.importStatus || 'not-imported' }),
+    steps: createWizardSteps(phase),
+    nextStep: {
+      label: createPublicText({ dataDir, value: nextStepLabel }),
+      reason: createPublicText({ dataDir, value: nextStepReason }),
+      blocked: Boolean(nextStepBlocked)
+    }
+  }
+}
+
+const createPublicTextList = ({ dataDir, values = [] }) => (
+  Array.isArray(values)
+    ? values.map((value) => createPublicText({ dataDir, value })).filter(Boolean)
+    : []
+)
+
+const createImportedResultCard = ({ dataDir, run, hasActionFrames, triggerProposalSummary }) => {
+  if (run.status !== 'imported') {
+    return {
+      available: false,
+      title: '',
+      entries: [],
+      reviewLocation: ''
+    }
+  }
+
+  if (hasActionFrames) {
+    const entries = [{
+      label: 'Imported action',
+      value: run.importedActionId || run.artifacts?.actionFrames?.actionId || ''
+    }]
+    if (triggerProposalSummary) {
+      entries.push({
+        label: 'Trigger proposal',
+        value: triggerProposalSummary
+      })
+    }
+    return {
+      available: true,
+      title: 'Imported result details',
+      entries: entries.map((entry) => ({
+        label: createPublicText({ dataDir, value: entry.label }),
+        value: createPublicText({ dataDir, value: entry.value })
+      })),
+      reviewLocation: createPublicText({
+        dataDir,
+        value: run.triggerProposalSubmission?.ok === true
+          ? 'Actions -> Trigger Proposal Inbox'
+          : 'Control Center -> Plugins'
+      })
+    }
+  }
+
+  const entries = [{
+    label: 'Imported pet pack',
+    value: run.importedPackId || ''
+  }]
+  if (run.activatedPackId) {
+    entries.push({
+      label: 'Activated pack',
+      value: run.activatedPackId
+    })
+  }
+  return {
+    available: true,
+    title: 'Imported result details',
+    entries: entries.map((entry) => ({
+      label: createPublicText({ dataDir, value: entry.label }),
+      value: createPublicText({ dataDir, value: entry.value })
+    })),
+    reviewLocation: createPublicText({ dataDir, value: 'OpenPet' })
+  }
+}
+
+const resolveImportCommand = (run) => (
+  run.artifacts?.actionFrames
+    ? 'import-approved-action'
+    : 'import-approved-pet'
+)
+
+const resolveImportCommandTitle = (commandId) => (
+  commandId === 'import-approved-action'
+    ? 'Import Approved Action'
+    : 'Import Approved Pet'
+)
+
+const createImportHandoff = ({ dataDir, run, importStatus }) => {
+  const commandId = resolveImportCommand(run)
+  const ready = run.status === 'approved' && importStatus === 'ready'
+  const payload = {
+    runId: createPublicText({ dataDir, value: run.runId || '' })
+  }
+  return {
+    ready,
+    runId: createPublicText({ dataDir, value: run.runId || '' }),
+    commandId: createPublicText({ dataDir, value: commandId }),
+    commandTitle: createPublicText({ dataDir, value: resolveImportCommandTitle(commandId) }),
+    payload,
+    payloadJson: createPublicText({ dataDir, value: JSON.stringify(payload) }),
+    location: 'Control Center -> Plugins',
+    dashboardCanImport: false,
+    reason: ready
+      ? 'The dashboard cannot import directly because the OpenPet bridge token is command-scoped and only issued to explicit plugin command runs.'
+      : 'Approve the run first, then use the host-owned plugin command so bridge access stays command-scoped.'
+  }
+}
+
+const createDashboardButtonStates = ({ dataDir, run }) => {
+  const hasPendingQuestion = Boolean(run.generationTask?.questions?.[0])
+  const taskStatus = String(run.taskStatus || '')
+  const status = String(run.status || 'draft')
+  const isFullPet = run.generationTask?.mode === 'full-pet'
+  const fullPetReviewGate = createFullPetReviewGate({ dataDir, run })
+  const actionFrameReviewGate = createActionFrameReviewGate({ dataDir, run })
+  const fullPetApprovalBlocked = status === 'ready_for_review' && fullPetReviewGate.reviewGate.ready === false
+  const actionApprovalBlocked = status === 'ready_for_review' && actionFrameReviewGate.reviewGate.ready === false
+  const requiresRetryBeforeApproval = fullPetApprovalBlocked
+  const canRetryGeneration = Boolean(
+    run.recovery?.canRetryGeneration ||
+    (status === 'failed' && taskStatus === 'confirmed') ||
+    (requiresRetryBeforeApproval && taskStatus === 'confirmed')
+  )
+  const generateLabel = canRetryGeneration ? 'Retry generation' : (isFullPet ? 'Generate pet pack' : 'Generate action')
+
+  const confirmEnabled = !hasPendingQuestion && taskStatus !== 'confirmed'
+  const generateEnabled = !hasPendingQuestion && taskStatus === 'confirmed' && ['draft', 'failed'].includes(status)
+    ? true
+    : !hasPendingQuestion && requiresRetryBeforeApproval && taskStatus === 'confirmed'
+  const approveEnabled = status === 'ready_for_review' && !fullPetApprovalBlocked && !actionApprovalBlocked
+
+  return {
+    confirm: {
+      buttonId: 'confirm-button',
+      label: 'Confirm task',
+      enabled: confirmEnabled,
+      reason: confirmEnabled
+        ? 'The task is drafted and can now be confirmed in the dashboard.'
+        : hasPendingQuestion
+          ? 'Answer the pending follow-up question before confirming the task.'
+          : taskStatus === 'confirmed'
+            ? 'This run is already confirmed.'
+            : 'Draft a task before confirming it.'
+    },
+    generate: {
+      buttonId: 'generate-button',
+      label: generateLabel,
+      enabled: generateEnabled,
+      reason: generateEnabled
+        ? (canRetryGeneration
+            ? 'Retry generation will reuse this same run and preserve the confirmed task.'
+            : 'Generation is unlocked for this confirmed task.')
+        : hasPendingQuestion
+          ? 'Answer the pending follow-up question before generation.'
+          : taskStatus !== 'confirmed'
+            ? 'Confirm the task before generation.'
+            : 'Generation is not available in the current run state.'
+    },
+    approve: {
+      buttonId: 'approve-button',
+      label: 'Approve run',
+      enabled: approveEnabled,
+      reason: approveEnabled
+        ? 'QA is ready. Approve the run to unlock host-owned import.'
+        : actionApprovalBlocked
+          ? actionFrameReviewGate.reviewGate.reason
+        : fullPetApprovalBlocked
+          ? 'Retry generation before approval so QA matches the current generated image.'
+        : status === 'imported'
+          ? 'This run is already imported.'
+          : status === 'approved'
+            ? 'This run is already approved. Finish host-owned import in Control Center -> Plugins.'
+            : status === 'failed'
+              ? 'Retry generation before approval.'
+              : 'Generation review must complete before approval.'
+    }
+  }
+}
+
+const createActionLane = ({ dataDir, run, buttonStates, importHandoff }) => {
+  const taskStatus = String(run.taskStatus || '')
+  const status = String(run.status || 'draft')
+  const nextStep = run.wizardState?.nextStep || {}
+
+  let dashboardAction = {
+    label: 'Draft task',
+    available: false,
+    buttonId: '',
+    reason: 'Draft or load a run to unlock dashboard actions.'
+  }
+
+  if (taskStatus === 'needs_input') {
+    dashboardAction = {
+      label: 'Answer follow-up',
+      available: true,
+      buttonId: 'question-panel',
+      reason: 'Choose one of the pending follow-up answers in the dashboard.'
+    }
+  } else if (buttonStates.confirm.enabled) {
+    dashboardAction = {
+      label: buttonStates.confirm.label,
+      available: true,
+      buttonId: buttonStates.confirm.buttonId,
+      reason: buttonStates.confirm.reason
+    }
+  } else if (buttonStates.generate.enabled) {
+    dashboardAction = {
+      label: buttonStates.generate.label,
+      available: true,
+      buttonId: buttonStates.generate.buttonId,
+      reason: buttonStates.generate.reason
+    }
+  } else if (buttonStates.approve.enabled) {
+    dashboardAction = {
+      label: buttonStates.approve.label,
+      available: true,
+      buttonId: buttonStates.approve.buttonId,
+      reason: buttonStates.approve.reason
+    }
+  } else {
+    dashboardAction = {
+      label: createPublicText({ dataDir, value: nextStep.label || 'No dashboard action' }),
+      available: false,
+      buttonId: '',
+      reason: createPublicText({ dataDir, value: nextStep.reason || 'This step is not available directly in the dashboard.' })
+    }
+  }
+
+  let hostAction = {
+    required: false,
+    label: '',
+    location: '',
+    reason: ''
+  }
+
+  if (status === 'approved' && importHandoff.ready) {
+    hostAction = {
+      required: true,
+      label: importHandoff.commandTitle,
+      location: importHandoff.location,
+      reason: importHandoff.reason
+    }
+  } else if (status === 'imported') {
+    const importedFollowUp = createImportedFollowUp(run)
+    hostAction = {
+      required: true,
+      label: importedFollowUp.label,
+      location: importedFollowUp.location,
+      reason: importedFollowUp.reason
+    }
+  }
+
+  return createPublicLogValue({
+    dataDir,
+    value: {
+      summary: hostAction.required
+        ? 'This run now depends on a host-owned step outside the dashboard.'
+        : dashboardAction.available
+          ? 'This run still has a dashboard action you can take now.'
+          : 'This run currently has no direct dashboard action available.',
+      dashboardAction,
+      hostAction,
+      buttonStates
+    }
+  })
+}
+
+const createWorkflowGuidance = ({ dataDir, run }) => {
+  const backend = normalizeCreatorBackend(run.backend || run.input?.backend, FIXTURE_BACKEND)
+  const modelSnapshot = run.modelSnapshot || run.artifacts?.generatedImage?.modelSnapshot || {}
+  const providerLabel = [modelSnapshot.provider, modelSnapshot.model].filter(Boolean).join(' / ')
+  const usesProviderRun = usesHostProviderBackend(backend)
+  const usageSummary = createGenerationUsageSummary({ run })
+  const generationSummary = usesProviderRun
+    ? (
+        ['ready_for_review', 'approved', 'imported'].includes(run.status)
+          ? `This run already used the host-owned image Provider${providerLabel ? ` (${providerLabel})` : ''}.`
+          : run.status === 'failed'
+            ? `This run failed while using the host-owned image Provider${providerLabel ? ` (${providerLabel})` : ''}.`
+            : `This run will use the host-owned image Provider when generation starts${providerLabel ? ` (${providerLabel})` : ''}.`
+      )
+    : 'Fixture output is for workflow QA only and does not validate real host image Provider quality.'
+  const smokeChecklist = usesProviderRun
+    ? [
+        'Use Control Center -> AI -> Test saved image Provider before production smoke runs.',
+        'The dashboard service cannot run a live provider health check because bridge tokens stay command-scoped.',
+        run.status === 'failed'
+          ? 'Fix the provider readiness issue, then use Retry generation on this same run.'
+          : 'Review QA, prompt provenance, and generated frames before claiming production asset quality.'
+      ]
+    : [
+        'Use fixture runs to validate task flow, QA, and import handoff wiring.',
+        'Switch to provider generation before claiming production-ready generated assets.',
+        'Use Control Center -> AI -> Test saved image Provider before production smoke runs.'
+      ]
+  const hasActionFrames = Boolean(run.artifacts?.actionFrames)
+  const importCommand = resolveImportCommand(run)
+  const importedFollowUp = run.status === 'imported'
+    ? createImportedFollowUp(run)
+    : null
+  let importStatus = 'not-ready'
+  let importSummary = hasActionFrames
+    ? 'Approve the run before using Import Approved Action from Control Center -> Plugins.'
+    : 'Approve the run before using Import Approved Pet from Control Center -> Plugins.'
+  let triggerProposalStatus = hasActionFrames ? 'not-attempted' : 'not-applicable'
+  let triggerProposalSummary = hasActionFrames
+    ? 'Trigger proposal handoff runs during Import Approved Action.'
+    : 'This run does not create an action-frame trigger proposal handoff.'
+
+  if (run.status === 'approved') {
+    importStatus = 'ready'
+    importSummary = importCommand === 'import-approved-action'
+      ? 'Run Import Approved Action from Control Center -> Plugins to complete host-owned action import.'
+      : 'Run Import Approved Pet from Control Center -> Plugins to complete host-owned pet import.'
+  } else if (run.status === 'imported') {
+    importStatus = 'imported'
+    importSummary = importCommand === 'import-approved-action'
+      ? `Imported action ${run.importedActionId || run.artifacts?.actionFrames?.actionId || ''}.`
+      : `Imported pet pack ${run.importedPackId || 'unknown-pack'}.`
+    if (hasActionFrames) {
+      if (run.triggerProposalSubmission?.ok) {
+        triggerProposalStatus = 'submitted'
+        triggerProposalSummary = `Trigger proposal handoff succeeded. Review it in Actions -> Trigger Proposal Inbox${run.triggerProposalSubmission?.proposal?.id ? ` (${run.triggerProposalSubmission.proposal.id})` : ''}.`
+      } else if (run.triggerProposalSubmission && run.triggerProposalSubmission.ok === false) {
+        triggerProposalStatus = 'failed'
+        const handoffError = String(run.triggerProposalSubmission.error || '').trim()
+        triggerProposalSummary = handoffError
+          ? `Action import succeeded, but trigger proposal handoff failed: ${handoffError}. Re-run import or inspect the command output before applying trigger rules.`
+          : 'Action import succeeded, but trigger proposal handoff failed. Re-run import or inspect the command output before applying trigger rules.'
+      } else {
+        triggerProposalStatus = 'missing'
+        triggerProposalSummary = 'Action import succeeded, but no trigger proposal handoff record was saved. Review the command output in Control Center -> Plugins before applying trigger rules.'
+      }
+    } else if (run.activatedPackId) {
+      triggerProposalSummary = `Activated pack: ${run.activatedPackId}.`
+    }
+  } else if (run.status === 'ready_for_review') {
+    importStatus = 'review-required'
+    if (hasActionFrames) {
+      if (createActionFrameReviewGate({ dataDir, run }).reviewGate.ready === false) {
+        importSummary = 'Repair or regenerate frames before approval or host-owned action import.'
+      } else {
+        importSummary = 'Review QA and approve the run before host-owned action import.'
+      }
+    } else if (createFullPetReviewGate({ dataDir, run }).reviewGate.ready === false) {
+      importSummary = 'Retry generation on this same run before approval or import so QA matches the current generated image.'
+    } else {
+      importSummary = 'Review the generated pet-pack output and approve the run before host-owned pet import.'
+    }
+  }
+
+  const resultCard = createImportedResultCard({
+    dataDir,
+    run,
+    hasActionFrames,
+    triggerProposalSummary
+  })
+
+  return {
+    generation: {
+      backend: createPublicText({ dataDir, value: backend }),
+      mode: usesProviderRun ? 'host-provider' : 'fixture-preview',
+      summary: createPublicText({ dataDir, value: generationSummary }),
+      smokeChecklist: createPublicTextList({ dataDir, values: smokeChecklist }),
+      usageSummary
+    },
+    import: {
+      status: createPublicText({ dataDir, value: importStatus }),
+      command: createPublicText({ dataDir, value: importCommand }),
+      handoff: createImportHandoff({ dataDir, run, importStatus }),
+      summary: createPublicText({ dataDir, value: importSummary }),
+      followUp: importedFollowUp
+        ? createPublicLogValue({
+            dataDir,
+            value: {
+              label: importedFollowUp.label,
+              location: importedFollowUp.location,
+              reason: importedFollowUp.reason
+            }
+          })
+        : undefined,
+      importedActionId: createPublicText({ dataDir, value: run.importedActionId || '' }),
+      triggerProposalStatus: createPublicText({ dataDir, value: triggerProposalStatus }),
+      triggerProposalSummary: createPublicText({ dataDir, value: triggerProposalSummary }),
+      resultCard
+    }
+  }
+}
 
 const createPublicArtifacts = ({ dataDir, artifacts = {} }) => {
   const publicArtifacts = {}
@@ -122,22 +971,64 @@ const createPublicArtifacts = ({ dataDir, artifacts = {} }) => {
   }
   if (artifacts.actionFrames) {
     publicArtifacts.actionFrames = {
-      actionId: artifacts.actionFrames.actionId,
-      name: artifacts.actionFrames.name,
+      actionId: createPublicText({ dataDir, value: artifacts.actionFrames.actionId }),
+      name: createPublicText({ dataDir, value: artifacts.actionFrames.name }),
       qa: toDataRelativePath({ dataDir, targetPath: artifacts.actionFrames.qa }),
+      contactSheet: toDataRelativePath({ dataDir, targetPath: artifacts.actionFrames.contactSheet }),
       frameCount: artifacts.actionFrames.frameCount,
       frameWidth: artifacts.actionFrames.frameWidth,
       frameHeight: artifacts.actionFrames.frameHeight,
-      triggerProposal: artifacts.actionFrames.triggerProposal || { type: 'unbound' }
+      triggerProposal: createPublicLogValue({ dataDir, value: artifacts.actionFrames.triggerProposal || { type: 'unbound' } })
     }
   }
   return publicArtifacts
 }
 
-const createPublicRun = ({ dataDir, run }) => ({
-  ...run,
-  artifacts: createPublicArtifacts({ dataDir, artifacts: run.artifacts || {} })
-})
+const createPublicRun = ({ dataDir, run }) => {
+  const publicRun = createPublicLogValue({ dataDir, value: run })
+  const wizardState = createWizardState({ dataDir, run })
+  const workflowGuidance = createWorkflowGuidance({ dataDir, run })
+  const buttonStates = createDashboardButtonStates({
+    dataDir,
+    run: {
+      ...run,
+      wizardState
+    }
+  })
+  const actionLane = createActionLane({
+    dataDir,
+    run: {
+      ...run,
+      wizardState
+    },
+    buttonStates,
+    importHandoff: workflowGuidance.import.handoff
+  })
+  return {
+    ...publicRun,
+    artifacts: createPublicArtifacts({ dataDir, artifacts: run.artifacts || {} }),
+    developerPrompt: createDeveloperPrompt({ dataDir, run }),
+    recovery: createPublicRecovery({ dataDir, run }),
+    wizardState,
+    workflowGuidance,
+    actionLane
+  }
+}
+
+const readJsonArtifact = ({ dataDir, targetPath, label }) => {
+  if (!targetPath) return null
+  try {
+    const artifactPath = assertPathInsideDataDir({
+      dataDir,
+      targetPath,
+      label
+    })
+    if (!fs.existsSync(artifactPath)) return null
+    return JSON.parse(fs.readFileSync(artifactPath, 'utf-8'))
+  } catch (_) {
+    return null
+  }
+}
 
 const getActionFramePath = ({ dataDir, run, actionId, fileName }) => {
   const actionFrames = run.artifacts?.actionFrames
@@ -157,10 +1048,71 @@ const getActionFramePath = ({ dataDir, run, actionId, fileName }) => {
   return framePath
 }
 
+const getActionContactSheetPath = ({ dataDir, run, actionId }) => {
+  const actionFrames = run.artifacts?.actionFrames
+  if (!actionFrames || actionFrames.actionId !== actionId) throw new Error('Action contact sheet is not available')
+  const contactSheetPath = assertPathInsideDataDir({
+    dataDir,
+    targetPath: actionFrames.contactSheet,
+    label: 'Action contact sheet'
+  })
+  if (!fs.existsSync(contactSheetPath)) throw new Error('Action contact sheet is missing')
+  return contactSheetPath
+}
+
+const getFullPetSpritesheetPath = ({ dataDir, run }) => {
+  const spritesheetPath = run.artifacts?.spritesheet
+  if (!spritesheetPath) throw new Error('Full-pet spritesheet is not available')
+  const absolutePath = assertPathInsideDataDir({
+    dataDir,
+    targetPath: spritesheetPath,
+    label: 'Full-pet spritesheet'
+  })
+  if (!fs.existsSync(absolutePath)) throw new Error('Full-pet spritesheet is missing')
+  return absolutePath
+}
+
+const getFullPetSourceImagePath = ({ dataDir, run }) => {
+  const firstOutput = Array.isArray(run.artifacts?.generatedImage?.outputs)
+    ? run.artifacts.generatedImage.outputs[0]
+    : null
+  const sourceImageValidation = readJsonArtifact({
+    dataDir,
+    targetPath: run.artifacts?.sourceImageQa,
+    label: 'Full-pet source image QA'
+  })
+  const sourceCandidate = firstOutput?.dataRelativePath || sourceImageValidation?.sourceRelativePath
+  if (!sourceCandidate) throw new Error('Full-pet source image is not available')
+  const absolutePath = assertPathInsideDataDir({
+    dataDir,
+    targetPath: sourceCandidate,
+    label: 'Full-pet source image'
+  })
+  if (!fs.existsSync(absolutePath)) throw new Error('Full-pet source image is missing')
+  return absolutePath
+}
+
+const readActionFrameQa = ({ dataDir, actionFrames }) => {
+  if (!actionFrames?.qa) return null
+  try {
+    const qaPath = assertPathInsideDataDir({
+      dataDir,
+      targetPath: actionFrames.qa,
+      label: 'Action frame QA'
+    })
+    if (!fs.existsSync(qaPath)) return null
+    return JSON.parse(fs.readFileSync(qaPath, 'utf-8'))
+  } catch (_) {
+    return null
+  }
+}
+
 const createActionReview = ({ dataDir, run }) => {
   const actionFrames = run.artifacts?.actionFrames
   const action = Array.isArray(run.generationTask?.actions) ? run.generationTask.actions[0] : null
   if (!actionFrames) return null
+  const reviewState = createActionFrameReviewGate({ dataDir, run })
+  const qa = reviewState.qa
   const actionId = actionFrames.actionId
   const frameCount = actionFrames.frameCount || action?.frameCount || 0
   const previewFrames = Array.from({ length: Math.min(32, Math.max(0, Number(frameCount) || 0)) }, (_entry, index) => {
@@ -172,55 +1124,70 @@ const createActionReview = ({ dataDir, run }) => {
       url: `/api/runs/${encodeURIComponent(run.runId)}/action-frames/${encodeURIComponent(actionId)}/${fileName}`
     }
   })
+  const playback = createPlaybackDiagnostics({
+    frameCount,
+    loop: Boolean(qa?.loop ?? action?.loop),
+    frameDurationsMs: qa?.playback?.frameDurationsMs
+  })
   return {
-    actionId,
-    name: actionFrames.name || action?.name || actionFrames.actionId,
+    actionId: createPublicText({ dataDir, value: actionId }),
+    name: createPublicText({ dataDir, value: actionFrames.name || action?.name || actionFrames.actionId }),
     frameCount,
     frameWidth: actionFrames.frameWidth || 0,
     frameHeight: actionFrames.frameHeight || 0,
+    playback: createPublicLogValue({ dataDir, value: playback }),
     qa: toDataRelativePath({ dataDir, targetPath: actionFrames.qa }),
+    reviewGate: createPublicLogValue({ dataDir, value: reviewState.reviewGate }),
+    qaStatus: createPublicText({ dataDir, value: reviewState.reviewGate.status }),
+    qaWarnings: createPublicTextList({ dataDir, values: reviewState.qaWarnings }),
+    repairs: createPublicLogValue({ dataDir, value: reviewState.repairs }),
+    visiblePixelSummary: createPublicLogValue({ dataDir, value: reviewState.visiblePixelSummary }),
+    contactSheet: toDataRelativePath({ dataDir, targetPath: actionFrames.contactSheet }),
+    contactSheetUrl: actionFrames.contactSheet
+      ? `/api/runs/${encodeURIComponent(run.runId)}/action-frames/${encodeURIComponent(actionId)}/contact-sheet.png`
+      : '',
     previewFrames,
-    triggerProposal: actionFrames.triggerProposal || action?.triggerProposal || { type: 'unbound' },
+    triggerProposal: createPublicLogValue({ dataDir, value: actionFrames.triggerProposal || action?.triggerProposal || { type: 'unbound' } }),
     importStatus: run.importStatus || 'not-imported'
   }
 }
 
-const assertActionFrameQaPassed = ({ dataDir, actionFrames }) => {
-  if (!actionFrames) return
-  if (!actionFrames.qa) throw new Error('Action frame QA must pass before approval')
-  const qaPath = assertPathInsideDataDir({
+const createFullPetReview = ({ dataDir, run }) => {
+  if (run.artifacts?.actionFrames) return null
+  if (run.generationTask?.mode !== 'full-pet') return null
+  const artifacts = run.artifacts || {}
+  const reviewState = createFullPetReviewGate({ dataDir, run })
+  const atlasValidation = readJsonArtifact({
     dataDir,
-    targetPath: actionFrames.qa,
-    label: 'Action frame QA'
+    targetPath: artifacts.qa,
+    label: 'Full-pet atlas QA'
   })
-  if (!fs.existsSync(qaPath)) throw new Error('Action frame QA must pass before approval')
-  let qa
-  try {
-    qa = JSON.parse(fs.readFileSync(qaPath, 'utf-8'))
-  } catch (_) {
-    throw new Error('Action frame QA must be valid JSON before approval')
+  const sourceImage = reviewState.currentSourceImage || reviewState.qaSourceImage
+  return {
+    petId: createPublicText({ dataDir, value: run.petId || '' }),
+    displayName: createPublicText({ dataDir, value: run.input?.petName || run.petId || '' }),
+    outputDir: toDataRelativePath({ dataDir, targetPath: artifacts.outputDir }),
+    petJson: toDataRelativePath({ dataDir, targetPath: artifacts.petJson }),
+    spritesheet: toDataRelativePath({ dataDir, targetPath: artifacts.spritesheet }),
+    bundle: toDataRelativePath({ dataDir, targetPath: artifacts.bundle }),
+    qa: toDataRelativePath({ dataDir, targetPath: artifacts.qa }),
+    sourceImageQa: toDataRelativePath({ dataDir, targetPath: artifacts.sourceImageQa }),
+    actionTaskQa: toDataRelativePath({ dataDir, targetPath: artifacts.actionTaskQa }),
+    sourceImage,
+    currentSourceImage: reviewState.currentSourceImage,
+    qaSourceImage: reviewState.qaSourceImage,
+    requiresCurrentSourceMatch: reviewState.requiresCurrentSourceMatch,
+    sourceImageMatchesCurrent: reviewState.sourceImageMatchesCurrent,
+    reviewGate: reviewState.reviewGate,
+    sourceImageValidation: createPublicLogValue({ dataDir, value: reviewState.sourceImageValidation }),
+    atlasValidation: createPublicLogValue({ dataDir, value: atlasValidation }),
+    spritesheetUrl: artifacts.spritesheet
+      ? `/api/runs/${encodeURIComponent(run.runId)}/spritesheet.webp`
+      : '',
+    sourceImageUrl: sourceImage
+      ? `/api/runs/${encodeURIComponent(run.runId)}/source-image.png`
+      : ''
   }
-  if (qa.ok !== true) throw new Error('Action frame QA must pass before approval')
-  if (qa.actionId !== actionFrames.actionId) throw new Error('Action frame QA actionId must match before approval')
-  if (Number(qa.frameCount) !== Number(actionFrames.frameCount)) {
-    throw new Error('Action frame QA frameCount must match before approval')
-  }
-  if (Number(qa.frameWidth) !== Number(actionFrames.frameWidth)) {
-    throw new Error('Action frame QA frameWidth must match before approval')
-  }
-  if (Number(qa.frameHeight) !== Number(actionFrames.frameHeight)) {
-    throw new Error('Action frame QA frameHeight must match before approval')
-  }
-  const frames = Array.isArray(qa.frames) ? qa.frames : []
-  if (frames.length !== Number(actionFrames.frameCount)) {
-    throw new Error('Action frame QA frames must be complete before approval')
-  }
-  frames.forEach((frame, index) => {
-    const expectedFileName = `${String(index + 1).padStart(4, '0')}.png`
-    if (frame?.fileName !== expectedFileName || Number(frame.visiblePixels) < 1) {
-      throw new Error('Action frame QA frames must be complete before approval')
-    }
-  })
 }
 
 const handlePost = async ({ request, response, dataDir, url }) => {
@@ -266,6 +1233,22 @@ const handlePost = async ({ request, response, dataDir, url }) => {
       return true
     }
 
+    const updateTaskMatch = url.pathname.match(/^\/api\/runs\/([^/]+)\/task$/)
+    if (updateTaskMatch) {
+      const output = updateTaskDraft({
+        dataDir,
+        runId: decodeURIComponent(updateTaskMatch[1]),
+        updates: body
+      })
+      sendJson(response, 200, {
+        ok: true,
+        run: createPublicRun({ dataDir, run: output.run }),
+        actionReview: createActionReview({ dataDir, run: output.run }),
+        fullPetReview: createFullPetReview({ dataDir, run: output.run })
+      })
+      return true
+    }
+
     const generateMatch = url.pathname.match(/^\/api\/runs\/([^/]+)\/generate-action$/)
     if (generateMatch) {
       const output = await runGenerationStep({
@@ -288,7 +1271,15 @@ const handlePost = async ({ request, response, dataDir, url }) => {
       if (current.status !== 'ready_for_review') {
         throw new Error(`Run must be ready_for_review before approval: ${current.status}`)
       }
-      assertActionFrameQaPassed({ dataDir, actionFrames: current.artifacts?.actionFrames })
+      try {
+        assertRunActionFrameQaPassed({ dataDir, run: current, operation: 'approval' })
+        if (usesHostProviderBackend(current.backend || current.input?.backend)) {
+          assertRunFullPetQaPassed({ dataDir, run: current, operation: 'approval' })
+        }
+      } catch (error) {
+        error.run = current
+        throw error
+      }
       const run = updateRunStatus({
         dataDir,
         runId,
@@ -307,6 +1298,7 @@ const handlePost = async ({ request, response, dataDir, url }) => {
         ok: true,
         run: createPublicRun({ dataDir, run }),
         actionReview: createActionReview({ dataDir, run }),
+        fullPetReview: createFullPetReview({ dataDir, run }),
         importCommand: run.artifacts?.actionFrames ? 'import-approved-action' : 'import-approved-pet'
       })
       return true
@@ -344,7 +1336,14 @@ const handlePost = async ({ request, response, dataDir, url }) => {
         runId,
         status: run.status,
         patch: {
-          currentStep: 'review'
+          currentStep: 'review',
+          artifacts: {
+            ...run.artifacts,
+            actionFrames: {
+              ...actionFrames,
+              contactSheet: repair.contactSheetPath
+            }
+          }
         }
       })
       appendRunLog({
@@ -366,6 +1365,7 @@ const handlePost = async ({ request, response, dataDir, url }) => {
           actionId: repair.actionId,
           fileName: repair.fileName,
           frameIndex: repair.frameIndex,
+          contactSheet: toDataRelativePath({ dataDir, targetPath: repair.contactSheetPath }),
           qa: toDataRelativePath({ dataDir, targetPath: repair.qaPath })
         }
       })
@@ -374,7 +1374,7 @@ const handlePost = async ({ request, response, dataDir, url }) => {
 
     return false
   } catch (error) {
-    sendError(response, error)
+    sendError(response, error, { dataDir })
     return true
   }
 }
@@ -409,11 +1409,29 @@ const createCreatorStudioServer = ({ dataDir, dashboardPath }) => http.createSer
       sendJson(response, 200, {
         ok: true,
         run: createPublicRun({ dataDir, run }),
-        actionReview: createActionReview({ dataDir, run })
+        actionReview: createActionReview({ dataDir, run }),
+        fullPetReview: createFullPetReview({ dataDir, run })
       })
       return
     } catch (error) {
       sendJson(response, 404, { ok: false, error: error.message || 'Run not found' })
+      return
+    }
+  }
+
+  const contactSheetMatch = url.pathname.match(/^\/api\/runs\/([^/]+)\/action-frames\/([^/]+)\/contact-sheet\.png$/)
+  if (contactSheetMatch) {
+    try {
+      const run = readRun({ dataDir, runId: decodeURIComponent(contactSheetMatch[1]) })
+      const contactSheetPath = getActionContactSheetPath({
+        dataDir,
+        run,
+        actionId: decodeURIComponent(contactSheetMatch[2])
+      })
+      sendPng(response, contactSheetPath)
+      return
+    } catch (error) {
+      sendJson(response, 404, { ok: false, error: error.message || 'Action contact sheet not found' })
       return
     }
   }
@@ -434,6 +1452,37 @@ const createCreatorStudioServer = ({ dataDir, dashboardPath }) => http.createSer
       sendJson(response, 404, { ok: false, error: error.message || 'Action frame preview not found' })
       return
     }
+  }
+
+  const spritesheetMatch = url.pathname.match(/^\/api\/runs\/([^/]+)\/spritesheet\.webp$/)
+  if (spritesheetMatch) {
+    try {
+      const run = readRun({ dataDir, runId: decodeURIComponent(spritesheetMatch[1]) })
+      const spritesheetPath = getFullPetSpritesheetPath({ dataDir, run })
+      sendWebp(response, spritesheetPath)
+      return
+    } catch (error) {
+      sendJson(response, 404, { ok: false, error: error.message || 'Full-pet spritesheet not found' })
+      return
+    }
+  }
+
+  const sourceImageMatch = url.pathname.match(/^\/api\/runs\/([^/]+)\/source-image\.png$/)
+  if (sourceImageMatch) {
+    try {
+      const run = readRun({ dataDir, runId: decodeURIComponent(sourceImageMatch[1]) })
+      const sourceImagePath = getFullPetSourceImagePath({ dataDir, run })
+      sendPng(response, sourceImagePath)
+      return
+    } catch (error) {
+      sendJson(response, 404, { ok: false, error: error.message || 'Full-pet source image not found' })
+      return
+    }
+  }
+
+  if (url.pathname.startsWith('/api/')) {
+    sendJson(response, 404, { ok: false, error: 'Not found' })
+    return
   }
 
   sendHtml(response, dashboardPath)

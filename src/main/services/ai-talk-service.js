@@ -14,9 +14,12 @@ const FALLBACK_PERSONA = Object.freeze({
 
 const MAX_CONTEXT_MESSAGES = 20
 const MAX_MEMORY_CONTEXT_ITEMS = 8
+const MAX_MEMORY_RELEVANCE_HISTORY_MESSAGES = 6
 const MAX_USER_MESSAGE_CHARS = 4000
 const MAX_RECENT_PET_ACTIVITY_ITEMS = 6
 const MAX_RECENT_PET_ACTIVITY_CHARS = 1200
+const MAX_BUBBLE_SEGMENTS = 3
+const MAX_BUBBLE_SEGMENT_CHARS = 80
 
 const normalizeString = (value) => (typeof value === 'string' ? value.trim() : '')
 
@@ -25,6 +28,26 @@ const normalizeList = (value) => (
     ? value.map(normalizeString).filter(Boolean)
     : []
 )
+
+const normalizeActionCandidates = (actions = []) => (
+  (Array.isArray(actions) ? actions : [])
+    .map((action) => {
+      const id = normalizeString(action?.id)
+      if (!id) return null
+      return {
+        id,
+        label: normalizeString(action.label) || id,
+        kind: normalizeString(action.kind) || 'custom'
+      }
+    })
+    .filter(Boolean)
+)
+
+const normalizeScore = (value, fallback = 0.5) => {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return fallback
+  return Math.min(1, Math.max(0, number))
+}
 
 const normalizePersonaOverride = (override = {}) => {
   const result = {}
@@ -103,6 +126,43 @@ const compileRecentPetActivityPrompt = (utterances = []) => {
     'Use this as lightweight recent context. Do not treat it as durable memory unless the user explicitly continues the topic.',
     ...lines
   ].join('\n')
+}
+
+const splitReplyIntoBubbleSegments = (reply) => {
+  const text = normalizeString(reply).replace(/\s+/g, ' ')
+  if (!text) return []
+  const sentences = text
+    .split(/(?<=[.!?。！？；;])\s*/u)
+    .map((segment) => segment.trim())
+    .filter(Boolean)
+  const sourceSegments = sentences.length ? sentences : [text]
+  const segments = []
+  for (const source of sourceSegments) {
+    if (segments.length >= MAX_BUBBLE_SEGMENTS) break
+    if (source.length <= MAX_BUBBLE_SEGMENT_CHARS) {
+      segments.push(source)
+      continue
+    }
+    segments.push(`${source.slice(0, MAX_BUBBLE_SEGMENT_CHARS - 3)}...`)
+  }
+  return segments
+}
+
+const createReplyBubble = ({ reply, behaviorIntent } = {}) => {
+  if (behaviorIntent?.displayMode === 'none') {
+    return { text: '', segments: [], displayMode: 'none', source: 'behavior-intent' }
+  }
+  const preferred = normalizeString(behaviorIntent?.bubbleText)
+  const source = preferred ? 'behavior-intent' : 'assistant-reply'
+  const segments = preferred
+    ? splitReplyIntoBubbleSegments(preferred)
+    : splitReplyIntoBubbleSegments(reply)
+  return {
+    text: segments[0] || '',
+    segments,
+    displayMode: behaviorIntent?.displayMode || 'bubble',
+    source
+  }
 }
 
 const buildMemoryExtractionMessages = ({ userMessage, assistantReply, petPackId, persona }) => [
@@ -205,6 +265,104 @@ const getRecentMessages = (messages, limit = MAX_CONTEXT_MESSAGES) => {
   return messages.slice(messages.length - limit)
 }
 
+const tokenizeForMemoryRelevance = (value) => {
+  const text = String(value || '').toLowerCase()
+  const wordTokens = text.match(/[\p{L}\p{N}][\p{L}\p{N}_-]*/gu) || []
+  const cjkTokens = []
+  const cjkSequences = text.match(/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]{2,}/gu) || []
+  for (const sequence of cjkSequences) {
+    for (const size of [2, 3, 4]) {
+      for (let index = 0; index <= sequence.length - size; index += 1) {
+        cjkTokens.push(sequence.slice(index, index + size))
+      }
+    }
+  }
+  return Array.from(new Set(
+    [...wordTokens, ...cjkTokens]
+      .map((token) => token.trim())
+      .filter((token) => token.length >= 2)
+  )).slice(0, 120)
+}
+
+const timestampValue = (value) => {
+  const parsed = Date.parse(String(value || ''))
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+const countTokenMatches = (haystack, tokens) => {
+  if (!haystack || !tokens.length) return 0
+  return tokens.reduce((count, token) => count + (haystack.includes(token) ? 1 : 0), 0)
+}
+
+const scoreMemoryRelevance = ({ memory, userTokens, historyTokens, queryText, minTimestamp, maxTimestamp }) => {
+  const text = normalizeString(memory.text).toLowerCase()
+  const tags = normalizeList(memory.tags).map((tag) => tag.toLowerCase())
+  const tagText = tags.join(' ')
+  const haystack = `${text} ${tagText} ${normalizeString(memory.reason).toLowerCase()}`
+  const directMatches = countTokenMatches(haystack, userTokens)
+  const historyMatches = countTokenMatches(haystack, historyTokens)
+  const tagMatches = tags.reduce((count, tag) => (
+    count + (tag && queryText.includes(tag) ? 1 : 0)
+  ), 0)
+  const updatedAt = Math.max(
+    timestampValue(memory.lastEvidenceAt),
+    timestampValue(memory.updatedAt),
+    timestampValue(memory.createdAt)
+  )
+  const recency = maxTimestamp > minTimestamp
+    ? (updatedAt - minTimestamp) / (maxTimestamp - minTimestamp)
+    : (updatedAt ? 0.5 : 0)
+  return (
+    directMatches * 3 +
+    tagMatches * 2 +
+    historyMatches * 1.2 +
+    (memory.scope === 'petPack' ? 0.3 : 0) +
+    normalizeScore(memory.importance, 0.5) * 1.5 +
+    normalizeScore(memory.confidence, 0.5) * 1.2 +
+    Math.min(10, Math.max(0, Number(memory.useCount) || 0)) * 0.08 +
+    recency * 0.8
+  )
+}
+
+const rankMemoryContext = ({ memories = [], userMessage = '', history = [] } = {}) => {
+  const candidates = Array.isArray(memories) ? memories.filter((memory) => memory?.id && memory?.text) : []
+  if (!candidates.length) return []
+  const recentHistory = getRecentMessages(history, MAX_MEMORY_RELEVANCE_HISTORY_MESSAGES)
+  const userTokens = tokenizeForMemoryRelevance(userMessage)
+  const historyTokens = tokenizeForMemoryRelevance(recentHistory.map((message) => message.content).join(' '))
+  const queryText = `${normalizeString(userMessage)} ${recentHistory.map((message) => normalizeString(message.content)).join(' ')}`.toLowerCase()
+  const timestamps = candidates.map((memory) => Math.max(
+    timestampValue(memory.lastEvidenceAt),
+    timestampValue(memory.updatedAt),
+    timestampValue(memory.createdAt)
+  )).filter(Boolean)
+  const minTimestamp = timestamps.length ? Math.min(...timestamps) : 0
+  const maxTimestamp = timestamps.length ? Math.max(...timestamps) : 0
+  return candidates
+    .map((memory, index) => ({
+      memory,
+      index,
+      score: scoreMemoryRelevance({
+        memory,
+        userTokens,
+        historyTokens,
+        queryText,
+        minTimestamp,
+        maxTimestamp
+      })
+    }))
+    .sort((left, right) => {
+      if (left.score !== right.score) return right.score - left.score
+      const importanceDelta = normalizeScore(right.memory.importance) - normalizeScore(left.memory.importance)
+      if (importanceDelta !== 0) return importanceDelta
+      const confidenceDelta = normalizeScore(right.memory.confidence) - normalizeScore(left.memory.confidence)
+      if (confidenceDelta !== 0) return confidenceDelta
+      return left.index - right.index
+    })
+    .slice(0, MAX_MEMORY_CONTEXT_ITEMS)
+    .map((entry) => entry.memory)
+}
+
 const sanitizeDiagnosticText = (value) => String(value || '')
   .replace(/\bsk-[A-Za-z0-9_-]{8,}\b/g, '[redacted-secret]')
   .slice(0, 240)
@@ -239,6 +397,8 @@ const createAiTalkService = ({ aiService, aiTalkStore, petPackService, appLogSer
     const petPackId = normalizeString(manifest.id) || 'legacy-cat'
     return { pack, manifest, petPackId }
   }
+
+  const getCurrentActionCandidates = (manifest = {}) => normalizeActionCandidates(manifest.actions)
 
   const pendingMemoryJobs = new Set()
   const conversationQueues = new Map()
@@ -313,9 +473,41 @@ const createAiTalkService = ({ aiService, aiTalkStore, petPackService, appLogSer
     }
   }
 
-  const getMemoryContext = (petPackId) => {
+  const getMemoryContext = ({ petPackId, userMessage, history }) => {
     if (typeof aiTalkStore.listMemories !== 'function') return []
-    return aiTalkStore.listMemories({ petPackId, limit: MAX_MEMORY_CONTEXT_ITEMS })
+    const candidates = aiTalkStore.listMemories({ petPackId, limit: 0 })
+    return rankMemoryContext({ memories: candidates, userMessage, history })
+  }
+
+  const markMemoryContextUsed = ({ petPackId, conversationId, memories }) => {
+    if (!Array.isArray(memories) || !memories.length || typeof aiTalkStore.markMemoriesUsed !== 'function') return
+    try {
+      const result = aiTalkStore.markMemoriesUsed(memories.map((memory) => memory.id))
+      if (result.updatedCount > 0) {
+        recordLog({
+          level: 'info',
+          event: 'ai-talk.memory.context-used',
+          message: 'AI talk injected memories marked as used',
+          details: {
+            petPackId,
+            conversationId,
+            memoryCount: result.updatedCount
+          }
+        })
+      }
+    } catch (error) {
+      recordLog({
+        level: 'warn',
+        event: 'ai-talk.memory.context-used.failed',
+        message: 'AI talk failed to mark injected memories as used',
+        details: {
+          petPackId,
+          conversationId,
+          errorName: sanitizeDiagnosticText(error?.name || 'Error'),
+          errorMessage: sanitizeDiagnosticText(error?.message)
+        }
+      })
+    }
   }
 
   const getRecentPetActivity = (petPackId) => {
@@ -366,6 +558,42 @@ const createAiTalkService = ({ aiService, aiTalkStore, petPackService, appLogSer
       petPackMemories: aiTalkStore.listMemories({ petPackId, scope: 'petPack', limit: 0 }),
       recentJobs: listRecentMemoryJobs(petPackId)
     }
+  }
+
+  const migrateLegacyConversationIfNeeded = ({ manifest, petPackId, personaHash } = {}) => {
+    if (typeof aiTalkStore.migrateLegacyConversation !== 'function' || typeof aiService.getConversation !== 'function') {
+      return { migrated: false, skipped: true, reason: 'legacy migration unavailable', messageCount: 0 }
+    }
+    const packId = normalizeString(petPackId) || normalizeString(manifest?.id) || 'legacy-cat'
+    const legacyMessages = aiService.getConversation('control-center')
+    const result = aiTalkStore.migrateLegacyConversation({
+      entrypoint: 'control-center',
+      petPackId: packId,
+      personaHash,
+      messages: legacyMessages
+    })
+    if (result.migrated) {
+      recordLog({
+        level: 'info',
+        event: 'ai-talk.legacy-conversation.migrated',
+        message: 'AI talk legacy conversation migrated into pet-pack store',
+        details: {
+          petPackId: packId,
+          sessionId: result.sessionId || '',
+          conversationId: result.conversationId || '',
+          messageCount: result.messageCount
+        }
+      })
+    }
+    return result
+  }
+
+  const exportTraceDiagnostics = ({ behaviorDecisions = [], filters = {} } = {}) => {
+    if (typeof aiTalkStore.exportTraceDiagnostics !== 'function') {
+      throw new Error('AI talk trace diagnostics are not available')
+    }
+    const provider = typeof aiService.getConfig === 'function' ? aiService.getConfig() : {}
+    return aiTalkStore.exportTraceDiagnostics({ provider, behaviorDecisions, filters })
   }
 
   const deleteMemory = (memoryId) => {
@@ -479,6 +707,7 @@ const createAiTalkService = ({ aiService, aiTalkStore, petPackService, appLogSer
     if (parsed) return aiTalkStore.getMessages(parsed.sessionId, parsed.conversationId)
     const { manifest, petPackId } = resolveActivePack()
     const { personaHash } = resolvePersona(manifest, petPackId)
+    migrateLegacyConversationIfNeeded({ manifest, petPackId, personaHash })
     const { sessionId, conversationId: mainConversationId } = aiTalkStore.ensureMainConversation({
       entrypoint: 'control-center',
       petPackId,
@@ -501,6 +730,7 @@ const createAiTalkService = ({ aiService, aiTalkStore, petPackService, appLogSer
       if (!config.enabled) throw new Error('AI chat is disabled')
       const { manifest, petPackId } = resolveActivePack()
       const { persona, systemPrompt: personaPrompt, personaHash } = resolvePersona(manifest, petPackId)
+      migrateLegacyConversationIfNeeded({ manifest, petPackId, personaHash })
       const { sessionId, conversationId } = aiTalkStore.ensureMainConversation({
         entrypoint,
         petPackId,
@@ -510,7 +740,7 @@ const createAiTalkService = ({ aiService, aiTalkStore, petPackService, appLogSer
       return await enqueueConversation(conversationPublicId, async () => {
         const history = aiTalkStore.getMessages(sessionId, conversationId)
         const userMessage = { role: 'user', content }
-        const memoryContext = getMemoryContext(petPackId)
+        const memoryContext = getMemoryContext({ petPackId, userMessage: content, history })
         const memoryContextPrompt = compileMemoryContextPrompt(memoryContext)
         const recentPetActivity = getRecentPetActivity(petPackId)
         const recentPetActivityPrompt = compileRecentPetActivityPrompt(recentPetActivity)
@@ -521,8 +751,9 @@ const createAiTalkService = ({ aiService, aiTalkStore, petPackService, appLogSer
           ...getRecentMessages(history).map(({ role, content }) => ({ role, content })),
           userMessage
         ]
+        const actionCandidates = getCurrentActionCandidates(manifest)
         const tools = config.behavior?.enabled && config.behavior?.useTools !== false
-          ? [getBehaviorToolDefinition()]
+          ? [getBehaviorToolDefinition({ actions: actionCandidates })]
           : []
         Object.assign(diagnostics, {
           petPackId,
@@ -531,6 +762,7 @@ const createAiTalkService = ({ aiService, aiTalkStore, petPackService, appLogSer
           messagesCount: messages.length,
           memoryContextCount: memoryContext.length,
           recentPetActivityCount: recentPetActivity.length,
+          actionCandidateCount: actionCandidates.length,
           toolsCount: tools.length,
           memoryEnabled: config.memory?.enabled === true,
           behaviorEnabled: config.behavior?.enabled === true
@@ -556,10 +788,12 @@ const createAiTalkService = ({ aiService, aiTalkStore, petPackService, appLogSer
         const result = await aiService.complete({ messages, tools })
         const reply = normalizeString(result.reply)
         if (!reply) throw new Error('AI provider returned an empty response')
+        const bubble = createReplyBubble({ reply, behaviorIntent: result.behaviorIntent })
         const nextMessages = aiTalkStore.appendMessages(sessionId, conversationId, [
           userMessage,
           { role: 'assistant', content: reply }
         ])
+        markMemoryContextUsed({ petPackId, conversationId: conversationPublicId, memories: memoryContext })
         const sourceMessages = nextMessages.slice(-2)
         scheduleMemoryExtraction({
           config,
@@ -585,6 +819,7 @@ const createAiTalkService = ({ aiService, aiTalkStore, petPackService, appLogSer
         return {
           conversationId: conversationPublicId,
           reply,
+          bubble,
           behaviorIntent: result.behaviorIntent || undefined,
           messages: nextMessages
         }
@@ -615,6 +850,7 @@ const createAiTalkService = ({ aiService, aiTalkStore, petPackService, appLogSer
     compileMemoryContextPrompt,
     clearPetPackMemories,
     deleteMemory,
+    exportTraceDiagnostics,
     flushMemoryJobs: () => Promise.allSettled(Array.from(pendingMemoryJobs)),
     getConversation,
     generatePersonaDraft,

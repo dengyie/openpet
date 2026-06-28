@@ -6,6 +6,8 @@ import type {
   ActionFrameImportRequest,
   ActionFrameReinspectRequest,
   ActionTriggerProposalInboxStatus,
+  ActionTriggerProposalType,
+  ActionTriggerRuleStatus,
   ActionsConfigViewState,
   AiChatRequest,
   AiConfigViewState,
@@ -13,6 +15,7 @@ import type {
   AiMemoryJobViewState,
   AiMemoryProfileViewState,
   AiPersona,
+  AiTalkTraceDiagnosticsFilters,
   AiPersonaOverride,
   AiPersonaProfileViewState,
   CatalogBlocklistEntry,
@@ -155,6 +158,7 @@ const createDemoActionsConfig = (): ActionsConfigViewState => cloneActionsConfig
   defaultAction: 'idle',
   clickAction: 'wave',
   triggerProposalInbox: [],
+  triggerRules: [],
   actions: [
     { id: 'idle', label: 'Idle', kind: 'idle', loop: true, frameCount: 1, frameMs: 120, frameWidth: 8, frameHeight: 8 },
     { id: 'wave', label: 'Wave', kind: 'click', loop: false, frameCount: 1, frameMs: 100, frameWidth: 8, frameHeight: 8 },
@@ -541,6 +545,78 @@ const createDemoPluginLog = (pluginId: string, message: string, commandId = '') 
   commandId,
   message
 })
+
+const createDemoCreatorStudioImportResult = (payload?: JsonObject): PluginCommandRunResultViewState => {
+  const runId = typeof payload?.runId === 'string' && payload.runId.trim()
+    ? payload.runId.trim()
+    : '2026-06-19-creator-studio-pet-008'
+  return ({
+  ok: true,
+  pluginId: 'openpet.creator-studio',
+  commandId: 'import-approved-pet',
+  exitCode: 0,
+  result: {
+    ok: true,
+    message: `Imported run ${runId}`,
+    run: {
+      runId,
+      status: 'imported',
+      currentStep: 'imported',
+      importedPackId: 'creator-studio-pet',
+      artifacts: {
+        outputDir: `/tmp/openpet/runs/${runId}/outputs`,
+        bundle: `/tmp/openpet/runs/${runId}/outputs/creator-studio-pet.codex-pet.zip`
+      }
+    },
+    imported: {
+      pack: {
+        id: 'creator-studio-pet'
+      }
+    }
+  }
+  })
+}
+
+const createDemoCreatorStudioActionImportResult = (payload?: JsonObject): PluginCommandRunResultViewState => {
+  const runId = typeof payload?.runId === 'string' && payload.runId.trim()
+    ? payload.runId.trim()
+    : '2026-06-19-creator-studio-action-008'
+  return ({
+    ok: true,
+    pluginId: 'openpet.creator-studio',
+    commandId: 'import-approved-action',
+    exitCode: 0,
+    result: {
+      ok: true,
+      message: `Imported action shy-spin from run ${runId}`,
+      run: {
+        runId,
+        status: 'imported',
+        currentStep: 'imported',
+        importedActionId: 'shy-spin',
+        artifacts: {
+          actionFrames: {
+            framesDir: `/tmp/openpet/runs/${runId}/frames/actions/shy-spin`
+          }
+        }
+      },
+      imported: {
+        ok: true,
+        result: {
+          importedAction: {
+            id: 'shy-spin'
+          }
+        }
+      },
+      triggerProposalSubmission: {
+        ok: true,
+        proposal: {
+          id: 'proposal:click:shy-spin:test'
+        }
+      }
+    }
+  })
+}
 
 const createDemoServiceStatus = (): ServiceStatusViewState => cloneServiceStatus({
   ...defaultServiceStatus,
@@ -958,6 +1034,64 @@ const getActiveDemoPetPack = (): PetPackSummary | undefined => (
   demoState.petPacks.packs.find((pack) => pack.id === demoState.petPacks.activePackId)
 )
 
+const createDemoTriggerPreviewText = (type = '', actionId = '') => {
+  if (type === 'random') return `Random trigger rule can play ${actionId} from the host scheduler.`
+  if (type === 'state') return `State trigger rule can play ${actionId} when a host state condition matches.`
+  if (type === 'event') return `Event trigger rule can play ${actionId} when a host-owned event is received.`
+  if (type === 'click') return `Click trigger will set clickAction to ${actionId}.`
+  if (type === 'manual') return `Manual trigger keeps ${actionId} available from host UI without automatic scheduling.`
+  return `Unbound trigger keeps ${actionId} imported without automatic scheduling.`
+}
+
+const createDemoTriggerProposalPreview = (proposal: {
+  id?: string
+  actionId?: string
+  type?: ActionTriggerProposalType
+  binding?: string
+  sourcePluginId?: string
+  sourceRunId?: string
+  sourceCommandId?: string
+}) => {
+  const actionId = proposal.actionId || ''
+  const type = proposal.type || 'unbound'
+  const isRule = ['random', 'state', 'event'].includes(type)
+  const triggerRuleId = isRule ? `preview:${type}:${actionId}` : undefined
+  const triggerRule = isRule
+    ? {
+        id: triggerRuleId || '',
+        actionId,
+        type: type as 'random' | 'state' | 'event',
+        status: 'active' as const,
+        sourceProposalId: proposal.id || '',
+        sourcePluginId: proposal.sourcePluginId || '',
+        sourceRunId: proposal.sourceRunId || '',
+        sourceCommandId: proposal.sourceCommandId || '',
+        message: '',
+        preview: createDemoTriggerPreviewText(type, actionId),
+        createdAt: '2026-06-22T00:00:00.000Z',
+        updatedAt: '2026-06-22T00:00:00.000Z'
+      }
+    : undefined
+  return {
+    ok: true,
+    applied: type === 'click',
+    actionId,
+    type,
+    binding: type === 'click' ? (proposal.binding || 'clickAction') : '',
+    code: type === 'click' ? 'will_apply' as const : (isRule ? 'will_create_rule' as const : 'no_binding_required' as const),
+    message: isRule
+      ? `Preview: a host trigger rule would be created for action: ${actionId}`
+      : (type === 'click'
+          ? `Preview: clickAction would use action: ${actionId}`
+          : `Preview: action trigger proposal does not require an automatic binding: ${actionId}`),
+    ...(triggerRule ? { triggerRule, triggerRuleId } : {}),
+    preview: createDemoTriggerPreviewText(type, actionId),
+    sourcePluginId: proposal.sourcePluginId,
+    sourceRunId: proposal.sourceRunId,
+    sourceCommandId: proposal.sourceCommandId
+  }
+}
+
 const markDemoCatalogItemInstalled = (selection: CatalogInstallSelection): CatalogState => {
   const collectionKey = selection.kind === 'plugin' ? 'plugins' : 'petPacks'
   demoState.catalog = cloneCatalog({
@@ -1016,10 +1150,34 @@ const demoApi: ControlCenterApi = {
   importActionFrames: async ({ actionId, label } = {}) => ({ ok: true, result: { importedAction: { id: actionId, label: label || actionId } }, animations: cloneActionsConfig(demoState.actionsConfig) }),
   saveActionsConfig: async (config) => {
     const triggerProposal = config?.triggerProposal
+    const ruleProposal = triggerProposal && ['random', 'state', 'event'].includes(triggerProposal.type)
+      ? triggerProposal
+      : null
+    const triggerRule = ruleProposal
+      ? {
+          id: `demo-rule-${ruleProposal.type}-${ruleProposal.actionId}-${Date.now()}`,
+          actionId: ruleProposal.actionId,
+          type: ruleProposal.type as 'random' | 'state' | 'event',
+          status: 'active' as const,
+          sourceProposalId: ruleProposal.id || '',
+          sourcePluginId: ruleProposal.sourcePluginId || '',
+          sourceRunId: ruleProposal.sourceRunId || '',
+          sourceCommandId: ruleProposal.sourceCommandId || '',
+          message: ruleProposal.message || ruleProposal.notes || '',
+          preview: `${ruleProposal.type} rule can play ${ruleProposal.actionId} after host validation.`,
+          createdAt: '2026-06-22T00:00:00.000Z',
+          updatedAt: '2026-06-22T00:00:00.000Z'
+        }
+      : null
     if (triggerProposal?.type === 'click') {
       demoState.actionsConfig = cloneActionsConfig({
         ...demoState.actionsConfig,
         clickAction: triggerProposal.actionId
+      })
+    } else if (triggerRule) {
+      demoState.actionsConfig = cloneActionsConfig({
+        ...demoState.actionsConfig,
+        triggerRules: [...(demoState.actionsConfig.triggerRules || []), triggerRule]
       })
     } else if (!triggerProposal) {
       demoState.actionsConfig = cloneActionsConfig({
@@ -1030,11 +1188,11 @@ const demoApi: ControlCenterApi = {
     writeDemoState()
     const triggerCode = triggerProposal?.type === 'click'
       ? 'applied'
-      : (triggerProposal && ['random', 'state', 'event'].includes(triggerProposal.type) ? 'pending_host_rule' : 'no_binding_required')
+      : (triggerRule ? 'rule_created' : 'no_binding_required')
     const triggerMessage = triggerProposal?.type === 'click'
       ? `Click trigger now uses action: ${triggerProposal.actionId}`
-      : (triggerProposal && ['random', 'state', 'event'].includes(triggerProposal.type)
-          ? `Trigger type ${triggerProposal.type} requires a host trigger-rule editor before it can be applied.`
+      : (triggerRule
+          ? `Created host trigger rule ${triggerRule.id} for action: ${triggerProposal?.actionId || ''}`
           : `Action trigger proposal accepted for ${triggerProposal?.actionId || ''}`)
     return {
       animations: cloneActionsConfig(demoState.actionsConfig),
@@ -1048,6 +1206,9 @@ const demoApi: ControlCenterApi = {
               binding: triggerProposal.type === 'click' ? 'clickAction' : '',
               code: triggerCode,
               message: triggerMessage,
+              triggerRule: triggerRule || undefined,
+              triggerRuleId: triggerRule?.id || undefined,
+              preview: triggerRule?.preview || undefined,
               acceptedAt: '2026-06-22T00:00:00.000Z',
               sourcePluginId: triggerProposal.sourcePluginId,
               sourceRunId: triggerProposal.sourceRunId,
@@ -1057,7 +1218,9 @@ const demoApi: ControlCenterApi = {
         : {})
     }
   },
+  previewActionTriggerProposal: async (proposal) => createDemoTriggerProposalPreview(proposal),
   submitActionTriggerProposal: async (proposal) => {
+    const preview = createDemoTriggerProposalPreview(proposal)
     const id = proposal.id || `demo-proposal-${Date.now()}`
     const item = {
       id,
@@ -1069,6 +1232,8 @@ const demoApi: ControlCenterApi = {
       sourceCommandId: proposal.sourceCommandId || '',
       message: proposal.message || proposal.notes || '',
       status: 'pending' as const,
+      triggerRuleId: '',
+      preview: preview.preview || '',
       resultCode: '',
       resultMessage: '',
       rejectionReason: '',
@@ -1089,9 +1254,11 @@ const demoApi: ControlCenterApi = {
     if (!proposal) throw new Error('Trigger proposal not found')
     const response = await demoApi.saveActionsConfig({
       triggerProposal: {
+        id: proposal.id,
         actionId: proposal.actionId,
         type: proposal.type,
         binding: proposal.binding || undefined,
+        message: proposal.message || undefined,
         sourcePluginId: proposal.sourcePluginId,
         sourceRunId: proposal.sourceRunId,
         sourceCommandId: proposal.sourceCommandId
@@ -1103,13 +1270,14 @@ const demoApi: ControlCenterApi = {
     const nextProposal = {
       ...proposal,
       status,
+      triggerRuleId: response.triggerProposal?.triggerRuleId || '',
       resultCode: response.triggerProposal?.code || '',
       resultMessage: response.triggerProposal?.message || '',
       acceptedAt: response.triggerProposal?.acceptedAt || '',
       updatedAt: response.triggerProposal?.acceptedAt || '2026-06-22T00:00:00.000Z'
     }
     demoState.actionsConfig = cloneActionsConfig({
-      ...demoState.actionsConfig,
+      ...(response.animations || demoState.actionsConfig),
       triggerProposalInbox: demoState.actionsConfig.triggerProposalInbox.map((item) => item.id === proposalId ? nextProposal : item)
     })
     writeDemoState()
@@ -1132,6 +1300,41 @@ const demoApi: ControlCenterApi = {
     writeDemoState()
     return { animations: cloneActionsConfig(demoState.actionsConfig), proposal: nextProposal }
   },
+  setActionTriggerRuleStatus: async (ruleId, status) => {
+    const rule = demoState.actionsConfig.triggerRules.find((item) => item.id === ruleId)
+    if (!rule) throw new Error('Trigger rule not found')
+    if (status !== 'active' && status !== 'disabled') {
+      throw new Error(`Unsupported trigger rule status: ${status || 'unknown'}`)
+    }
+    const nextStatus: ActionTriggerRuleStatus = status
+    const nextRule = {
+      ...rule,
+      status: nextStatus,
+      updatedAt: '2026-06-22T00:00:00.000Z'
+    }
+    demoState.actionsConfig = cloneActionsConfig({
+      ...demoState.actionsConfig,
+      triggerRules: demoState.actionsConfig.triggerRules.map((item) => item.id === ruleId ? nextRule : item)
+    })
+    writeDemoState()
+    return {
+      animations: cloneActionsConfig(demoState.actionsConfig),
+      rule: nextRule
+    }
+  },
+  deleteActionTriggerRule: async (ruleId) => {
+    const rule = demoState.actionsConfig.triggerRules.find((item) => item.id === ruleId)
+    if (!rule) throw new Error('Trigger rule not found')
+    demoState.actionsConfig = cloneActionsConfig({
+      ...demoState.actionsConfig,
+      triggerRules: demoState.actionsConfig.triggerRules.filter((item) => item.id !== ruleId)
+    })
+    writeDemoState()
+    return {
+      animations: cloneActionsConfig(demoState.actionsConfig),
+      rule
+    }
+  },
   deleteAction: async () => ({ animations: cloneActionsConfig(demoState.actionsConfig) }),
   listPetPacks: async () => clonePetPacks(demoState.petPacks),
   inspectPetPackDirectory: async () => ({ canceled: true }),
@@ -1152,6 +1355,7 @@ const demoApi: ControlCenterApi = {
       animations: cloneActionsConfig(demoState.actionsConfig)
     }
   },
+  onActivePetPackChanged: () => () => {},
   removePetPack: async () => ({ petPacks: clonePetPacks(demoState.petPacks) }),
   getAiConfig: async () => cloneAiConfig(demoState.aiConfig),
   saveAiConfig: async (config) => {
@@ -1168,17 +1372,56 @@ const demoApi: ControlCenterApi = {
       updatedAt: new Date().toISOString()
     }
   },
-  testAiConnection: async () => ({
-    ok: true,
-    provider: demoState.aiConfig.provider,
-    baseUrl: demoState.aiConfig.baseUrl,
-    model: demoState.aiConfig.model,
-    hasApiKey: demoState.aiConfig.hasApiKey,
-    elapsedMs: 12,
-    reply: 'ok',
-    code: 'ok',
-    message: 'AI provider connection test succeeded'
-  }),
+  testAiConnection: async () => {
+    if (!demoState.aiConfig.hasApiKey) {
+      return {
+        ok: false,
+        provider: demoState.aiConfig.provider,
+        baseUrl: demoState.aiConfig.baseUrl,
+        model: demoState.aiConfig.model,
+        hasApiKey: false,
+        elapsedMs: 12,
+        code: 'missing_api_key',
+        message: 'AI API key is not configured',
+        modelsProbe: 'failed',
+        availableModels: [],
+        currentModelDiscovered: false
+      }
+    }
+    if (/models-unavailable|combo\.example\.test|ai\.example\.test/i.test(demoState.aiConfig.baseUrl)) {
+      return {
+        ok: true,
+        provider: demoState.aiConfig.provider,
+        baseUrl: demoState.aiConfig.baseUrl,
+        model: demoState.aiConfig.model,
+        hasApiKey: true,
+        elapsedMs: 12,
+        reply: 'ok',
+        code: 'ok',
+        message: 'AI provider connection test succeeded',
+        modelsProbe: 'unavailable',
+        availableModels: [],
+        currentModelDiscovered: false
+      }
+    }
+    const availableModels = /healthy-models/i.test(demoState.aiConfig.baseUrl)
+      ? ['gpt-4o-mini', 'deepseek-chat', 'openpet-chat-test']
+      : ['gpt-4o-mini']
+    return {
+      ok: true,
+      provider: demoState.aiConfig.provider,
+      baseUrl: demoState.aiConfig.baseUrl,
+      model: demoState.aiConfig.model,
+      hasApiKey: true,
+      elapsedMs: 12,
+      reply: 'ok',
+      code: 'ok',
+      message: 'AI provider connection test succeeded',
+      modelsProbe: 'ok',
+      availableModels,
+      currentModelDiscovered: availableModels.includes(demoState.aiConfig.model)
+    }
+  },
   getAiPersonaProfile: async () => createDemoPersonaProfile(demoState.petPacks, demoState.aiConfig, demoState.aiPersonaOverrides),
   generateAiPersonaDraft: async ({ instruction } = {}) => {
     const profile = createDemoPersonaProfile(demoState.petPacks, demoState.aiConfig, demoState.aiPersonaOverrides)
@@ -1271,7 +1514,10 @@ const demoApi: ControlCenterApi = {
         ok: false,
         provider: demoState.imageGenerationConfig.provider,
         code: 'missing_api_key',
-        message: 'Image generation API key is missing'
+        message: 'Image generation API key is missing',
+        modelsProbe: 'failed',
+        availableModels: [],
+        currentModelDiscovered: false
       }
     }
     if (
@@ -1281,14 +1527,26 @@ const demoApi: ControlCenterApi = {
         ok: true,
         provider: demoState.imageGenerationConfig.provider,
         code: 'provider_reachable_models_unavailable',
-        message: 'Image Provider is reachable, but the optional /models probe is unavailable'
+        message: 'Image Provider is reachable, but the optional /models probe is unavailable',
+        modelsProbe: 'unavailable',
+        availableModels: [],
+        currentModelDiscovered: false
       }
     }
+    const availableModels = /healthy-models/i.test(demoState.imageGenerationConfig.baseUrl)
+      ? ['gpt-image-2', 'openpet-image-test', 'flux-dev-transparent']
+      : ['gpt-image-2']
     return {
       ok: true,
       provider: demoState.imageGenerationConfig.provider,
       code: 'provider_healthy',
-      message: 'ok'
+      message: 'ok',
+      modelsProbe: 'ok',
+      availableModels,
+      currentModelDiscovered: availableModels.includes(demoState.imageGenerationConfig.model),
+      usage: /healthy-models/i.test(demoState.imageGenerationConfig.baseUrl)
+        ? { estimatedCostUsd: 0 }
+        : undefined
     }
   },
   getAiConversation: async () => cloneChatMessages(demoState.petChatMessages),
@@ -1304,6 +1562,77 @@ const demoApi: ControlCenterApi = {
     }
     writeDemoState()
     return { ...demoState.petBubbleChatState }
+  },
+  exportAiTalkTraceDiagnostics: async (filters?: AiTalkTraceDiagnosticsFilters) => {
+    const normalizedPetPackId = String(filters?.petPackId || '').trim()
+    const normalizedConversationId = String(filters?.conversationId || '').trim()
+    const matchesFilters = (entry: { petPackId?: string, conversationId?: string }) => {
+      if (normalizedPetPackId && String(entry.petPackId || '') !== normalizedPetPackId) return false
+      if (normalizedConversationId && String(entry.conversationId || '') !== normalizedConversationId) return false
+      return true
+    }
+    const activeConversationId = `control-center:${demoState.petPacks.activePackId}:main`
+    const conversations = [{
+      key: activeConversationId,
+      conversationId: activeConversationId,
+      petPackId: demoState.petPacks.activePackId,
+      messageCount: demoState.petChatMessages.length,
+      messages: demoState.petChatMessages.map((message, index) => ({
+        id: `demo-message-${index + 1}`,
+        role: message.role,
+        contentChars: message.content.length,
+        contentSha256: `demo-sha256-${index + 1}`,
+        createdAt: ''
+      }))
+    }].filter((entry) => matchesFilters(entry))
+    const memories = demoState.aiMemories.map((memory) => ({
+      id: memory.id,
+      scope: memory.scope,
+      petPackId: memory.petPackId,
+      conversationId: memory.sourceConversationId,
+      textChars: memory.text.length,
+      textSha256: `demo-memory-sha256-${memory.id}`,
+      tags: memory.tags,
+      confidence: memory.confidence,
+      importance: memory.importance,
+      status: memory.status
+    })).filter((entry) => matchesFilters(entry))
+    const memoryJobs = demoState.aiMemoryJobs
+      .map((job) => ({
+        ...job,
+        petPackId: job.petPackId,
+        conversationId: job.conversationId
+      }))
+      .filter((entry) => matchesFilters(entry))
+    return JSON.stringify({
+      schemaVersion: 1,
+      exportedAt: new Date().toISOString(),
+      redaction: {
+        messages: 'content omitted; contentChars and contentSha256 retained',
+        memories: 'text omitted; textChars and textSha256 retained',
+        provider: 'api keys and credentials omitted by provider view contract',
+        behavior: 'decision replay payloads omitted'
+      },
+      provider: {
+        enabled: demoState.aiConfig.enabled,
+        provider: demoState.aiConfig.provider,
+        baseUrl: demoState.aiConfig.baseUrl,
+        model: demoState.aiConfig.model,
+        hasApiKey: demoState.aiConfig.hasApiKey,
+        memoryEnabled: demoState.aiConfig.memory.enabled,
+        behaviorEnabled: demoState.aiConfig.behavior.enabled
+      },
+      conversations,
+      memories,
+      memoryJobs,
+      traces: [],
+      behaviorDecisions: (!normalizedPetPackId && !normalizedConversationId)
+        ? demoState.aiConfig.behavior.decisions.map(({ replay: _replay, ...decision }) => ({
+            ...decision,
+            replayRedacted: true
+          }))
+        : []
+    }, null, 2)
   },
   openPetChatWindow: async () => createDemoPetChatState(),
   sendPetChatMessage: sendDemoPetChatMessage,
@@ -1366,6 +1695,12 @@ const demoApi: ControlCenterApi = {
   runPluginCommand: async (pluginId, commandId, payload) => {
     demoState.pluginLogs = [createDemoPluginLog(pluginId, 'Command completed', commandId), ...demoState.pluginLogs]
     writeDemoState()
+    if (pluginId === 'openpet.creator-studio' && commandId === 'import-approved-pet') {
+      return createDemoCreatorStudioImportResult(payload)
+    }
+    if (pluginId === 'openpet.creator-studio' && commandId === 'import-approved-action') {
+      return createDemoCreatorStudioActionImportResult(payload)
+    }
     return {
       ok: true,
       pluginId,

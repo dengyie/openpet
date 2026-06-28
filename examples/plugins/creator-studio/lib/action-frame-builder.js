@@ -2,11 +2,17 @@ const fs = require('fs')
 const path = require('path')
 const sharp = require('sharp')
 const { resolveGeneratedImagePath } = require('./real-atlas-builder')
+const { createPlaybackDiagnostics } = require('./action-frame-playback')
 
 const SAFE_ACTION_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/
 const FRAME_WIDTH = 192
 const FRAME_HEIGHT = 208
 const MAX_FRAME_COUNT = 32
+const CONTACT_SHEET_THUMB_WIDTH = 96
+const CONTACT_SHEET_THUMB_HEIGHT = 104
+const CONTACT_SHEET_LABEL_HEIGHT = 20
+const CONTACT_SHEET_GAP = 12
+const CONTACT_SHEET_COLUMNS = 4
 
 const assertSafeActionId = (actionId) => {
   if (!SAFE_ACTION_ID_PATTERN.test(actionId || '')) {
@@ -151,6 +157,68 @@ const createFrameVariant = async ({ baseFrame, index, frameCount }) => {
     .toBuffer()
 }
 
+const toDataRelativePath = ({ dataDir, targetPath }) => path
+  .relative(path.resolve(dataDir), path.resolve(targetPath))
+  .split(path.sep)
+  .join('/')
+
+const createContactSheetLabel = ({ fileName, width }) => Buffer.from(`
+  <svg width="${width}" height="${CONTACT_SHEET_LABEL_HEIGHT}" xmlns="http://www.w3.org/2000/svg">
+    <text x="${Math.floor(width / 2)}" y="14" text-anchor="middle" font-family="Avenir Next, Arial, sans-serif" font-size="12" font-weight="700" fill="#66727f">${fileName}</text>
+  </svg>
+`)
+
+const writeActionFrameContactSheet = async ({ dataDir, framesDir, qaDir, frames }) => {
+  const frameEntries = Array.isArray(frames) ? frames : []
+  const columns = Math.max(1, Math.min(CONTACT_SHEET_COLUMNS, frameEntries.length || 1))
+  const rows = Math.max(1, Math.ceil((frameEntries.length || 1) / columns))
+  const cellWidth = CONTACT_SHEET_THUMB_WIDTH + CONTACT_SHEET_GAP
+  const cellHeight = CONTACT_SHEET_THUMB_HEIGHT + CONTACT_SHEET_LABEL_HEIGHT + CONTACT_SHEET_GAP
+  const width = (columns * cellWidth) + CONTACT_SHEET_GAP
+  const height = (rows * cellHeight) + CONTACT_SHEET_GAP
+  const composites = []
+
+  for (const [index, frame] of frameEntries.entries()) {
+    const fileName = frame?.fileName
+    const framePath = path.join(framesDir, fileName || '')
+    if (!fileName || !fs.existsSync(framePath)) continue
+    const left = CONTACT_SHEET_GAP + ((index % columns) * cellWidth)
+    const top = CONTACT_SHEET_GAP + (Math.floor(index / columns) * cellHeight)
+    const thumb = await sharp(framePath)
+      .ensureAlpha()
+      .resize({
+        width: CONTACT_SHEET_THUMB_WIDTH,
+        height: CONTACT_SHEET_THUMB_HEIGHT,
+        fit: 'contain',
+        background: { r: 0, g: 0, b: 0, alpha: 0 }
+      })
+      .png()
+      .toBuffer()
+    composites.push(
+      { input: thumb, left, top },
+      {
+        input: createContactSheetLabel({ fileName, width: CONTACT_SHEET_THUMB_WIDTH }),
+        left,
+        top: top + CONTACT_SHEET_THUMB_HEIGHT
+      }
+    )
+  }
+
+  const contactSheetPath = path.join(qaDir, 'action-frame-contact-sheet.png')
+  await sharp({
+    create: {
+      width,
+      height,
+      channels: 4,
+      background: { r: 255, g: 253, b: 246, alpha: 1 }
+    }
+  })
+    .composite(composites)
+    .png()
+    .toFile(contactSheetPath)
+  return contactSheetPath
+}
+
 const buildActionFramesFromGeneratedImage = async ({
   dataDir,
   generationResult,
@@ -191,7 +259,17 @@ const buildActionFramesFromGeneratedImage = async ({
     })
   }
 
+  const contactSheetPath = await writeActionFrameContactSheet({
+    dataDir,
+    framesDir: safeOutputFramesDir,
+    qaDir: safeQaDir,
+    frames
+  })
   const qaPath = path.join(safeQaDir, 'action-frame-validation.json')
+  const playback = createPlaybackDiagnostics({
+    frameCount,
+    loop: Boolean(action?.loop)
+  })
   writeJson(qaPath, {
     ok: true,
     actionId,
@@ -201,7 +279,9 @@ const buildActionFramesFromGeneratedImage = async ({
     frameWidth: FRAME_WIDTH,
     frameHeight: FRAME_HEIGHT,
     loop: Boolean(action?.loop),
+    playback,
     triggerProposal: action?.triggerProposal || { type: 'unbound' },
+    contactSheetRelativePath: toDataRelativePath({ dataDir, targetPath: contactSheetPath }),
     frames,
     warnings: []
   })
@@ -212,6 +292,7 @@ const buildActionFramesFromGeneratedImage = async ({
     frameWidth: FRAME_WIDTH,
     frameHeight: FRAME_HEIGHT,
     framesDir: safeOutputFramesDir,
+    contactSheetPath,
     qaPath
   }
 }
@@ -278,6 +359,17 @@ const repairActionFrameFromGeneratedImage = async ({
   const nextWarnings = qaComplete
     ? warnings.filter((warning) => warning !== incompleteWarning)
     : [...new Set([...warnings, incompleteWarning])]
+  const contactSheetPath = await writeActionFrameContactSheet({
+    dataDir,
+    framesDir: safeOutputFramesDir,
+    qaDir: safeQaDir,
+    frames
+  })
+  const playback = createPlaybackDiagnostics({
+    frameCount,
+    loop: Boolean(currentQa.loop ?? action?.loop),
+    frameDurationsMs: currentQa.playback?.frameDurationsMs
+  })
   writeJson(qaPath, {
     ...currentQa,
     ok: qaComplete,
@@ -286,6 +378,8 @@ const repairActionFrameFromGeneratedImage = async ({
     frameCount,
     frameWidth: FRAME_WIDTH,
     frameHeight: FRAME_HEIGHT,
+    playback,
+    contactSheetRelativePath: toDataRelativePath({ dataDir, targetPath: contactSheetPath }),
     frames,
     warnings: nextWarnings,
     repairs: [
@@ -300,6 +394,7 @@ const repairActionFrameFromGeneratedImage = async ({
     frameIndex,
     frame,
     framePath,
+    contactSheetPath,
     qaPath
   }
 }

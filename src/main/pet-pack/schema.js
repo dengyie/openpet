@@ -3,6 +3,9 @@ const DEFAULT_SCHEMA_VERSION = 1
 const MIN_FRAME_MS = 16
 const MAX_FRAME_MS = 5000
 const SAFE_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/
+const SAFE_TRIGGER_RULE_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9:_-]*$/
+const TRIGGER_RULE_TYPES = new Set(['random', 'state', 'event'])
+const TRIGGER_RULE_STATUSES = new Set(['active', 'disabled'])
 
 const inferActionKind = (actionId) => {
   if (/idle|bai|stand/i.test(actionId)) return 'idle'
@@ -148,6 +151,39 @@ const normalizeAction = (action) => {
   return normalized
 }
 
+const normalizeTriggerRule = (rule, actionIds) => {
+  assertNonEmptyString(rule?.id, 'triggerRule.id')
+  if (!SAFE_TRIGGER_RULE_ID_PATTERN.test(rule.id)) {
+    throw new Error('pet pack triggerRule.id must be a safe id')
+  }
+  const actionId = optionalString(rule.actionId)
+  if (!actionIds.has(actionId)) {
+    throw new Error(`pet pack trigger rule action does not exist: ${actionId || 'unknown'}`)
+  }
+  const type = optionalString(rule.type)
+  if (!TRIGGER_RULE_TYPES.has(type)) {
+    throw new Error(`pet pack trigger rule type is unsupported: ${type || 'unknown'}`)
+  }
+  const status = optionalString(rule.status) || 'active'
+  if (!TRIGGER_RULE_STATUSES.has(status)) {
+    throw new Error(`pet pack trigger rule status is unsupported: ${status}`)
+  }
+  return {
+    id: rule.id,
+    actionId,
+    type,
+    status,
+    sourceProposalId: optionalString(rule.sourceProposalId),
+    sourcePluginId: optionalString(rule.sourcePluginId),
+    sourceRunId: optionalString(rule.sourceRunId),
+    sourceCommandId: optionalString(rule.sourceCommandId),
+    message: optionalString(rule.message),
+    preview: optionalString(rule.preview),
+    createdAt: optionalString(rule.createdAt),
+    updatedAt: optionalString(rule.updatedAt)
+  }
+}
+
 const normalizePetPackManifest = (manifest) => {
   assertSafeId(manifest?.id, 'id')
 
@@ -176,6 +212,10 @@ const normalizePetPackManifest = (manifest) => {
   }
   if (Array.isArray(manifest.triggerProposalInbox)) {
     normalized.triggerProposalInbox = manifest.triggerProposalInbox.map((proposal) => ({ ...proposal }))
+  }
+  if (Array.isArray(manifest.triggerRules)) {
+    const actionIds = new Set(actions.map((action) => action.id))
+    normalized.triggerRules = manifest.triggerRules.map((rule) => normalizeTriggerRule(rule, actionIds))
   }
   return normalized
 }

@@ -412,7 +412,7 @@ const createPluginService = ({ settingsService, petService, actionService, actio
     }
   }
 
-  const createPluginBridgeHandlers = (plugin, commandId) => ({
+  const createPluginBridgeHandlers = (plugin, commandId, bridgeRunId = '') => ({
     context: async () => {
       appendLog({ pluginId: plugin.manifest.id, commandId, level: 'info', message: 'Bridge context requested' })
       return { ok: true, context: createPluginBridgeContext() }
@@ -440,6 +440,18 @@ const createPluginService = ({ settingsService, petService, actionService, actio
       appendLog({ pluginId: plugin.manifest.id, commandId, level: 'info', message: 'Bridge creator.actions apply invoked' })
       const actions = actionService.applyCreatorActionMutation(payload)
       return { ok: true, actions }
+    },
+    creatorTriggerProposalSubmit: async (payload = {}) => {
+      assertPermission(plugin.manifest, 'trigger-proposals:write')
+      if (!actionService?.submitTriggerProposal) throw new Error('Creator trigger proposal inbox is not available')
+      appendLog({ pluginId: plugin.manifest.id, commandId, level: 'info', message: 'Bridge creator.trigger-proposals submit invoked' })
+      const result = actionService.submitTriggerProposal({
+        ...payload,
+        sourcePluginId: plugin.manifest.id,
+        sourceCommandId: commandId,
+        sourceRunId: payload.sourceRunId || bridgeRunId
+      })
+      return { ok: true, proposal: result.proposal, actions: result.animations }
     },
     creatorPackManifestRead: async () => {
       assertPermission(plugin.manifest, 'pack-manifest:read')
@@ -488,6 +500,7 @@ const createPluginService = ({ settingsService, petService, actionService, actio
       const preflight = await actionImportService.inspectActionFrames({ sourceDir, actionId })
       assertCreatorAssetImportWithinLimits(preflight.inspection, sourceDir)
       const result = await actionImportService.importActionFrames({ sourceDir, actionId, label })
+      actionService?.reload?.()
       const { importedAction, ...actions } = result
       return { ok: true, actions, importedAction }
     },
@@ -637,7 +650,7 @@ const createPluginService = ({ settingsService, petService, actionService, actio
     commandBridgeServer = http.createServer(async (request, response) => {
       try {
         const url = new URL(request.url, `http://${PLUGIN_BRIDGE_HOST}`)
-        const match = url.pathname.match(/^\/plugins\/bridge\/([^/]+)\/([^/]+)\/([^/]+)(\/context|\/pet\/say|\/pet\/action|\/pet\/event|\/creator\/actions|\/creator\/actions\/validate|\/creator\/actions\/apply|\/creator\/pack-manifest|\/creator\/pack-manifest\/validate|\/creator\/pack-manifest\/apply|\/creator\/assets\/inspect-frames|\/creator\/assets\/import-frames|\/creator\/assets\/pick-frames\/inspect|\/creator\/assets\/pick-frames\/import|\/creator\/pet-pack\/inspect-output|\/creator\/pet-pack\/import-output|\/creator\/model-settings|\/creator\/model-health-check|\/creator\/model-image-generate)$/)
+        const match = url.pathname.match(/^\/plugins\/bridge\/([^/]+)\/([^/]+)\/([^/]+)(\/context|\/pet\/say|\/pet\/action|\/pet\/event|\/creator\/actions|\/creator\/actions\/validate|\/creator\/actions\/apply|\/creator\/trigger-proposals\/submit|\/creator\/pack-manifest|\/creator\/pack-manifest\/validate|\/creator\/pack-manifest\/apply|\/creator\/assets\/inspect-frames|\/creator\/assets\/import-frames|\/creator\/assets\/pick-frames\/inspect|\/creator\/assets\/pick-frames\/import|\/creator\/pet-pack\/inspect-output|\/creator\/pet-pack\/import-output|\/creator\/model-settings|\/creator\/model-health-check|\/creator\/model-image-generate)$/)
         if (!match) {
           sendJson(response, 404, { ok: false, error: 'Not found' })
           return
@@ -699,6 +712,10 @@ const createPluginService = ({ settingsService, petService, actionService, actio
         }
         if (route === '/creator/actions/apply') {
           sendJson(response, 200, await runtime.handlers.creatorActionsApply(payload))
+          return
+        }
+        if (route === '/creator/trigger-proposals/submit') {
+          sendJson(response, 200, await runtime.handlers.creatorTriggerProposalSubmit(payload))
           return
         }
         if (route === '/creator/pack-manifest/validate') {
@@ -1496,7 +1513,7 @@ const createPluginService = ({ settingsService, petService, actionService, actio
       runId: bridgeRunId,
       token: bridgeToken,
       status: 'running',
-      handlers: createPluginBridgeHandlers(plugin, commandId)
+      handlers: createPluginBridgeHandlers(plugin, commandId, bridgeRunId)
     })
     commandRuntimes.set(runtimeKey, runtime)
     let stdoutText = ''

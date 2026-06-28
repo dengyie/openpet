@@ -143,6 +143,14 @@ const createRequiredServices = ({ pluginInstallService, pluginService, dialogSer
       sourcePluginId: proposal.sourcePluginId || '',
       sourceRunId: proposal.sourceRunId || '',
       sourceCommandId: proposal.sourceCommandId || ''
+    }),
+    setTriggerRuleStatus: (ruleId, status) => ({
+      animations: { actions: [] },
+      rule: { id: ruleId, actionId: 'wave', type: 'state', status, sourceProposalId: '', sourcePluginId: '', sourceRunId: '', sourceCommandId: '', message: '', preview: '', createdAt: '', updatedAt: '' }
+    }),
+    deleteTriggerRule: (ruleId) => ({
+      animations: { actions: [] },
+      rule: { id: ruleId, actionId: 'wave', type: 'state', status: 'active', sourceProposalId: '', sourcePluginId: '', sourceRunId: '', sourceCommandId: '', message: '', preview: '', createdAt: '', updatedAt: '' }
     })
   },
   actionImportService: {
@@ -688,6 +696,23 @@ test('action mutation handlers return contract-shaped results and refreshed anim
       }
     },
     actionService: {
+      previewTriggerProposal: (proposal) => {
+        calls.push(['preview-trigger', proposal])
+        return {
+          ok: true,
+          applied: true,
+          actionId: proposal.actionId,
+          type: proposal.type,
+          binding: proposal.binding || '',
+          code: 'will_apply',
+          message: 'preview',
+          preview: `Click trigger will set clickAction to ${proposal.actionId}.`,
+          sourcePluginId: proposal.sourcePluginId || '',
+          sourceRunId: proposal.sourceRunId || '',
+          sourceCommandId: proposal.sourceCommandId || '',
+          internal: 'service-only'
+        }
+      },
       acceptTriggerProposal: (proposal) => {
         calls.push(['trigger', proposal])
         return {
@@ -702,6 +727,46 @@ test('action mutation handlers return contract-shaped results and refreshed anim
           sourcePluginId: proposal.sourcePluginId || '',
           sourceRunId: proposal.sourceRunId || '',
           sourceCommandId: proposal.sourceCommandId || ''
+        }
+      },
+      setTriggerRuleStatus: (ruleId, status) => {
+        calls.push(['set-trigger-rule-status', ruleId, status])
+        return {
+          animations,
+          rule: {
+            id: ruleId,
+            actionId: 'wave',
+            type: 'state',
+            status,
+            sourceProposalId: 'proposal:state:wave:test',
+            sourcePluginId: 'openpet.creator-studio',
+            sourceRunId: 'run-1',
+            sourceCommandId: 'import-approved-action',
+            message: 'updated',
+            preview: 'State trigger rule can play wave when a host state condition matches.',
+            createdAt: '2026-06-22T10:00:00.000Z',
+            updatedAt: '2026-06-22T10:01:00.000Z'
+          }
+        }
+      },
+      deleteTriggerRule: (ruleId) => {
+        calls.push(['delete-trigger-rule', ruleId])
+        return {
+          animations,
+          rule: {
+            id: ruleId,
+            actionId: 'wave',
+            type: 'state',
+            status: 'disabled',
+            sourceProposalId: 'proposal:state:wave:test',
+            sourcePluginId: 'openpet.creator-studio',
+            sourceRunId: 'run-1',
+            sourceCommandId: 'import-approved-action',
+            message: 'deleted',
+            preview: 'State trigger rule can play wave when a host state condition matches.',
+            createdAt: '2026-06-22T10:00:00.000Z',
+            updatedAt: '2026-06-22T10:01:00.000Z'
+          }
         }
       }
     },
@@ -731,6 +796,21 @@ test('action mutation handlers return contract-shaped results and refreshed anim
       sourceCommandId: 'import-approved-action'
     }
   })
+  const triggerPreview = await ipcMain.handlers.get(IPC.ACTIONS_PREVIEW_TRIGGER_PROPOSAL)(null, {
+    actionId: 'wave',
+    type: 'click',
+    binding: 'clickAction',
+    sourcePluginId: 'openpet.creator-studio',
+    sourceRunId: 'run-1',
+    sourceCommandId: 'import-approved-action'
+  })
+  const updatedRuleResult = await ipcMain.handlers.get(IPC.ACTIONS_UPDATE_TRIGGER_RULE)(null, {
+    ruleId: 'rule:state:wave:test',
+    status: 'disabled'
+  })
+  const deletedRuleResult = await ipcMain.handlers.get(IPC.ACTIONS_DELETE_TRIGGER_RULE)(null, {
+    ruleId: 'rule:state:wave:test'
+  })
   const deleteResult = await ipcMain.handlers.get(IPC.ACTIONS_DELETE)(null, { actionId: 'wave' })
 
   assert.deepEqual(importResult, {
@@ -758,6 +838,53 @@ test('action mutation handlers return contract-shaped results and refreshed anim
       sourceCommandId: 'import-approved-action'
     }
   })
+  assert.deepEqual(triggerPreview, {
+    ok: true,
+    applied: true,
+    actionId: 'wave',
+    type: 'click',
+    binding: 'clickAction',
+    code: 'will_apply',
+    message: 'preview',
+    preview: 'Click trigger will set clickAction to wave.',
+    sourcePluginId: 'openpet.creator-studio',
+    sourceRunId: 'run-1',
+    sourceCommandId: 'import-approved-action'
+  })
+  assert.deepEqual(updatedRuleResult, {
+    animations,
+    rule: {
+      id: 'rule:state:wave:test',
+      actionId: 'wave',
+      type: 'state',
+      status: 'disabled',
+      sourceProposalId: 'proposal:state:wave:test',
+      sourcePluginId: 'openpet.creator-studio',
+      sourceRunId: 'run-1',
+      sourceCommandId: 'import-approved-action',
+      message: 'updated',
+      preview: 'State trigger rule can play wave when a host state condition matches.',
+      createdAt: '2026-06-22T10:00:00.000Z',
+      updatedAt: '2026-06-22T10:01:00.000Z'
+    }
+  })
+  assert.deepEqual(deletedRuleResult, {
+    animations,
+    rule: {
+      id: 'rule:state:wave:test',
+      actionId: 'wave',
+      type: 'state',
+      status: 'disabled',
+      sourceProposalId: 'proposal:state:wave:test',
+      sourcePluginId: 'openpet.creator-studio',
+      sourceRunId: 'run-1',
+      sourceCommandId: 'import-approved-action',
+      message: 'deleted',
+      preview: 'State trigger rule can play wave when a host state condition matches.',
+      createdAt: '2026-06-22T10:00:00.000Z',
+      updatedAt: '2026-06-22T10:01:00.000Z'
+    }
+  })
   assert.deepEqual(deleteResult, { animations })
   assert.deepEqual(petWindowMessages.map((message) => message[0]), [
     IPC.PET_ANIMATIONS_CHANGED,
@@ -780,6 +907,16 @@ test('action mutation handlers return contract-shaped results and refreshed anim
       sourceRunId: 'run-1',
       sourceCommandId: 'import-approved-action'
     }],
+    ['preview-trigger', {
+      actionId: 'wave',
+      type: 'click',
+      binding: 'clickAction',
+      sourcePluginId: 'openpet.creator-studio',
+      sourceRunId: 'run-1',
+      sourceCommandId: 'import-approved-action'
+    }],
+    ['set-trigger-rule-status', 'rule:state:wave:test', 'disabled'],
+    ['delete-trigger-rule', 'rule:state:wave:test'],
     ['delete', 'wave']
   ])
 })

@@ -31,15 +31,28 @@ const extractCreatorStudioDetails = (resultRecord) => {
   if (!isRecord(resultRecord)) return []
   const run = isRecord(resultRecord.run) ? resultRecord.run : null
   const artifacts = isRecord(run?.artifacts) ? run.artifacts : {}
+  const actionFrames = isRecord(artifacts.actionFrames) ? artifacts.actionFrames : null
   const imported = isRecord(resultRecord.imported) ? resultRecord.imported : null
   const importedPack = isRecord(imported?.pack) ? imported.pack : null
+  const importedResult = isRecord(imported?.result) ? imported.result : null
+  const importedAction = isRecord(importedResult?.importedAction) ? importedResult.importedAction : null
   const bundle = isRecord(resultRecord.bundle) ? resultRecord.bundle : null
+  const triggerProposalSubmission = isRecord(resultRecord.triggerProposalSubmission) ? resultRecord.triggerProposalSubmission : null
+  const triggerProposal = isRecord(triggerProposalSubmission?.proposal) ? triggerProposalSubmission.proposal : null
   const details = []
 
   addDetail(details, 'Run', run?.runId)
   addDetail(details, '状态', run?.status)
   addDetail(details, '步骤', run?.currentStep)
   addDetail(details, '已导入 Pack', run?.importedPackId || importedPack?.id)
+  addDetail(details, '已导入动作', run?.importedActionId || importedAction?.id)
+  addDetail(details, '动作目录', actionFrames?.framesDir)
+  if (triggerProposalSubmission) {
+    const triggerProposalValue = triggerProposalSubmission.ok === true
+      ? `已提交${triggerProposal?.id ? ` · ${triggerProposal.id}` : ''}`
+      : `提交失败${triggerProposalSubmission.error ? ` · ${triggerProposalSubmission.error}` : ''}`
+    addDetail(details, '触发建议', triggerProposalValue)
+  }
   addDetail(details, '输出目录', artifacts.outputDir || resultRecord.outputDir)
   addDetail(details, '导出包', artifacts.bundle || bundle?.path)
   return details

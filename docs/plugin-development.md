@@ -83,7 +83,7 @@ OpenPet should preserve structural safety:
 
 `examples/plugins/creator-studio/` demonstrates a hybrid creator-tools extension. It creates durable pet-generation runs under `OPENPET_DATA_DIR`, produces a valid `codex-pet` fixture output, requires explicit approval, and imports the approved output through OpenPet's host-owned pet-pack bridge.
 
-The example intentionally uses a deterministic fixture backend first. Cloud and local model adapters can replace the fixture generator while keeping the same run workspace and review/import contract.
+The example intentionally uses a deterministic fixture backend first. Creator Studio now treats model-backed generation as one host-owned `provider` path while still accepting legacy `cloud` / `local` inputs as compatibility aliases. When Creator Studio uses model-backed generation, that generation remains host-managed: the command gets a short-lived bridge token for bounded host routes, OpenPet keeps provider credentials in main-process secret storage, and plugin-managed provider credentials are currently unsupported in the author-facing trust model.
 
 ## Manifest Shape
 
@@ -248,6 +248,7 @@ Current bridge routes:
 - `GET /creator/actions`
 - `POST /creator/actions/validate`
 - `POST /creator/actions/apply`
+- `POST /creator/trigger-proposals/submit`
 - `GET /creator/pack-manifest`
 - `POST /creator/pack-manifest/validate`
 - `POST /creator/pack-manifest/apply`
@@ -257,6 +258,9 @@ Current bridge routes:
 - `POST /creator/assets/pick-frames/import`
 - `POST /creator/pet-pack/inspect-output`
 - `POST /creator/pet-pack/import-output`
+- `GET /creator/model-settings`
+- `POST /creator/model-health-check`
+- `POST /creator/model-image-generate`
 
 The bridge is loopback-only, token-gated, and valid only while the command run is active.
 
@@ -293,6 +297,7 @@ Current endpoint set:
 - `GET /creator/actions`
 - `POST /creator/actions/validate`
 - `POST /creator/actions/apply`
+- `POST /creator/trigger-proposals/submit`
 - `GET /creator/pack-manifest`
 - `POST /creator/pack-manifest/validate`
 - `POST /creator/pack-manifest/apply`
@@ -302,13 +307,16 @@ Current endpoint set:
 - `POST /creator/assets/pick-frames/import`
 - `POST /creator/pet-pack/inspect-output`
 - `POST /creator/pet-pack/import-output`
+- `GET /creator/model-settings`
+- `POST /creator/model-health-check`
+- `POST /creator/model-image-generate`
 
 Bridge rules:
 
 - the bridge exists only during an explicit declaration-only command run;
 - the command must belong to an enabled, policy-allowed local extension;
 - requests must use `Authorization: Bearer <OPENPET_BRIDGE_TOKEN>`;
-- `pet:say`, `pet:action`, `pet:event`, `actions:read`, `actions:write`, `pack-manifest:read`, `pack-manifest:write`, `assets:inspect`, `assets:generate`, and `pet-pack:import` permissions are enforced per route;
+- `pet:say`, `pet:action`, `pet:event`, `actions:read`, `actions:write`, `trigger-proposals:write`, `pack-manifest:read`, `pack-manifest:write`, `assets:inspect`, `assets:generate`, `pet-pack:import`, and `model:image-generate` permissions are enforced per route;
 - all pet mutations still flow through `PetService`;
 - creator-tools action reads and writes flow through the host action service boundary, while pack manifest metadata reads and writes flow through the host pet-pack service boundary;
 - `pack-manifest:read` / `pack-manifest:write` only expose the current active installed user pack metadata workflow and do not permit arbitrary pet-pack writes, arbitrary pack targeting, or raw filesystem access;
@@ -316,6 +324,7 @@ Bridge rules:
 - creator-tools frame import/sprite generation is host-mediated, package-local, resource-limited, and does not grant raw filesystem writes or plugin-selected output paths;
 - creator-tools picker frame inspection/import is host-mediated and user-approved: the command can request a native folder picker, but selected absolute paths stay in the main process and are not returned to the bridge caller;
 - creator-tools full pet-pack import is host-mediated through `PetPackService`: the extension supplies a package-local or `OPENPET_DATA_DIR` relative approved output path, then OpenPet inspects, imports, applies policy checks, and optionally activates the pack;
+- creator-tools model settings, model health checks, and model image generation stay host-managed through the short-lived bridge; OpenPet-owned secrets remain in the main process, and plugin-managed provider credentials are not part of the current supported trust model;
 - setup entries, services, install, enable, and background health paths do not receive bridge access.
 
 Example bridge requests:
@@ -438,11 +447,13 @@ Current bridge-backed capabilities:
 | `pet:event` | Emit bounded pet events for host-visible integration | Event payload stays command-run scoped. |
 | `actions:read` | Action studio reads current action configuration | Read through host action service. |
 | `actions:write` | Add or update bounded action configuration | Validated and applied by the host; no raw config-file write. |
+| `trigger-proposals:write` | Submit candidate trigger rules from a creator workflow | Writes to the host-owned trigger proposal inbox only; no direct trigger-rule mutation. |
 | `pack-manifest:read` | Read active installed user pack metadata | Active installed user pack only. |
 | `pack-manifest:write` | Update bounded user pack metadata | No built-in pack edits or arbitrary pack targeting. |
 | `assets:inspect` | Inspect package-local or user-approved action frame folders | No raw filesystem grant; paths stay host-confined. |
 | `assets:generate` | Import frames and regenerate sprites/action metadata | Host-mediated, resource-limited, no plugin-selected output path. |
 | `pet-pack:import` | Import approved full pet-pack output from a creator workflow | Host inspects/imports through `PetPackService`; no direct write to OpenPet pet-pack storage. |
+| `model:image-generate` | Read host image model settings, run health checks, and generate images through the bridge | Host-managed provider flow only; OpenPet-owned credentials stay in the main process and outputs stay host-confined. |
 
 Example permission shape:
 
@@ -464,8 +475,10 @@ Recommended mapping:
 - Weather announcer: `pet:say`, optionally `pet:action`, plus any extension-owned network/API disclosure in `manifest`.
 - Pet dialogue/personality pack: `pet:say`, optionally `pet:event`, with config schema for tone, verbosity, and quiet hours.
 - Pet action studio: `actions:read`, `actions:write`, `assets:inspect`, `assets:generate`.
+- Trigger suggestion helper: `trigger-proposals:write`, optionally `actions:read`, when the workflow proposes triggers without directly mutating host rules.
 - Pack metadata helper: `pack-manifest:read`, optionally `pack-manifest:write`.
 - Full pet creator workflow: `assets:inspect`, `assets:generate`, and `pet-pack:import`; add `pet:say` only when the workflow announces status through the pet.
+- Host-managed image workflow: `model:image-generate`, optionally `assets:inspect`, `assets:generate`, or `pet-pack:import`, when the extension wants OpenPet to own provider credentials and image outputs.
 - Dashboard-only extension: no pet/creator permission unless it actually calls the bridge.
 
 If a desired capability is not available yet, authors should still be able to submit the package as a local/community extension with the gap clearly disclosed. Maintainers should classify the missing capability as backlog instead of rejecting the idea outright when the package is structurally safe and honest about its limits.

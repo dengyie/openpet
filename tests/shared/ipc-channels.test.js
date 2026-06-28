@@ -19,6 +19,7 @@ test('shared IPC contract exports stable frozen channel names', () => {
   assert.equal(IPC.AI_GET_MEMORY_PROFILE, 'ai:get-memory-profile')
   assert.equal(IPC.AI_DELETE_MEMORY, 'ai:delete-memory')
   assert.equal(IPC.AI_CLEAR_PET_PACK_MEMORIES, 'ai:clear-pet-pack-memories')
+  assert.equal(IPC.ACTIONS_PREVIEW_TRIGGER_PROPOSAL, 'actions:preview-trigger-proposal')
   assert.equal(IPC.CATALOG_INSTALL_SELECTION, 'catalog:install-selection')
   assert.equal(IPC.SETTINGS_OPEN, 'settings:open')
   assert.equal(Object.isFrozen(IPC), true)

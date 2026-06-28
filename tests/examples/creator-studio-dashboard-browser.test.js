@@ -1,0 +1,1260 @@
+const test = require('node:test')
+const assert = require('node:assert/strict')
+const fs = require('node:fs')
+const http = require('node:http')
+const os = require('node:os')
+const path = require('node:path')
+const { chromium } = require('@playwright/test')
+const sharp = require('sharp')
+
+const { createCreatorStudioServer } = require('../../examples/plugins/creator-studio/service/studio-service')
+const { createMinimalWebp } = require('../../examples/plugins/creator-studio/lib/fake-hatch-pet')
+const { createRun, updateRunStatus } = require('../../examples/plugins/creator-studio/lib/run-store')
+
+const openDashboardServer = async (dataDir) => {
+  const dashboardPath = path.join(__dirname, '../../examples/plugins/creator-studio/web/dashboard/index.html')
+  const server = createCreatorStudioServer({ dataDir, dashboardPath })
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  return server
+}
+
+const openDashboardPage = async (server) => {
+  const browser = await chromium.launch({ headless: true })
+  const page = await browser.newPage()
+  await page.goto(`http://127.0.0.1:${server.address().port}`)
+  return { browser, page }
+}
+
+const writeSolidPng = async (targetPath, { width, height, background }) => {
+  fs.mkdirSync(path.dirname(targetPath), { recursive: true })
+  await sharp({
+    create: {
+      width,
+      height,
+      channels: 4,
+      background
+    }
+  }).png().toFile(targetPath)
+}
+
+const seedImportedActionRun = async (dataDir) => {
+  const run = createRun({
+    dataDir,
+    input: {
+      prompt: '新增一个自定义动作：害羞转圈，点击后轻轻转一圈。',
+      originalPrompt: '新增一个自定义动作：害羞转圈，点击后轻轻转一圈。',
+      backend: 'local',
+      generationTask: {
+        mode: 'single-action',
+        actions: [{
+          actionId: 'shy-spin',
+          name: '害羞转圈',
+          motionPrompt: '先缩起来，再轻轻转一圈。',
+          loop: false,
+          frameCount: 1,
+          triggerProposal: { type: 'click', binding: 'clickAction' }
+        }]
+      }
+    },
+    now: () => '2026-06-27T01:00:00.000Z'
+  })
+  const runDir = path.join(dataDir, 'runs', run.runId)
+  const framesDir = path.join(runDir, 'frames', 'actions', 'shy-spin')
+  const qaDir = path.join(runDir, 'qa')
+  const baseDir = path.join(runDir, 'frames', 'base')
+  await writeSolidPng(path.join(framesDir, '0001.png'), {
+    width: 192,
+    height: 208,
+    background: { r: 255, g: 182, b: 145, alpha: 1 }
+  })
+  await writeSolidPng(path.join(qaDir, 'action-frame-contact-sheet.png'), {
+    width: 192,
+    height: 208,
+    background: { r: 255, g: 220, b: 205, alpha: 1 }
+  })
+  await writeSolidPng(path.join(baseDir, '0001.png'), {
+    width: 512,
+    height: 512,
+    background: { r: 250, g: 200, b: 160, alpha: 1 }
+  })
+  fs.writeFileSync(path.join(qaDir, 'action-frame-validation.json'), `${JSON.stringify({
+    ok: true,
+    loop: false,
+    warnings: [],
+    playback: {
+      frameDurationsMs: [160]
+    }
+  }, null, 2)}\n`)
+  updateRunStatus({
+    dataDir,
+    runId: run.runId,
+    status: 'imported',
+    patch: {
+      taskStatus: 'confirmed',
+      currentStep: 'imported',
+      reviewStatus: 'approved',
+      importStatus: 'imported',
+      importedActionId: 'shy-spin',
+      triggerProposalSubmission: {
+        ok: true,
+        proposal: {
+          id: 'proposal:click:shy-spin:dashboard'
+        }
+      },
+      artifacts: {
+        generatedImage: {
+          ok: true,
+          backend: 'local',
+          model: 'local-custom-sprite-v2',
+          generatedAt: '2026-06-27T01:01:00.000Z',
+          outputs: [{
+            dataRelativePath: `runs/${run.runId}/frames/base/0001.png`,
+            mimeType: 'image/png',
+            sha256: 'dashboard-imported-action-sha'
+          }]
+        },
+        actionFrames: {
+          actionId: 'shy-spin',
+          name: '害羞转圈',
+          framesDir,
+          qa: path.join(qaDir, 'action-frame-validation.json'),
+          contactSheet: path.join(qaDir, 'action-frame-contact-sheet.png'),
+          frameCount: 1,
+          frameWidth: 192,
+          frameHeight: 208,
+          triggerProposal: { type: 'click', binding: 'clickAction' }
+        }
+      }
+    },
+    now: () => '2026-06-27T01:02:00.000Z'
+  })
+  return run
+}
+
+const seedImportedFailedActionRun = async (dataDir) => {
+  const run = createRun({
+    dataDir,
+    input: {
+      prompt: '新增一个自定义动作：害羞转圈，点击后轻轻转一圈。',
+      originalPrompt: '新增一个自定义动作：害羞转圈，点击后轻轻转一圈。',
+      backend: 'local',
+      generationTask: {
+        mode: 'single-action',
+        actions: [{
+          actionId: 'shy-spin',
+          name: '害羞转圈',
+          motionPrompt: '先缩起来，再轻轻转一圈。',
+          loop: false,
+          frameCount: 1,
+          triggerProposal: { type: 'click', binding: 'clickAction' }
+        }]
+      }
+    },
+    now: () => '2026-06-27T01:05:00.000Z'
+  })
+  const runDir = path.join(dataDir, 'runs', run.runId)
+  const framesDir = path.join(runDir, 'frames', 'actions', 'shy-spin')
+  const qaDir = path.join(runDir, 'qa')
+  const baseDir = path.join(runDir, 'frames', 'base')
+  await writeSolidPng(path.join(framesDir, '0001.png'), {
+    width: 192,
+    height: 208,
+    background: { r: 240, g: 180, b: 150, alpha: 1 }
+  })
+  await writeSolidPng(path.join(qaDir, 'action-frame-contact-sheet.png'), {
+    width: 192,
+    height: 208,
+    background: { r: 255, g: 230, b: 215, alpha: 1 }
+  })
+  await writeSolidPng(path.join(baseDir, '0001.png'), {
+    width: 512,
+    height: 512,
+    background: { r: 240, g: 205, b: 170, alpha: 1 }
+  })
+  fs.writeFileSync(path.join(qaDir, 'action-frame-validation.json'), `${JSON.stringify({
+    ok: true,
+    loop: false,
+    warnings: [],
+    playback: {
+      frameDurationsMs: [160]
+    }
+  }, null, 2)}\n`)
+  updateRunStatus({
+    dataDir,
+    runId: run.runId,
+    status: 'imported',
+    patch: {
+      taskStatus: 'confirmed',
+      currentStep: 'imported',
+      reviewStatus: 'approved',
+      importStatus: 'imported',
+      importedActionId: 'shy-spin',
+      triggerProposalSubmission: {
+        ok: false,
+        error: 'proposal write failed via OPENPET_BRIDGE_TOKEN=bridge-secret at /Users/mango/private/proposal.json from http://127.0.0.1:8787/creator/trigger-proposals/submit'
+      },
+      artifacts: {
+        generatedImage: {
+          ok: true,
+          backend: 'local',
+          model: 'local-custom-sprite-v2',
+          generatedAt: '2026-06-27T01:06:00.000Z',
+          outputs: [{
+            dataRelativePath: `runs/${run.runId}/frames/base/0001.png`,
+            mimeType: 'image/png',
+            sha256: 'dashboard-imported-failed-action-sha'
+          }]
+        },
+        actionFrames: {
+          actionId: 'shy-spin',
+          name: '害羞转圈',
+          framesDir,
+          qa: path.join(qaDir, 'action-frame-validation.json'),
+          contactSheet: path.join(qaDir, 'action-frame-contact-sheet.png'),
+          frameCount: 1,
+          frameWidth: 192,
+          frameHeight: 208,
+          triggerProposal: { type: 'click', binding: 'clickAction' }
+        }
+      }
+    },
+    now: () => '2026-06-27T01:07:00.000Z'
+  })
+  return run
+}
+
+const seedBlockedActionReviewRun = async (dataDir) => {
+  const run = createRun({
+    dataDir,
+    input: {
+      prompt: '新增一个自定义动作：害羞转圈，点击后轻轻转一圈。',
+      originalPrompt: '新增一个自定义动作：害羞转圈，点击后轻轻转一圈。',
+      backend: 'local',
+      generationTask: {
+        mode: 'single-action',
+        actions: [{
+          actionId: 'shy-spin',
+          name: '害羞转圈',
+          motionPrompt: '先缩起来，再轻轻转一圈。',
+          loop: false,
+          frameCount: 1,
+          triggerProposal: { type: 'click', binding: 'clickAction' }
+        }]
+      }
+    },
+    now: () => '2026-06-28T01:20:00.000Z'
+  })
+  const runDir = path.join(dataDir, 'runs', run.runId)
+  const framesDir = path.join(runDir, 'frames', 'actions', 'shy-spin')
+  const qaDir = path.join(runDir, 'qa')
+  const baseDir = path.join(runDir, 'frames', 'base')
+  await writeSolidPng(path.join(framesDir, '0001.png'), {
+    width: 192,
+    height: 208,
+    background: { r: 248, g: 185, b: 150, alpha: 1 }
+  })
+  await writeSolidPng(path.join(qaDir, 'action-frame-contact-sheet.png'), {
+    width: 192,
+    height: 208,
+    background: { r: 255, g: 228, b: 210, alpha: 1 }
+  })
+  await writeSolidPng(path.join(baseDir, '0001.png'), {
+    width: 512,
+    height: 512,
+    background: { r: 242, g: 198, b: 162, alpha: 1 }
+  })
+  fs.writeFileSync(path.join(qaDir, 'action-frame-validation.json'), `${JSON.stringify({
+    ok: false,
+    actionId: 'shy-spin',
+    frameCount: 1,
+    frameWidth: 192,
+    frameHeight: 208,
+    frames: [{
+      fileName: '0001.png',
+      width: 192,
+      height: 208,
+      visiblePixels: 0
+    }],
+    warnings: ['Frame 0001.png has no visible pixels.'],
+    playback: {
+      frameDurationsMs: [160]
+    },
+    repairs: [{
+      fileName: '0001.png',
+      reason: 'Visible pixels dropped to zero after regeneration.'
+    }],
+    contactSheetRelativePath: `runs/${run.runId}/qa/action-frame-contact-sheet.png`
+  }, null, 2)}\n`)
+  updateRunStatus({
+    dataDir,
+    runId: run.runId,
+    status: 'ready_for_review',
+    patch: {
+      taskStatus: 'confirmed',
+      currentStep: 'review',
+      reviewStatus: 'pending',
+      artifacts: {
+        generatedImage: {
+          ok: true,
+          backend: 'local',
+          model: 'local-custom-sprite-v2',
+          generatedAt: '2026-06-28T01:21:00.000Z',
+          outputs: [{
+            dataRelativePath: `runs/${run.runId}/frames/base/0001.png`,
+            mimeType: 'image/png',
+            sha256: 'dashboard-blocked-action-sha'
+          }]
+        },
+        actionFrames: {
+          actionId: 'shy-spin',
+          name: '害羞转圈',
+          framesDir,
+          qa: path.join(qaDir, 'action-frame-validation.json'),
+          contactSheet: path.join(qaDir, 'action-frame-contact-sheet.png'),
+          frameCount: 1,
+          frameWidth: 192,
+          frameHeight: 208,
+          triggerProposal: { type: 'click', binding: 'clickAction' }
+        }
+      }
+    },
+    now: () => '2026-06-28T01:21:30.000Z'
+  })
+  return run
+}
+
+const seedImportedFullPetRun = async (dataDir) => {
+  const run = createRun({
+    dataDir,
+    input: {
+      petName: 'Imported Review Cat',
+      petId: 'imported-review-cat',
+      prompt: '生成一只完整的新桌宠。',
+      originalPrompt: '生成一只完整的新桌宠。',
+      backend: 'cloud',
+      generationTask: {
+        mode: 'full-pet',
+        targetPet: 'new',
+        styleSource: 'textOnly',
+        characterBrief: '一只已经导入完成、等待最终复核的桌宠。',
+        actions: [{
+          actionId: 'idle',
+          name: 'Idle',
+          motionPrompt: 'soft breathing and a tiny tail sway',
+          loop: true,
+          frameCount: 12,
+          triggerProposal: { type: 'state', binding: 'idle' }
+        }]
+      }
+    },
+    now: () => '2026-06-27T01:10:00.000Z'
+  })
+  const runDir = path.join(dataDir, 'runs', run.runId)
+  const outputDir = path.join(runDir, 'outputs')
+  const qaDir = path.join(runDir, 'qa')
+  const baseDir = path.join(runDir, 'frames', 'base')
+  await writeSolidPng(path.join(baseDir, '0001.png'), {
+    width: 1024,
+    height: 1024,
+    background: { r: 255, g: 194, b: 120, alpha: 1 }
+  })
+  fs.mkdirSync(outputDir, { recursive: true })
+  fs.mkdirSync(qaDir, { recursive: true })
+  fs.writeFileSync(path.join(outputDir, 'spritesheet.webp'), createMinimalWebp())
+  fs.writeFileSync(path.join(outputDir, 'pet.json'), `${JSON.stringify({
+    id: 'imported-review-cat',
+    displayName: 'Imported Review Cat',
+    spritesheetPath: 'spritesheet.webp'
+  }, null, 2)}\n`)
+  fs.writeFileSync(path.join(qaDir, 'atlas-validation.json'), `${JSON.stringify({
+    ok: true,
+    width: 1536,
+    height: 1872,
+    visiblePixels: 8200,
+    warnings: []
+  }, null, 2)}\n`)
+  fs.writeFileSync(path.join(qaDir, 'source-image-validation.json'), `${JSON.stringify({
+    ok: true,
+    sourceRelativePath: `runs/${run.runId}/frames/base/0001.png`,
+    width: 1024,
+    height: 1024,
+    visiblePixels: 6400,
+    warnings: []
+  }, null, 2)}\n`)
+  updateRunStatus({
+    dataDir,
+    runId: run.runId,
+    status: 'imported',
+    patch: {
+      taskStatus: 'confirmed',
+      currentStep: 'imported',
+      reviewStatus: 'approved',
+      importStatus: 'imported',
+      importedPackId: 'imported-review-cat',
+      activatedPackId: 'imported-review-cat',
+      artifacts: {
+        outputDir,
+        petJson: path.join(outputDir, 'pet.json'),
+        spritesheet: path.join(outputDir, 'spritesheet.webp'),
+        qa: path.join(qaDir, 'atlas-validation.json'),
+        sourceImageQa: path.join(qaDir, 'source-image-validation.json'),
+        generatedImage: {
+          ok: true,
+          backend: 'cloud',
+          model: 'gpt-image-2',
+          generatedAt: '2026-06-27T01:11:00.000Z',
+          outputs: [{
+            dataRelativePath: `runs/${run.runId}/frames/base/0001.png`,
+            mimeType: 'image/png',
+            sha256: 'dashboard-imported-full-pet-sha'
+          }]
+        }
+      }
+    },
+    now: () => '2026-06-27T01:12:00.000Z'
+  })
+  return run
+}
+
+const seedImportedActionRunWithoutTriggerSubmission = async (dataDir) => {
+  const run = createRun({
+    dataDir,
+    input: {
+      prompt: 'Imported action without recorded trigger proposal submission.',
+      originalPrompt: 'Imported action without recorded trigger proposal submission.',
+      backend: 'provider',
+      generationTask: {
+        mode: 'single-action',
+        targetPet: 'current',
+        styleSource: 'currentPet',
+        actions: [{
+          actionId: 'missing-trigger-record',
+          name: 'Missing Trigger Record',
+          motionPrompt: 'wave once',
+          loop: false,
+          frameCount: 1,
+          triggerProposal: { type: 'click', binding: 'clickAction' }
+        }]
+      }
+    },
+    now: () => '2026-06-27T01:13:00.000Z'
+  })
+  const runDir = path.join(dataDir, 'runs', run.runId)
+  const framesDir = path.join(runDir, 'frames', 'actions', 'missing-trigger-record')
+  const qaDir = path.join(runDir, 'qa')
+  const baseDir = path.join(runDir, 'frames', 'base')
+  await writeSolidPng(path.join(framesDir, '0001.png'), {
+    width: 192,
+    height: 208,
+    background: { r: 222, g: 185, b: 150, alpha: 1 }
+  })
+  await writeSolidPng(path.join(qaDir, 'action-frame-contact-sheet.png'), {
+    width: 192,
+    height: 208,
+    background: { r: 255, g: 234, b: 214, alpha: 1 }
+  })
+  await writeSolidPng(path.join(baseDir, '0001.png'), {
+    width: 512,
+    height: 512,
+    background: { r: 244, g: 206, b: 170, alpha: 1 }
+  })
+  fs.writeFileSync(path.join(qaDir, 'action-frame-validation.json'), `${JSON.stringify({
+    ok: true,
+    loop: false,
+    warnings: [],
+    playback: {
+      frameDurationsMs: [160]
+    }
+  }, null, 2)}\n`)
+  updateRunStatus({
+    dataDir,
+    runId: run.runId,
+    status: 'imported',
+    patch: {
+      taskStatus: 'confirmed',
+      currentStep: 'imported',
+      reviewStatus: 'approved',
+      importStatus: 'imported',
+      importedActionId: 'missing-trigger-record',
+      artifacts: {
+        generatedImage: {
+          ok: true,
+          backend: 'provider',
+          model: 'gpt-image-2',
+          generatedAt: '2026-06-27T01:14:00.000Z',
+          outputs: [{
+            dataRelativePath: `runs/${run.runId}/frames/base/0001.png`,
+            mimeType: 'image/png',
+            sha256: 'dashboard-imported-missing-trigger-record-sha'
+          }]
+        },
+        actionFrames: {
+          actionId: 'missing-trigger-record',
+          name: 'Missing Trigger Record',
+          framesDir,
+          qa: path.join(qaDir, 'action-frame-validation.json'),
+          contactSheet: path.join(qaDir, 'action-frame-contact-sheet.png'),
+          frameCount: 1,
+          frameWidth: 192,
+          frameHeight: 208,
+          triggerProposal: { type: 'click', binding: 'clickAction' }
+        }
+      }
+    },
+    now: () => '2026-06-27T01:15:00.000Z'
+  })
+  return run
+}
+
+test('creator studio dashboard drives a single-action fixture run to the host import handoff', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-dashboard-browser-'))
+  const dashboardPath = path.join(__dirname, '../../examples/plugins/creator-studio/web/dashboard/index.html')
+  const server = createCreatorStudioServer({ dataDir, dashboardPath })
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const port = server.address().port
+  const browser = await chromium.launch({ headless: true })
+  const page = await browser.newPage()
+
+  try {
+    await page.goto(`http://127.0.0.1:${port}`)
+    await page.locator('#prompt-input').fill('新增一个自定义动作：原地打滚，动作要循环。')
+    await page.locator('#draft-button').click()
+
+    await page.waitForSelector('[data-answer=\"manual\"]')
+    assert.match(await page.locator('#next-step-panel').textContent(), /Answer follow-up/i)
+
+    await page.locator('[data-answer=\"manual\"]').click()
+    await page.waitForFunction(() => !document.querySelector('#confirm-button').disabled)
+    assert.match(await page.locator('#task-preview').textContent(), /原地打滚/i)
+
+    await page.locator('#confirm-button').click()
+    await page.waitForFunction(() => !document.querySelector('#generate-button').disabled)
+    assert.match(await page.locator('#status-line').textContent(), /Task confirmed/i)
+
+    await page.locator('#generate-button').click()
+    await page.waitForFunction(() => !document.querySelector('#approve-button').disabled)
+    assert.match(await page.locator('#action-review-panel').textContent(), /Review status/i)
+    assert.match(await page.locator('#import-handoff-panel').textContent(), /Review the generated frames, repair any bad frame, then approve the action/i)
+
+    await page.locator('#approve-button').click()
+    await page.waitForFunction(() => /Run approved/.test(document.querySelector('#status-line').textContent))
+
+    const handoffText = await page.locator('#import-handoff-panel').textContent()
+    assert.match(await page.locator('#status-line').textContent(), /import-approved-action/i)
+    assert.match(handoffText, /Import Approved Action/i)
+    assert.match(handoffText, /Control Center -> Plugins/i)
+    assert.match(handoffText, /Command ID: import-approved-action/i)
+  } finally {
+    await browser.close()
+    await new Promise((resolve) => server.close(resolve))
+  }
+})
+
+test('creator studio dashboard drives a full-pet fixture run to the host import handoff', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-dashboard-browser-full-pet-'))
+  const server = await openDashboardServer(dataDir)
+  const port = server.address().port
+  const { browser, page } = await openDashboardPage(server)
+
+  try {
+    await page.goto(`http://127.0.0.1:${port}`)
+    await page.locator('#prompt-input').fill('生成一只完整的新桌宠，要软乎乎的橘猫风格，包含 idle 动作。')
+    await page.locator('#draft-button').click()
+
+    await page.waitForFunction(() => !document.querySelector('#confirm-button').disabled)
+    assert.match(await page.locator('#task-preview').textContent(), /Character brief/i)
+    assert.match(await page.locator('#trigger-panel').textContent(), /Trigger plan/i)
+
+    await page.locator('#confirm-button').click()
+    await page.waitForFunction(() => !document.querySelector('#generate-button').disabled)
+    assert.match(await page.locator('#status-line').textContent(), /Task confirmed/i)
+
+    await page.locator('#generate-button').click()
+    await page.waitForFunction(() => !document.querySelector('#approve-button').disabled)
+    assert.match(await page.locator('#status-line').textContent(), /Generated pet-pack output/i)
+    assert.match(await page.locator('#full-pet-review-panel').textContent(), /Atlas QA/i)
+    assert.match(await page.locator('#import-handoff-panel').textContent(), /Review the generated pet-pack output and approve the run before host-owned pet import/i)
+
+    await page.locator('#approve-button').click()
+    await page.waitForFunction(() => /Run approved/.test(document.querySelector('#status-line').textContent))
+
+    const handoffText = await page.locator('#import-handoff-panel').textContent()
+    assert.match(await page.locator('#status-line').textContent(), /import-approved-pet/i)
+    assert.match(handoffText, /Import Approved Pet/i)
+    assert.match(handoffText, /Control Center -> Plugins/i)
+    assert.match(handoffText, /Command ID: import-approved-pet/i)
+    assert.match(handoffText, /Payload JSON:/i)
+    assert.match(handoffText, /"runId":"[^"]+"/i)
+  } finally {
+    await browser.close()
+    await new Promise((resolve) => server.close(resolve))
+  }
+})
+
+test('creator studio dashboard surfaces blocked single-action qa before approval', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-dashboard-browser-blocked-action-'))
+  const run = await seedBlockedActionReviewRun(dataDir)
+  const server = await openDashboardServer(dataDir)
+  const { browser, page } = await openDashboardPage(server)
+
+  try {
+    await page.waitForFunction(() => document.querySelector('#run-select')?.value?.length > 0)
+    await page.locator('#run-select').selectOption(run.runId)
+    await page.waitForFunction((expectedRunId) => document.querySelector('#run-select')?.value === expectedRunId, run.runId)
+
+    const reviewText = await page.locator('#action-review-panel').textContent()
+    assert.match(reviewText, /QA blocked/i)
+    assert.match(reviewText, /Repair or regenerate frames before approval/i)
+    assert.match(reviewText, /Frame 0001\.png has no visible pixels/i)
+    assert.match(reviewText, /Invalid frames: 1/i)
+    assert.match(reviewText, /Repairs logged: 1/i)
+
+    const nextStepText = await page.locator('#next-step-panel').textContent()
+    assert.doesNotMatch(nextStepText, /Approve run/i)
+    assert.match(nextStepText, /Review and repair frames/i)
+    assert.match(nextStepText, /repair buttons in the frame review panel/i)
+
+    const actionLaneText = await page.locator('#action-lane-panel').textContent()
+    assert.match(actionLaneText, /Dashboard action: Review and repair frames/i)
+    assert.match(actionLaneText, /repair buttons in the frame review panel/i)
+    assert.match(actionLaneText, /not directly available from a dashboard button right now/i)
+
+    assert.equal(await page.locator('#approve-button').isDisabled(), true)
+
+    const handoffText = await page.locator('#import-handoff-panel').textContent()
+    assert.match(handoffText, /QA blocked/i)
+    assert.match(handoffText, /repair the bad frames or regenerate the action before approval/i)
+
+    const workflowGuidanceText = await page.locator('#workflow-guidance-panel').textContent()
+    assert.match(workflowGuidanceText, /Import state: review-required/i)
+    assert.match(workflowGuidanceText, /Repair or regenerate frames before approval/i)
+    assert.doesNotMatch(workflowGuidanceText, /Review QA and approve the run before host-owned action import/i)
+  } finally {
+    await browser.close()
+    await new Promise((resolve) => server.close(resolve))
+  }
+})
+
+test('creator studio dashboard shows imported action review completion details', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-dashboard-browser-imported-action-'))
+  await seedImportedActionRun(dataDir)
+  const server = await openDashboardServer(dataDir)
+  const { browser, page } = await openDashboardPage(server)
+
+  try {
+    await page.waitForFunction(() => document.querySelector('#run-select')?.value?.length > 0)
+
+    const handoffText = await page.locator('#import-handoff-panel').textContent()
+    assert.match(handoffText, /Imported result details/i)
+    assert.match(handoffText, /Review location: Actions -> Trigger Proposal Inbox/i)
+    assert.match(handoffText, /Follow-up: Review trigger proposal/i)
+    assert.match(handoffText, /The action import is complete\. Review the submitted trigger proposal/i)
+
+    const workflowGuidanceText = await page.locator('#workflow-guidance-panel').textContent()
+    assert.match(workflowGuidanceText, /Follow-up: Review trigger proposal/i)
+    assert.match(workflowGuidanceText, /Actions -> Trigger Proposal Inbox/i)
+
+    const reviewText = await page.locator('#action-review-panel').textContent()
+    assert.match(reviewText, /Import completed/i)
+    assert.match(reviewText, /Imported action: shy-spin/i)
+    assert.match(reviewText, /Actions -> Trigger Proposal Inbox/i)
+    assert.match(reviewText, /Follow-up: Review trigger proposal/i)
+    assert.match(reviewText, /The action import is complete\. Review the submitted trigger proposal/i)
+    assert.doesNotMatch(reviewText, /QA blocked/i)
+    assert.doesNotMatch(reviewText, /Repair or regenerate frames before approval/i)
+    assert.doesNotMatch(reviewText, /Repair/i)
+
+    const nextStepText = await page.locator('#next-step-panel').textContent()
+    assert.match(nextStepText, /Review trigger proposal/i)
+    assert.match(nextStepText, /Actions -> Trigger Proposal Inbox/i)
+
+    const actionLaneText = await page.locator('#action-lane-panel').textContent()
+    assert.match(actionLaneText, /Host-owned action: Review trigger proposal/i)
+    assert.match(actionLaneText, /Actions -> Trigger Proposal Inbox/i)
+  } finally {
+    await browser.close()
+    await new Promise((resolve) => server.close(resolve))
+  }
+})
+
+test('creator studio dashboard shows imported action handoff failure details', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-dashboard-browser-imported-action-failed-'))
+  await seedImportedFailedActionRun(dataDir)
+  const server = await openDashboardServer(dataDir)
+  const { browser, page } = await openDashboardPage(server)
+
+  try {
+    await page.waitForFunction(() => document.querySelector('#run-select')?.value?.length > 0)
+
+    const handoffText = await page.locator('#import-handoff-panel').textContent()
+    assert.match(handoffText, /Imported result details/i)
+    assert.match(handoffText, /Review location: Control Center -> Plugins/i)
+    assert.match(handoffText, /Follow-up: Review import handoff/i)
+    assert.match(handoffText, /proposal write failed/i)
+    assert.match(handoffText, /\[redacted-token\]/i)
+    assert.match(handoffText, /\[redacted-path\]/i)
+    assert.match(handoffText, /\[redacted-local-url\]/i)
+    assert.equal(handoffText.includes('bridge-secret'), false)
+    assert.equal(handoffText.includes('/Users/mango/private/proposal.json'), false)
+    assert.equal(handoffText.includes('127.0.0.1:8787'), false)
+
+    const workflowGuidanceText = await page.locator('#workflow-guidance-panel').textContent()
+    assert.match(workflowGuidanceText, /Follow-up: Review import handoff/i)
+    assert.match(workflowGuidanceText, /Control Center -> Plugins/i)
+    assert.match(workflowGuidanceText, /proposal write failed/i)
+    assert.match(workflowGuidanceText, /\[redacted-token\]/i)
+    assert.match(workflowGuidanceText, /\[redacted-path\]/i)
+    assert.match(workflowGuidanceText, /\[redacted-local-url\]/i)
+    assert.equal(workflowGuidanceText.includes('bridge-secret'), false)
+    assert.equal(workflowGuidanceText.includes('/Users/mango/private/proposal.json'), false)
+    assert.equal(workflowGuidanceText.includes('127.0.0.1:8787'), false)
+
+    const reviewText = await page.locator('#action-review-panel').textContent()
+    assert.match(reviewText, /Import completed/i)
+    assert.match(reviewText, /Imported action: shy-spin/i)
+    assert.match(reviewText, /Control Center -> Plugins/i)
+    assert.match(reviewText, /Follow-up: Review import handoff/i)
+    assert.match(reviewText, /proposal write failed/i)
+    assert.match(reviewText, /\[redacted-token\]/i)
+    assert.match(reviewText, /\[redacted-path\]/i)
+    assert.match(reviewText, /\[redacted-local-url\]/i)
+    assert.doesNotMatch(reviewText, /QA blocked/i)
+    assert.doesNotMatch(reviewText, /Repair or regenerate frames before approval/i)
+    assert.doesNotMatch(reviewText, /Repair/i)
+    assert.equal(reviewText.includes('bridge-secret'), false)
+    assert.equal(reviewText.includes('/Users/mango/private/proposal.json'), false)
+    assert.equal(reviewText.includes('127.0.0.1:8787'), false)
+
+    const nextStepText = await page.locator('#next-step-panel').textContent()
+    assert.match(nextStepText, /Review import handoff/i)
+    assert.match(nextStepText, /Control Center -> Plugins/i)
+    assert.match(nextStepText, /proposal write failed/i)
+    assert.match(nextStepText, /\[redacted-token\]/i)
+    assert.match(nextStepText, /\[redacted-path\]/i)
+    assert.match(nextStepText, /\[redacted-local-url\]/i)
+    assert.equal(nextStepText.includes('bridge-secret'), false)
+    assert.equal(nextStepText.includes('/Users/mango/private/proposal.json'), false)
+    assert.equal(nextStepText.includes('127.0.0.1:8787'), false)
+
+    const actionLaneText = await page.locator('#action-lane-panel').textContent()
+    assert.match(actionLaneText, /Host-owned action: Review import handoff/i)
+    assert.match(actionLaneText, /Location: Control Center -> Plugins/i)
+    assert.match(actionLaneText, /proposal write failed/i)
+    assert.match(actionLaneText, /\[redacted-token\]/i)
+    assert.match(actionLaneText, /\[redacted-path\]/i)
+    assert.match(actionLaneText, /\[redacted-local-url\]/i)
+    assert.equal(actionLaneText.includes('bridge-secret'), false)
+    assert.equal(actionLaneText.includes('/Users/mango/private/proposal.json'), false)
+    assert.equal(actionLaneText.includes('127.0.0.1:8787'), false)
+  } finally {
+    await browser.close()
+    await new Promise((resolve) => server.close(resolve))
+  }
+})
+
+test('creator studio dashboard shows imported full-pet review completion details', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-dashboard-browser-imported-full-pet-'))
+  await seedImportedFullPetRun(dataDir)
+  const server = await openDashboardServer(dataDir)
+  const { browser, page } = await openDashboardPage(server)
+
+  try {
+    await page.waitForFunction(() => document.querySelector('#run-select')?.value?.length > 0)
+
+    const handoffText = await page.locator('#import-handoff-panel').textContent()
+    assert.match(handoffText, /Imported result details/i)
+    assert.match(handoffText, /Imported pet pack: imported-review-cat/i)
+    assert.match(handoffText, /Follow-up: Review imported result/i)
+    assert.match(handoffText, /Review the imported result inside OpenPet/i)
+
+    const resultCardText = await page.locator('#import-handoff-panel .notice').last().textContent()
+    assert.match(resultCardText, /Follow-up: Review imported result/i)
+    assert.match(resultCardText, /Review the imported result inside OpenPet/i)
+
+    const workflowGuidanceText = await page.locator('#workflow-guidance-panel').textContent()
+    assert.match(workflowGuidanceText, /Follow-up: Review imported result/i)
+    assert.match(workflowGuidanceText, /OpenPet/i)
+
+    const reviewText = await page.locator('#full-pet-review-panel').textContent()
+    assert.match(reviewText, /Import completed/i)
+    assert.match(reviewText, /Imported pet pack: imported-review-cat/i)
+    assert.match(reviewText, /Activated pack: imported-review-cat/i)
+    assert.match(reviewText, /Review location: OpenPet/i)
+    assert.match(reviewText, /Follow-up: Review imported result/i)
+    assert.match(reviewText, /Review the imported result inside OpenPet/i)
+    assert.doesNotMatch(reviewText, /QA blocked/i)
+    assert.doesNotMatch(reviewText, /Retry generation on this same run before approval or import/i)
+
+    const nextStepText = await page.locator('#next-step-panel').textContent()
+    assert.match(nextStepText, /Review imported result/i)
+    assert.match(nextStepText, /OpenPet/i)
+
+    const actionLaneText = await page.locator('#action-lane-panel').textContent()
+    assert.match(actionLaneText, /Host-owned action: Review imported result/i)
+    assert.match(actionLaneText, /Location: OpenPet/i)
+  } finally {
+    await browser.close()
+    await new Promise((resolve) => server.close(resolve))
+  }
+})
+
+test('creator studio dashboard shows imported action missing trigger handoff record details', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-dashboard-browser-imported-action-missing-trigger-'))
+  await seedImportedActionRunWithoutTriggerSubmission(dataDir)
+  const server = await openDashboardServer(dataDir)
+  const { browser, page } = await openDashboardPage(server)
+
+  try {
+    await page.waitForFunction(() => document.querySelector('#run-select')?.value?.length > 0)
+
+    const handoffText = await page.locator('#import-handoff-panel').textContent()
+    assert.match(handoffText, /Imported result details/i)
+    assert.match(handoffText, /Follow-up: Review import handoff/i)
+    assert.match(handoffText, /no trigger proposal handoff record was saved/i)
+    assert.equal(handoffText.includes('runs during Import Approved Action'), false)
+
+    const workflowGuidanceText = await page.locator('#workflow-guidance-panel').textContent()
+    assert.match(workflowGuidanceText, /Follow-up: Review import handoff/i)
+    assert.match(workflowGuidanceText, /Control Center -> Plugins/i)
+    assert.match(workflowGuidanceText, /no trigger proposal handoff record was saved/i)
+    assert.equal(workflowGuidanceText.includes('runs during Import Approved Action'), false)
+
+    const reviewText = await page.locator('#action-review-panel').textContent()
+    assert.match(reviewText, /Import completed/i)
+    assert.match(reviewText, /Control Center -> Plugins/i)
+    assert.match(reviewText, /Follow-up: Review import handoff/i)
+    assert.match(reviewText, /no trigger proposal handoff record was saved/i)
+    assert.doesNotMatch(reviewText, /QA blocked/i)
+    assert.doesNotMatch(reviewText, /Repair or regenerate frames before approval/i)
+    assert.doesNotMatch(reviewText, /Repair/i)
+    assert.equal(reviewText.includes('runs during Import Approved Action'), false)
+
+    const nextStepText = await page.locator('#next-step-panel').textContent()
+    assert.match(nextStepText, /Review import handoff/i)
+    assert.match(nextStepText, /no trigger proposal handoff record was saved/i)
+
+    const actionLaneText = await page.locator('#action-lane-panel').textContent()
+    assert.match(actionLaneText, /Host-owned action: Review import handoff/i)
+    assert.match(actionLaneText, /Control Center -> Plugins/i)
+    assert.match(actionLaneText, /no trigger proposal handoff record was saved/i)
+  } finally {
+    await browser.close()
+    await new Promise((resolve) => server.close(resolve))
+  }
+})
+
+test('creator studio dashboard surfaces full-pet qa source mismatch before approval', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-dashboard-browser-full-pet-mismatch-'))
+  const run = createRun({
+    dataDir,
+    input: {
+      petName: 'Mismatch Dashboard Cat',
+      petId: 'mismatch-dashboard-cat',
+      prompt: '生成一只完整的新桌宠。',
+      originalPrompt: '生成一只完整的新桌宠。',
+      backend: 'cloud',
+      generationTask: {
+        mode: 'full-pet',
+        targetPet: 'new',
+        styleSource: 'textOnly',
+        characterBrief: '一只需要显示 mismatch 提示的桌宠。',
+        actions: [{
+          actionId: 'idle',
+          name: 'Idle',
+          motionPrompt: 'neutral idle pose',
+          loop: true,
+          frameCount: 12,
+          triggerProposal: { type: 'state', binding: 'idle' }
+        }]
+      }
+    },
+    now: () => '2026-06-27T00:30:00.000Z'
+  })
+  const outputDir = path.join(dataDir, 'runs', run.runId, 'outputs')
+  const qaDir = path.join(dataDir, 'runs', run.runId, 'qa')
+  const currentSourceDir = path.join(dataDir, 'runs', run.runId, 'frames', 'base')
+  fs.mkdirSync(outputDir, { recursive: true })
+  fs.mkdirSync(qaDir, { recursive: true })
+  fs.mkdirSync(currentSourceDir, { recursive: true })
+  await sharp({
+    create: {
+      width: 192,
+      height: 208,
+      channels: 4,
+      background: { r: 210, g: 140, b: 80, alpha: 1 }
+    }
+  }).png().toFile(path.join(currentSourceDir, '0001.png'))
+  fs.writeFileSync(path.join(outputDir, 'spritesheet.webp'), createMinimalWebp())
+  fs.writeFileSync(path.join(outputDir, 'pet.json'), `${JSON.stringify({
+    id: 'mismatch-dashboard-cat',
+    displayName: 'Mismatch Dashboard Cat',
+    spritesheetPath: 'spritesheet.webp'
+  }, null, 2)}\n`)
+  fs.writeFileSync(path.join(qaDir, 'atlas-validation.json'), `${JSON.stringify({
+    ok: true,
+    width: 1536,
+    height: 1872,
+    visiblePixels: 6400,
+    warnings: []
+  }, null, 2)}\n`)
+  fs.writeFileSync(path.join(qaDir, 'source-image-validation.json'), `${JSON.stringify({
+    ok: true,
+    sourceRelativePath: `runs/${run.runId}/frames/base/stale-source.png`,
+    width: 1024,
+    height: 1024,
+    visiblePixels: 1000,
+    warnings: []
+  }, null, 2)}\n`)
+  updateRunStatus({
+    dataDir,
+    runId: run.runId,
+    status: 'ready_for_review',
+    patch: {
+      taskStatus: 'confirmed',
+      currentStep: 'review',
+      reviewStatus: 'pending',
+      artifacts: {
+        outputDir,
+        petJson: path.join(outputDir, 'pet.json'),
+        spritesheet: path.join(outputDir, 'spritesheet.webp'),
+        qa: path.join(qaDir, 'atlas-validation.json'),
+        sourceImageQa: path.join(qaDir, 'source-image-validation.json'),
+        generatedImage: {
+          outputs: [{
+            mimeType: 'image/png',
+            dataRelativePath: `runs/${run.runId}/frames/base/0001.png`
+          }]
+        }
+      }
+    },
+    now: () => '2026-06-27T00:30:30.000Z'
+  })
+  const server = await openDashboardServer(dataDir)
+  const { browser, page } = await openDashboardPage(server)
+
+  try {
+    await page.waitForFunction(() => document.querySelector('#run-select')?.value?.length > 0)
+    await page.locator('#run-select').selectOption(run.runId)
+    await page.waitForFunction((expectedRunId) => document.querySelector('#run-select')?.value === expectedRunId, run.runId)
+    const reviewText = await page.locator('#full-pet-review-panel').textContent()
+    assert.match(reviewText, /QA source image does not match the current generated image/i)
+    assert.match(reviewText, /Retry generation on this same run before approval/i)
+    assert.match(reviewText, /stale-source\.png/i)
+    assert.match(reviewText, /0001\.png/i)
+    await expectRetryButtonLabel(page, 'Retry generation')
+    assert.match(await page.locator('#next-step-panel').textContent(), /Retry generation/i)
+    assert.equal(await page.locator('#approve-button').isDisabled(), true)
+    assert.match(await page.locator('#action-lane-panel').textContent(), /Retry generation before approval/i)
+    const handoffText = await page.locator('#import-handoff-panel').textContent()
+    assert.match(handoffText, /QA blocked/i)
+    assert.match(handoffText, /Retry generation on this same run before approval or import/i)
+    const workflowGuidanceText = await page.locator('#workflow-guidance-panel').textContent()
+    assert.match(workflowGuidanceText, /Import state: review-required/i)
+    assert.match(workflowGuidanceText, /Retry generation on this same run before approval/i)
+    assert.doesNotMatch(workflowGuidanceText, /Review the generated pet-pack output and approve the run before host-owned pet import/i)
+  } finally {
+    await browser.close()
+    await new Promise((resolve) => server.close(resolve))
+  }
+})
+
+test('creator studio dashboard lets users edit a drafted action task before confirmation', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-dashboard-browser-task-edit-'))
+  const server = await openDashboardServer(dataDir)
+  const { browser, page } = await openDashboardPage(server)
+
+  try {
+    await page.locator('#prompt-input').fill('新增一个自定义动作：原地打滚，动作要循环。')
+    await page.locator('#draft-button').click()
+
+    await page.waitForSelector('[data-answer="manual"]')
+    await page.locator('[data-answer="manual"]').click()
+    await page.waitForFunction(() => !document.querySelector('#confirm-button').disabled)
+
+    await page.locator('#task-edit-name').fill('害羞打滚')
+    await page.locator('#task-edit-motion').fill('先缩起来，再沿着地面慢慢打滚一圈。')
+    await page.locator('#task-edit-loop').selectOption('false')
+    await page.locator('#task-edit-trigger').selectOption('manual')
+    await page.locator('#save-task-button').click()
+
+    await page.waitForFunction(() => /Task edits saved\./.test(document.querySelector('#status-line').textContent))
+    assert.match(await page.locator('#task-preview').textContent(), /害羞打滚/i)
+    assert.match(await page.locator('#task-preview').textContent(), /先缩起来，再沿着地面慢慢打滚一圈/i)
+    assert.match(await page.locator('#trigger-panel').textContent(), /manual/i)
+
+    await page.locator('#confirm-button').click()
+    await page.waitForFunction(() => !document.querySelector('#generate-button').disabled)
+    await page.locator('#generate-button').click()
+    await page.waitForFunction(() => !document.querySelector('#approve-button').disabled)
+
+    const reviewText = await page.locator('#action-review-panel').textContent()
+    assert.match(reviewText, /害羞打滚/i)
+    assert.match(reviewText, /manual/i)
+  } finally {
+    await browser.close()
+    await new Promise((resolve) => server.close(resolve))
+  }
+})
+
+test('creator studio dashboard lets users edit a drafted full-pet task before confirmation', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-dashboard-browser-full-pet-task-edit-'))
+  const server = await openDashboardServer(dataDir)
+  const { browser, page } = await openDashboardPage(server)
+
+  try {
+    await page.locator('#prompt-input').fill('生成一只完整的新桌宠，要软乎乎的橘猫风格，包含 idle 动作。')
+    await page.locator('#draft-button').click()
+    await page.waitForFunction(() => !document.querySelector('#confirm-button').disabled)
+
+    await page.locator('#task-edit-character-brief').fill('一只更圆润、奶油橘色、动作更慵懒的新桌宠。')
+    await page.locator('#task-edit-name-0').fill('Lazy Idle')
+    await page.locator('#task-edit-motion-0').fill('slow breathing with tiny ear flicks and a soft tail sway')
+    await page.locator('#task-edit-loop-0').selectOption('true')
+    await page.locator('#task-edit-trigger-0').selectOption('state')
+    await page.locator('#save-task-button').click()
+
+    await page.waitForFunction(() => /Task edits saved\./.test(document.querySelector('#status-line').textContent))
+    const previewText = await page.locator('#task-preview').textContent()
+    const triggerText = await page.locator('#trigger-panel').textContent()
+    assert.match(previewText, /一只更圆润、奶油橘色、动作更慵懒的新桌宠/i)
+    assert.match(previewText, /Lazy Idle/i)
+    assert.match(previewText, /slow breathing with tiny ear flicks/i)
+    assert.match(triggerText, /state/i)
+
+    await page.locator('#confirm-button').click()
+    await page.waitForFunction(() => !document.querySelector('#generate-button').disabled)
+    await page.locator('#generate-button').click()
+    await page.waitForFunction(() => !document.querySelector('#approve-button').disabled)
+
+    const reviewText = await page.locator('#full-pet-review-panel').textContent()
+    assert.match(reviewText, /Atlas QA/i)
+    assert.match(await page.locator('#status-line').textContent(), /Generated pet-pack output/i)
+  } finally {
+    await browser.close()
+    await new Promise((resolve) => server.close(resolve))
+  }
+})
+
+test('creator studio dashboard shows failed generation recovery and retries the same run', { concurrency: false }, async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-dashboard-browser-retry-'))
+  let generationAttempts = 0
+  const bridgeServer = http.createServer((request, response) => {
+    let body = ''
+    request.on('data', (chunk) => { body += chunk })
+    request.on('end', () => {
+      const payload = body ? JSON.parse(body) : {}
+      response.setHeader('Content-Type', 'application/json')
+      if (request.url.endsWith('/creator/model-settings')) {
+        response.end(JSON.stringify({
+          ok: true,
+          config: {
+            provider: 'openai-compatible',
+            baseUrl: 'http://127.0.0.1:7860/v1',
+            model: 'local-custom-sprite-v2'
+          }
+        }))
+        return
+      }
+      if (request.url.endsWith('/creator/model-image-generate')) {
+        generationAttempts += 1
+        if (generationAttempts === 1) {
+          response.statusCode = 503
+          response.end(JSON.stringify({ ok: false, error: 'Provider queue overloaded' }))
+          return
+        }
+        const dataRelativePath = `runs/${payload.output.dataRelativeDir.split('/')[1]}/frames/base/0001.png`
+        const generatedPath = path.join(dataDir, dataRelativePath)
+        fs.mkdirSync(path.dirname(generatedPath), { recursive: true })
+        sharp({
+          create: {
+            width: 96,
+            height: 112,
+            channels: 4,
+            background: { r: 255, g: 170, b: 90, alpha: 1 }
+          }
+        })
+          .png()
+          .toFile(generatedPath)
+          .then(() => {
+            response.end(JSON.stringify({
+              ok: true,
+              result: {
+                ok: true,
+                backend: 'provider',
+                model: 'local-custom-sprite-v2',
+                generatedAt: '2026-06-27T00:00:00.000Z',
+                outputs: [{
+                  dataRelativePath,
+                  mimeType: 'image/png',
+                  sha256: 'retry-sha'
+                }]
+              }
+            }))
+          })
+          .catch((error) => {
+            response.statusCode = 500
+            response.end(JSON.stringify({ ok: false, error: error.message }))
+          })
+        return
+      }
+      response.statusCode = 404
+      response.end(JSON.stringify({ ok: false, error: 'Unknown route' }))
+    })
+  })
+  await new Promise((resolve) => bridgeServer.listen(0, '127.0.0.1', resolve))
+  const previousBridgeUrl = process.env.OPENPET_BRIDGE_URL
+  const previousBridgeToken = process.env.OPENPET_BRIDGE_TOKEN
+  process.env.OPENPET_BRIDGE_URL = `http://127.0.0.1:${bridgeServer.address().port}`
+  process.env.OPENPET_BRIDGE_TOKEN = 'bridge-token'
+  const server = await openDashboardServer(dataDir)
+  const { browser, page } = await openDashboardPage(server)
+
+  try {
+    await page.locator('#backend-select').selectOption('provider')
+    await page.locator('#prompt-input').fill('新增一个自定义动作：害羞转圈，点击后轻轻转一圈。')
+    await page.locator('#draft-button').click()
+    await page.waitForFunction(() => !document.querySelector('#confirm-button').disabled)
+
+    await page.locator('#confirm-button').click()
+    await page.waitForFunction(() => !document.querySelector('#generate-button').disabled)
+    await page.locator('#generate-button').click()
+    await page.waitForFunction(() => /Provider queue overloaded/.test(document.querySelector('#status-line').textContent))
+
+    assert.match(await page.locator('#recovery-panel').textContent(), /Generation failed/i)
+    assert.match(await page.locator('#recovery-panel').textContent(), /Provider queue overloaded/i)
+    await expectRetryButtonLabel(page, 'Retry generation')
+
+    const runIdBeforeRetry = await page.locator('#run-select').inputValue()
+    await page.locator('#generate-button').click()
+    await page.waitForFunction(() => !document.querySelector('#approve-button').disabled)
+
+    const runIdAfterRetry = await page.locator('#run-select').inputValue()
+    assert.equal(runIdAfterRetry, runIdBeforeRetry)
+    assert.equal(generationAttempts, 2)
+    assert.match(await page.locator('#status-line').textContent(), /Generated action output/i)
+    assert.match(await page.locator('#action-review-panel').textContent(), /Review status/i)
+  } finally {
+    await browser.close()
+    await new Promise((resolve) => server.close(resolve))
+    bridgeServer.closeAllConnections?.()
+    await new Promise((resolve) => bridgeServer.close(resolve))
+    if (previousBridgeUrl == null) delete process.env.OPENPET_BRIDGE_URL
+    else process.env.OPENPET_BRIDGE_URL = previousBridgeUrl
+    if (previousBridgeToken == null) delete process.env.OPENPET_BRIDGE_TOKEN
+    else process.env.OPENPET_BRIDGE_TOKEN = previousBridgeToken
+  }
+})
+
+test('creator studio dashboard shows full-pet validation recovery and retries the same run', { concurrency: false }, async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-dashboard-browser-full-pet-retry-'))
+  let generationAttempts = 0
+  const bridgeServer = http.createServer((request, response) => {
+    let body = ''
+    request.on('data', (chunk) => { body += chunk })
+    request.on('end', () => {
+      const payload = body ? JSON.parse(body) : {}
+      response.setHeader('Content-Type', 'application/json')
+      if (request.url.endsWith('/creator/model-settings')) {
+        response.end(JSON.stringify({
+          ok: true,
+          config: {
+            provider: 'openai-compatible',
+            baseUrl: 'http://127.0.0.1:7860/v1',
+            model: 'local-full-pet-v2'
+          }
+        }))
+        return
+      }
+      if (request.url.endsWith('/creator/model-image-generate')) {
+        generationAttempts += 1
+        const dataRelativePath = `runs/${payload.output.dataRelativeDir.split('/')[1]}/frames/base/0001.png`
+        const generatedPath = path.join(dataDir, dataRelativePath)
+        fs.mkdirSync(path.dirname(generatedPath), { recursive: true })
+        const background = generationAttempts === 1
+          ? { r: 0, g: 0, b: 0, alpha: 0 }
+          : { r: 255, g: 196, b: 120, alpha: 1 }
+        sharp({
+          create: {
+            width: 96,
+            height: 112,
+            channels: 4,
+            background
+          }
+        })
+          .png()
+          .toFile(generatedPath)
+          .then(() => {
+            response.end(JSON.stringify({
+              ok: true,
+              result: {
+                ok: true,
+                backend: 'provider',
+                model: 'local-full-pet-v2',
+                generatedAt: '2026-06-27T00:00:00.000Z',
+                outputs: [{
+                  dataRelativePath,
+                  mimeType: 'image/png',
+                  sha256: generationAttempts === 1 ? 'invalid-visible-pixels-sha' : 'full-pet-retry-sha'
+                }]
+              }
+            }))
+          })
+          .catch((error) => {
+            response.statusCode = 500
+            response.end(JSON.stringify({ ok: false, error: error.message }))
+          })
+        return
+      }
+      response.statusCode = 404
+      response.end(JSON.stringify({ ok: false, error: 'Unknown route' }))
+    })
+  })
+  await new Promise((resolve) => bridgeServer.listen(0, '127.0.0.1', resolve))
+  const previousBridgeUrl = process.env.OPENPET_BRIDGE_URL
+  const previousBridgeToken = process.env.OPENPET_BRIDGE_TOKEN
+  process.env.OPENPET_BRIDGE_URL = `http://127.0.0.1:${bridgeServer.address().port}`
+  process.env.OPENPET_BRIDGE_TOKEN = 'bridge-token'
+  const server = await openDashboardServer(dataDir)
+  const { browser, page } = await openDashboardPage(server)
+
+  try {
+    await page.locator('#backend-select').selectOption('provider')
+    await page.locator('#prompt-input').fill('生成一只完整的新桌宠，平时懒懒的，被点击会害羞转圈，偶尔会打哈欠。')
+    await page.locator('#draft-button').click()
+    await page.waitForFunction(() => !document.querySelector('#confirm-button').disabled)
+
+    await page.locator('#confirm-button').click()
+    await page.waitForFunction(() => !document.querySelector('#generate-button').disabled)
+    await page.locator('#generate-button').click()
+    await page.waitForFunction(() => /Generated image contains no visible pixels/.test(document.querySelector('#status-line').textContent))
+
+    const recoveryText = await page.locator('#recovery-panel').textContent()
+    assert.match(recoveryText, /Generation failed/i)
+    assert.match(recoveryText, /Generated image contains no visible pixels/i)
+    assert.match(recoveryText, /The generated source image was empty/i)
+    await expectRetryButtonLabel(page, 'Retry generation')
+
+    const runIdBeforeRetry = await page.locator('#run-select').inputValue()
+    await page.locator('#generate-button').click()
+    await page.waitForFunction(() => !document.querySelector('#approve-button').disabled)
+
+    const runIdAfterRetry = await page.locator('#run-select').inputValue()
+    assert.equal(runIdAfterRetry, runIdBeforeRetry)
+    assert.equal(generationAttempts, 2)
+    assert.match(await page.locator('#status-line').textContent(), /Generated pet-pack output/i)
+    assert.match(await page.locator('#full-pet-review-panel').textContent(), /Atlas QA/i)
+  } finally {
+    await browser.close()
+    await new Promise((resolve) => server.close(resolve))
+    bridgeServer.closeAllConnections?.()
+    await new Promise((resolve) => bridgeServer.close(resolve))
+    if (previousBridgeUrl == null) delete process.env.OPENPET_BRIDGE_URL
+    else process.env.OPENPET_BRIDGE_URL = previousBridgeUrl
+    if (previousBridgeToken == null) delete process.env.OPENPET_BRIDGE_TOKEN
+    else process.env.OPENPET_BRIDGE_TOKEN = previousBridgeToken
+  }
+})
+
+const expectRetryButtonLabel = async (page, label) => {
+  await page.waitForFunction((expected) => document.querySelector('#generate-button')?.textContent?.includes(expected), label)
+}

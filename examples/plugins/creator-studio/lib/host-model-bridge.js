@@ -1,12 +1,15 @@
 const { callBridge } = require('./bridge-client')
 const { BackendUnavailableError } = require('./backend-adapters')
 const { buildOpenPetImagePrompt } = require('./openpet-prompt-builder')
+const { FIXTURE_BACKEND, PROVIDER_BACKEND, normalizeCreatorBackend } = require('./backend-mode')
 
 const DEFAULT_CONSTRAINTS = {
   width: 1024,
   height: 1024,
   transparent: true
 }
+
+const PROMPT_PREVIEW_MAX_LENGTH = 8000
 
 const safeUrlHost = (value) => {
   try {
@@ -26,36 +29,39 @@ const readHostModelSettings = async () => {
 }
 
 const createModelSnapshot = ({ backend, settings }) => {
-  if (backend !== 'fixture') {
+  const normalizedBackend = normalizeCreatorBackend(backend, FIXTURE_BACKEND)
+  if (normalizedBackend !== FIXTURE_BACKEND) {
     return {
-      backend: backend || 'provider',
+      backend: PROVIDER_BACKEND,
       provider: String(settings.provider || 'openai-compatible'),
       model: String(settings.model || ''),
       baseUrlHost: safeUrlHost(settings.baseUrl)
     }
   }
   return {
-    backend: backend || 'fixture',
-    provider: backend || 'fixture',
+    backend: FIXTURE_BACKEND,
+    provider: FIXTURE_BACKEND,
     model: 'fixture-image'
   }
 }
 
 const generateViaHostModelBridge = async ({ backend, run }) => {
+  const normalizedBackend = normalizeCreatorBackend(backend, FIXTURE_BACKEND)
   if (!process.env.OPENPET_BRIDGE_URL || !process.env.OPENPET_BRIDGE_TOKEN) {
     throw new BackendUnavailableError({
-      backend,
-      message: `${backend === 'cloud' ? 'Cloud' : 'Local'} backend is not configured. Configure model settings in OpenPet before running this backend.`
+      backend: normalizedBackend,
+      message: 'Provider backend is not configured. Configure model settings in OpenPet before running provider generation.'
     })
   }
 
   const settings = await readHostModelSettings()
-  const modelSnapshot = createModelSnapshot({ backend, settings })
+  const modelSnapshot = createModelSnapshot({ backend: normalizedBackend, settings })
   const promptBuild = buildOpenPetImagePrompt({
     run,
-    backend,
+    backend: normalizedBackend,
     model: modelSnapshot.model
   })
+  const promptPreviewText = String(promptBuild.prompt || '')
   const response = await callBridge('/creator/model-image-generate', {
     prompt: promptBuild.prompt,
     output: {
@@ -72,7 +78,12 @@ const generateViaHostModelBridge = async ({ backend, run }) => {
       mode: promptBuild.mode,
       actionId: promptBuild.actionId,
       sections: promptBuild.sections,
-      warnings: promptBuild.warnings
+      warnings: promptBuild.warnings,
+      promptPreview: {
+        text: promptPreviewText.slice(0, PROMPT_PREVIEW_MAX_LENGTH),
+        truncated: promptPreviewText.length > PROMPT_PREVIEW_MAX_LENGTH,
+        maxLength: PROMPT_PREVIEW_MAX_LENGTH
+      }
     }
   }
 }

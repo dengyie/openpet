@@ -4,6 +4,8 @@ import { cloneActionsConfig, clonePetPacks, defaultActionsConfig, defaultPetPack
 import { messageFromError } from '../lib/errors'
 import type {
   ActionTriggerProposalAcceptanceResult,
+  ActionTriggerProposalPreviewResult,
+  ActionTriggerRuleStatus,
   ActionTriggerProposalType,
   ActionsConfigViewState,
   CompletedActionFrameInspectionResult,
@@ -22,6 +24,7 @@ export function useActionsPane() {
   const [importInspection, setImportInspection] = useState<CompletedActionFrameInspectionResult | null>(null)
   const [triggerProposalType, setTriggerProposalType] = useState<ActionTriggerProposalType>('click')
   const [triggerProposalNotes, setTriggerProposalNotes] = useState('')
+  const [triggerProposalPreview, setTriggerProposalPreview] = useState<ActionTriggerProposalPreviewResult | null>(null)
   const [lastTriggerProposalResult, setLastTriggerProposalResult] = useState<ActionTriggerProposalAcceptanceResult | null>(null)
   const [status, setStatus] = useState('')
   const [working, setWorking] = useState(false)
@@ -48,6 +51,26 @@ export function useActionsPane() {
     if (actionsConfig.actions.some((action) => action.id === selectedActionId)) return
     setSelectedActionId(actionsConfig.defaultAction || actionsConfig.actions[0]?.id || '')
   }, [actionsConfig, selectedActionId])
+
+  useEffect(() => {
+    const actionId = selectedActionId || actionsConfig.defaultAction || actionsConfig.actions[0]?.id || ''
+    if (!actionId) {
+      setTriggerProposalPreview(null)
+      return undefined
+    }
+    let canceled = false
+    api.previewActionTriggerProposal({
+      actionId,
+      type: triggerProposalType,
+      binding: triggerProposalType === 'click' ? 'clickAction' : undefined,
+      notes: triggerProposalNotes.trim() || undefined
+    }).then((preview) => {
+      if (!canceled) setTriggerProposalPreview(preview)
+    }).catch(() => {
+      if (!canceled) setTriggerProposalPreview(null)
+    })
+    return () => { canceled = true }
+  }, [actionsConfig, selectedActionId, triggerProposalType, triggerProposalNotes])
 
   const onChangeImportDraft = (partial: Partial<ActionImportDraft>, clearInspection = false) => {
     setImportDraft({ ...importDraft, ...partial })
@@ -154,6 +177,37 @@ export function useActionsPane() {
       setStatus(`已拒绝触发提案：${response.proposal?.actionId || proposalId}`)
     } catch (error) {
       setStatus(messageFromError(error, '拒绝触发提案失败'))
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  const onSetTriggerRuleStatus = async (ruleId: string, status: ActionTriggerRuleStatus) => {
+    if (!ruleId) return
+    setWorking(true)
+    setStatus('')
+    try {
+      const response = await api.setActionTriggerRuleStatus(ruleId, status)
+      setActionsConfig(cloneActionsConfig(response.animations))
+      setStatus(`${status === 'disabled' ? '已停用' : '已启用'}触发规则：${ruleId}`)
+    } catch (error) {
+      setStatus(messageFromError(error, '更新触发规则失败'))
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  const onDeleteTriggerRule = async (ruleId: string) => {
+    if (!ruleId) return
+    if (!window.confirm(`删除触发规则 ${ruleId}？`)) return
+    setWorking(true)
+    setStatus('')
+    try {
+      const response = await api.deleteActionTriggerRule(ruleId)
+      setActionsConfig(cloneActionsConfig(response.animations))
+      setStatus(`已删除触发规则：${ruleId}`)
+    } catch (error) {
+      setStatus(messageFromError(error, '删除触发规则失败'))
     } finally {
       setWorking(false)
     }
@@ -375,10 +429,13 @@ export function useActionsPane() {
     onApplyTriggerProposal,
     onAcceptTriggerProposal,
     onRejectTriggerProposal,
+    onSetTriggerRuleStatus,
+    onDeleteTriggerRule,
     triggerProposalType,
     setTriggerProposalType: onChangeTriggerProposalType,
     triggerProposalNotes,
     setTriggerProposalNotes: onChangeTriggerProposalNotes,
+    triggerProposalPreview,
     lastTriggerProposalResult
   } satisfies ActionsPaneProps
 

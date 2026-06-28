@@ -135,6 +135,7 @@ test('pet chat state exposes provider readiness and current pet-pack main conver
 test('pet chat send uses shared control-center entrypoint and compact pet bubble', async () => {
   const prompt = 'secret phrase should not be logged'
   const longReply = 'This is a very long desktop pet reply that should remain complete in the chat panel but short inside the speech bubble.'
+  const bubbleText = 'Short pet bubble line.'
   const talkCalls = []
   const sayCalls = []
   const logs = []
@@ -161,6 +162,12 @@ test('pet chat send uses shared control-center entrypoint and compact pet bubble
         return {
           conversationId: 'control-center:legacy-cat:main',
           reply: longReply,
+          bubble: {
+            text: bubbleText,
+            segments: [bubbleText],
+            displayMode: 'bubble',
+            source: 'assistant-reply'
+          },
           messages: conversationMessages
         }
       }
@@ -186,12 +193,11 @@ test('pet chat send uses shared control-center entrypoint and compact pet bubble
   assert.equal(result.conversationId, 'control-center:legacy-cat:main')
   assert.equal(result.reply, longReply)
   assert.deepEqual(result.state.messages, conversationMessages)
-  assert.equal(result.state.bubble.text.length, 80)
+  assert.equal(result.state.bubble.text, bubbleText)
   assert.equal(result.state.bubble.source, 'ai')
   assert.equal(sayCalls.length, 1)
   assert.equal(sayCalls[0].source, 'ai')
-  assert.equal(sayCalls[0].text.length, 80)
-  assert.equal(sayCalls[0].text.endsWith('...'), true)
+  assert.equal(sayCalls[0].text, bubbleText)
   assert.equal(JSON.stringify(logs).includes(prompt), false)
   assert.deepEqual(logs.map((entry) => entry.event), [
     'pet-chat.message.started',
@@ -713,4 +719,76 @@ test('pet chat send stops before provider call when chat provider is not ready',
     'pet-chat.message.started',
     'pet-chat.message.failed'
   ])
+})
+
+test('pet pack activation notifies control center and desktop chat with refreshed AI talk state', async () => {
+  const rendererEvents = []
+  const desktopStates = []
+  const ipcMain = registerPetChatHandlers({
+    petPackService: {
+      setActivePack: (packId) => ({ activePackId: packId, pack: { id: packId, displayName: 'Mochi Cat' } }),
+      listPacks: () => ({
+        activePackId: 'mochi-cat',
+        packs: [{ id: 'mochi-cat', displayName: 'Mochi Cat', active: true }]
+      })
+    },
+    aiService: {
+      getConfig: () => ({
+        enabled: true,
+        hasApiKey: true,
+        provider: 'openai-compatible',
+        baseUrl: 'http://127.0.0.1:8317/v1',
+        model: 'gpt-5.5'
+      })
+    },
+    aiTalkService: {
+      getPersonaProfile: () => ({ petPackId: 'mochi-cat', petPackDisplayName: 'Mochi Cat' }),
+      getConversation: () => [{ role: 'assistant', content: 'mochi hello' }]
+    },
+    petChatWindowService: {
+      getState: () => ({ alwaysOnTop: true, visible: true, hasWindow: true }),
+      sendStateChanged: (state) => desktopStates.push(state)
+    }
+  })
+  const event = {
+    sender: {
+      send: (channel, payload) => rendererEvents.push({ channel, payload })
+    }
+  }
+
+  const result = await ipcMain.handlers.get(IPC.PET_PACKS_SET_ACTIVE)(event, { packId: 'mochi-cat' })
+
+  assert.equal(result.activePackId, 'mochi-cat')
+  assert.equal(desktopStates.length, 1)
+  assert.equal(desktopStates[0].petPack.id, 'mochi-cat')
+  assert.deepEqual(rendererEvents.map((entry) => entry.channel), [IPC.PET_PACKS_ACTIVE_CHANGED])
+  assert.equal(rendererEvents[0].payload.activePackId, 'mochi-cat')
+  assert.equal(rendererEvents[0].payload.petChatState.petPack.displayName, 'Mochi Cat')
+})
+
+test('ai talk trace export IPC includes behavior decisions through ai talk service', async () => {
+  const exportCalls = []
+  const ipcMain = registerPetChatHandlers({
+    aiTalkService: {
+      getConversation: () => [],
+      getPersonaProfile: () => ({ petPackId: 'legacy-cat', petPackDisplayName: 'Legacy Cat' }),
+      exportTraceDiagnostics: (payload) => {
+        exportCalls.push(payload)
+        return JSON.stringify({ ok: true, behaviorCount: payload.behaviorDecisions.length })
+      }
+    },
+    behaviorOrchestratorService: {
+      ...createRequiredServices().behaviorOrchestratorService,
+      getConfig: () => ({
+        decisions: [
+          { id: 7, timestamp: '2026-06-20T00:00:00.000Z', matched: true, reason: 'matched provider actionId' }
+        ]
+      })
+    }
+  })
+
+  const exported = JSON.parse(await ipcMain.handlers.get(IPC.AI_EXPORT_TRACE_DIAGNOSTICS)())
+
+  assert.deepEqual(exported, { ok: true, behaviorCount: 1 })
+  assert.equal(exportCalls[0].behaviorDecisions[0].id, 7)
 })

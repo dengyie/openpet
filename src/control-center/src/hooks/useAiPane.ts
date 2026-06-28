@@ -29,6 +29,7 @@ import type {
   AiBehaviorRule,
   AiConfigViewState,
   AiConnectionTestResult,
+  AiTalkTraceDiagnosticsFilters,
   AiMemoryProfileViewState,
   AiPersonaDraftViewState,
   AiPersonaOverride,
@@ -145,9 +146,25 @@ const formatConnectionStatus = ({
   const notice = (hasUnsavedConfigChanges || hasUnsavedApiKeyDraft)
     ? '当前存在未保存修改；本次测试使用已保存配置。'
     : ''
+  const localizedMessage = String(result.message || '')
+    .replace(/^AI API key is not configured$/, '聊天 API Key 未配置')
+    .replace(/^AI provider rejected the API key$/, '聊天 Provider 拒绝了当前 API Key')
+    .replace(/^AI provider endpoint or model was not found$/, '聊天 Provider 的接口或模型不存在')
+    .replace(/^AI provider rate limit exceeded$/, '聊天 Provider 已触发限流')
+    .replace(/^AI provider is temporarily unavailable$/, '聊天 Provider 暂时不可用')
+    .replace(/^AI provider returned an error response$/, '聊天 Provider 返回了错误响应')
+    .replace(/^AI provider connection test succeeded$/, '聊天 Provider 连接测试通过')
+  if (result.ok && result.modelsProbe === 'ok' && result.currentModelDiscovered === false) {
+    const mismatch = `聊天 Provider 可达，但当前保存的聊天 Model 未出现在 /models 返回列表中；请手动确认模型名称或网关映射。`
+    return notice ? `${notice} ${mismatch}` : mismatch
+  }
+  if (result.ok && result.modelsProbe === 'unavailable') {
+    const unavailable = '聊天 Provider 可达，但模型列表探测不可用；请手动确认模型名称。'
+    return notice ? `${notice} ${unavailable}` : unavailable
+  }
   const details = result.ok
     ? `连接正常：${context}${result.reply ? ` · ${result.reply}` : ''}`
-    : `连接失败：${result.message || result.code || 'Unknown error'} · ${context}`
+    : `连接失败：${localizedMessage || result.code || 'Unknown error'} · ${context}`
   return notice ? `${notice} ${details}` : details
 }
 
@@ -171,8 +188,12 @@ const formatImageGenerationHealthStatus = (result: ImageGenerationHealthCheckRes
   const label = '图片 Provider'
   const message = String(result.message || result.code || '')
     .replace(/^Cloud image generation API key is missing$/, 'Image generation API key is missing')
+    .replace(/^Image generation API key is missing$/, '图片 API Key 未配置')
     .replace(/^Cloud provider is reachable, but the optional \/models probe is unavailable$/, 'provider 可达，但模型列表探测不可用')
     .replace(/^Image Provider is reachable, but the optional \/models probe is unavailable$/, 'provider 可达，但模型列表探测不可用')
+  if (result.ok && result.modelsProbe === 'ok' && result.currentModelDiscovered === false) {
+    return `${label} 可达，但当前保存的图片 Model 未出现在 /models 返回列表中；请手动确认模型名称或网关映射。`
+  }
   if (result.ok) {
     if (result.code === 'provider_reachable_models_unavailable') {
       return `${label} 可达，但模型列表探测不可用；可继续尝试生成。`
@@ -200,9 +221,11 @@ export function useAiPane(activeTab = 'ai') {
   const [connectionStatus, setConnectionStatus] = useState('')
   const [connectionTestResult, setConnectionTestResult] = useState<AiConnectionTestResult | null>(null)
   const [imageHealthStatus, setImageHealthStatus] = useState('')
+  const [imageHealthResult, setImageHealthResult] = useState<ImageGenerationHealthCheckResult | null>(null)
   const [chatDraft, setChatDraft] = useState('')
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [petChatState, setPetChatState] = useState<PetChatStateViewState>(defaultPetChatState)
+  const [traceDiagnosticsFilters, setTraceDiagnosticsFilters] = useState<AiTalkTraceDiagnosticsFilters>({})
   const [chatting, setChatting] = useState(false)
   const [behavior, setBehavior] = useState<AiBehaviorConfig>(defaultAiConfig.behavior)
   const [behaviorRulesText, setBehaviorRulesText] = useState('[]')
@@ -240,6 +263,37 @@ export function useAiPane(activeTab = 'ai') {
       ...current,
       bubbleChat: nextState.bubbleChat
     }))
+    return nextState
+  }
+
+  const loadBehavior = async () => {
+    const nextBehavior = cloneAiBehavior(await api.getAiBehavior())
+    setBehavior(nextBehavior)
+    setBehaviorRulesText(JSON.stringify(nextBehavior.rules || [], null, 2))
+    setConfig((current) => ({ ...current, behavior: nextBehavior }))
+    return nextBehavior
+  }
+
+  const refreshActivePetPackAiContext = async (reason = 'refresh') => {
+    const [profile, memory, state, nextBehavior] = await Promise.all([
+      api.getAiPersonaProfile(),
+      api.getAiMemoryProfile(),
+      api.getPetChatState(),
+      api.getAiBehavior()
+    ])
+    const nextPersonaProfile = cloneAiPersonaProfile(profile)
+    setPersonaProfile(nextPersonaProfile)
+    setPersonaDraft(personaToDraft(nextPersonaProfile.overridePersona))
+    setGeneratedPersonaDraft((current) => (current?.petPackId === nextPersonaProfile.petPackId ? current : null))
+    setMemoryProfile(cloneAiMemoryProfile(memory))
+    applyPetChatState(state)
+    const behaviorConfig = cloneAiBehavior(nextBehavior)
+    setBehavior(behaviorConfig)
+    setBehaviorRulesText(JSON.stringify(behaviorConfig.rules || [], null, 2))
+    setConfig((current) => ({ ...current, behavior: behaviorConfig }))
+    if (reason === 'active-pet-pack-changed') {
+      setStatus(`已切换到 ${nextPersonaProfile.petPackDisplayName || nextPersonaProfile.petPackId} 的 AI 上下文`)
+    }
   }
 
   useEffect(() => {
@@ -278,9 +332,7 @@ export function useAiPane(activeTab = 'ai') {
 
   useEffect(() => {
     if (activeTab !== 'ai') return
-    void loadPersonaProfile().catch(() => {})
-    void loadMemoryProfile().catch(() => {})
-    void loadPetChatState().catch(() => {})
+    void refreshActivePetPackAiContext('tab-active').catch(() => {})
   }, [activeTab])
 
   useEffect(() => {
@@ -298,6 +350,16 @@ export function useAiPane(activeTab = 'ai') {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   }, [activeTab])
+
+  useEffect(() => {
+    if (typeof api.onActivePetPackChanged !== 'function') return undefined
+    return api.onActivePetPackChanged((event) => {
+      if (event?.petChatState) applyPetChatState(event.petChatState)
+      void refreshActivePetPackAiContext('active-pet-pack-changed').catch((error) => {
+        setStatus(messageFromError(error, '刷新当前宠物 AI 上下文失败'))
+      })
+    })
+  }, [])
 
   const saveProviderConfigDraft = async () => {
     const validationError = validateProviderConfig(config)
@@ -346,6 +408,7 @@ export function useAiPane(activeTab = 'ai') {
     setSaving(true)
     setStatus('')
     setImageHealthStatus('')
+    setImageHealthResult(null)
     try {
       const validationError = validateImageProviderConfig(imageGenerationConfig)
       if (validationError) throw new Error(validationError)
@@ -425,9 +488,7 @@ export function useAiPane(activeTab = 'ai') {
     setStatus('')
     try {
       await api.clearAiBehaviorDecisions()
-      const nextBehavior = cloneAiBehavior(await api.getAiBehavior())
-      setBehavior(nextBehavior)
-      setConfig({ ...config, behavior: nextBehavior })
+      await loadBehavior()
       setReplayResult(null)
       setDryRunResult(null)
       setStatus('Behavior 决策已清空')
@@ -459,6 +520,7 @@ export function useAiPane(activeTab = 'ai') {
     setSaving(true)
     setStatus('')
     setImageHealthStatus('')
+    setImageHealthResult(null)
     try {
       const key = imageApiKeyDraft.trim()
       if (!key) throw new Error('图片 API Key 不能为空')
@@ -483,6 +545,7 @@ export function useAiPane(activeTab = 'ai') {
     setSaving(true)
     setStatus('')
     setImageHealthStatus('')
+    setImageHealthResult(null)
     try {
       const result = await api.clearImageGenerationApiKey()
       const applyKeyResult = (current: ImageGenerationConfigViewState) => cloneImageGenerationConfig({
@@ -504,14 +567,18 @@ export function useAiPane(activeTab = 'ai') {
   const onCheckImageGenerationHealth = async () => {
     if (hasUnsavedImageGenerationChanges) {
       setImageHealthStatus('当前图片 Provider 配置有未保存修改；请先保存图片配置后再检查健康。')
+      setImageHealthResult(null)
       return
     }
     setSaving(true)
     setImageHealthStatus('图片 Provider 健康检查中')
+    setImageHealthResult(null)
     try {
       const result = await api.checkImageGenerationHealth({})
+      setImageHealthResult(result)
       setImageHealthStatus(formatImageGenerationHealthStatus(result))
     } catch (error) {
+      setImageHealthResult(null)
       setImageHealthStatus(messageFromError(error, '图片模型健康检查失败'))
     } finally {
       setSaving(false)
@@ -681,9 +748,7 @@ export function useAiPane(activeTab = 'ai') {
           ? `动作触发失败：${result.action.error}`
           : `已触发动作：${result.action.label || result.action.actionId}`)
       }
-      const nextBehavior = cloneAiBehavior(await api.getAiBehavior())
-      setBehavior(nextBehavior)
-      setConfig((current) => ({ ...current, behavior: nextBehavior }))
+      await loadBehavior()
       void loadMemoryProfile().catch(() => {})
     } catch (error) {
       setStatus(messageFromError(error, '发送失败'))
@@ -718,6 +783,20 @@ export function useAiPane(activeTab = 'ai') {
     }
   }
 
+  const onExportAiTalkTraceDiagnostics = async () => {
+    setStatus('')
+    try {
+      const content = await api.exportAiTalkTraceDiagnostics({
+        petPackId: String(traceDiagnosticsFilters.petPackId || '').trim(),
+        conversationId: String(traceDiagnosticsFilters.conversationId || '').trim()
+      })
+      downloadTextFile('openpet-ai-talk-trace-diagnostics.json', content, 'application/json;charset=utf-8')
+      setStatus('AI Talk Trace 已导出')
+    } catch (error) {
+      setStatus(messageFromError(error, 'AI Talk Trace 导出失败'))
+    }
+  }
+
   const paneProps = {
     config,
     activeConfig,
@@ -736,6 +815,7 @@ export function useAiPane(activeTab = 'ai') {
     status,
     connectionStatus,
     imageHealthStatus,
+    imageHealthResult,
     hasUnsavedConfigChanges,
     hasUnsavedApiKeyDraft,
     hasUnsavedImageGenerationChanges,
@@ -758,6 +838,7 @@ export function useAiPane(activeTab = 'ai') {
     dryRunResult,
     replayDraft,
     replayResult,
+    traceDiagnosticsFilters,
     setDryRunText,
     setReplayDraft,
     setBehaviorRulesText,
@@ -782,7 +863,12 @@ export function useAiPane(activeTab = 'ai') {
     onTest,
     onDryRunBehavior,
     onReplayBehaviorDecision,
+    onChangeTraceDiagnosticsFilters: (partial: AiTalkTraceDiagnosticsFilters) => setTraceDiagnosticsFilters({
+      petPackId: String(partial.petPackId || '').trim(),
+      conversationId: String(partial.conversationId || '').trim()
+    }),
     onExportBehaviorDiagnostics,
+    onExportAiTalkTraceDiagnostics,
     onClearBehaviorDecisions,
     onRefreshMemoryProfile,
     onDeleteMemory,

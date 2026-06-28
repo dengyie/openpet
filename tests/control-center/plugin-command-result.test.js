@@ -74,3 +74,44 @@ test('toCommandResultPreview summarizes Creator Studio run results', () => {
     { label: '导出包', value: '/tmp/openpet/runs/2026-06-19-creator-studio-pet-008/outputs/creator-studio-pet.codex-pet.zip' }
   ])
 })
+
+test('toCommandResultPreview summarizes Creator Studio action import results', () => {
+  const preview = toCommandResultPreview({
+    ok: true,
+    pluginId: 'openpet.creator-studio',
+    commandId: 'import-approved-action',
+    exitCode: 0,
+    stdout: '',
+    stderr: '',
+    result: {
+      ok: true,
+      message: 'Imported action shy-spin from run run-demo-action-123',
+      run: {
+        runId: 'run-demo-action-123',
+        status: 'imported',
+        currentStep: 'imported',
+        importedActionId: 'shy-spin',
+        artifacts: {
+          actionFrames: {
+            framesDir: '/tmp/openpet/runs/run-demo-action-123/frames/actions/shy-spin'
+          }
+        }
+      },
+      triggerProposalSubmission: {
+        ok: true,
+        proposal: {
+          id: 'proposal:click:shy-spin:test'
+        }
+      }
+    }
+  })
+
+  assert.deepEqual(preview.details, [
+    { label: 'Run', value: 'run-demo-action-123' },
+    { label: '状态', value: 'imported' },
+    { label: '步骤', value: 'imported' },
+    { label: '已导入动作', value: 'shy-spin' },
+    { label: '动作目录', value: '/tmp/openpet/runs/run-demo-action-123/frames/actions/shy-spin' },
+    { label: '触发建议', value: '已提交 · proposal:click:shy-spin:test' }
+  ])
+})

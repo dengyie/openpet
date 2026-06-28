@@ -1,6 +1,6 @@
 # OpenPet Current TODO Architecture
 
-> Date: 2026-06-24
+> Date: 2026-06-28
 > Baseline: `main@a317ec5` (`feat(chat): unify pet chat surfaces`)
 > Status: live TODO entry point
 > Scope: summarize current product gaps by the code architecture that owns them. Historical phase/spec documents remain audit records.
@@ -19,7 +19,7 @@ This is not a promise to implement every item in one milestone. It is a map for 
 - P3: longer-term platform direction.
 - Manual-required: needs real provider accounts, signed artifacts, notarization, Windows machines, production credentials, or human review.
 
-Current P0 status: no known startup/build blocker in this TODO pass. The highest-risk current gap is the half-wired trigger proposal inbox surface, but it is not yet the primary UI path.
+Current P0 status: no known startup/build blocker in this TODO pass. Trigger proposal inbox closure is now landed; remaining work is P1 product polish or Manual-required release/provider evidence.
 
 ## Current Code Architecture
 
@@ -41,12 +41,22 @@ Current P0 status: no known startup/build blocker in this TODO pass. The highest
 
 - Chat provider UX has separate `保存聊天 Provider` and `测试已保存配置` actions. Saving does not require a successful test, and testing uses the active saved config.
 - Image generation settings use a host-owned OpenAI-compatible image Provider contract in Control Center. Legacy `fixture` / `cloud` / `local` vocabulary may still appear in Creator Studio run backends, but secrets and provider calls remain host-owned.
-- AI Talk core exists: `AiTalkService`, `AiTalkStore`, pet-pack `persona`, local persona override, generated persona draft, pet-pack isolated main conversations, background memory extraction, memory profile UI, delete memory, and clear current pet-pack memories.
+- Control Center AI settings now include chat/image provider presets, an explicit OpenPet `127.0.0.1:8317/v1` gateway preset for `gpt-5.5` chat and `gpt-image-2` image generation, optional `/models` discovery with safe fallback wording, chat/image model compatibility hints, safe image generation usage/cost summaries when provider metadata is available, stale-result warnings when chat/image provider drafts are unsaved, and a model-settings-first AI pane where `聊天 Provider` / `图片 Provider` open by default while secondary memory/persona/behavior/chat sections stay collapsed until expanded.
+- AI Provider smoke evidence now has a repeatable CLI entry point: `npm run smoke:ai-provider -- --base-url <url> --api-key-env <env> --chat-model <model> [--include-image] --image-model <model> --output <report.json>`. It probes `/models`, tests chat completions, keeps image generation opt-in, and writes a sanitized report without raw API keys.
+- AI Talk core exists: `AiTalkService`, `AiTalkStore`, pet-pack `persona`, local persona override, generated persona draft, pet-pack isolated main conversations, conservative legacy `settings.ai.conversations.control-center` migration, active pet-pack refresh signals for AI pane and desktop chat, redacted trace diagnostics export with pet-pack and conversation filters, trace-filter rebinding when the active pet-pack changes, background memory extraction, relevance-ranked memory injection with use tracking, compact bubble segmentation, current-pet action candidate tool hints, provider behavior `reason` / `displayMode` preservation through behavior decisions, memory profile UI, delete memory, and clear current pet-pack memories.
 - Desktop chat window exists and routes through the same pet chat state/AI Talk flow instead of introducing a separate product brain.
 - Bubble chat now has a transparent mini-dialogue implementation path in the current branch, but `main` still reflects a transitional dual-surface model where the lightweight bubble and full desktop chat coexist as separate primary entry points.
-- Creator Studio already has `GenerationTask`, deterministic `conversation-wizard`, task answer/confirm commands, `openpet-prompt-builder`, host model bridge, run persistence, QA artifacts, dashboard display, and action import command paths.
-- Action trigger review exists for the manually selected action path: `click` can update `clickAction`; `manual` and `unbound` are acknowledged; `random`, `state`, and `event` remain pending host-rule work.
+- Creator Studio already has `GenerationTask`, deterministic `conversation-wizard`, task answer/confirm commands, `openpet-prompt-builder`, host model bridge, run persistence, QA artifacts, dashboard-first wizard display, prompt snapshot, wizard-step rail, retry/recover for failed provider runs, sanitized developer-mode prompt provenance, workflow smoke guidance, and structured approved action/pet import command handoff that tells the dashboard which Control Center plugin command to run while preserving command-scoped bridge-token boundaries.
+- Creator Studio fixture single-action runs now produce reviewable action-frame artifacts, contact-sheet QA, repairable frame previews, and an `Import Approved Action` dashboard handoff, so the dashboard can validate the action-specific review/import path without a live provider.
+- Creator Studio dashboard browser regressions now cover both single-action and full-pet fixture flows through draft/confirm/generate/review/approve to the correct host-owned import handoff, including mode-correct generation status copy, blocked action-frame QA recovery messaging, imported action handoff failure follow-up, and the `Import Approved Pet` full-pet review path.
+- Creator Studio provider-backed full-pet runs now package a real generated atlas instead of a placeholder sprite, write source-image and atlas QA artifacts, and gate `Import Approved Pet` on passing QA before the host import bridge runs.
+- Action trigger review exists for the manually selected action path: `click` can update `clickAction`; `manual` and `unbound` are acknowledged; `random`, `state`, and `event` create host-owned durable trigger rules.
 - Trigger proposal inbox now has a host-owned service/API/UI closed loop: proposals can be submitted, persisted, accepted, rejected, preserved through action regeneration, and reviewed from the Actions pane.
+- Creator Studio approved single-action imports now submit their generated `triggerProposal` into the host-owned trigger proposal inbox through the narrow `trigger-proposals:write` creator-tools bridge permission after action frames are imported; the plugin still does not directly apply trigger rules.
+- Creator Studio imported follow-up routing is now outcome-specific across `nextStep`, `actionLane`, `workflowGuidance.import.followUp`, and imported result review surfaces: imported action success routes the next review step to `Actions -> Trigger Proposal Inbox`, imported action handoff failures route follow-up to `Control Center -> Plugins`, and imported pet follow-up remains `OpenPet` through `Import Approved Pet`.
+- Creator Studio imported review surfaces are now phase-aware: once a run is `imported`, the dashboard keeps imported result and follow-up guidance visible but no longer mixes in pre-import QA blocked notices, repair controls, or retry-generation cues from the approval phase.
+- Creator Studio dashboard service only exposes local task/run/review routes, returns explicit JSON `404` for unknown `/api/*` paths, and cannot invoke command-scoped host bridge routes outside explicit command runs.
+- Creator Studio generation remains host-owned at the provider boundary; plugin-managed provider credentials are unsupported in the current trust model.
 
 ## P1 Architecture TODOs
 
@@ -59,14 +69,15 @@ Current state:
 - Chat Provider save and test are separated and provide section-local feedback.
 - Image Provider can be saved independently and health-checked through host services.
 - Provider diagnostics are structured and sanitized.
+- Chat provider presets now cover OpenAI official, LM Studio, vLLM, OpenRouter, Together, generic local or proxied OpenAI-compatible gateways, and the OpenPet `127.0.0.1:8317/v1` development gateway; image provider presets cover OpenAI official, Together, OpenRouter, generic local or proxied OpenAI-compatible gateways, and the OpenPet `127.0.0.1:8317/v1` development gateway.
+- Chat/image provider health checks now perform optional `/models` discovery with safe fallback wording when probing is unavailable.
+- Chat/image model compatibility hints are visible in the AI pane, now keyed by provider family plus model where possible; image generation usage/cost summaries surface when safe provider metadata is returned, unsaved chat/image drafts now warn that `/models` and usage results still reflect saved config, and the AI pane foregrounds the chat/image Provider sections before collapsed memory/persona/behavior/chat sections while explicitly restating the host-owned trust and save/test boundaries.
+- `scripts/run-ai-provider-smoke.js` and `npm run smoke:ai-provider` provide a sanitized real-gateway smoke path for confirming chat model names, image model names, optional `/models` discovery, and opt-in image generation without exposing API keys in the output report.
 
 P1 work:
 
-- Split dense AI settings into clearer model-settings sections if the current AI pane becomes hard to operate.
-- Add provider presets/catalog entries for common OpenAI-compatible chat and image endpoints.
-- Add optional `/models` discovery where providers support it, with safe fallback wording when probing is unavailable.
-- Add provider compatibility hints, especially for image models that do or do not support transparent-background payload parameters.
-- Add user-visible generation usage/cost summaries when the provider response exposes safe metadata.
+- Keep the curated provider preset list small and verified instead of turning the AI pane into a large dynamic catalog.
+- Keep provider compatibility copy aligned with real verified gateway behavior, especially for transparent-background support details and provider-specific routing caveats.
 
 P2/P3:
 
@@ -77,7 +88,7 @@ P2/P3:
 Manual-required:
 
 - Real cloud/local provider smoke evidence for each supported provider preset.
-- Confirmation of exact image model names against the user's target gateway, because OpenAI-compatible gateways may alias names differently.
+- Confirmation of exact image model names against the user's target gateway, because OpenAI-compatible gateways may alias names differently. Use `npm run smoke:ai-provider` as the evidence entry point, but do not treat a generated report as production asset-quality proof without human review.
 
 ### 2. AI Talk And Pet Chat
 
@@ -88,30 +99,17 @@ Current state:
 - Each pet-pack has an isolated `control-center:{petPackId}:main` conversation.
 - Persona is layered as pet-pack default plus local override, then compiled into system prompt.
 - Memory is automatically extracted in the background and injected as dynamic context without blocking the main reply.
+- Memory injection is relevance-ranked by current user message, recent history, tags, scope, importance, confidence, recency, and use count; injected memories update `lastUsedAt` and `useCount`.
 - Memory profile UI can show global and pet-pack memories, delete one memory, and clear current pet-pack relationship memories.
+- Trace diagnostics export already supports pet-pack-specific and conversation-specific slices.
 - Desktop chat is connected to the same chat state rather than a separate AI implementation.
 - The lightweight pet bubble chat is the right product direction for default interaction, but `main` still needs an explicit convergence pass so the transparent bubble becomes the default entry while the desktop chat becomes an extended view instead of a second primary chat surface.
 
 P1 work:
 
-- Converge chat surfaces into one primary flow:
-  - `BubbleChatWindow` becomes the default user-facing chat entry anchored around the pet.
-  - `PetChatWindow` stays as an extended desktop panel for longer history and advanced interaction, not a competing default entry.
-  - Double-click on the pet should open the same bubble chat surface by default.
-- Route all lightweight pet speech through one visible surface.
-  - Keep `PetService.say()` as the single runtime speech entry.
-  - Keep old inline `#bubble` hidden as a compatibility node only; it must not reappear as a second visible chat box.
-  - Continue classifying AI main replies as `dialogue` and plugin/http/mcp/renderer/event speech as `notice`.
-- Keep one shared conversation brain across all chat entry points.
-  - Bubble chat, desktop chat, and Control Center AI must keep using `control-center:{petPackId}:main`.
-  - Bubble chat should render a clipped recent dialogue stream plus lightweight notices instead of owning a second transcript.
-- Add relevant memory scoring before injection. Score by current user message, recent history, tags, scope, importance, confidence, recency, and use count.
-- Mark injected memories as used by updating `lastUsedAt` and `useCount`.
-- Upgrade the action tool schema with `reason`, `displayMode`, and a current-pet action candidate whitelist.
-- Add reply bubble segmentation while keeping the full assistant reply in transcript.
-- Add explicit active pet-pack refresh signals so AI pane and desktop chat reload persona, history, memory profile, and chat state when the active pack changes.
-- Add redacted AI Talk trace export that links provider, conversation, memory, and behavior decisions without exposing full prompts, API keys, or raw memory text.
-- Add conservative legacy migration from old `settings.ai.conversations.control-center` into `ai-talk-store.json` only when the new store has no messages.
+- Converge chat surfaces into one primary flow so the transparent bubble becomes the default entry anchored around the pet, while `PetChatWindow` remains an extended panel for longer history and advanced interaction.
+- Keep all lightweight pet speech routed through one visible surface, with `PetService.say()` as the single runtime speech entry and the old inline `#bubble` staying hidden as a compatibility node only.
+- Keep future trace UX aligned if trace volume or streaming surfaces expand beyond the current export and filter model.
 
 P2/P3:
 
@@ -167,21 +165,23 @@ Current state:
 
 - Manual trigger review card can apply `click` to `clickAction`.
 - `manual` and `unbound` proposals are acknowledged without mutating bindings.
-- `random`, `state`, and `event` proposals return pending-host-rule semantics.
+- `random`, `state`, and `event` proposals create active host-owned durable trigger rules with preview text.
+- Actions review now asks the host for an application preview before accepting trigger proposals, and pending non-click inbox items show the host preview text before users apply them.
 - `triggerProposalInbox` is part of the action config view state and host service contract.
+- `triggerRules` is part of the action config view state, active pet-pack manifest, legacy animation config, and Control Center demo contract.
 - `ActionService.submitTriggerProposal`, `acceptTriggerProposalItem`, and `rejectTriggerProposalItem` persist proposal status: pending, accepted, rejected, applied, or pending-host-rule.
+- Trigger-rule persistence validates that every rule references an existing imported action and survives action regeneration.
 - Control Center Actions pane shows a trigger proposal inbox and can accept/reject queued proposals.
-- Legacy action regeneration preserves the trigger proposal inbox.
+- Control Center Actions pane shows saved host trigger rules for non-click proposal types.
+- Legacy action regeneration preserves the trigger proposal inbox and trigger rules.
 
 P1 work:
 
-- Define durable trigger-rule schema for `random`, `state`, and `event`.
-- Add validation that every trigger rule references an existing imported action.
-- Add simulation/preview before applying non-click triggers.
-- Connect Creator Studio imports to submit generated trigger proposals into the host inbox instead of only showing them in the plugin dashboard.
+- Keep Creator Studio-trigger proposal handoff aligned with future trigger-rule editor and scheduler semantics.
 
 P2/P3:
 
+- Rich runtime simulation showing actual scheduler timing, state predicates, and event matching.
 - Conflict resolution between multiple rules.
 - Cooldowns, priorities, and per-pet-pack trigger profiles.
 - Import/export of trigger-rule presets.
@@ -197,16 +197,17 @@ Current state:
 - Question answer and task confirmation commands exist.
 - `openpet-prompt-builder` compiles OpenPet-specific prompts.
 - Host model bridge sends built prompts to host-owned image generation.
-- Run persistence, logs, QA metadata, dashboard preview, and approved action import paths exist.
+- Run persistence, logs, QA metadata, dashboard-first wizard preview, prompt provenance, workflow guidance, retry/recover, and approved action import paths exist.
+- Approved action/pet dashboard runs now expose a sanitized `workflowGuidance.import.handoff` object with command id/title, Control Center location, run id, and the reason dashboard import remains blocked by command-scoped bridge tokens.
+- Imported runs now also expose a sanitized `workflowGuidance.import.followUp` object so the dashboard can render the same next review route that already powers `nextStep`, `actionLane`, and imported result cards.
+- Approved single-action imports submit generated trigger proposals to the host inbox with source plugin/command/run provenance after successful action frame import.
+- Creator Studio review/recovery state is now outcome-specific across service and dashboard surfaces: blocked action-frame QA points to `Review and repair frames`, stale full-pet QA source mismatches point to `Retry generation`, imported action handoff failures point to `Review import handoff`, and successful imported action follow-up points to `Actions -> Trigger Proposal Inbox`.
+- Imported action success follow-up now points reviewers to `Actions -> Trigger Proposal Inbox`, imported action handoff failures now point to `Control Center -> Plugins`, and imported pet follow-up stays in `OpenPet` for `Import Approved Pet`.
 
 P1 work:
 
-- Turn the existing command-level task flow into a smoother dashboard-first wizard with visible prompt, task preview, pending question, confirmation, generation, QA, and import states.
-- Preserve the current command paths as automation/test entry points while improving user-facing dashboard affordances.
-- Add explicit retry/recover flows for failed cloud/local generation without silently falling back to fixture.
-- Surface prompt-builder provenance in the dashboard, including sanitized final prompt preview for developer mode.
-- Connect generated trigger proposals to the host trigger proposal inbox after the inbox service/UI is complete.
-- Add realistic smoke guidance for configured host image Provider generation.
+- Preserve the current command paths as automation/test entry points while continuing dashboard UX polish beyond the import handoff card.
+- Keep generated trigger proposal submission compatible with future random/state/event trigger-rule schema and editor semantics.
 
 P2/P3:
 
@@ -229,14 +230,14 @@ Current state:
 
 - Plugin commands/services are explicit, permission-gated, and logged.
 - Creator-tools routes support bounded action, asset, pack metadata, pet-pack import, and model-generation flows.
+- Bridge route docs and permission docs are now synchronized with the implemented surface through targeted route/permission regression coverage, including `trigger-proposals:write` for Creator Studio review handoff and `model:image-generate` for host-managed settings, health checks, and bounded image generation.
 - Secrets stay in host services.
+- Plugin-managed provider credentials are now explicitly documented as unsupported when an extension uses the host-managed generation surface.
+- Creator Studio dashboard cannot use command-scoped host bridge routes directly; explicit command runs remain the only path that receives bridge URL/token credentials.
 
 P1 work:
 
-- Keep bridge route docs synchronized with actual route coverage and permission names.
-- Add targeted tests whenever a new route is added to prevent IPC/bridge drift.
-- Ensure Creator Studio dashboard cannot bypass command-scoped bridge tokens for privileged actions.
-- Document plugin-managed provider credentials as unsupported unless a future explicit trust model is designed.
+- Keep future bridge additions behind the same docs-and-tests lockstep instead of letting route/permission drift reappear.
 
 P2/P3:
 
@@ -290,25 +291,17 @@ P2/P3:
 
 Choose one of these when starting the next development milestone:
 
-1. Trigger Proposal Inbox Closure
-   - User value: Creator Studio and future plugins can submit action trigger proposals into a real host review queue.
-   - Main files: `ActionService`, `ipc.js`, Actions pane, shared contracts, action tests, Control Center smoke.
+1. Creator Studio Review Surface Polish
+   - User value: provider-backed action and full-pet runs stay easy to inspect, retry, and import as review states continue to grow.
+   - Main files: `examples/plugins/creator-studio/service/studio-service.js`, dashboard review surfaces, Creator Studio regression tests.
 
-2. AI Talk Relevance And Bubble UX
-   - User value: pet conversations feel more contextual and more pet-like without changing provider setup.
-   - Main files: `AiTalkService`, `AiTalkStore`, AI pane, pet chat renderer, service tests.
-
-3. Creator Studio Dashboard Wizard Polish
-   - User value: users can drive custom action generation from dashboard instead of running individual commands.
-   - Main files: Creator Studio service/dashboard/commands, plugin tests, host bridge tests.
-
-4. Model Settings Product Polish
-   - User value: provider setup is clearer for local and hosted image/chat gateways.
-   - Main files: AI pane, `ImageGenerationModelService`, `AiService`, Control Center smoke tests.
-
-5. Release Evidence Closure
+2. Release Evidence Closure
    - User value: release readiness claims can be upgraded only when real evidence exists.
    - Main files: release scripts/docs. This is mostly Manual-required.
+
+3. AI Provider Verification Closure
+   - User value: provider preset wording stays aligned with real verified gateway behavior instead of drifting into guessed compatibility claims.
+   - Main files: AI provider docs, smoke evidence reports, and AI pane copy only when backed by verified behavior.
 
 ## Verification Commands For Future Milestones
 

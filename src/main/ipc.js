@@ -14,6 +14,7 @@ const { choosePetContextMenuPoint, estimatePetContextMenuSize } = require('./pet
 const { showPetContextMenuWindow } = require('./pet-context-menu-window')
 const {
   createActionFrameImportResult,
+  createActionTriggerProposalPreviewResult,
   createActionsMutationResult,
   createAboutInfoView,
   createCatalogBlocklistResult,
@@ -179,9 +180,11 @@ const normalizePetBubble = (payload = {}) => {
   }
 }
 
-const createPetBubbleText = (reply, behaviorIntent) => {
+const createPetBubbleText = (reply, behaviorIntent, bubble) => {
+  if (bubble?.displayMode === 'none') return ''
+  const segmented = normalizeMessageText(bubble?.text)
   const preferred = normalizeMessageText(behaviorIntent?.bubbleText)
-  const text = preferred || normalizeMessageText(reply)
+  const text = segmented || preferred || normalizeMessageText(reply)
   if (text.length <= MAX_PET_BUBBLE_CHARS) return text
   return `${text.slice(0, MAX_PET_BUBBLE_CHARS - 3)}...`
 }
@@ -264,6 +267,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     const config = aiService?.getConfig?.() || {}
     let profile = {}
     let messages = []
+    let conversationId = ''
     try {
       profile = aiTalkService?.getPersonaProfile?.() || {}
     } catch (_) {
@@ -274,12 +278,16 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     } catch (_) {
       messages = []
     }
+    if (profile?.petPackId) {
+      conversationId = `control-center:${profile.petPackId}:main`
+    }
     const enabled = Boolean(config.enabled)
     const hasApiKey = Boolean(config.hasApiKey)
     const ready = enabled && hasApiKey
     return {
       available: Boolean(petChatWindowService),
       ...windowState,
+      conversationId,
       petPack: {
         id: profile.petPackId || '',
         displayName: profile.petPackDisplayName || profile.petPackId || ''
@@ -329,6 +337,17 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
       conversationMessages = []
     }
     return petBubbleChatWindowService.refreshItems({ conversationMessages, reason })
+  }
+
+  const notifyActivePetPackChanged = (event, payload = {}) => {
+    const state = getPetChatState()
+    notifyPetChatStateChanged(state)
+    event?.sender?.send?.(IPC.PET_PACKS_ACTIVE_CHANGED, {
+      activePackId: payload.activePackId || state.petPack.id || '',
+      pack: payload.pack || null,
+      petChatState: state
+    })
+    return state
   }
 
   const capturePetBubble = (payload = {}, { notify = true } = {}) => {
@@ -385,7 +404,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     })
     try {
       const result = await (aiTalkService || aiService).chat(requestPayload)
-      const bubbleText = createPetBubbleText(result.reply, result.behaviorIntent)
+      const bubbleText = createPetBubbleText(result.reply, result.behaviorIntent, result.bubble)
       const bubble = bubbleText ? capturePetBubble({ text: bubbleText, source: 'ai' }, { notify: false }) : lastPetBubble
       if (bubbleText) {
         recordAppLog({
@@ -1032,6 +1051,12 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     return createActionsMutationResult(petService.getPreviewAnimations())
   })
 
+  ipcMainService.handle(IPC.ACTIONS_PREVIEW_TRIGGER_PROPOSAL, async (_event, payload) => {
+    if (!actionService?.previewTriggerProposal) throw new Error('Action trigger proposal preview is not available')
+    const triggerProposal = actionService.previewTriggerProposal(payload)
+    return createActionTriggerProposalPreviewResult(triggerProposal)
+  })
+
   ipcMainService.handle(IPC.ACTIONS_SUBMIT_TRIGGER_PROPOSAL, async (_event, payload) => {
     if (!actionService?.submitTriggerProposal) throw new Error('Action trigger proposal inbox is not available')
     const result = actionService.submitTriggerProposal(payload)
@@ -1094,6 +1119,50 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     return createActionsMutationResult(result.animations, { proposal: result.proposal })
   })
 
+  ipcMainService.handle(IPC.ACTIONS_UPDATE_TRIGGER_RULE, async (_event, payload) => {
+    if (!actionService?.setTriggerRuleStatus) throw new Error('Action trigger rule management is not available')
+    const result = actionService.setTriggerRuleStatus(payload?.ruleId, payload?.status)
+    recordAppLog({
+      scope: 'actions',
+      level: 'info',
+      actor: 'user',
+      event: 'actions.trigger-rule.updated',
+      message: 'Action trigger rule status updated',
+      details: {
+        ruleId: result.rule.id,
+        actionId: result.rule.actionId,
+        type: result.rule.type,
+        status: result.rule.status
+      }
+    })
+    return {
+      animations: result.animations,
+      rule: result.rule
+    }
+  })
+
+  ipcMainService.handle(IPC.ACTIONS_DELETE_TRIGGER_RULE, async (_event, payload) => {
+    if (!actionService?.deleteTriggerRule) throw new Error('Action trigger rule management is not available')
+    const result = actionService.deleteTriggerRule(payload?.ruleId)
+    recordAppLog({
+      scope: 'actions',
+      level: 'info',
+      actor: 'user',
+      event: 'actions.trigger-rule.deleted',
+      message: 'Action trigger rule deleted',
+      details: {
+        ruleId: result.rule.id,
+        actionId: result.rule.actionId,
+        type: result.rule.type,
+        status: result.rule.status
+      }
+    })
+    return {
+      animations: result.animations,
+      rule: result.rule
+    }
+  })
+
   ipcMainService.handle(IPC.ACTIONS_DELETE, async (_event, payload) => {
     await actionImportService.deleteAction(payload.actionId)
     reloadAndSendAnimations(getPetWindow, petService)
@@ -1135,11 +1204,12 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     return { canceled: false, ...petPackService.exportPack(payload.packId, selected.filePaths[0]) }
   })
 
-  ipcMainService.handle(IPC.PET_PACKS_SET_ACTIVE, (_event, payload) => {
+  ipcMainService.handle(IPC.PET_PACKS_SET_ACTIVE, (event, payload) => {
     const result = petPackService.setActivePack(payload.packId)
     reloadAndSendAnimations(getPetWindow, petService)
     const animations = petService.getPreviewAnimations()
     const petPacks = petPackService.listPacks()
+    notifyActivePetPackChanged(event, result)
     return createPetPackMutationResult(result, petPacks, animations)
   })
 
@@ -1249,6 +1319,14 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
   })
 
   ipcMainService.handle(IPC.AI_CHAT, async (_event, payload) => runAiChatRequest(payload, { source: 'control-center' }))
+
+  ipcMainService.handle(IPC.AI_EXPORT_TRACE_DIAGNOSTICS, (_event, payload) => {
+    if (!aiTalkService?.exportTraceDiagnostics) throw new Error('AI talk trace diagnostics are not available')
+    return aiTalkService.exportTraceDiagnostics({
+      filters: payload || {},
+      behaviorDecisions: behaviorOrchestratorService.getConfig?.().decisions || []
+    })
+  })
 
   ipcMainService.handle(IPC.AI_BEHAVIOR_GET, () => behaviorOrchestratorService.getConfig())
 

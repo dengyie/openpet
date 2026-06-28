@@ -34,6 +34,20 @@ const createActionImportService = ({ framesRoot, spritesDir, configPath }) => {
       .map((action) => [action.id, action.label])
   )
 
+  const preserveHostActionMetadata = (currentConfig = {}, generated = {}) => {
+    const generatedActionIds = new Set((generated.actions || []).map((action) => action.id))
+    const triggerRules = Array.isArray(currentConfig.triggerRules)
+      ? currentConfig.triggerRules.filter((rule) => generatedActionIds.has(rule.actionId))
+      : []
+    return {
+      ...generated,
+      ...(Array.isArray(currentConfig.triggerProposalInbox)
+        ? { triggerProposalInbox: currentConfig.triggerProposalInbox }
+        : {}),
+      ...(triggerRules.length ? { triggerRules } : {})
+    }
+  }
+
   const actionExists = (actionId) => {
     const existsInConfig = (readCurrentConfig().actions || [])
       .some((action) => action.id === actionId)
@@ -70,15 +84,8 @@ const createActionImportService = ({ framesRoot, spritesDir, configPath }) => {
       clickAction: overrides.clickAction ?? currentConfig.clickAction,
       labels: getExistingLabels()
     })
-    const preserved = {
-      ...generated,
-      ...(Array.isArray(currentConfig.triggerProposalInbox)
-        ? { triggerProposalInbox: currentConfig.triggerProposalInbox }
-        : {})
-    }
-    if (preserved !== generated) {
-      fs.writeFileSync(configPath, JSON.stringify(preserved, null, 2), 'utf-8')
-    }
+    const preserved = preserveHostActionMetadata(currentConfig, generated)
+    fs.writeFileSync(configPath, JSON.stringify(preserved, null, 2), 'utf-8')
     return preserved
   }
 
@@ -92,16 +99,19 @@ const createActionImportService = ({ framesRoot, spritesDir, configPath }) => {
     if (!inspection.valid) throw new Error(inspection.errors.join('; ') || 'Frame folder is invalid')
 
     const targetDir = path.join(framesRoot, actionId)
+    const currentConfig = readCurrentConfig()
     copyDirectory(sourceDir, targetDir)
     const { generateSpritesFromFrames } = loadSpriteGenerator()
-    const config = await generateSpritesFromFrames({
+    const generated = await generateSpritesFromFrames({
       framesRoot,
       spritesDir,
       configPath,
-      defaultAction: readCurrentConfig().defaultAction,
-      clickAction: readCurrentConfig().clickAction,
+      defaultAction: currentConfig.defaultAction,
+      clickAction: currentConfig.clickAction,
       labels: { ...getExistingLabels(), ...(label ? { [actionId]: label } : {}) }
     })
+    const config = preserveHostActionMetadata(currentConfig, generated)
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8')
     const importedAction = config.actions.find((action) => action.id === actionId)
     return { ...config, importedAction }
   }

@@ -140,6 +140,35 @@ test('ai talk store upserts active global and pet-pack memories conservatively',
   assert.equal(reloaded.listMemories({ petPackId: 'mochi-cat' }).length, 2)
 })
 
+test('ai talk store marks injected memories as used without changing inactive memories', () => {
+  const storePath = createTempStorePath()
+  let currentNow = '2026-06-20T00:00:00.000Z'
+  const store = createAiTalkStore({ storePath, now: () => currentNow })
+
+  const created = store.applyMemoryOperations({
+    petPackId: 'mochi-cat',
+    conversationId: 'control-center:mochi-cat:main',
+    messageIds: ['m1'],
+    operations: [
+      { operation: 'create', scope: 'global', text: 'User likes focus sprints.', tags: ['focus'], confidence: 0.8, importance: 0.7 },
+      { operation: 'create', scope: 'petPack', text: 'Mochi uses soft check-ins.', tags: ['relationship'], confidence: 0.8, importance: 0.6 }
+    ]
+  })
+  const usedId = created.applied[0].id
+  const deletedId = created.applied[1].id
+  store.deleteMemory(deletedId)
+
+  currentNow = '2026-06-20T00:05:00.000Z'
+  const result = store.markMemoriesUsed([usedId, usedId, deletedId, 'missing'])
+
+  assert.equal(result.updatedCount, 1)
+  assert.equal(result.memories[0].id, usedId)
+  assert.equal(result.memories[0].useCount, 1)
+  assert.equal(result.memories[0].lastUsedAt, '2026-06-20T00:05:00.000Z')
+  assert.equal(store.getState().memories[deletedId].useCount, 0)
+  assert.equal(createAiTalkStore({ storePath }).getState().memories[usedId].useCount, 1)
+})
+
 test('ai talk store soft deletes a memory and excludes it from active lists', () => {
   const storePath = createTempStorePath()
   const store = createAiTalkStore({ storePath, now: () => '2026-06-20T00:00:00.000Z' })
@@ -220,4 +249,164 @@ test('ai talk store filters sensitive memory candidates without storing raw secr
   assert.deepEqual(Object.values(store.getState().traces).map((trace) => trace.filteredMemoryCandidates), [
     [{ operation: 'create', scope: 'global', reason: 'sensitive' }]
   ])
+})
+
+test('ai talk store migrates legacy conversation only when target main conversation is empty', () => {
+  const store = createAiTalkStore({ storePath: createTempStorePath(), now: () => '2026-06-20T00:00:00.000Z' })
+
+  const migrated = store.migrateLegacyConversation({
+    petPackId: 'legacy-cat',
+    personaHash: 'persona-hash',
+    messages: [
+      { role: 'user', content: 'legacy hello' },
+      { role: 'assistant', content: 'legacy reply' }
+    ]
+  })
+  const skipped = store.migrateLegacyConversation({
+    petPackId: 'legacy-cat',
+    personaHash: 'persona-hash',
+    messages: [
+      { role: 'user', content: 'should not overwrite' }
+    ]
+  })
+
+  assert.equal(migrated.migrated, true)
+  assert.equal(migrated.messageCount, 2)
+  assert.equal(skipped.migrated, false)
+  assert.equal(skipped.reason, 'target conversation already has messages')
+  assert.deepEqual(store.getMessages('control-center:legacy-cat', 'main').map((message) => message.content), [
+    'legacy hello',
+    'legacy reply'
+  ])
+})
+
+test('ai talk store exports redacted trace diagnostics without raw message or memory text', () => {
+  const store = createAiTalkStore({ storePath: createTempStorePath(), now: () => '2026-06-20T00:00:00.000Z' })
+  const { sessionId, conversationId } = store.ensureMainConversation({ petPackId: 'mochi-cat', personaHash: 'hash-a' })
+  store.appendMessages(sessionId, conversationId, [
+    { role: 'user', content: 'secret chat phrase sk-cpa-raw-message' },
+    { role: 'assistant', content: 'assistant raw reply' }
+  ])
+  store.applyMemoryOperations({
+    petPackId: 'mochi-cat',
+    conversationId: 'control-center:mochi-cat:main',
+    messageIds: ['m1'],
+    operations: [
+      { operation: 'create', scope: 'global', text: 'User likes trace-safe exports.', tags: ['trace'], confidence: 0.8, importance: 0.7 }
+    ]
+  })
+
+  const exported = JSON.parse(store.exportTraceDiagnostics({
+    provider: {
+      enabled: true,
+      provider: 'openai-compatible',
+      baseUrl: 'http://127.0.0.1:8317/v1',
+      model: 'gpt-5.5',
+      hasApiKey: true,
+      memory: { enabled: true },
+      behavior: { enabled: true }
+    },
+    behaviorDecisions: [
+      {
+        id: 1,
+        timestamp: '2026-06-20T00:00:00.000Z',
+        matched: true,
+        type: 'playAction',
+        reason: 'matched provider actionId',
+        actionId: 'wave',
+        replay: { reply: 'raw behavior replay text' }
+      }
+    ]
+  }))
+  const raw = JSON.stringify(exported)
+
+  assert.equal(exported.provider.hasApiKey, true)
+  assert.equal(exported.conversations[0].messageCount, 2)
+  assert.equal(exported.conversations[0].messages[0].contentChars, 'secret chat phrase sk-cpa-raw-message'.length)
+  assert.equal(exported.memories[0].textChars, 'User likes trace-safe exports.'.length)
+  assert.equal(exported.behaviorDecisions[0].replayRedacted, true)
+  assert.equal(raw.includes('secret chat phrase'), false)
+  assert.equal(raw.includes('assistant raw reply'), false)
+  assert.equal(raw.includes('User likes trace-safe exports.'), false)
+  assert.equal(raw.includes('raw behavior replay text'), false)
+})
+
+test('ai talk store can filter trace diagnostics by pet pack and conversation id', () => {
+  const store = createAiTalkStore({ storePath: createTempStorePath(), now: () => '2026-06-20T00:00:00.000Z' })
+  const mochiMain = store.ensureMainConversation({ entrypoint: 'control-center', petPackId: 'mochi-cat', personaHash: 'hash-a' })
+  const sproutMain = store.ensureMainConversation({ entrypoint: 'control-center', petPackId: 'sprout-cat', personaHash: 'hash-b' })
+
+  store.appendMessages(mochiMain.sessionId, mochiMain.conversationId, [
+    { role: 'user', content: 'mochi user message' },
+    { role: 'assistant', content: 'mochi reply' }
+  ])
+  store.appendMessages(sproutMain.sessionId, sproutMain.conversationId, [
+    { role: 'user', content: 'sprout user message' },
+    { role: 'assistant', content: 'sprout reply' }
+  ])
+
+  store.applyMemoryOperations({
+    petPackId: 'mochi-cat',
+    conversationId: 'control-center:mochi-cat:main',
+    messageIds: ['m1'],
+    operations: [
+      { operation: 'create', scope: 'petPack', text: 'Mochi memory', tags: ['relationship'], confidence: 0.8, importance: 0.7 }
+    ]
+  })
+  store.applyMemoryOperations({
+    petPackId: 'sprout-cat',
+    conversationId: 'control-center:sprout-cat:main',
+    messageIds: ['m2'],
+    operations: [
+      { operation: 'create', scope: 'petPack', text: 'Sprout memory', tags: ['relationship'], confidence: 0.8, importance: 0.7 }
+    ]
+  })
+  const mochiJob = store.createMemoryJob({ petPackId: 'mochi-cat', conversationId: 'control-center:mochi-cat:main' })
+  store.finishMemoryJob(mochiJob.id, { status: 'completed', appliedCount: 1, filteredCount: 0 })
+  const sproutJob = store.createMemoryJob({ petPackId: 'sprout-cat', conversationId: 'control-center:sprout-cat:main' })
+  store.finishMemoryJob(sproutJob.id, { status: 'completed', appliedCount: 1, filteredCount: 0 })
+
+  const mochiOnly = JSON.parse(store.exportTraceDiagnostics({
+    provider: {
+      enabled: true,
+      provider: 'openai-compatible',
+      baseUrl: 'http://127.0.0.1:8317/v1',
+      model: 'gpt-5.5',
+      hasApiKey: true,
+      memory: { enabled: true },
+      behavior: { enabled: true }
+    },
+    filters: {
+      petPackId: 'mochi-cat'
+    },
+    behaviorDecisions: [
+      { id: 1, timestamp: '2026-06-20T00:00:00.000Z', matched: true, reason: 'mochi matched', actionId: 'wave', replay: { reply: 'hidden' } },
+      { id: 2, timestamp: '2026-06-20T00:00:01.000Z', matched: true, reason: 'sprout matched', actionId: 'sleep', replay: { reply: 'hidden' } }
+    ]
+  }))
+
+  assert.deepEqual(mochiOnly.conversations.map((entry) => entry.petPackId), ['mochi-cat'])
+  assert.deepEqual(mochiOnly.memories.map((entry) => entry.petPackId), ['mochi-cat'])
+  assert.deepEqual(mochiOnly.memoryJobs.map((entry) => entry.petPackId), ['mochi-cat'])
+  assert.deepEqual(mochiOnly.traces.map((entry) => entry.petPackId), [])
+
+  const sproutConversationOnly = JSON.parse(store.exportTraceDiagnostics({
+    provider: {
+      enabled: true,
+      provider: 'openai-compatible',
+      baseUrl: 'http://127.0.0.1:8317/v1',
+      model: 'gpt-5.5',
+      hasApiKey: true,
+      memory: { enabled: true },
+      behavior: { enabled: true }
+    },
+    filters: {
+      conversationId: 'control-center:sprout-cat:main'
+    },
+    behaviorDecisions: []
+  }))
+
+  assert.deepEqual(sproutConversationOnly.conversations.map((entry) => entry.conversationId), ['control-center:sprout-cat:main'])
+  assert.deepEqual(sproutConversationOnly.memories.map((entry) => entry.conversationId), ['control-center:sprout-cat:main'])
+  assert.deepEqual(sproutConversationOnly.memoryJobs.map((entry) => entry.conversationId), ['control-center:sprout-cat:main'])
 })

@@ -1,4 +1,5 @@
 import type {
+  ActionTriggerProposalPreviewResult,
   ControlCenterSettings,
   CatalogInstallSelection,
   CreatorActionsMutationResult,
@@ -166,6 +167,7 @@ const creatorActionsReadFixture = {
     defaultAction: 'idle',
     clickAction: 'wave',
     triggerProposalInbox: [],
+    triggerRules: [],
     actions: [
       { id: 'idle', label: 'Idle', sprite: 'file:///packs/cat/sprites/idle.png', previewSprite: 'file:///packs/cat/sprites/idle.png', frameCount: 1, frameMs: 100, frameWidth: 32, frameHeight: 32 },
       { id: 'wave', label: 'Wave', sprite: 'file:///packs/cat/sprites/wave.png', previewSprite: 'file:///packs/cat/sprites/wave.png', frameCount: 1, frameMs: 100, frameWidth: 32, frameHeight: 32 }
@@ -183,6 +185,7 @@ const creatorActionsMutationFixture = {
       defaultAction: 'idle',
       clickAction: 'wave',
       triggerProposalInbox: [],
+      triggerRules: [],
       actions: [
         { id: 'idle', label: 'Idle', sprite: 'file:///packs/cat/sprites/idle.png', frameCount: 1, frameMs: 100, frameWidth: 32, frameHeight: 32 },
         { id: 'wave', label: 'Wave Updated', sprite: 'file:///packs/cat/sprites/wave.png', frameCount: 1, frameMs: 100, frameWidth: 32, frameHeight: 32 }
@@ -193,12 +196,39 @@ const creatorActionsMutationFixture = {
     defaultAction: 'idle',
     clickAction: 'wave',
     triggerProposalInbox: [],
+    triggerRules: [],
     actions: [
       { id: 'idle', label: 'Idle', sprite: 'file:///packs/cat/sprites/idle.png', frameCount: 1, frameMs: 100, frameWidth: 32, frameHeight: 32 },
       { id: 'wave', label: 'Wave Updated', sprite: 'file:///packs/cat/sprites/wave.png', frameCount: 1, frameMs: 100, frameWidth: 32, frameHeight: 32 }
     ]
   }
 } satisfies CreatorActionsMutationResult
+
+const triggerProposalPreviewFixture = {
+  ok: true,
+  applied: false,
+  actionId: 'wave',
+  type: 'state',
+  binding: '',
+  code: 'will_create_rule',
+  message: 'Preview: a host trigger rule would be created for action: wave',
+  triggerRuleId: 'preview:state:wave',
+  preview: 'State trigger rule can play wave when a host state condition matches.',
+  triggerRule: {
+    id: 'preview:state:wave',
+    actionId: 'wave',
+    type: 'state',
+    status: 'active',
+    sourceProposalId: 'proposal:state:wave:test',
+    sourcePluginId: 'openpet.creator-studio',
+    sourceRunId: 'run-1',
+    sourceCommandId: 'import-approved-action',
+    message: 'Play when idle.',
+    preview: 'State trigger rule can play wave when a host state condition matches.',
+    createdAt: '2026-06-22T10:00:00.000Z',
+    updatedAt: '2026-06-22T10:00:00.000Z'
+  }
+} satisfies ActionTriggerProposalPreviewResult
 
 const creatorAssetsInspectFramesRequestFixture = {
   relativePath: 'assets/actions/wave',
@@ -238,6 +268,7 @@ const creatorAssetsImportFramesResponseFixture = {
     defaultAction: 'idle',
     clickAction: 'wave',
     triggerProposalInbox: [],
+    triggerRules: [],
     actions: [
       { id: 'idle', label: 'Idle', sprite: 'file:///packs/cat/sprites/idle.png', frameCount: 1, frameMs: 100, frameWidth: 32, frameHeight: 32 },
       { id: 'wave', label: 'Wave Hello', sprite: 'file:///packs/cat/sprites/wave.png', frameCount: 2, frameMs: 95, frameWidth: 8, frameHeight: 8 }

@@ -194,7 +194,7 @@ test('ai talk service serializes concurrent messages for the same main conversat
   ])
 })
 
-test('ai talk service preserves existing behavior tool request when enabled', async () => {
+test('ai talk service provides current pet action candidates to behavior tool request', async () => {
   const requests = []
   const service = createAiTalkService({
     aiService: {
@@ -205,13 +205,53 @@ test('ai talk service preserves existing behavior tool request when enabled', as
       }
     },
     aiTalkStore: createStore(),
-    petPackService: createPetPackService({ id: 'legacy-cat' })
+    petPackService: createPetPackService({
+      id: 'legacy-cat',
+      actions: [
+        { id: 'wave', label: 'Wave', kind: 'social' },
+        { id: 'sleep', label: 'Sleep', kind: 'rest' }
+      ]
+    })
   })
 
   const result = await service.chat({ message: 'Hi' })
 
   assert.equal(requests[0].tools[0].function.name, 'openpet_behavior')
+  assert.deepEqual(requests[0].tools[0].function.parameters.properties.actionId.enum, ['wave', 'sleep'])
+  assert.match(requests[0].tools[0].function.parameters.properties.actionId.description, /wave: Wave/)
+  assert.deepEqual(requests[0].tools[0].function.parameters.properties.displayMode.enum, ['none', 'bubble', 'action', 'event'])
   assert.deepEqual(result.behaviorIntent, { intent: 'greet', confidence: 0.8 })
+})
+
+test('ai talk service returns compact bubble segments while keeping full assistant transcript', async () => {
+  const fullReply = [
+    '第一句会显示在宠物气泡里。',
+    '第二句仍然应该留在聊天记录里。',
+    '第三句也属于完整回复。'
+  ].join('\n')
+  const store = createStore()
+  const service = createAiTalkService({
+    aiService: {
+      getConfig: () => ({ enabled: true, behavior: { enabled: false, useTools: true } }),
+      complete: async () => ({ reply: fullReply })
+    },
+    aiTalkStore: store,
+    petPackService: createPetPackService({ id: 'legacy-cat' })
+  })
+
+  const result = await service.chat({ message: '说完整一点' })
+
+  assert.equal(result.reply, fullReply)
+  assert.deepEqual(store.getMessages('control-center:legacy-cat', 'main').map((message) => message.content), [
+    '说完整一点',
+    fullReply
+  ])
+  assert.deepEqual(result.bubble, {
+    text: '第一句会显示在宠物气泡里。',
+    segments: ['第一句会显示在宠物气泡里。', '第二句仍然应该留在聊天记录里。', '第三句也属于完整回复。'],
+    displayMode: 'bubble',
+    source: 'assistant-reply'
+  })
 })
 
 test('ai talk service injects recent pet activity without polluting transcript or memory extraction', async () => {
@@ -606,6 +646,119 @@ test('ai talk service injects relevant memories as dynamic context without chang
   assert.match(requests[0].messages[1].content, /Mochi greets the user softly/)
 })
 
+test('ai talk service ranks memory context by current relevance and marks injected memories as used', async () => {
+  const requests = []
+  const store = createStore()
+  const operations = []
+  for (let index = 0; index < 85; index += 1) {
+    operations.push({
+      operation: 'create',
+      scope: 'global',
+      text: `User likes archive topic ${index}.`,
+      tags: ['archive'],
+      confidence: 1,
+      importance: 1,
+      reason: 'high confidence but unrelated'
+    })
+  }
+  operations.push({
+    operation: 'create',
+    scope: 'global',
+    text: 'User wants help with focus sprint planning.',
+    tags: ['focus', 'planning'],
+    confidence: 0.4,
+    importance: 0.3,
+    reason: 'directly relevant to focus sessions'
+  })
+  const created = store.applyMemoryOperations({
+    petPackId: 'mochi-cat',
+    conversationId: 'control-center:mochi-cat:main',
+    messageIds: ['m1'],
+    operations
+  })
+  const relevantId = created.applied.at(-1).id
+
+  const service = createAiTalkService({
+    aiService: {
+      getConfig: () => ({
+        enabled: true,
+        behavior: { enabled: false, useTools: true },
+        memory: { enabled: false }
+      }),
+      complete: async (request) => {
+        requests.push(request)
+        return { reply: '我会帮你把专注冲刺拆小。' }
+      }
+    },
+    aiTalkStore: store,
+    petPackService: createPetPackService({ id: 'mochi-cat' })
+  })
+
+  await service.chat({ message: 'Can you help with my focus sprint plan now?' })
+
+  const memoryPrompt = requests[0].messages.find((message) => message.content.includes('# Relevant Memories')).content
+  assert.match(memoryPrompt, /^# Relevant Memories\n1\. \[global user\] User wants help with focus sprint planning/m)
+  assert.equal((memoryPrompt.match(/^\d+\. /gm) || []).length, 8)
+  const state = store.getState()
+  assert.equal(state.memories[relevantId].useCount, 1)
+  assert.equal(state.memories[relevantId].lastUsedAt, '2026-06-20T00:00:00.000Z')
+  assert.ok(Object.values(state.memories).some((memory) => (
+    memory.text.startsWith('User likes archive topic') && memory.useCount === 0
+  )))
+})
+
+test('ai talk service ranks Chinese memory text without requiring whitespace tokenization', async () => {
+  const requests = []
+  const store = createStore()
+  const created = store.applyMemoryOperations({
+    petPackId: 'mochi-cat',
+    conversationId: 'control-center:mochi-cat:main',
+    messageIds: ['m1'],
+    operations: [
+      {
+        operation: 'create',
+        scope: 'global',
+        text: 'User likes unrelated opera trivia.',
+        tags: ['opera'],
+        confidence: 1,
+        importance: 1,
+        reason: 'high confidence but unrelated'
+      },
+      {
+        operation: 'create',
+        scope: 'global',
+        text: '用户喜欢茉莉花茶，工作前喝会更安心。',
+        tags: ['茉莉花茶', 'preference'],
+        confidence: 0.4,
+        importance: 0.4,
+        reason: 'directly relevant Chinese preference'
+      }
+    ]
+  })
+  const teaMemoryId = created.applied.at(-1).id
+  const service = createAiTalkService({
+    aiService: {
+      getConfig: () => ({
+        enabled: true,
+        behavior: { enabled: false, useTools: true },
+        memory: { enabled: false }
+      }),
+      complete: async (request) => {
+        requests.push(request)
+        return { reply: '先喝口茶，我陪你进入专注。' }
+      }
+    },
+    aiTalkStore: store,
+    petPackService: createPetPackService({ id: 'mochi-cat' })
+  })
+
+  await service.chat({ message: '今天想喝茉莉花茶，然后准备专注一下' })
+
+  const memoryPrompt = requests[0].messages.find((message) => message.content.includes('# Relevant Memories')).content
+  assert.match(memoryPrompt, /^# Relevant Memories\n1\. \[global user\] 用户喜欢茉莉花茶/m)
+  assert.equal(store.getState().memories[teaMemoryId].useCount, 1)
+})
+
 test('ai talk service exposes and manages memory profile without reinjecting deleted memories', async () => {
   const requests = []
   const logs = []
@@ -683,4 +836,114 @@ test('ai talk service accepts fenced json memory extraction replies', async () =
   await service.flushMemoryJobs()
 
   assert.deepEqual(store.listMemories({ petPackId: 'legacy-cat' }).map((memory) => memory.text), ['User likes quiet focus music.'])
+})
+
+test('ai talk service migrates legacy control-center conversation before reading current main chat', () => {
+  const store = createStore()
+  const logs = []
+  const service = createAiTalkService({
+    aiService: {
+      getConfig: () => ({ enabled: true, behavior: { enabled: false, useTools: true } }),
+      getConversation: (conversationId) => (
+        conversationId === 'control-center'
+          ? [
+              { role: 'user', content: 'old hello' },
+              { role: 'assistant', content: 'old reply' }
+            ]
+          : []
+      )
+    },
+    aiTalkStore: store,
+    petPackService: createPetPackService({ id: 'legacy-cat' }),
+    appLogService: { record: (entry) => logs.push(entry) }
+  })
+
+  const messages = service.getConversation('')
+  const secondRead = service.getConversation('')
+
+  assert.deepEqual(messages.map((message) => message.content), ['old hello', 'old reply'])
+  assert.deepEqual(secondRead.map((message) => message.content), ['old hello', 'old reply'])
+  assert.equal(logs.filter((entry) => entry.event === 'ai-talk.legacy-conversation.migrated').length, 1)
+})
+
+test('ai talk service exports redacted diagnostics with provider and behavior links', async () => {
+  const store = createStore()
+  const service = createAiTalkService({
+    aiService: {
+      getConfig: () => ({
+        enabled: true,
+        provider: 'openai-compatible',
+        baseUrl: 'http://127.0.0.1:8317/v1',
+        model: 'gpt-5.5',
+        hasApiKey: true,
+        behavior: { enabled: true, useTools: true },
+        memory: { enabled: true }
+      }),
+      complete: async () => ({ reply: 'trace raw assistant reply' })
+    },
+    aiTalkStore: store,
+    petPackService: createPetPackService({ id: 'legacy-cat' })
+  })
+
+  await service.chat({ message: 'trace raw user prompt' })
+  const exported = JSON.parse(service.exportTraceDiagnostics({
+    behaviorDecisions: [
+      { id: 3, timestamp: '2026-06-20T00:00:00.000Z', matched: true, reason: 'matched provider actionId', actionId: 'wave', replay: { reply: 'raw replay' } }
+    ]
+  }))
+  const raw = JSON.stringify(exported)
+
+  assert.equal(exported.provider.model, 'gpt-5.5')
+  assert.equal(exported.provider.hasApiKey, true)
+  assert.equal(exported.provider.memoryEnabled, true)
+  assert.equal(exported.provider.behaviorEnabled, true)
+  assert.equal(exported.conversations[0].petPackId, 'legacy-cat')
+  assert.equal(exported.behaviorDecisions[0].id, 3)
+  assert.equal(exported.behaviorDecisions[0].replayRedacted, true)
+  assert.equal(raw.includes('trace raw user prompt'), false)
+  assert.equal(raw.includes('trace raw assistant reply'), false)
+  assert.equal(raw.includes('raw replay'), false)
+})
+
+test('ai talk service forwards trace diagnostic filters to the store export', () => {
+  const captured = []
+  const service = createAiTalkService({
+    aiService: {
+      getConfig: () => ({
+        enabled: true,
+        provider: 'openai-compatible',
+        baseUrl: 'http://127.0.0.1:8317/v1',
+        model: 'gpt-5.5',
+        hasApiKey: true,
+        behavior: { enabled: true, useTools: true },
+        memory: { enabled: true }
+      })
+    },
+    aiTalkStore: {
+      exportTraceDiagnostics: (payload) => {
+        captured.push(payload)
+        return JSON.stringify({ ok: true })
+      }
+    },
+    petPackService: createPetPackService({ id: 'legacy-cat' })
+  })
+
+  const output = service.exportTraceDiagnostics({
+    filters: {
+      petPackId: 'legacy-cat',
+      conversationId: 'control-center:legacy-cat:main'
+    },
+    behaviorDecisions: [{ id: 9, matched: true, reason: 'demo' }]
+  })
+
+  assert.equal(output, JSON.stringify({ ok: true }))
+  assert.equal(captured.length, 1)
+  assert.equal(captured[0].provider.model, 'gpt-5.5')
+  assert.equal(captured[0].provider.memory.enabled, true)
+  assert.equal(captured[0].provider.behavior.enabled, true)
+  assert.deepEqual(captured[0].filters, {
+    petPackId: 'legacy-cat',
+    conversationId: 'control-center:legacy-cat:main'
+  })
+  assert.deepEqual(captured[0].behaviorDecisions, [{ id: 9, matched: true, reason: 'demo' }])
 })

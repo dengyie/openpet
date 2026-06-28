@@ -3,6 +3,7 @@ const assert = require('node:assert/strict')
 
 const {
   createActionFrameImportResult,
+  createActionTriggerProposalPreviewResult,
   createActionsMutationResult,
   createAboutInfoView,
   createCatalogBlocklistResult,
@@ -191,6 +192,8 @@ test('action adapters package import and mutation results without leaking servic
       sourceCommandId: 'import-approved-action',
       message: 'Click trigger proposal',
       status: 'applied',
+      triggerRuleId: '',
+      preview: 'Click trigger will set clickAction to wave.',
       resultCode: 'applied',
       resultMessage: 'Click trigger now uses action: wave',
       rejectionReason: '',
@@ -226,6 +229,8 @@ test('action adapters package import and mutation results without leaking servic
       sourceCommandId: 'import-approved-action',
       message: 'Click trigger proposal',
       status: 'applied',
+      triggerRuleId: '',
+      preview: 'Click trigger will set clickAction to wave.',
       resultCode: 'applied',
       resultMessage: 'Click trigger now uses action: wave',
       rejectionReason: '',
@@ -247,6 +252,123 @@ test('action adapters package import and mutation results without leaking servic
       sourceRunId: 'run-1',
       sourceCommandId: 'import-approved-action'
     }
+  })
+  assert.deepEqual(createActionsMutationResult(animations, {
+    triggerProposal: {
+      ok: true,
+      applied: false,
+      actionId: 'sleep',
+      type: 'state',
+      binding: '',
+      code: 'rule_created',
+      message: 'Created host trigger rule rule:state:sleep:test for action: sleep',
+      acceptedAt: '2026-06-22T10:00:00.000Z',
+      triggerRuleId: 'rule:state:sleep:test',
+      preview: 'State trigger rule can play sleep when a host state condition matches.',
+      triggerRule: {
+        id: 'rule:state:sleep:test',
+        actionId: 'sleep',
+        type: 'state',
+        status: 'active',
+        sourceProposalId: 'proposal:state:sleep:test',
+        sourcePluginId: 'openpet.creator-studio',
+        sourceRunId: 'run-1',
+        sourceCommandId: 'import-approved-action',
+        message: 'Sleep when idle.',
+        preview: 'State trigger rule can play sleep when a host state condition matches.',
+        createdAt: '2026-06-22T10:00:00.000Z',
+        updatedAt: '2026-06-22T10:00:00.000Z',
+        internal: 'ignore-me'
+      }
+    }
+  }), {
+    animations,
+    triggerProposal: {
+      ok: true,
+      applied: false,
+      actionId: 'sleep',
+      type: 'state',
+      binding: '',
+      code: 'rule_created',
+      message: 'Created host trigger rule rule:state:sleep:test for action: sleep',
+      acceptedAt: '2026-06-22T10:00:00.000Z',
+      triggerRuleId: 'rule:state:sleep:test',
+      preview: 'State trigger rule can play sleep when a host state condition matches.',
+      triggerRule: {
+        id: 'rule:state:sleep:test',
+        actionId: 'sleep',
+        type: 'state',
+        status: 'active',
+        sourceProposalId: 'proposal:state:sleep:test',
+        sourcePluginId: 'openpet.creator-studio',
+        sourceRunId: 'run-1',
+        sourceCommandId: 'import-approved-action',
+        message: 'Sleep when idle.',
+        preview: 'State trigger rule can play sleep when a host state condition matches.',
+        createdAt: '2026-06-22T10:00:00.000Z',
+        updatedAt: '2026-06-22T10:00:00.000Z'
+      }
+    }
+  })
+})
+
+test('action trigger proposal preview adapter strips internal fields', () => {
+  assert.deepEqual(createActionTriggerProposalPreviewResult({
+    ok: true,
+    applied: false,
+    actionId: 'sleep',
+    type: 'state',
+    binding: '',
+    code: 'will_create_rule',
+    message: 'Preview: a host trigger rule would be created for action: sleep',
+    triggerRuleId: 'preview:state:sleep',
+    preview: 'State trigger rule can play sleep when a host state condition matches.',
+    triggerRule: {
+      id: 'preview:state:sleep',
+      actionId: 'sleep',
+      type: 'state',
+      status: 'active',
+      sourceProposalId: '',
+      sourcePluginId: 'openpet.creator-studio',
+      sourceRunId: 'run-1',
+      sourceCommandId: 'import-approved-action',
+      message: 'Sleep when idle.',
+      preview: 'State trigger rule can play sleep when a host state condition matches.',
+      createdAt: '2026-06-22T10:00:00.000Z',
+      updatedAt: '2026-06-22T10:00:00.000Z',
+      internal: 'ignore-me'
+    },
+    sourcePluginId: 'openpet.creator-studio',
+    sourceRunId: 'run-1',
+    sourceCommandId: 'import-approved-action',
+    internal: 'ignore-me'
+  }), {
+    ok: true,
+    applied: false,
+    actionId: 'sleep',
+    type: 'state',
+    binding: '',
+    code: 'will_create_rule',
+    message: 'Preview: a host trigger rule would be created for action: sleep',
+    triggerRuleId: 'preview:state:sleep',
+    preview: 'State trigger rule can play sleep when a host state condition matches.',
+    triggerRule: {
+      id: 'preview:state:sleep',
+      actionId: 'sleep',
+      type: 'state',
+      status: 'active',
+      sourceProposalId: '',
+      sourcePluginId: 'openpet.creator-studio',
+      sourceRunId: 'run-1',
+      sourceCommandId: 'import-approved-action',
+      message: 'Sleep when idle.',
+      preview: 'State trigger rule can play sleep when a host state condition matches.',
+      createdAt: '2026-06-22T10:00:00.000Z',
+      updatedAt: '2026-06-22T10:00:00.000Z'
+    },
+    sourcePluginId: 'openpet.creator-studio',
+    sourceRunId: 'run-1',
+    sourceCommandId: 'import-approved-action'
   })
 })
 

@@ -67,6 +67,64 @@ test.describe('Control Center smoke', () => {
     expect(metrics.shellWidth).toBeLessThanOrEqual(metrics.viewportWidth)
   })
 
+  test('keeps secondary AI settings collapsed until opened', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: 'AI' }).click()
+
+    const sectionHeadings = await page.locator('details.ai-section summary h2').allTextContents()
+    expect(sectionHeadings).toEqual([
+      '聊天 Provider',
+      '图片 Provider',
+      '长期记忆',
+      'Pet Persona Override',
+      'Behavior',
+      '聊天'
+    ])
+
+    const coreSections = ['聊天 Provider', '图片 Provider']
+    const secondarySections = ['长期记忆', 'Pet Persona Override', 'Behavior', '聊天']
+
+    for (const sectionName of coreSections) {
+      const section = aiSection(page, sectionName)
+      await expect(section).toHaveCount(1)
+      await expect(section).toHaveAttribute('open', '')
+    }
+
+    for (const sectionName of secondarySections) {
+      const section = aiSection(page, sectionName)
+      await expect(section).toHaveCount(1)
+      await expect(section).not.toHaveAttribute('open', '')
+    }
+
+    const memorySection = aiSection(page, '长期记忆')
+    await expect(memorySection.locator('.field-label', { hasText: '当前宠物包' })).toBeHidden()
+    await memorySection.locator('summary').click()
+    await expect(memorySection).toHaveAttribute('open', '')
+    await expect(memorySection.locator('.field-label', { hasText: '当前宠物包' })).toBeVisible()
+
+    const personaSection = aiSection(page, 'Pet Persona Override')
+    await expect(personaSection.getByLabel('Tone')).toBeHidden()
+    await personaSection.locator('summary').click()
+    await expect(personaSection.getByLabel('Tone')).toBeVisible()
+  })
+
+  test('shows host-owned trust copy for chat and image providers', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: 'AI' }).click()
+
+    const chatBoundary = page.getByTestId('chat-provider-boundary')
+    await expect(chatBoundary).toContainText('本地网关、代理服务和云端接口共用同一套 OpenAI-compatible 聊天 Provider 契约')
+    await expect(chatBoundary).toContainText('“保存聊天 Provider”只写入当前配置')
+    await expect(chatBoundary).toContainText('“测试已保存配置”只测试已保存的生效配置')
+    await expect(chatBoundary).toContainText('API Key 只保存在 OpenPet host')
+
+    const imageBoundary = page.getByTestId('image-provider-boundary')
+    await expect(imageBoundary).toContainText('本地网关、代理服务和云端接口共用同一套 OpenAI-compatible 图片 Provider 契约')
+    await expect(imageBoundary).toContainText('“保存图片 Provider”只更新 host 配置')
+    await expect(imageBoundary).toContainText('“检查图片健康”只检查当前已保存的图片 Provider')
+    await expect(imageBoundary).toContainText('Creator Studio 只提交提示词和输出目录')
+  })
+
   test('keeps key Pet and About interactions responsive', async ({ page }) => {
     await page.goto('/')
 
@@ -111,7 +169,7 @@ test.describe('Control Center smoke', () => {
     await expect(reviewCard).not.toContainText('最近结果：已应用')
   })
 
-  test('keeps host-rule trigger proposals pending in the Actions review UI', async ({ page }) => {
+  test('creates host-owned trigger rules from the Actions review UI', async ({ page }) => {
     await page.goto('/')
     await page.getByRole('button', { name: 'Actions' }).click()
 
@@ -121,13 +179,71 @@ test.describe('Control Center smoke', () => {
     const reviewCard = page.locator('[aria-label="触发建议审阅"]')
 
     await reviewCard.locator('select').selectOption('state')
-    await expect(reviewCard).toContainText('状态条件和优先级必须由 host 统一校验和持久化。')
-    await page.getByRole('button', { name: '确认待规则' }).click()
+    await expect(reviewCard).toContainText('本轮保存最小规则')
+    await expect(reviewCard).toContainText('应用前预览')
+    await expect(reviewCard).toContainText('will_create_rule')
+    await page.getByRole('button', { name: '创建状态规则' }).click()
 
     await expect(page.locator('.status-line')).toContainText('已确认 触发建议')
     await expect(reviewCard).toContainText('最近结果：已确认')
-    await expect(reviewCard).toContainText('结果码：pending_host_rule')
+    await expect(reviewCard).toContainText('结果码：rule_created')
+    const rulesPanel = page.locator('[aria-label="触发规则"]')
+    await expect(rulesPanel).toContainText('Sleep')
+    await expect(rulesPanel).toContainText('state')
     await expect(clickAction).toHaveValue(beforeClickAction)
+  })
+
+  test('manages host-owned trigger rules from the Actions UI', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.sessionStorage.setItem('openpet.controlCenter.demoState', JSON.stringify({
+        actionsConfig: {
+          defaultAction: 'idle',
+          clickAction: 'wave',
+          actions: [
+            { id: 'idle', label: 'Idle', kind: 'idle', loop: true, frameCount: 1, frameMs: 120, frameWidth: 8, frameHeight: 8 },
+            { id: 'wave', label: 'Wave', kind: 'click', loop: false, frameCount: 1, frameMs: 100, frameWidth: 8, frameHeight: 8 },
+            { id: 'sleep', label: 'Sleep', kind: 'idle', loop: true, frameCount: 1, frameMs: 140, frameWidth: 8, frameHeight: 8 }
+          ],
+          triggerProposalInbox: [],
+          triggerRules: [
+            {
+              id: 'rule:state:sleep:test',
+              actionId: 'sleep',
+              type: 'state',
+              status: 'active',
+              sourceProposalId: 'proposal:state:sleep:test',
+              sourcePluginId: 'openpet.creator-studio',
+              sourceRunId: 'run-demo-state',
+              sourceCommandId: 'import-approved-action',
+              message: 'Use Sleep when the pet enters idle focus mode.',
+              preview: 'State trigger rule can play sleep when a host state condition matches.',
+              createdAt: '2026-06-24T08:00:00.000Z',
+              updatedAt: '2026-06-24T08:00:00.000Z'
+            }
+          ]
+        }
+      }))
+    })
+
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Actions' }).click()
+
+    const rulesPanel = page.locator('[aria-label="触发规则"]')
+    const sleepRule = rulesPanel.locator('.trigger-inbox-item', { hasText: 'Sleep' })
+    await expect(sleepRule).toContainText('active')
+
+    await sleepRule.getByRole('button', { name: '停用规则' }).click()
+    await expect(page.locator('.status-line')).toContainText('已停用触发规则：rule:state:sleep:test')
+    await expect(sleepRule).toContainText('disabled')
+
+    await sleepRule.getByRole('button', { name: '启用规则' }).click()
+    await expect(page.locator('.status-line')).toContainText('已启用触发规则：rule:state:sleep:test')
+    await expect(sleepRule).toContainText('active')
+
+    page.once('dialog', (dialog) => dialog.accept())
+    await sleepRule.getByRole('button', { name: '删除规则' }).click()
+    await expect(page.locator('.status-line')).toContainText('已删除触发规则：rule:state:sleep:test')
+    await expect(rulesPanel).toContainText('暂无非点击触发规则')
   })
 
   test('reviews queued trigger proposals from the Actions inbox', async ({ page }) => {
@@ -141,6 +257,7 @@ test.describe('Control Center smoke', () => {
             { id: 'wave', label: 'Wave', kind: 'click', loop: false, frameCount: 1, frameMs: 100, frameWidth: 8, frameHeight: 8 },
             { id: 'sleep', label: 'Sleep', kind: 'idle', loop: true, frameCount: 1, frameMs: 140, frameWidth: 8, frameHeight: 8 }
           ],
+          triggerRules: [],
           triggerProposalInbox: [
             {
               id: 'proposal:state:sleep:test',
@@ -152,6 +269,7 @@ test.describe('Control Center smoke', () => {
               sourceCommandId: 'import-approved-action',
               message: 'Use Sleep when the pet enters idle focus mode.',
               status: 'pending',
+              preview: 'State trigger rule can play sleep when a host state condition matches.',
               resultCode: '',
               resultMessage: '',
               rejectionReason: '',
@@ -170,6 +288,7 @@ test.describe('Control Center smoke', () => {
               sourceCommandId: 'import-approved-action',
               message: 'Keep Wave as a click action candidate.',
               status: 'pending',
+              preview: '',
               resultCode: '',
               resultMessage: '',
               rejectionReason: '',
@@ -190,10 +309,14 @@ test.describe('Control Center smoke', () => {
     await expect(inbox).toContainText('2 条待审核')
     const sleepProposal = inbox.locator('.trigger-inbox-item', { hasText: 'Sleep' })
     await expect(sleepProposal).toContainText('待审核')
+    await expect(sleepProposal).toContainText('State trigger rule can play sleep')
     await sleepProposal.getByRole('button', { name: '接受提案' }).click()
-    await expect(page.locator('.status-line')).toContainText('已标记待规则触发提案：sleep')
-    await expect(sleepProposal).toContainText('待规则')
-    await expect(sleepProposal).toContainText('pending_host_rule')
+    await expect(page.locator('.status-line')).toContainText('已接受触发提案：sleep')
+    await expect(sleepProposal).toContainText('已接受')
+    await expect(sleepProposal).toContainText('rule_created')
+    const rulesPanel = page.locator('[aria-label="触发规则"]')
+    await expect(rulesPanel).toContainText('Sleep')
+    await expect(rulesPanel).toContainText('state')
 
     const waveProposal = inbox.locator('.trigger-inbox-item', { hasText: 'Wave' })
     page.once('dialog', (dialog) => dialog.accept('Not for this pack'))
@@ -355,7 +478,7 @@ test.describe('Control Center smoke', () => {
     await expect(apiKeyRow).toContainText('已保存')
 
     await chatProviderSection.getByRole('button', { name: '测试已保存配置' }).click()
-    await expect(page.getByTestId('ai-provider-feedback')).toContainText('连接正常')
+    await expect(page.getByTestId('ai-provider-feedback')).toContainText('聊天 Provider 可达')
     await expect(page.getByTestId('ai-connection-result')).toContainText('连接测试通过')
     await expect(page.getByTestId('ai-connection-result')).toContainText('openpet-test-model')
 
@@ -388,8 +511,81 @@ test.describe('Control Center smoke', () => {
 
     await expect(page.locator('.readonly-row', { hasText: '当前生效配置' })).toContainText('https://combo.example.test/v1')
     await expect(page.locator('.readonly-row', { hasText: '当前生效配置' })).toContainText('combo-test-model')
-    await expect(page.getByTestId('ai-provider-feedback')).toContainText('openai-compatible · https://combo.example.test/v1 · combo-test-model')
+    await expect(page.getByTestId('ai-connection-result')).toContainText('Provider: openai-compatible')
+    await expect(page.getByTestId('ai-connection-result')).toContainText('Base URL: https://combo.example.test/v1')
+    await expect(page.getByTestId('ai-connection-result')).toContainText('Model: combo-test-model')
     await expect(page.locator('.field-row').filter({ has: page.getByText('API Key', { exact: true }) })).toContainText('已保存')
+  })
+
+  test('applies chat provider presets without touching the API key draft', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: 'AI' }).click()
+    const chatProviderSection = await expandAiSection(page, '聊天 Provider')
+
+    await expect(chatProviderSection.getByRole('button', { name: 'OpenAI 官方' })).toHaveCount(1)
+    await expect(chatProviderSection.getByRole('button', { name: 'LM Studio' })).toHaveCount(1)
+    await expect(chatProviderSection.getByRole('button', { name: 'vLLM' })).toHaveCount(1)
+    await expect(chatProviderSection.getByRole('button', { name: 'OpenRouter' })).toHaveCount(1)
+    await expect(chatProviderSection.getByRole('button', { name: 'Together' })).toHaveCount(1)
+    await page.getByRole('textbox', { name: 'Base URL', exact: true }).fill('https://dirty.example.test/v1')
+    await page.getByRole('textbox', { name: 'Model', exact: true }).fill('dirty-model')
+    await page.getByPlaceholder('输入 API Key').fill('sk-dirty-secret')
+
+    await chatProviderSection.getByRole('button', { name: 'LM Studio' }).click()
+    await expect(page.getByRole('textbox', { name: 'Base URL', exact: true })).toHaveValue('http://127.0.0.1:1234/v1')
+    await expect(page.getByRole('textbox', { name: 'Model', exact: true })).toHaveValue('dirty-model')
+    await expect(page.getByPlaceholder('输入 API Key')).toHaveValue('sk-dirty-secret')
+
+    await chatProviderSection.getByRole('button', { name: 'OpenRouter' }).click()
+    await expect(page.getByRole('textbox', { name: 'Base URL', exact: true })).toHaveValue('https://openrouter.ai/api/v1')
+    await expect(page.getByRole('textbox', { name: 'Model', exact: true })).toHaveValue('dirty-model')
+    await expect(page.getByPlaceholder('输入 API Key')).toHaveValue('sk-dirty-secret')
+
+    await chatProviderSection.getByRole('button', { name: 'OpenAI 官方' }).click()
+
+    await expect(page.getByRole('textbox', { name: 'Base URL', exact: true })).toHaveValue('https://api.openai.com/v1')
+    await expect(page.getByRole('textbox', { name: 'Model', exact: true })).toHaveValue('gpt-4o-mini')
+    await expect(page.getByPlaceholder('输入 API Key')).toHaveValue('sk-dirty-secret')
+    const chatDraftStatusRow = chatProviderSection.locator('.readonly-row').filter({ has: page.locator('strong', { hasText: /^草稿状态$/ }) })
+    await expect(chatDraftStatusRow).toContainText('草稿未保存')
+  })
+
+  test('applies OpenPet gateway provider presets without touching API key drafts', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: 'AI' }).click()
+
+    const chatProviderSection = await expandAiSection(page, '聊天 Provider')
+    await page.getByRole('textbox', { name: 'Base URL', exact: true }).fill('https://dirty-chat.example.test/v1')
+    await page.getByRole('textbox', { name: 'Model', exact: true }).fill('dirty-chat-model')
+    await page.getByPlaceholder('输入 API Key').fill('sk-chat-draft-secret')
+    await chatProviderSection.getByRole('button', { name: /OpenPet 8317 网关/ }).click()
+
+    await expect(page.getByRole('textbox', { name: 'Base URL', exact: true })).toHaveValue('http://127.0.0.1:8317/v1')
+    await expect(page.getByRole('textbox', { name: 'Model', exact: true })).toHaveValue('gpt-5.5')
+    await expect(page.getByPlaceholder('输入 API Key')).toHaveValue('sk-chat-draft-secret')
+
+    const imageProviderSection = await expandAiSection(page, '图片 Provider')
+    await expect(imageProviderSection.getByRole('button', { name: 'Together' })).toHaveCount(1)
+    await expect(imageProviderSection.getByRole('button', { name: 'OpenRouter' })).toHaveCount(1)
+    await page.getByLabel('图片 Base URL').fill('https://dirty-image.example.test/v1')
+    await page.getByLabel('图片 Model').fill('dirty-image-model')
+    const imageApiKeyRow = page.locator('.field-row', { hasText: '图片 API Key' })
+    await imageApiKeyRow.locator('input[type="password"]').fill('sk-image-draft-secret')
+
+    await imageProviderSection.getByRole('button', { name: 'Together' }).click()
+    await expect(page.getByLabel('图片 Base URL')).toHaveValue('https://api.together.xyz/v1')
+    await expect(page.getByLabel('图片 Model')).toHaveValue('dirty-image-model')
+    await expect(page.getByLabel('图片 Timeout MS')).toHaveValue('120000')
+    await expect(page.getByLabel('图片最大并发')).toHaveValue('1')
+    await expect(imageApiKeyRow.locator('input[type="password"]')).toHaveValue('sk-image-draft-secret')
+
+    await imageProviderSection.getByRole('button', { name: /OpenPet 8317 网关/ }).click()
+
+    await expect(page.getByLabel('图片 Base URL')).toHaveValue('http://127.0.0.1:8317/v1')
+    await expect(page.getByLabel('图片 Model')).toHaveValue('gpt-image-2')
+    await expect(page.getByLabel('图片 Timeout MS')).toHaveValue('120000')
+    await expect(page.getByLabel('图片最大并发')).toHaveValue('1')
+    await expect(imageApiKeyRow.locator('input[type="password"]')).toHaveValue('sk-image-draft-secret')
   })
 
   test('persists image generation config and supports key health actions in the demo API', async ({ page }) => {
@@ -439,7 +635,7 @@ test.describe('Control Center smoke', () => {
     await expect(imageApiKeyRow).toContainText('未保存')
 
     await page.getByRole('button', { name: '检查图片健康' }).click()
-    await expect(page.locator('.readonly-row', { hasText: '图片健康状态' })).toContainText('图片 Provider 健康检查失败：Image generation API key is missing')
+    await expect(page.locator('.readonly-row', { hasText: '图片健康状态' })).toContainText('图片 Provider 健康检查失败：图片 API Key 未配置')
 
     await page.reload()
     await page.getByRole('button', { name: 'AI' }).click()
@@ -449,6 +645,99 @@ test.describe('Control Center smoke', () => {
     await expect(page.getByLabel('图片 Timeout MS')).toHaveValue('90000')
     await expect(page.getByLabel('图片最大并发')).toHaveValue('2')
     await expect(page.locator('.field-row', { hasText: '图片 API Key' })).toContainText('未保存')
+  })
+
+  test('shows image provider discovery results and transparency compatibility hints in the demo API', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: 'AI' }).click()
+
+    const imageProviderSection = await expandAiSection(page, '图片 Provider')
+    await imageProviderSection.getByRole('button', { name: /Together/ }).click()
+    await page.getByLabel('图片 Model').fill('black-forest-labs/flux-schnell')
+    await expect(page.getByTestId('image-model-compatibility')).toContainText('Together 图片兼容模式')
+    await expect(page.getByTestId('image-model-compatibility')).toContainText('Together')
+
+    await imageProviderSection.getByRole('button', { name: /OpenRouter/ }).click()
+    await expect(page.getByTestId('image-model-compatibility')).toContainText('OpenRouter 图片兼容模式')
+    await expect(page.getByTestId('image-model-compatibility')).toContainText('OpenRouter 路由')
+
+    await imageProviderSection.getByRole('button', { name: /OpenAI 官方/ }).click()
+    await page.getByLabel('图片 Base URL').fill('https://healthy-models.example.test/v1')
+    await page.getByLabel('图片 Model').fill('openpet-image-test')
+    await imageProviderSection.getByRole('button', { name: '保存图片 Provider' }).click()
+
+    const imageApiKeyRow = page.locator('.field-row', { hasText: '图片 API Key' })
+    await imageApiKeyRow.locator('input[type="password"]').fill('sk-image-demo-5678')
+    await page.getByRole('button', { name: '保存图片密钥' }).click()
+    await page.getByRole('button', { name: '检查图片健康' }).click()
+
+    await expect(page.getByTestId('image-model-discovery')).toContainText('模型列表探测成功')
+    await expect(page.getByTestId('image-model-discovery')).toContainText('openpet-image-test')
+    await expect(page.getByTestId('image-model-discovery')).toContainText('已包含当前模型')
+    await expect(page.getByTestId('image-usage-summary')).toContainText('使用量摘要')
+    await expect(page.getByTestId('image-usage-summary')).toContainText('usage.estimatedCostUsd')
+    await expect(page.getByTestId('image-model-compatibility')).toContainText('transparent')
+    await expect(page.getByTestId('image-model-compatibility')).toContainText('OpenAI-compatible')
+
+    await page.getByLabel('图片 Model').fill('gpt-image-2')
+    await expect(page.getByTestId('image-model-compatibility')).toContainText('gpt-image-2')
+    await expect(page.getByTestId('image-model-compatibility')).toContainText('不会强制发送 background 参数')
+
+    await page.getByLabel('图片 Model').fill('missing-image-model')
+    await imageProviderSection.getByRole('button', { name: '保存图片 Provider' }).click()
+    await page.getByRole('button', { name: '检查图片健康' }).click()
+    await expect(page.locator('.readonly-row', { hasText: '图片健康状态' })).toContainText('当前保存的图片 Model 未出现在 /models 返回列表中')
+    await expect(page.getByTestId('image-model-discovery')).toContainText('当前保存的图片 Model 未出现在探测列表中')
+  })
+
+  test('shows chat provider model discovery results in the demo API', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: 'AI' }).click()
+
+    const chatProviderSection = await expandAiSection(page, '聊天 Provider')
+    await page.getByRole('textbox', { name: 'Base URL', exact: true }).fill('https://healthy-models.example.test/v1')
+    await page.getByRole('textbox', { name: 'Model', exact: true }).fill('deepseek-chat')
+    await chatProviderSection.getByRole('button', { name: '保存聊天 Provider' }).click()
+
+    const apiKeyRow = page.locator('.field-row').filter({ has: page.getByText('API Key', { exact: true }) })
+    await apiKeyRow.getByPlaceholder('输入 API Key').fill('sk-chat-demo-5678')
+    await apiKeyRow.getByRole('button', { name: '保存密钥' }).click()
+    await chatProviderSection.getByRole('button', { name: '测试已保存配置' }).click()
+
+    await expect(page.getByTestId('chat-model-discovery')).toContainText('模型列表探测成功')
+    await expect(page.getByTestId('chat-model-discovery')).toContainText('deepseek-chat')
+    await expect(page.getByTestId('chat-model-discovery')).toContainText('已包含当前模型')
+
+    await page.getByRole('textbox', { name: 'Model', exact: true }).fill('missing-chat-model')
+    await chatProviderSection.getByRole('button', { name: '保存聊天 Provider' }).click()
+    await chatProviderSection.getByRole('button', { name: '测试已保存配置' }).click()
+
+    await expect(page.getByTestId('ai-provider-feedback')).toContainText('当前保存的聊天 Model 未出现在 /models 返回列表中')
+    await expect(page.getByTestId('chat-model-discovery')).toContainText('当前保存的聊天 Model 未出现在探测列表中')
+  })
+
+  test('shows chat model compatibility hints for default and custom models in the demo API', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: 'AI' }).click()
+
+    const chatProviderSection = await expandAiSection(page, '聊天 Provider')
+    await expect(page.getByTestId('chat-model-compatibility')).toContainText('gpt-4o-mini')
+    await expect(page.getByTestId('chat-model-compatibility')).toContainText('OpenAI 官方兼容模式')
+
+    await chatProviderSection.getByRole('button', { name: 'LM Studio' }).click()
+    await page.getByRole('textbox', { name: 'Model', exact: true }).fill('qwen2.5-7b-instruct')
+    await expect(page.getByTestId('chat-model-compatibility')).toContainText('LM Studio 聊天兼容模式')
+    await expect(page.getByTestId('chat-model-compatibility')).toContainText('打开本地服务')
+
+    await chatProviderSection.getByRole('button', { name: 'OpenRouter' }).click()
+    await expect(page.getByTestId('chat-model-compatibility')).toContainText('OpenRouter 聊天兼容模式')
+    await expect(page.getByTestId('chat-model-compatibility')).toContainText('OpenRouter 路由')
+
+    await page.getByRole('textbox', { name: 'Model', exact: true }).fill('deepseek-chat')
+    await chatProviderSection.getByRole('button', { name: 'Together' }).click()
+    await expect(page.getByTestId('chat-model-compatibility')).toContainText('deepseek-chat')
+    await expect(page.getByTestId('chat-model-compatibility')).toContainText('Together 聊天兼容模式')
+    await expect(chatProviderSection).toContainText('聊天 Provider')
   })
 
   test('persists pet persona override and follows the active pet-pack in the demo API', async ({ page }) => {
@@ -574,6 +863,23 @@ test.describe('Control Center smoke', () => {
     })
 
     await expect(bubbleState).toContainText('当前未显示')
+  })
+
+  test('switches AI trace export filters in the demo API', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: 'AI' }).click()
+
+    const memorySection = await expandAiSection(page, '长期记忆')
+    const filterSelect = memorySection.getByTestId('ai-trace-filter-select')
+
+    await expect(filterSelect).toHaveValue('all')
+    await expect(memorySection.locator('.readonly-row', { hasText: '当前 Trace 过滤' })).toContainText('不过滤，导出全部')
+
+    await filterSelect.selectOption('petPack')
+    await expect(memorySection.locator('.readonly-row', { hasText: '当前 Trace 过滤' })).toContainText('宠物包 legacy-cat')
+
+    await filterSelect.selectOption('conversation')
+    await expect(memorySection.locator('.readonly-row', { hasText: '当前 Trace 过滤' })).toContainText('会话 control-center:legacy-cat:main')
   })
 
   test('shows AI behavior decisions and supports replay and clearing diagnostics', async ({ page }) => {
@@ -856,5 +1162,164 @@ test.describe('Control Center smoke', () => {
     await expect(page.locator('.status-line')).toContainText('插件已安装，默认保持停用')
     await expect(reviewPanel).toBeHidden()
     await expect(page.locator('.plugin-row', { hasText: 'Demo Manual Review' })).toContainText('openpet.demo.manual-review')
+  })
+
+  test('opens the Creator Studio dashboard entry from the Plugins pane with the demo API', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.sessionStorage.setItem('openpet.controlCenter.demoState', JSON.stringify({
+        plugins: [
+          {
+            id: 'openpet.creator-studio',
+            name: 'Creator Studio',
+            version: '1.0.0',
+            source: 'local',
+            enabled: true,
+            runnable: true,
+            permissions: ['pet:say', 'storage'],
+            commands: [
+              { id: 'draft-task', title: 'Draft Creator Task' },
+              { id: 'import-approved-pet', title: 'Import Approved Pet' }
+            ],
+            entries: {
+              setup: [],
+              commands: [
+                { id: 'draft-task', title: 'Draft Creator Task', command: 'node ./commands/draft-task.js', cwd: '.' },
+                { id: 'import-approved-pet', title: 'Import Approved Pet', command: 'node ./commands/import-approved-pet.js', cwd: '.' }
+              ],
+              services: [],
+              dashboards: [
+                { id: 'main', title: 'Creator Studio', url: 'http://127.0.0.1:8794' }
+              ]
+            },
+            configSchema: { properties: [] },
+            config: {},
+            storage: { keyCount: 0, byteSize: 2, valid: true },
+            signatureStatus: { label: 'Unsigned local demo' }
+          }
+        ]
+      }))
+    })
+
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Plugins' }).click()
+
+    const pluginRow = page.locator('.plugin-row', { hasText: 'Creator Studio' })
+    await expect(pluginRow).toContainText('openpet.creator-studio')
+    await expect(pluginRow).toContainText('Dashboard entries')
+    await expect(pluginRow).toContainText('main')
+
+    await pluginRow.getByRole('button', { name: 'Creator Studio' }).click()
+
+    await expect(page.locator('.status-line')).toContainText('Dashboard 已打开')
+    await expect(page.locator('.plugin-log-row', { hasText: 'Dashboard opened' })).toContainText('dashboard:main')
+    await expect(page.locator('.plugin-log-row', { hasText: 'Dashboard opened' })).toContainText('openpet.creator-studio')
+  })
+
+  test('shows structured Creator Studio command results in the Plugins pane with the demo API', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.sessionStorage.setItem('openpet.controlCenter.demoState', JSON.stringify({
+        plugins: [
+          {
+            id: 'openpet.creator-studio',
+            name: 'Creator Studio',
+            version: '1.0.0',
+            source: 'local',
+            enabled: true,
+            runnable: true,
+            permissions: ['pet:say', 'storage'],
+            commands: [
+              { id: 'import-approved-pet', title: 'Import Approved Pet' }
+            ],
+            entries: {
+              setup: [],
+              commands: [
+                { id: 'import-approved-pet', title: 'Import Approved Pet', command: 'node ./commands/import-approved-pet.js', cwd: '.' }
+              ],
+              services: [],
+              dashboards: []
+            },
+            configSchema: { properties: [] },
+            config: {},
+            storage: { keyCount: 0, byteSize: 2, valid: true },
+            signatureStatus: { label: 'Unsigned local demo' }
+          }
+        ]
+      }))
+    })
+
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Plugins' }).click()
+
+    const pluginRow = page.locator('.plugin-row', { hasText: 'Creator Studio' })
+    await pluginRow.getByLabel('可选命令 Payload JSON').fill('{"runId":"run-demo-creator-123"}')
+    await pluginRow.getByRole('button', { name: 'Import Approved Pet' }).click()
+
+    await expect(page.locator('.status-line')).toContainText('Imported run run-demo-creator-123')
+    await expect(pluginRow).toContainText('最近命令结果')
+    await expect(pluginRow).toContainText('import-approved-pet · exit 0')
+    await expect(pluginRow).toContainText('Run')
+    await expect(pluginRow).toContainText('run-demo-creator-123')
+    await expect(pluginRow).toContainText('状态')
+    await expect(pluginRow).toContainText('imported')
+    await expect(pluginRow).toContainText('步骤')
+    await expect(pluginRow).toContainText('已导入 Pack')
+    await expect(pluginRow).toContainText('creator-studio-pet')
+    await expect(pluginRow).toContainText('输出目录')
+    await expect(pluginRow).toContainText('/tmp/openpet/runs/run-demo-creator-123/outputs')
+    await expect(pluginRow).toContainText('导出包')
+    await expect(pluginRow).toContainText('creator-studio-pet.codex-pet.zip')
+  })
+
+  test('shows structured Creator Studio action import results in the Plugins pane with the demo API', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.sessionStorage.setItem('openpet.controlCenter.demoState', JSON.stringify({
+        plugins: [
+          {
+            id: 'openpet.creator-studio',
+            name: 'Creator Studio',
+            version: '1.0.0',
+            source: 'local',
+            enabled: true,
+            runnable: true,
+            permissions: ['pet:say', 'storage'],
+            commands: [
+              { id: 'import-approved-action', title: 'Import Approved Action' }
+            ],
+            entries: {
+              setup: [],
+              commands: [
+                { id: 'import-approved-action', title: 'Import Approved Action', command: 'node ./commands/import-approved-action.js', cwd: '.' }
+              ],
+              services: [],
+              dashboards: []
+            },
+            configSchema: { properties: [] },
+            config: {},
+            storage: { keyCount: 0, byteSize: 2, valid: true },
+            signatureStatus: { label: 'Unsigned local demo' }
+          }
+        ]
+      }))
+    })
+
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Plugins' }).click()
+
+    const pluginRow = page.locator('.plugin-row', { hasText: 'Creator Studio' })
+    await pluginRow.getByLabel('可选命令 Payload JSON').fill('{"runId":"run-demo-action-123"}')
+    await pluginRow.getByRole('button', { name: 'Import Approved Action' }).click()
+
+    await expect(page.locator('.status-line')).toContainText('Imported action shy-spin from run run-demo-action-123')
+    await expect(pluginRow).toContainText('最近命令结果')
+    await expect(pluginRow).toContainText('import-approved-action · exit 0')
+    await expect(pluginRow).toContainText('Run')
+    await expect(pluginRow).toContainText('run-demo-action-123')
+    await expect(pluginRow).toContainText('已导入动作')
+    await expect(pluginRow).toContainText('shy-spin')
+    await expect(pluginRow).toContainText('动作目录')
+    await expect(pluginRow).toContainText('/tmp/openpet/runs/run-demo-action-123/frames/actions/shy-spin')
+    await expect(pluginRow).toContainText('触发建议')
+    await expect(pluginRow).toContainText('已提交')
+    await expect(pluginRow).toContainText('proposal:click:shy-spin:test')
   })
 })

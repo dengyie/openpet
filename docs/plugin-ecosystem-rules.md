@@ -118,7 +118,7 @@ Commands should be allowed to use any suitable runtime. Do not require JavaScrip
 Services are long-running local process entries managed by OpenPet.
 
 OpenPet can run command and setup entries only after explicit Control Center action, record setup status/logs, start and stop declared service processes only after explicit Control Center action, apply service platform overrides, capture stdout/stderr snippets, show runtime state, manually check declared loopback health endpoints, optionally schedule host-managed periodic health checks for already running services, stop running services on disable/app quit with best-effort process-group cleanup, wait for confirmed child exit before reporting a clean stop, attempt one bounded host-side force stop if a service ignores the grace-period shutdown request, and try a host-owned process-tree cleanup path before falling back to direct child kill when process-group signalling fails. Declaration-only command runs also receive a short-lived bridge URL/token pair for bounded pet-aware actions and context reads. Explicit setup and declaration-only command cleanup now also keeps stop intent visible until child exit confirmation, but those paths remain direct-child best effort. Commands and setup do not run during install or enable, services do not auto-start, periodic health checks are opt-in and runtime-bound, and command/setup/service processes are spawned without shell expansion. Universal process-tree cleanup guarantees still remain out of scope.
-Declaration-only command runs for creator-tools also receive host-owned `OPENPET_DATA_DIR`, `OPENPET_CACHE_DIR`, and `OPENPET_LOG_DIR`, plus bridge routes for bounded action reads/writes, active installed user pack metadata reads / validation / bounded writes through `pack-manifest:read` and `pack-manifest:write`, read-only package-local frame inspection through `assets:inspect`, host-mediated package-local frame import/sprite generation through `assets:generate`, approved full pet-pack import through `pet-pack:import`, and host-owned native picker frame inspection/import after explicit user approval. This does not grant raw filesystem access, raw file writes, plugin-selected output paths, arbitrary pet-pack writes, direct writes to OpenPet pet-pack storage, built-in pack edits, persistent folder grants, or arbitrary pack targeting.
+Declaration-only command runs for creator-tools also receive host-owned `OPENPET_DATA_DIR`, `OPENPET_CACHE_DIR`, and `OPENPET_LOG_DIR`, plus bridge routes for bounded action reads/writes, trigger proposal submission through `trigger-proposals:write`, active installed user pack metadata reads / validation / bounded writes through `pack-manifest:read` and `pack-manifest:write`, read-only package-local frame inspection through `assets:inspect`, host-mediated package-local frame import/sprite generation through `assets:generate`, approved full pet-pack import through `pet-pack:import`, and host-owned native picker frame inspection/import after explicit user approval. This does not grant raw filesystem access, raw file writes, plugin-selected output paths, arbitrary pet-pack writes, direct writes to OpenPet pet-pack storage, built-in pack edits, persistent folder grants, or arbitrary pack targeting.
 
 Services may power real local experiences: dashboards, background companions, schedulers, local model servers, voice processors, or integrations with external APIs.
 
@@ -172,11 +172,19 @@ The current local bridge stays intentionally small:
 - `GET /creator/actions`
 - `POST /creator/actions/validate`
 - `POST /creator/actions/apply`
+- `POST /creator/trigger-proposals/submit`
 - `GET /creator/pack-manifest`
 - `POST /creator/pack-manifest/validate`
 - `POST /creator/pack-manifest/apply`
+- `POST /creator/assets/inspect-frames`
+- `POST /creator/assets/import-frames`
+- `POST /creator/assets/pick-frames/inspect`
+- `POST /creator/assets/pick-frames/import`
 - `POST /creator/pet-pack/inspect-output`
 - `POST /creator/pet-pack/import-output`
+- `GET /creator/model-settings`
+- `POST /creator/model-health-check`
+- `POST /creator/model-image-generate`
 
 The bridge is for integration convenience. It is not a complete SDK, not a full security broker, and not a reason to block extensions from using their own local capabilities.
 
@@ -188,10 +196,12 @@ The following capabilities are intentionally available to ordinary third-party a
 - pet action playback through `pet:action`;
 - bounded pet event emission through `pet:event`;
 - action configuration reads/writes through `actions:read` and `actions:write`;
+- trigger proposal inbox submission through `trigger-proposals:write` without granting direct action configuration writes;
 - active installed user pack metadata reads/writes through `pack-manifest:read` and `pack-manifest:write`;
 - package-local or user-approved frame inspection through `assets:inspect`;
 - package-local or user-approved frame import and sprite/action metadata generation through `assets:generate`;
 - approved full pet-pack import through `pet-pack:import`, where the extension provides an output path and OpenPet performs inspection, import, policy checks, and optional activation.
+- host-managed model settings reads, health checks, and bounded image generation through `model:image-generate` during explicit command runs, without exposing OpenPet-owned provider credentials to the extension.
 
 These are not official-only powers. A community weather announcer, pet dialogue pack, pet personality helper, action editor, sprite generator, or local model workflow may request them when the package explains the user value and accepts the host boundary.
 
@@ -229,6 +239,7 @@ Third-party extensions may manage:
 OpenPet should not claim it can enumerate, audit, revoke, or delete every third-party secret or data file. Authors should disclose likely data locations and external dependencies in `manifest`, and OpenPet should show those declarations plainly.
 
 This is intentionally more welcoming than the older "no secrets in ordinary plugin config" posture. The new boundary is: OpenPet-owned config should be clear about whether it stores secrets, and extension-owned secrets must be disclosed and managed by the extension/user, not silently implied to be protected by OpenPet.
+For Creator Studio and similar host-mediated generation flows, plugin-managed provider credentials are currently unsupported: if generation is meant to use OpenPet's provider surface, the credentials stay in OpenPet main-process secret storage and the extension only receives a short-lived bridge token for bounded generation routes.
 
 ## 8. Setup, Dependencies, And Cleanup
 

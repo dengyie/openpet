@@ -8,6 +8,7 @@ const KNOWN_PLUGIN_PERMISSIONS = new Set([
   'commands',
   'actions:read',
   'actions:write',
+  'trigger-proposals:write',
   'assets:inspect',
   'assets:generate',
   'model:image-generate',

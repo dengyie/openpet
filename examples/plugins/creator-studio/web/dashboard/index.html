@@ -173,11 +173,137 @@
         margin-bottom: 4px;
       }
 
+      .notice {
+        border: 1px solid rgba(40, 123, 84, 0.28);
+        border-radius: 14px;
+        background: rgba(237, 243, 238, 0.72);
+        padding: 12px;
+      }
+
+      .notice.error {
+        border-color: rgba(170, 61, 61, 0.35);
+        background: rgba(255, 240, 232, 0.82);
+      }
+
+      .action-lane {
+        display: grid;
+        gap: 10px;
+      }
+
+      .action-lane-card {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: #fffef8;
+        padding: 12px;
+      }
+
+      .action-lane-card.host {
+        border-style: dashed;
+        background: rgba(237, 243, 238, 0.72);
+      }
+
+      .meta-list {
+        display: grid;
+        gap: 6px;
+        margin-top: 8px;
+      }
+
+      .meta-list span {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .prompt-preview {
+        max-height: 360px;
+        margin-top: 10px;
+      }
+
+      .wizard-steps {
+        display: grid;
+        gap: 10px;
+      }
+
+      .wizard-step {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: 10px;
+        align-items: start;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: #fffef8;
+        padding: 10px 12px;
+      }
+
+      .wizard-step-badge {
+        display: inline-grid;
+        place-items: center;
+        width: 28px;
+        height: 28px;
+        border-radius: 999px;
+        background: rgba(39, 63, 67, 0.1);
+        color: var(--ink);
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .wizard-step.complete {
+        border-color: rgba(40, 123, 84, 0.32);
+        background: rgba(237, 243, 238, 0.88);
+      }
+
+      .wizard-step.complete .wizard-step-badge {
+        background: var(--good);
+        color: #fff;
+      }
+
+      .wizard-step.current {
+        border-color: rgba(216, 111, 56, 0.42);
+        box-shadow: inset 0 0 0 1px rgba(216, 111, 56, 0.18);
+      }
+
+      .wizard-step.current .wizard-step-badge {
+        background: var(--accent);
+        color: #fff;
+      }
+
+      .wizard-step.blocked {
+        border-color: rgba(170, 61, 61, 0.3);
+        background: rgba(255, 240, 232, 0.86);
+      }
+
+      .wizard-step.blocked .wizard-step-badge {
+        background: var(--bad);
+        color: #fff;
+      }
+
+      .wizard-step-meta {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
       .contact-sheet {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
         gap: 10px;
         margin-top: 12px;
+      }
+
+      .contact-sheet-preview {
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: #fffef8;
+        margin-top: 12px;
+        overflow: hidden;
+        padding: 10px;
+      }
+
+      .contact-sheet-preview img {
+        display: block;
+        max-width: 100%;
+        height: auto;
       }
 
       .frame-card {
@@ -217,6 +343,139 @@
         font-size: 11px;
       }
 
+      .playback-preview {
+        display: grid;
+        gap: 12px;
+      }
+
+      .playback-stage {
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background:
+          linear-gradient(45deg, rgba(39, 63, 67, 0.08) 25%, transparent 25%),
+          linear-gradient(-45deg, rgba(39, 63, 67, 0.08) 25%, transparent 25%),
+          linear-gradient(45deg, transparent 75%, rgba(39, 63, 67, 0.08) 75%),
+          linear-gradient(-45deg, transparent 75%, rgba(39, 63, 67, 0.08) 75%),
+          #fffef8;
+        background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+        background-size: 20px 20px;
+        overflow: hidden;
+        padding: 12px;
+      }
+
+      .playback-stage img {
+        display: block;
+        width: min(240px, 100%);
+        margin: 0 auto;
+        aspect-ratio: 192 / 208;
+        object-fit: contain;
+      }
+
+      .playback-meta {
+        display: grid;
+        gap: 6px;
+      }
+
+      .timeline {
+        display: grid;
+        gap: 8px;
+      }
+
+      .timeline-row {
+        display: grid;
+        grid-template-columns: 64px minmax(0, 1fr) 70px;
+        gap: 10px;
+        align-items: center;
+      }
+
+      .timeline-bar {
+        height: 10px;
+        border-radius: 999px;
+        background: rgba(39, 63, 67, 0.12);
+        overflow: hidden;
+      }
+
+      .timeline-fill {
+        display: block;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, var(--accent) 0%, #efb06e 100%);
+      }
+
+      .spritesheet-preview {
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: #fffef8;
+        overflow: hidden;
+        padding: 12px;
+      }
+
+      .spritesheet-preview img {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+
+      .review-grid {
+        display: grid;
+        gap: 12px;
+      }
+
+      .review-grid.two-up {
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      }
+
+      .review-card {
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: #fffef8;
+        padding: 12px;
+      }
+
+      .review-card strong {
+        display: block;
+        margin-bottom: 8px;
+      }
+
+      .review-card img {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+
+      .review-summary {
+        display: grid;
+        gap: 6px;
+      }
+
+      .review-summary span {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .task-edit-form {
+        display: grid;
+        gap: 10px;
+      }
+
+      .task-edit-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 10px;
+      }
+
+      .task-edit-action-card {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: #fffef8;
+        padding: 12px;
+      }
+
+      .task-edit-action-card h3 {
+        margin: 0 0 10px;
+        font-size: 15px;
+      }
+
       @media (max-width: 820px) {
         main {
           padding: 20px;
@@ -232,21 +491,20 @@
     <main>
       <header>
         <h1>Creator Studio</h1>
-        <p>Describe a custom OpenPet action, review the generated task, then generate safe fixture output for import.</p>
+        <p>Describe an OpenPet generation task, validate the workflow with fixture runs, then use provider generation for real host-provider smoke.</p>
       </header>
 
       <div class="grid">
         <section class="panel stack">
           <div>
-            <label for="prompt-input">Action prompt</label>
+            <label for="prompt-input">Generation prompt</label>
             <textarea id="prompt-input">新增一个自定义动作：原地打滚，动作要循环。</textarea>
           </div>
           <div>
-            <label for="backend-select">Backend</label>
+            <label for="backend-select">Generation Mode</label>
             <select id="backend-select">
               <option value="fixture">fixture</option>
-              <option value="cloud">cloud</option>
-              <option value="local">local</option>
+              <option value="provider">provider</option>
             </select>
           </div>
           <div class="run-picker">
@@ -269,8 +527,28 @@
 
         <aside class="panel stack">
           <section>
+            <h2>Run Snapshot</h2>
+            <section id="run-snapshot-panel">Prompt snapshot and wizard state appear after you draft or load a run.</section>
+          </section>
+          <section>
+            <h2>Wizard Steps</h2>
+            <section id="wizard-steps-panel">Draft a task to see the workflow rail.</section>
+          </section>
+          <section>
+            <h2>Action Lane</h2>
+            <section id="action-lane-panel">Draft or load a run to see which action is available in the dashboard and which step must move to OpenPet.</section>
+          </section>
+          <section>
+            <h2>Next Step</h2>
+            <section id="next-step-panel">Draft a task to see the next recommended action.</section>
+          </section>
+          <section>
             <h2>Task Preview</h2>
             <section id="task-preview">No task drafted yet.</section>
+          </section>
+          <section>
+            <h2>Task Edit</h2>
+            <section id="task-edit-panel">Draft a task to edit action details before confirmation.</section>
           </section>
           <section>
             <h2>Follow-up</h2>
@@ -281,20 +559,40 @@
             <section id="trigger-panel">No trigger proposal yet.</section>
           </section>
           <section>
+            <h2>Recovery</h2>
+            <section id="recovery-panel">No failed generation to recover.</section>
+          </section>
+          <section>
+            <h2>Workflow Guidance</h2>
+            <section id="workflow-guidance-panel">Use fixture for workflow QA first. Before provider smoke, go to Control Center -> AI -> Test saved image Provider.</section>
+          </section>
+          <section>
             <h2>Import Handoff</h2>
-            <section id="import-handoff-panel">Generate and approve an action to unlock host-owned import.</section>
+            <section id="import-handoff-panel">Generate and approve a run to unlock host-owned import.</section>
           </section>
         </aside>
       </div>
 
       <section class="panel stack" style="margin-top: 18px;">
         <section>
+          <h2>Developer Prompt Provenance</h2>
+          <section id="prompt-provenance-panel">Host prompt preview appears after provider generation.</section>
+        </section>
+        <section>
           <h2>QA</h2>
           <section id="qa-panel">No generated QA yet.</section>
         </section>
+        <section>
+          <h2>Review Preview</h2>
+          <section id="playback-panel">Generate output to inspect review artifacts.</section>
+        </section>
         <section id="action-review">
-          <h2>Single Action Review</h2>
-          <section id="action-review-panel">Generated action frames and action-frame-validation.json will appear here before import.</section>
+          <h2>Preview Playback</h2>
+          <section id="action-review-panel">Generated review artifacts and QA will appear here before import.</section>
+        </section>
+        <section>
+          <h2>Generation Review</h2>
+          <section id="full-pet-review-panel">Generated pet-pack review artifacts will appear here before import.</section>
         </section>
         <section>
           <h2>Run Logs</h2>
@@ -304,8 +602,22 @@
     </main>
 
     <script>
-      const state = { run: null, actionReview: null, runs: [] }
+      const state = { run: null, actionReview: null, fullPetReview: null, runs: [], playbackTimer: null, playbackSession: 0 }
       const $ = (id) => document.getElementById(id)
+      const isFullPetRun = (run) => run?.generationTask?.mode === 'full-pet'
+      const defaultGenerateLabel = (run = state.run) => (isFullPetRun(run) ? 'Generate pet pack' : 'Generate action')
+      const formatTriggerSummary = (triggerProposal = {}) => {
+        const type = triggerProposal?.type || 'unbound'
+        return triggerProposal?.binding ? `${type} (${triggerProposal.binding})` : type
+      }
+
+      const stopPlaybackPreview = () => {
+        if (state.playbackTimer) {
+          clearTimeout(state.playbackTimer)
+          state.playbackTimer = null
+        }
+        state.playbackSession += 1
+      }
 
       const setStatus = (message, kind = '') => {
         $('status-line').textContent = message
@@ -319,7 +631,12 @@
           body: JSON.stringify(body)
         })
         const payload = await response.json()
-        if (!response.ok || !payload.ok) throw new Error(payload.error || 'Creator Studio request failed')
+        if (!response.ok || !payload.ok) {
+          const error = new Error(payload.error || 'Creator Studio request failed')
+          error.payload = payload
+          error.status = response.status
+          throw error
+        }
         return payload
       }
 
@@ -361,6 +678,7 @@
         if (!payload.ok) throw new Error(payload.error || 'Failed to load run detail')
         state.run = payload.run
         state.actionReview = payload.actionReview || null
+        state.fullPetReview = payload.fullPetReview || null
         renderRunList()
       }
 
@@ -374,41 +692,636 @@
 
       const frameSrc = (frame) => `${frame.url}${frame.url.includes('?') ? '&' : '?'}v=${encodeURIComponent(state.run?.updatedAt || '')}`
 
-      const renderFramePreview = (review) => {
+      const assetSrc = (url) => `${url}${url.includes('?') ? '&' : '?'}v=${encodeURIComponent(state.run?.updatedAt || '')}`
+
+      const renderContactSheet = (review) => {
+        if (!review?.contactSheetUrl) return ''
+        return [
+          '<div class="contact-sheet-preview">',
+          `<img alt="Action frame contact sheet" src="${escapeHtml(assetSrc(review.contactSheetUrl))}">`,
+          '</div>'
+        ].join('')
+      }
+
+      const renderFramePreview = (review, run) => {
         const frames = Array.isArray(review?.previewFrames) ? review.previewFrames : []
         if (!frames.length) return '<p>No frame previews available yet.</p>'
+        const canRepairFrames = run?.status === 'ready_for_review'
         return `<div class="contact-sheet">${frames.map((frame) => (
           `<figure class="frame-card">` +
           `<img alt="${escapeHtml(frame.fileName)}" src="${escapeHtml(frameSrc(frame))}">` +
           `<span>${escapeHtml(frame.fileName)}</span>` +
-          `<button type="button" class="secondary" data-repair-frame="${escapeHtml(frame.fileName)}">Repair</button>` +
+          (canRepairFrames
+            ? `<button type="button" class="secondary" data-repair-frame="${escapeHtml(frame.fileName)}">Repair</button>`
+            : '') +
           `</figure>`
         )).join('')}</div>`
+      }
+
+      const renderPlaybackPanel = (review) => {
+        const playback = review?.playback || {}
+        const frames = Array.isArray(review?.previewFrames) ? review.previewFrames : []
+        const timeline = Array.isArray(playback.timeline) ? playback.timeline : []
+        if (!frames.length || !timeline.length) {
+          return 'Generate action frames to inspect playback timing.'
+        }
+        const maxDurationMs = Math.max(...timeline.map((entry) => Number(entry.durationMs) || 0), 1)
+        return [
+          '<div class="playback-preview">',
+          '<div class="playback-stage">',
+          `<img id="playback-preview-image" alt="Playback preview frame" src="${escapeHtml(frameSrc(frames[0]))}">`,
+          '</div>',
+          '<div class="playback-meta" id="playback-meta">',
+          `<strong>${escapeHtml(playback.loop ? 'Looping playback' : 'One-shot playback')}</strong>`,
+          `<span>Total duration: ${escapeHtml(playback.totalDurationMs || 0)} ms</span>`,
+          `<span>Last-frame hold: ${escapeHtml(playback.holdLastFrameMs || 0)} ms</span>`,
+          '</div>',
+          '<button type="button" id="replay-playback-button" class="secondary">Replay preview</button>',
+          '<div class="timeline">',
+          ...timeline.map((entry) => {
+            const widthPercent = Math.max(8, Math.round(((Number(entry.durationMs) || 0) / maxDurationMs) * 100))
+            return (
+              `<div class="timeline-row">` +
+              `<span>${escapeHtml(entry.fileName)}</span>` +
+              `<div class="timeline-bar"><span class="timeline-fill" style="width:${widthPercent}%"></span></div>` +
+              `<span>${escapeHtml(entry.durationMs)} ms</span>` +
+              `</div>`
+            )
+          }),
+          '</div>',
+          '</div>'
+        ].join('')
+      }
+
+      const renderImportedReviewNotice = (run) => {
+        if (run?.status !== 'imported') return ''
+        const importGuidance = run?.workflowGuidance?.import || {}
+        const followUp = importGuidance.followUp || {}
+        const resultCard = importGuidance.resultCard || {}
+        const entries = Array.isArray(resultCard.entries) ? resultCard.entries : []
+        return [
+          '<div class="notice">',
+          '<strong>Import completed.</strong>',
+          `<p>${escapeHtml(importGuidance.summary || 'The output has been imported through the host bridge.')}</p>`,
+          entries.map((entry) => `<p>${escapeHtml(entry.label || 'Result')}: ${escapeHtml(entry.value || '')}</p>`).join(''),
+          resultCard.reviewLocation
+            ? `<p>Review location: ${escapeHtml(resultCard.reviewLocation)}</p>`
+            : '',
+          followUp.label
+            ? `<p>Follow-up: ${escapeHtml(followUp.label)}${followUp.location ? ` (${escapeHtml(followUp.location)})` : ''}</p>`
+            : '',
+          followUp.reason
+            ? `<p>${escapeHtml(followUp.reason)}</p>`
+            : '',
+          '</div>'
+        ].join('')
+      }
+
+      const renderActionReview = (review, run, actionFrames, action) => {
+        if (!actionFrames) return 'Generated action frames and action-frame-validation.json will appear here before import.'
+        const reviewGate = review?.reviewGate || {}
+        const qaWarnings = Array.isArray(review?.qaWarnings) ? review.qaWarnings : []
+        const repairs = Array.isArray(review?.repairs) ? review.repairs : []
+        const visiblePixelSummary = review?.visiblePixelSummary || {}
+        return [
+          renderImportedReviewNotice(run),
+          run?.status === 'ready_for_review' && reviewGate.ready === false
+            ? [
+                '<div class="notice error">',
+                '<strong>QA blocked.</strong>',
+                `<p>${escapeHtml(reviewGate.reason || 'Repair or regenerate frames before approval.')}</p>`,
+                `<p>Invalid frames: ${escapeHtml(visiblePixelSummary.invalidFrameCount || 0)}</p>`,
+                `<p>Repairs logged: ${escapeHtml(repairs.length)}</p>`,
+                qaWarnings.length
+                  ? `<p>Warnings: ${escapeHtml(qaWarnings.join(' | '))}</p>`
+                  : '',
+                '</div>'
+              ].join('')
+            : '',
+          `<strong>${escapeHtml(actionFrames.name || actionFrames.actionId)}</strong>`,
+          `<p>Frames: ${escapeHtml(actionFrames.frameCount)} at ${escapeHtml(actionFrames.frameWidth)}x${escapeHtml(actionFrames.frameHeight)}</p>`,
+          `<p>QA: ${escapeHtml(actionFrames.qa || 'action-frame-validation.json')}</p>`,
+          review?.contactSheet ? `<p>Contact sheet: ${escapeHtml(review.contactSheet)}</p>` : '',
+          `<p>Trigger proposal is review-only: ${escapeHtml((actionFrames.triggerProposal || action.triggerProposal).type)}</p>`,
+          `<p>Review status: ${escapeHtml(run.reviewStatus || 'pending')} / Import status: ${escapeHtml(run.importStatus || 'not-imported')}</p>`,
+          `<p>Visible pixels: ${escapeHtml(visiblePixelSummary.totalVisiblePixels || 0)}</p>`,
+          renderContactSheet(review),
+          renderFramePreview(review, run)
+        ].join('')
+      }
+
+      const renderFullPetReview = (review, run) => {
+        if (!review?.spritesheetUrl) return 'Generated pet-pack review artifacts will appear here before import.'
+        const sourceValidation = review?.sourceImageValidation || {}
+        const atlasValidation = review?.atlasValidation || {}
+        const reviewGate = review?.reviewGate || {}
+        const showsMismatch = review?.sourceImageMatchesCurrent === false
+        return [
+          renderImportedReviewNotice(run),
+          showsMismatch
+            ? [
+                '<div class="notice error">',
+                '<strong>QA source image does not match the current generated image.</strong>',
+                `<p>${escapeHtml(reviewGate.reason || 'Retry generation on this same run before approval or import.')}</p>`,
+                `<p>Current generated source: ${escapeHtml(review.currentSourceImage || 'not available')}</p>`,
+                `<p>QA source reference: ${escapeHtml(review.qaSourceImage || 'not available')}</p>`,
+                '</div>'
+              ].join('')
+            : '',
+          '<div class="notice">',
+          `<strong>${escapeHtml(review.displayName || review.petId || 'Generated pet')}</strong>`,
+          `<p>Bundle: ${escapeHtml(review.bundle || 'not available')}</p>`,
+          `<p>Manifest: ${escapeHtml(review.petJson || 'not available')}</p>`,
+          `<p>Source image: ${escapeHtml(review.sourceImage || 'not available')}</p>`,
+          review.currentSourceImage && review.currentSourceImage !== review.sourceImage
+            ? `<p>Current generated source: ${escapeHtml(review.currentSourceImage)}</p>`
+            : '',
+          review.qaSourceImage && review.qaSourceImage !== review.sourceImage
+            ? `<p>QA source reference: ${escapeHtml(review.qaSourceImage)}</p>`
+            : '',
+          review.sourceImageQa ? `<p>Source QA: ${escapeHtml(review.sourceImageQa)}</p>` : '',
+          `<p>Atlas QA: ${escapeHtml(review.qa || 'not available')}</p>`,
+          review.actionTaskQa ? `<p>Task QA: ${escapeHtml(review.actionTaskQa)}</p>` : '',
+          '</div>',
+          '<div class="review-grid two-up">',
+          '<div class="review-card">',
+          '<strong>Source image preview</strong>',
+          review.sourceImageUrl
+            ? `<img alt="Source image preview" src="${escapeHtml(assetSrc(review.sourceImageUrl))}">`
+            : '<p>No source image preview available.</p>',
+          '</div>',
+          '<div class="review-card spritesheet-preview">',
+          '<strong>Atlas preview</strong>',
+          `<img alt="Full pet spritesheet preview" src="${escapeHtml(assetSrc(review.spritesheetUrl))}">`,
+          '</div>',
+          '</div>',
+          '<div class="review-grid two-up">',
+          '<div class="review-card review-summary">',
+          '<strong>Source QA summary:</strong>',
+          `<span>Size: ${escapeHtml(sourceValidation.width || 0)} x ${escapeHtml(sourceValidation.height || 0)}</span>`,
+          `<span>Visible pixels: ${escapeHtml(sourceValidation.visiblePixels || 0)}</span>`,
+          `<span>Warnings: ${escapeHtml((sourceValidation.warnings || []).length)}</span>`,
+          '</div>',
+          '<div class="review-card review-summary">',
+          '<strong>Atlas QA summary:</strong>',
+          `<span>Size: ${escapeHtml(atlasValidation.width || 0)} x ${escapeHtml(atlasValidation.height || 0)}</span>`,
+          `<span>Visible pixels: ${escapeHtml(atlasValidation.visiblePixels || 0)}</span>`,
+          `<span>Warnings: ${escapeHtml((atlasValidation.warnings || []).length)}</span>`,
+          '</div>'
+        ].join('')
+      }
+
+      const renderTaskEditPanel = (run) => {
+        const actions = Array.isArray(run?.generationTask?.actions) ? run.generationTask.actions : []
+        const action = actions[0] || null
+        if (!action) return 'Draft a task to edit action details before confirmation.'
+        const editingLocked = run?.taskStatus === 'confirmed'
+        if (isFullPetRun(run)) {
+          return [
+            '<div class="task-edit-form">',
+            '<div>',
+            '<label for="task-edit-character-brief">Character brief</label>',
+            `<textarea id="task-edit-character-brief" ${editingLocked ? 'disabled' : ''}>${escapeHtml(run.generationTask.characterBrief || '')}</textarea>`,
+            '</div>',
+            ...actions.map((plannedAction, index) => {
+              const actionIndex = String(index)
+              const triggerType = plannedAction.triggerProposal?.type || 'unbound'
+              return [
+                `<section class="task-edit-action-card" data-action-id="${escapeHtml(plannedAction.actionId || '')}">`,
+                `<h3>Action ${escapeHtml(index + 1)}: ${escapeHtml(plannedAction.name || plannedAction.actionId || 'Untitled')}</h3>`,
+                '<div>',
+                `<label for="task-edit-name-${actionIndex}">Action name</label>`,
+                `<input id="task-edit-name-${actionIndex}" data-task-edit="action-name" data-action-id="${escapeHtml(plannedAction.actionId || '')}" type="text" value="${escapeHtml(plannedAction.name || '')}" ${editingLocked ? 'disabled' : ''}>`,
+                '</div>',
+                '<div>',
+                `<label for="task-edit-motion-${actionIndex}">Motion description</label>`,
+                `<textarea id="task-edit-motion-${actionIndex}" data-task-edit="motion-prompt" data-action-id="${escapeHtml(plannedAction.actionId || '')}" ${editingLocked ? 'disabled' : ''}>${escapeHtml(plannedAction.motionPrompt || '')}</textarea>`,
+                '</div>',
+                '<div class="task-edit-grid">',
+                '<div>',
+                `<label for="task-edit-loop-${actionIndex}">Loop behavior</label>`,
+                `<select id="task-edit-loop-${actionIndex}" data-task-edit="loop" data-action-id="${escapeHtml(plannedAction.actionId || '')}" ${editingLocked ? 'disabled' : ''}>`,
+                `<option value="false" ${plannedAction.loop ? '' : 'selected'}>One-shot</option>`,
+                `<option value="true" ${plannedAction.loop ? 'selected' : ''}>Looping</option>`,
+                '</select>',
+                '</div>',
+                '<div>',
+                `<label for="task-edit-trigger-${actionIndex}">Trigger type</label>`,
+                `<select id="task-edit-trigger-${actionIndex}" data-task-edit="trigger-type" data-action-id="${escapeHtml(plannedAction.actionId || '')}" ${editingLocked ? 'disabled' : ''}>`,
+                ['manual', 'click', 'random', 'state', 'event', 'unbound'].map((option) => (
+                  `<option value="${escapeHtml(option)}" ${option === triggerType ? 'selected' : ''}>${escapeHtml(option)}</option>`
+                )).join(''),
+                '</select>',
+                '</div>',
+                '</div>',
+                '</section>'
+              ].join('')
+            }),
+            `<button id="save-task-button" type="button" class="secondary" ${editingLocked ? 'disabled' : ''}>Save task edits</button>`,
+            editingLocked
+              ? '<p>Task editing is locked after confirmation. Draft a new run if you need different task inputs.</p>'
+              : '<p>Adjust the full-pet brief and per-action task details before confirming the task.</p>',
+            '</div>'
+          ].join('')
+        }
+        const triggerType = action.triggerProposal?.type || 'unbound'
+        return [
+          '<div class="task-edit-form">',
+          '<div>',
+          '<label for="task-edit-name">Action name</label>',
+          `<input id="task-edit-name" type="text" value="${escapeHtml(action.name || '')}" ${editingLocked ? 'disabled' : ''}>`,
+          '</div>',
+          '<div>',
+          '<label for="task-edit-motion">Motion description</label>',
+          `<textarea id="task-edit-motion" ${editingLocked ? 'disabled' : ''}>${escapeHtml(action.motionPrompt || '')}</textarea>`,
+          '</div>',
+          '<div class="task-edit-grid">',
+          '<div>',
+          '<label for="task-edit-loop">Loop behavior</label>',
+          `<select id="task-edit-loop" ${editingLocked ? 'disabled' : ''}>`,
+          `<option value="false" ${action.loop ? '' : 'selected'}>One-shot</option>`,
+          `<option value="true" ${action.loop ? 'selected' : ''}>Looping</option>`,
+          '</select>',
+          '</div>',
+          '<div>',
+          '<label for="task-edit-trigger">Trigger type</label>',
+          `<select id="task-edit-trigger" ${editingLocked ? 'disabled' : ''}>`,
+          ['manual', 'click', 'random', 'state', 'event', 'unbound'].map((option) => (
+            `<option value="${escapeHtml(option)}" ${option === triggerType ? 'selected' : ''}>${escapeHtml(option)}</option>`
+          )).join(''),
+          '</select>',
+          '</div>',
+          '</div>',
+          `<button id="save-task-button" type="button" class="secondary" ${editingLocked ? 'disabled' : ''}>Save task edits</button>`,
+          editingLocked
+            ? '<p>Task editing is locked after confirmation. Draft a new run if you need different task inputs.</p>'
+            : '<p>Adjust the interpreted action details before confirming the task.</p>',
+          '</div>'
+        ].join('')
+      }
+
+      const startPlaybackPreview = (review) => {
+        stopPlaybackPreview()
+        const playback = review?.playback || {}
+        const frames = Array.isArray(review?.previewFrames) ? review.previewFrames : []
+        const durations = Array.isArray(playback.frameDurationsMs) ? playback.frameDurationsMs : []
+        const image = $('playback-preview-image')
+        const meta = $('playback-meta')
+        if (!image || !frames.length || !durations.length) return
+        const session = state.playbackSession + 1
+        state.playbackSession = session
+
+        const showFrame = (frameIndex) => {
+          if (state.playbackSession !== session) return
+          const safeIndex = frameIndex % frames.length
+          const frame = frames[safeIndex]
+          image.src = frameSrc(frame)
+          image.alt = `Playback preview ${frame.fileName}`
+          if (meta) {
+            meta.innerHTML = [
+              `<strong>${escapeHtml(playback.loop ? 'Looping playback' : 'One-shot playback')}</strong>`,
+              `<span>Frame ${escapeHtml(safeIndex + 1)} / ${escapeHtml(frames.length)}</span>`,
+              `<span>Current duration: ${escapeHtml(durations[safeIndex] || 0)} ms</span>`,
+              `<span>Total duration: ${escapeHtml(playback.totalDurationMs || 0)} ms</span>`
+            ].join('')
+          }
+          const nextIndex = safeIndex + 1
+          if (!playback.loop && nextIndex >= frames.length) {
+            state.playbackTimer = null
+            return
+          }
+          state.playbackTimer = setTimeout(() => showFrame(nextIndex), Math.max(1, Number(durations[safeIndex]) || 120))
+        }
+
+        showFrame(0)
+      }
+
+      const renderRecoveryPanel = (run) => {
+        const recovery = run?.recovery || {}
+        const backend = recovery.backend || run?.backendStatus || {}
+        if (run?.status === 'failed') {
+          return [
+            '<div class="notice error">',
+            '<strong>Generation failed.</strong>',
+            '<div class="meta-list">',
+            `<span>Backend: ${escapeHtml(backend.backend || run.backend || 'unknown')}</span>`,
+            `<span>State: ${escapeHtml(backend.state || 'failed')}</span>`,
+            `<span>Failure kind: ${escapeHtml(recovery.failureKind || 'provider')}</span>`,
+            `<span>Reason: ${escapeHtml(recovery.failureReason || backend.message || run.error || 'Unknown failure')}</span>`,
+            `<span>Guidance: ${escapeHtml(recovery.guidance || 'Review the failure details, then retry generation on this same run.')}</span>`,
+            `<span>QA focus: ${escapeHtml(recovery.qaFocus || 'No QA artifacts were produced before the generation failure.')}</span>`,
+            recovery.canRetryGeneration
+              ? '<span>Retry generation will reuse this same run and preserve the confirmed task.</span>'
+              : '<span>Retry is locked until the task is confirmed again.</span>',
+            '</div>',
+            '</div>'
+          ].join('')
+        }
+        if (backend.state === 'running') {
+          return '<div class="notice"><strong>Generation running.</strong><p>Refresh the run logs if the provider is slow.</p></div>'
+        }
+        return 'No failed generation to recover.'
+      }
+
+      const renderPromptProvenance = (run) => {
+        const developerPrompt = run?.developerPrompt || {}
+        if (!developerPrompt.available) {
+          return `<p>${escapeHtml(developerPrompt.message || 'Host prompt preview appears after provider generation.')}</p>`
+        }
+        const builder = developerPrompt.promptBuilder || {}
+        const preview = developerPrompt.promptPreview || builder.promptPreview || {}
+        const snapshot = developerPrompt.modelSnapshot || {}
+        const sections = Array.isArray(builder.sections) ? builder.sections.join(', ') : ''
+        const warnings = Array.isArray(builder.warnings) && builder.warnings.length
+          ? builder.warnings.join(', ')
+          : 'none'
+        return [
+          '<div class="notice">',
+          '<strong>Host model prompt-builder provenance</strong>',
+          '<div class="meta-list">',
+          `<span>Source: ${escapeHtml(developerPrompt.source || 'host-model-bridge')}</span>`,
+          `<span>Builder: v${escapeHtml(builder.version || 0)} / ${escapeHtml(builder.mode || 'unknown')} / ${escapeHtml(builder.actionId || 'n/a')}</span>`,
+          `<span>Model: ${escapeHtml(snapshot.model || 'unknown')} via ${escapeHtml(snapshot.provider || 'unknown')} (${escapeHtml(snapshot.backend || 'unknown')})</span>`,
+          `<span>Sections: ${escapeHtml(sections || 'none')}</span>`,
+          `<span>Warnings: ${escapeHtml(warnings)}</span>`,
+          preview.truncated ? `<span>Prompt preview is capped at ${escapeHtml(preview.maxLength || 0)} characters.</span>` : '',
+          '</div>',
+          `<pre class="prompt-preview">${escapeHtml(preview.text || '')}</pre>`,
+          '</div>'
+        ].join('')
+      }
+
+      const renderWorkflowGuidance = (run) => {
+        const guidance = run?.workflowGuidance || {}
+        const generation = guidance.generation || {}
+        const importGuidance = guidance.import || {}
+        const followUp = importGuidance.followUp || {}
+        const usageSummary = generation.usageSummary || {}
+        const checklist = Array.isArray(generation.smokeChecklist) ? generation.smokeChecklist : []
+        const checklistHtml = checklist.length
+          ? `<ul>${checklist.map((entry) => `<li>${escapeHtml(entry)}</li>`).join('')}</ul>`
+          : '<p>No smoke guidance yet.</p>'
+        return [
+          '<div class="notice">',
+          `<strong>${escapeHtml(generation.summary || 'Use fixture for workflow QA first.')}</strong>`,
+          usageSummary.available
+            ? `<p>Estimated generation cost: <code>${escapeHtml(usageSummary.displayCost || '')}</code></p>`
+            : '',
+          checklistHtml,
+          `<p>Import state: ${escapeHtml(importGuidance.status || 'not-ready')} / Command: ${escapeHtml(importGuidance.command || 'n/a')}</p>`,
+          `<p>${escapeHtml(importGuidance.summary || 'Approve the run before host-owned import.')}</p>`,
+          importGuidance.triggerProposalSummary
+            ? `<p>${escapeHtml(importGuidance.triggerProposalSummary)}</p>`
+            : '',
+          followUp.label
+            ? `<p>Follow-up: ${escapeHtml(followUp.label)}${followUp.location ? ` -> ${escapeHtml(followUp.location)}` : ''}</p>`
+            : '',
+          followUp.reason
+            ? `<p>${escapeHtml(followUp.reason)}</p>`
+            : '',
+          '</div>'
+        ].join('')
+      }
+
+      const renderRunSnapshot = (run) => {
+        const snapshot = run?.wizardState || {}
+        const prompt = snapshot.prompt || run?.input?.originalPrompt || run?.input?.prompt || ''
+        return [
+          '<div class="notice">',
+          `<strong>${escapeHtml(snapshot.summary || 'Draft a task to create a run snapshot.')}</strong>`,
+          '<div class="meta-list">',
+          `<span>Phase: ${escapeHtml(snapshot.phase || 'draft')}</span>`,
+          `<span>Backend: ${escapeHtml(snapshot.backend || run?.backend || 'fixture')}</span>`,
+          `<span>Task: ${escapeHtml(snapshot.taskStatus || run?.taskStatus || 'unknown')} / Step: ${escapeHtml(snapshot.currentStep || run?.currentStep || 'draft')}</span>`,
+          `<span>Review: ${escapeHtml(snapshot.reviewStatus || run?.reviewStatus || 'pending')} / Import: ${escapeHtml(snapshot.importStatus || run?.importStatus || 'not-imported')}</span>`,
+          '</div>',
+          `<pre class="prompt-preview">${escapeHtml(prompt || 'No prompt snapshot yet.')}</pre>`,
+          '</div>'
+        ].join('')
+      }
+
+      const renderWizardSteps = (run) => {
+        const snapshot = run?.wizardState || {}
+        const steps = Array.isArray(snapshot.steps) ? snapshot.steps : []
+        if (!steps.length) return 'Draft a task to see the workflow rail.'
+        return [
+          '<div class="wizard-steps">',
+          ...steps.map((step, index) => (
+            `<div class="wizard-step ${escapeHtml(step.status || 'upcoming')}">` +
+            `<span class="wizard-step-badge">${index + 1}</span>` +
+            '<div>' +
+            `<strong>${escapeHtml(step.label || step.key || `Step ${index + 1}`)}</strong>` +
+            `<div class="wizard-step-meta">${escapeHtml(step.status || 'upcoming')}</div>` +
+            '</div>' +
+            '</div>'
+          )),
+          '</div>'
+        ].join('')
+      }
+
+      const renderNextStep = (run) => {
+        const snapshot = run?.wizardState || {}
+        const nextStep = snapshot.nextStep || {}
+        return [
+          `<div class="notice ${nextStep.blocked ? 'error' : ''}">`,
+          `<strong>${escapeHtml(nextStep.label || 'Draft task')}</strong>`,
+          `<p>${escapeHtml(nextStep.reason || 'Draft a task to see the next recommended action.')}</p>`,
+          nextStep.blocked
+            ? '<p>This step is host-owned or gated outside the dashboard.</p>'
+            : '<p>This step is available directly in the dashboard.</p>',
+          '</div>'
+        ].join('')
+      }
+
+      const renderActionLane = (run) => {
+        const lane = run?.actionLane || {}
+        const dashboardAction = lane.dashboardAction || {}
+        const hostAction = lane.hostAction || {}
+        const buttonStates = lane.buttonStates || {}
+        const buttonSummary = Object.values(buttonStates).map((buttonState) => (
+          `<li><strong>${escapeHtml(buttonState.label || buttonState.buttonId || 'Action')}</strong>: ${escapeHtml(buttonState.reason || '')}</li>`
+        )).join('')
+        return [
+          '<div class="action-lane">',
+          `<div class="action-lane-card ${dashboardAction.available ? '' : 'host'}">`,
+          `<strong>Dashboard action: ${escapeHtml(dashboardAction.label || 'No dashboard action')}</strong>`,
+          `<p>${escapeHtml(dashboardAction.reason || lane.summary || 'No dashboard action available yet.')}</p>`,
+          dashboardAction.available && dashboardAction.buttonId
+            ? `<p>Use <code>${escapeHtml(dashboardAction.buttonId)}</code> in this dashboard.</p>`
+            : '<p>This step is not directly available from a dashboard button right now.</p>',
+          '</div>',
+          hostAction.required
+            ? [
+                '<div class="action-lane-card host">',
+                `<strong>Host-owned action: ${escapeHtml(hostAction.label || 'OpenPet step')}</strong>`,
+                `<p>${escapeHtml(hostAction.reason || 'Continue inside OpenPet.')}</p>`,
+                `<p>Location: <code>${escapeHtml(hostAction.location || 'OpenPet')}</code></p>`,
+                '</div>'
+              ].join('')
+            : '',
+          buttonSummary
+            ? `<div class="notice"><strong>Button availability</strong><ul>${buttonSummary}</ul></div>`
+            : '',
+          '</div>'
+        ].join('')
+      }
+
+      const renderImportHandoff = (run, actionFrames = null, actionReview = null, fullPetReview = null) => {
+        const importGuidance = run?.workflowGuidance?.import || {}
+        const handoff = importGuidance.handoff || {}
+        const followUp = importGuidance.followUp || {}
+        if (run?.status === 'approved' && handoff.commandTitle) {
+          return [
+            '<div class="handoff">',
+            `<strong>Approved. Ready for host-owned import: ${escapeHtml(handoff.commandTitle)}</strong>`,
+            `<p>Open ${escapeHtml(handoff.location || 'Control Center -> Plugins')} and run <code>${escapeHtml(handoff.commandTitle)}</code> for run <code>${escapeHtml(handoff.runId || run.runId)}</code>.</p>`,
+            `<p>${escapeHtml(handoff.reason || 'The dashboard cannot import directly because bridge access is command-scoped.')}</p>`,
+            `<p>Command ID: <code>${escapeHtml(handoff.commandId || importGuidance.command || 'import')}</code></p>`,
+            handoff.payloadJson
+              ? `<p>Payload JSON: <code>${escapeHtml(handoff.payloadJson)}</code></p>`
+              : '',
+            '</div>'
+          ].join('')
+        }
+        if (run?.status === 'imported') {
+          return [
+            '<div class="handoff">',
+            `<strong>${escapeHtml(importGuidance.summary || `Imported action: ${run.importedActionId || actionFrames?.actionId || ''}`)}</strong>`,
+            importGuidance.triggerProposalSummary
+              ? `<p>${escapeHtml(importGuidance.triggerProposalSummary)}</p>`
+              : '<p>The output has been handed to OpenPet through the host import bridge.</p>',
+            followUp.label
+              ? `<p>Follow-up: ${escapeHtml(followUp.label)}${followUp.location ? ` -> ${escapeHtml(followUp.location)}` : ''}</p>`
+              : '',
+            followUp.reason
+              ? `<p>${escapeHtml(followUp.reason)}</p>`
+              : '',
+            renderImportedResultCard(run),
+            '</div>'
+          ].join('')
+        }
+        if (!actionFrames && run?.generationTask?.mode === 'full-pet') {
+          if (run?.status === 'ready_for_review') {
+            const reviewGate = fullPetReview?.reviewGate || {}
+            if (reviewGate.ready === false) {
+              return [
+                '<div class="notice error">',
+                '<strong>QA blocked.</strong>',
+                `<p>${escapeHtml(reviewGate.reason || 'Retry generation on this same run before approval or import.')}</p>`,
+                '<p>Retry generation on this same run before approval or import.</p>',
+                '</div>'
+              ].join('')
+            }
+            return escapeHtml(importGuidance.summary || 'Review the generated pet-pack output and approve the run before host-owned pet import.')
+          }
+          return 'Generate and approve the pet-pack output to unlock host-owned pet import.'
+        }
+        if (actionFrames) {
+          const reviewGate = actionReview?.reviewGate || {}
+          if (run?.status === 'ready_for_review' && reviewGate.ready === false) {
+            return [
+              '<div class="notice error">',
+              '<strong>QA blocked.</strong>',
+              `<p>${escapeHtml(reviewGate.reason || 'Repair or regenerate frames before approval.')}</p>`,
+              '<p>Repair the bad frames or regenerate the action before approval.</p>',
+              '</div>'
+            ].join('')
+          }
+          return 'Review the generated frames, repair any bad frame, then approve the action.'
+        }
+        return 'Generate action frames before action import handoff.'
+      }
+
+      const renderImportedResultCard = (run) => {
+        const resultCard = run?.workflowGuidance?.import?.resultCard || {}
+        const followUp = run?.workflowGuidance?.import?.followUp || {}
+        const entries = Array.isArray(resultCard.entries) ? resultCard.entries : []
+        if (!resultCard.available || !entries.length) return ''
+        return [
+          '<div class="notice">',
+          `<strong>${escapeHtml(resultCard.title || 'Imported result details')}</strong>`,
+          '<div class="meta-list">',
+          ...entries.map((entry) => (
+            `<span>${escapeHtml(entry.label || 'Result')}: ${escapeHtml(entry.value || '')}</span>`
+          )),
+          resultCard.reviewLocation
+            ? `<span>Review location: ${escapeHtml(resultCard.reviewLocation)}</span>`
+            : '',
+          followUp.label
+            ? `<span>Follow-up: ${escapeHtml(followUp.label)}${followUp.location ? ` -> ${escapeHtml(followUp.location)}` : ''}</span>`
+            : '',
+          followUp.reason
+            ? `<span>${escapeHtml(followUp.reason)}</span>`
+            : '',
+          '</div>',
+          '</div>'
+        ].join('')
       }
 
       const renderRun = () => {
         const run = state.run
         if (!run?.generationTask) {
+          $('run-snapshot-panel').textContent = 'Prompt snapshot and wizard state appear after you draft or load a run.'
+          $('wizard-steps-panel').textContent = 'Draft a task to see the workflow rail.'
+          $('action-lane-panel').textContent = 'Draft or load a run to see which action is available in the dashboard and which step must move to OpenPet.'
+          $('next-step-panel').textContent = 'Draft a task to see the next recommended action.'
           $('task-preview').textContent = 'No task drafted yet.'
+          $('task-edit-panel').textContent = 'Draft a task to edit action details before confirmation.'
           $('question-panel').textContent = 'No pending question.'
           $('trigger-panel').textContent = 'No trigger proposal yet.'
+          $('recovery-panel').textContent = 'No failed generation to recover.'
+          $('workflow-guidance-panel').textContent = 'Use fixture for workflow QA first. Before provider smoke, go to Control Center -> AI -> Test saved image Provider.'
+          $('prompt-provenance-panel').textContent = 'Host prompt preview appears after provider generation.'
           $('qa-panel').textContent = 'No generated QA yet.'
-          $('action-review-panel').textContent = 'Generated action frames and action-frame-validation.json will appear here before import.'
-          $('import-handoff-panel').textContent = 'Generate and approve an action to unlock host-owned import.'
+          $('playback-panel').textContent = 'Generate output to inspect review artifacts.'
+          $('action-review-panel').textContent = 'Generated review artifacts and QA will appear here before import.'
+          $('full-pet-review-panel').textContent = 'Generated pet-pack review artifacts will appear here before import.'
+          $('import-handoff-panel').textContent = 'Generate and approve a run to unlock host-owned import.'
           $('run-logs').textContent = 'No logs yet.'
           $('confirm-button').disabled = true
           $('generate-button').disabled = true
+          $('generate-button').textContent = defaultGenerateLabel()
           $('approve-button').disabled = true
+          stopPlaybackPreview()
           return
         }
         const action = run.generationTask.actions[0]
         const question = run.generationTask.questions[0]
-        $('task-preview').innerHTML = [
-          `<strong>${escapeHtml(action.name)}</strong>`,
-          `<p>Mode: ${escapeHtml(run.generationTask.mode)} / Frames: ${escapeHtml(action.frameCount)} / Loop: ${action.loop ? 'yes' : 'no'}</p>`,
-          `<p>${escapeHtml(action.motionPrompt)}</p>`
-        ].join('')
-        $('trigger-panel').innerHTML = `<strong>${escapeHtml(action.triggerProposal.type)}</strong><p>${escapeHtml(action.triggerProposal.notes || 'No notes.')}</p>`
+        $('run-snapshot-panel').innerHTML = renderRunSnapshot(run)
+        $('wizard-steps-panel').innerHTML = renderWizardSteps(run)
+        $('action-lane-panel').innerHTML = renderActionLane(run)
+        $('next-step-panel').innerHTML = renderNextStep(run)
+        $('task-edit-panel').innerHTML = renderTaskEditPanel(run)
+        if (isFullPetRun(run) && run.generationTask.characterBrief) {
+          const actions = Array.isArray(run.generationTask.actions) ? run.generationTask.actions : []
+          const actionSummaries = actions.map((plannedAction) => (
+            `<li><strong>${escapeHtml(plannedAction.name)}</strong> - ${escapeHtml(plannedAction.motionPrompt)} ` +
+            `(${escapeHtml(plannedAction.frameCount)} frames / ${plannedAction.loop ? 'loop' : 'one-shot'})</li>`
+          )).join('')
+          const triggerSummaries = actions.map((plannedAction) => (
+            `<li><strong>${escapeHtml(plannedAction.name)}</strong> - ${escapeHtml(formatTriggerSummary(plannedAction.triggerProposal))}</li>`
+          )).join('')
+          $('task-preview').innerHTML = [
+            `<strong>${escapeHtml(run.input?.petName || 'Full Pet Task')}</strong>`,
+            `<p>Mode: ${escapeHtml(run.generationTask.mode)} / Actions: ${escapeHtml(actions.length)} / Style: ${escapeHtml(run.generationTask.styleSource || 'n/a')}</p>`,
+            `<p><strong>Character brief:</strong> ${escapeHtml(run.generationTask.characterBrief)}</p>`,
+            `<p><strong>Planned actions:</strong></p>`,
+            `<ul>${actionSummaries}</ul>`
+          ].join('')
+          $('trigger-panel').innerHTML = [
+            '<strong>Trigger plan</strong>',
+            '<p>Full-pet generation records trigger proposals per planned action for later host review.</p>',
+            `<p><strong>Trigger plan:</strong></p>`,
+            `<ul>${triggerSummaries}</ul>`
+          ].join('')
+        } else {
+          $('task-preview').innerHTML = [
+            `<strong>${escapeHtml(action.name)}</strong>`,
+            `<p>Mode: ${escapeHtml(run.generationTask.mode)} / Frames: ${escapeHtml(action.frameCount)} / Loop: ${action.loop ? 'yes' : 'no'}</p>`,
+            `<p>${escapeHtml(action.motionPrompt)}</p>`
+          ].join('')
+          $('trigger-panel').innerHTML = `<strong>${escapeHtml(action.triggerProposal.type)}</strong><p>${escapeHtml(action.triggerProposal.notes || 'No notes.')}</p>`
+        }
         if (question) {
           $('question-panel').innerHTML = question.options.map((option) => (
             `<button data-answer="${escapeHtml(option)}">${escapeHtml(option)}</button>`
@@ -416,51 +1329,35 @@
         } else {
           $('question-panel').textContent = 'No pending question.'
         }
-        $('confirm-button').disabled = Boolean(question) || run.taskStatus === 'confirmed'
-        $('generate-button').disabled = Boolean(question) || run.taskStatus !== 'confirmed' || !['draft', 'failed'].includes(run.status)
-        $('approve-button').disabled = run.status !== 'ready_for_review'
+        const buttonStates = run.actionLane?.buttonStates || {}
+        $('confirm-button').disabled = buttonStates.confirm ? !buttonStates.confirm.enabled : (Boolean(question) || run.taskStatus === 'confirmed')
+        $('generate-button').disabled = buttonStates.generate ? !buttonStates.generate.enabled : (Boolean(question) || run.taskStatus !== 'confirmed' || !['draft', 'failed'].includes(run.status))
+        $('generate-button').textContent = buttonStates.generate?.label || (run.recovery?.canRetryGeneration ? 'Retry generation' : defaultGenerateLabel(run))
+        $('approve-button').disabled = buttonStates.approve ? !buttonStates.approve.enabled : (run.status !== 'ready_for_review')
+        $('recovery-panel').innerHTML = renderRecoveryPanel(run)
+        $('workflow-guidance-panel').innerHTML = renderWorkflowGuidance(run)
+        $('prompt-provenance-panel').innerHTML = renderPromptProvenance(run)
         const actionFrames = run.artifacts?.actionFrames
         const actionReview = state.actionReview
+        const fullPetReview = state.fullPetReview
         if (actionFrames) {
           $('qa-panel').textContent = `Frame QA written: ${actionFrames.qa || 'action-frame-validation.json'}`
-          $('action-review-panel').innerHTML = [
-            `<strong>${escapeHtml(actionFrames.name || actionFrames.actionId)}</strong>`,
-            `<p>Frames: ${escapeHtml(actionFrames.frameCount)} at ${escapeHtml(actionFrames.frameWidth)}x${escapeHtml(actionFrames.frameHeight)}</p>`,
-            `<p>QA: ${escapeHtml(actionFrames.qa || 'action-frame-validation.json')}</p>`,
-            `<p>Trigger proposal is review-only: ${escapeHtml((actionFrames.triggerProposal || action.triggerProposal).type)}</p>`,
-            `<p>Review status: ${escapeHtml(run.reviewStatus || 'pending')} / Import status: ${escapeHtml(run.importStatus || 'not-imported')}</p>`,
-            renderFramePreview(actionReview)
-          ].join('')
-          if (run.status === 'approved') {
-            $('import-handoff-panel').innerHTML = [
-              '<div class="handoff">',
-              '<strong>Approved. Ready for host-owned import.</strong>',
-              '<p>Run the Creator Studio command <code>Import Approved Action</code> from Control Center → Plugins. The dashboard service cannot import directly because the OpenPet bridge token is only issued to command runs.</p>',
-              '</div>'
-            ].join('')
-          } else if (run.status === 'imported') {
-            $('import-handoff-panel').innerHTML = [
-              '<div class="handoff">',
-              `<strong>Imported action: ${escapeHtml(run.importedActionId || actionFrames.actionId)}</strong>`,
-              '<p>The action frames have been handed to OpenPet through the host import bridge.</p>',
-              '</div>'
-            ].join('')
-          } else {
-            $('import-handoff-panel').textContent = 'Review the generated frames, repair any bad frame, then approve the action.'
-          }
+          $('playback-panel').innerHTML = renderPlaybackPanel(actionReview)
+          $('action-review-panel').innerHTML = renderActionReview(actionReview, run, actionFrames, action)
+          $('full-pet-review-panel').textContent = 'Generated pet-pack review artifacts will appear here before import.'
+          startPlaybackPreview(actionReview)
+          $('import-handoff-panel').innerHTML = renderImportHandoff(run, actionFrames, actionReview, fullPetReview)
         } else {
           $('qa-panel').textContent = run.artifacts?.actionTaskQa ? `QA written: ${run.artifacts.actionTaskQa}` : 'No generated QA yet.'
-          $('action-review-panel').textContent = 'Generated action frames and action-frame-validation.json will appear here before import.'
-          if (run.status === 'approved') {
-            $('import-handoff-panel').innerHTML = [
-              '<div class="handoff">',
-              '<strong>Approved pet-pack output.</strong>',
-              '<p>No action frame folder is available for action import. Use the Creator Studio command <code>Import Approved Pet</code>, or generate with a cloud/local provider to create action frames for <code>Import Approved Action</code>.</p>',
-              '</div>'
-            ].join('')
-          } else {
-            $('import-handoff-panel').textContent = 'Generate action frames before action import handoff.'
-          }
+          $('playback-panel').textContent = isFullPetRun(run)
+            ? 'Generate pet-pack output to inspect full-pet review artifacts.'
+            : 'Generate action frames to inspect playback timing.'
+          $('action-review-panel').textContent = isFullPetRun(run)
+            ? 'Generated pet-pack review artifacts and atlas QA will appear here before import.'
+            : 'Generated action frames and action-frame-validation.json will appear here before import.'
+          $('full-pet-review-panel').innerHTML = renderFullPetReview(fullPetReview, run)
+          stopPlaybackPreview()
+          $('import-handoff-panel').innerHTML = renderImportHandoff(run, null, null, fullPetReview)
         }
       }
 
@@ -480,6 +1377,7 @@
           })
           state.run = payload.run
           state.actionReview = payload.actionReview || null
+          state.fullPetReview = payload.fullPetReview || null
           renderRun()
           await refreshLogs()
           await refreshRunList()
@@ -496,6 +1394,7 @@
           const payload = await postJson(`/api/runs/${encodeURIComponent(state.run.runId)}/questions/trigger/answer`, { answer })
           state.run = payload.run
           state.actionReview = payload.actionReview || null
+          state.fullPetReview = payload.fullPetReview || null
           renderRun()
           await refreshLogs()
           await refreshRunList()
@@ -513,6 +1412,7 @@
           const payload = await postJson(`/api/runs/${encodeURIComponent(state.run.runId)}/action-frames/${encodeURIComponent(actionId)}/${encodeURIComponent(fileName)}/repair`)
           state.run = payload.run
           state.actionReview = payload.actionReview || null
+          state.fullPetReview = payload.fullPetReview || null
           renderRun()
           await refreshLogs()
           await refreshRunList()
@@ -522,16 +1422,58 @@
         }
       })
 
+      $('playback-panel').addEventListener('click', (event) => {
+        if (event.target?.id !== 'replay-playback-button') return
+        if (!state.actionReview) return
+        startPlaybackPreview(state.actionReview)
+      })
+
       $('confirm-button').addEventListener('click', async () => {
         if (!state.run?.runId) return
         try {
           const payload = await postJson(`/api/runs/${encodeURIComponent(state.run.runId)}/confirm`)
           state.run = payload.run
           state.actionReview = payload.actionReview || null
+          state.fullPetReview = payload.fullPetReview || null
           renderRun()
           await refreshLogs()
           await refreshRunList()
           setStatus('Task confirmed.', 'ok')
+        } catch (error) {
+          setStatus(error.message, 'error')
+        }
+      })
+
+      $('task-edit-panel').addEventListener('click', async (event) => {
+        if (event.target?.id !== 'save-task-button' || !state.run?.runId) return
+        try {
+          const payloadBody = isFullPetRun(state.run)
+            ? {
+                characterBrief: $('task-edit-character-brief')?.value || '',
+                actions: (Array.isArray(state.run.generationTask?.actions) ? state.run.generationTask.actions : []).map((action, index) => ({
+                  actionId: action.actionId,
+                  actionName: $(`task-edit-name-${index}`)?.value || '',
+                  motionPrompt: $(`task-edit-motion-${index}`)?.value || '',
+                  loop: $(`task-edit-loop-${index}`)?.value === 'true',
+                  triggerType: $(`task-edit-trigger-${index}`)?.value || 'unbound'
+                }))
+              }
+            : {
+                actionName: $('task-edit-name')?.value || '',
+                motionPrompt: $('task-edit-motion')?.value || '',
+                loop: $('task-edit-loop')?.value === 'true',
+                triggerType: $('task-edit-trigger')?.value || 'unbound'
+              }
+          const payload = await postJson(`/api/runs/${encodeURIComponent(state.run.runId)}/task`, {
+            ...payloadBody
+          })
+          state.run = payload.run
+          state.actionReview = payload.actionReview || null
+          state.fullPetReview = payload.fullPetReview || null
+          renderRun()
+          await refreshLogs()
+          await refreshRunList()
+          setStatus('Task edits saved.', 'ok')
         } catch (error) {
           setStatus(error.message, 'error')
         }
@@ -543,12 +1485,22 @@
           const payload = await postJson(`/api/runs/${encodeURIComponent(state.run.runId)}/generate-action`)
           state.run = payload.run
           state.actionReview = payload.actionReview || null
+          state.fullPetReview = payload.fullPetReview || null
           if (!state.actionReview) await fetchRunDetail()
           renderRun()
           await refreshLogs()
           await refreshRunList()
-          setStatus(`Generated action output in ${payload.outputDir || 'run workspace'}.`, 'ok')
+          const outputLabel = isFullPetRun(payload.run) ? 'pet-pack' : 'action'
+          setStatus(`Generated ${outputLabel} output in ${payload.outputDir || 'run workspace'}.`, 'ok')
         } catch (error) {
+          if (error.payload?.run) {
+            state.run = error.payload.run
+            state.actionReview = error.payload.actionReview || null
+            state.fullPetReview = error.payload.fullPetReview || null
+            renderRun()
+            await refreshLogs()
+            await refreshRunList()
+          }
           setStatus(error.message, 'error')
         }
       })
@@ -559,11 +1511,20 @@
           const payload = await postJson(`/api/runs/${encodeURIComponent(state.run.runId)}/approve`)
           state.run = payload.run
           state.actionReview = payload.actionReview || null
+          state.fullPetReview = payload.fullPetReview || null
           renderRun()
           await refreshLogs()
           await refreshRunList()
           setStatus(`Run approved. Use the ${payload.importCommand || 'import'} plugin command for host-owned import.`, 'ok')
         } catch (error) {
+          if (error.payload?.run) {
+            state.run = error.payload.run
+            state.actionReview = error.payload.actionReview || null
+            state.fullPetReview = error.payload.fullPetReview || null
+            renderRun()
+            await refreshLogs()
+            await refreshRunList()
+          }
           setStatus(error.message, 'error')
         }
       })

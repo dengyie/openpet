@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "profile": "hybrid",
   "description": "Create, review, import, and export Codex-compatible OpenPet pets.",
-  "permissions": ["pet-pack:import", "pet:say", "model:image-generate", "assets:generate"],
+  "permissions": ["pet-pack:import", "pet:say", "model:image-generate", "assets:generate", "trigger-proposals:write"],
   "config": "config.schema.json",
   "entries": {
     "commands": [
@@ -35,7 +35,7 @@
     "dataLocations": [
       { "path": "OPENPET_DATA_DIR/runs", "description": "Creator Studio run workspaces and generated pet outputs." }
     ],
-    "modelBackends": ["fixture", "cloud", "local"],
+    "modelBackends": ["fixture", "provider"],
     "outputFormat": "codex-pet"
   },
   "assets": ["web/dashboard/index.html"]

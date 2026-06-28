@@ -79,6 +79,8 @@ export interface AiBehaviorRule {
   kind?: string
   actionId?: string
   bubbleText?: string
+  reason?: string
+  displayMode?: 'none' | 'bubble' | 'action' | 'event'
   intent?: string
   confidence?: number
 }
@@ -95,6 +97,8 @@ export interface AiBehaviorDecision {
   kind?: string
   event?: string
   intent?: string
+  providerReason?: string
+  displayMode?: 'none' | 'bubble' | 'action' | 'event'
   inputSummary?: string
   cooldown?: boolean
   fallback?: boolean
@@ -159,6 +163,31 @@ export interface AiMemoryProfileViewState {
   globalMemories: AiMemoryItemViewState[]
   petPackMemories: AiMemoryItemViewState[]
   recentJobs: AiMemoryJobViewState[]
+}
+
+export interface AiTalkTraceDiagnosticsExport {
+  schemaVersion: number
+  exportedAt: string
+  redaction: JsonObject
+  provider: {
+    enabled: boolean
+    provider: string
+    baseUrl: string
+    model: string
+    hasApiKey: boolean
+    memoryEnabled: boolean
+    behaviorEnabled: boolean
+  }
+  conversations: JsonObject[]
+  memories: JsonObject[]
+  memoryJobs: JsonObject[]
+  traces: JsonObject[]
+  behaviorDecisions: JsonObject[]
+}
+
+export interface AiTalkTraceDiagnosticsFilters {
+  petPackId?: string
+  conversationId?: string
 }
 
 export interface AiPersona {
@@ -273,10 +302,28 @@ export interface ActionsConfigViewState {
   clickAction: string
   actions: ActionEntry[]
   triggerProposalInbox: ActionTriggerProposalInboxItem[]
+  triggerRules: ActionTriggerRule[]
 }
 
 export type ActionTriggerProposalType = 'manual' | 'click' | 'random' | 'state' | 'event' | 'unbound'
 export type ActionTriggerProposalInboxStatus = 'pending' | 'accepted' | 'rejected' | 'applied' | 'pending-host-rule'
+export type ActionTriggerRuleType = 'random' | 'state' | 'event'
+export type ActionTriggerRuleStatus = 'active' | 'disabled'
+
+export interface ActionTriggerRule {
+  id: string
+  actionId: string
+  type: ActionTriggerRuleType
+  status: ActionTriggerRuleStatus
+  sourceProposalId: string
+  sourcePluginId: string
+  sourceRunId: string
+  sourceCommandId: string
+  message: string
+  preview: string
+  createdAt: string
+  updatedAt: string
+}
 
 export interface ActionTriggerProposalInboxItem {
   id: string
@@ -288,6 +335,8 @@ export interface ActionTriggerProposalInboxItem {
   sourceCommandId: string
   message: string
   status: ActionTriggerProposalInboxStatus
+  triggerRuleId: string
+  preview: string
   resultCode: string
   resultMessage: string
   rejectionReason: string
@@ -315,9 +364,28 @@ export interface ActionTriggerProposalAcceptanceResult {
   actionId: string
   type: ActionTriggerProposalType
   binding: string
-  code: 'applied' | 'no_binding_required' | 'pending_host_rule'
+  code: 'applied' | 'no_binding_required' | 'pending_host_rule' | 'rule_created'
   message: string
   acceptedAt: string
+  triggerRule?: ActionTriggerRule
+  triggerRuleId?: string
+  preview?: string
+  sourcePluginId?: string
+  sourceRunId?: string
+  sourceCommandId?: string
+}
+
+export interface ActionTriggerProposalPreviewResult {
+  ok: boolean
+  applied: boolean
+  actionId: string
+  type: ActionTriggerProposalType
+  binding: string
+  code: 'will_apply' | 'no_binding_required' | 'will_create_rule'
+  message: string
+  triggerRule?: ActionTriggerRule
+  triggerRuleId?: string
+  preview?: string
   sourcePluginId?: string
   sourceRunId?: string
   sourceCommandId?: string
@@ -402,6 +470,11 @@ export interface ActionsMutationResult {
   animations: ActionsConfigViewState
   proposal?: ActionTriggerProposalInboxItem
   triggerProposal?: ActionTriggerProposalAcceptanceResult
+}
+
+export interface ActionTriggerRuleMutationResult {
+  animations: ActionsConfigViewState
+  rule: ActionTriggerRule
 }
 
 export interface BlocklistState {
@@ -491,6 +564,12 @@ export interface PetPackMutationResult {
   activePackId?: string
   petPacks: PetPacksViewState
   animations?: ActionsConfigViewState
+}
+
+export interface ActivePetPackChangedEvent {
+  activePackId: string
+  pack?: PetPackSummary | null
+  petChatState?: PetChatStateViewState
 }
 
 export interface CompletedPetPackExportResult {
@@ -1823,6 +1902,7 @@ export interface PetChatStateViewState {
   hasWindow: boolean
   alwaysOnTop: boolean
   hasUserBounds: boolean
+  conversationId: string
   bounds: {
     x: number
     y: number
@@ -1863,6 +1943,9 @@ export interface AiConnectionTestResult {
   reply?: string
   code?: string
   message?: string
+  modelsProbe?: 'ok' | 'unavailable' | 'failed'
+  availableModels?: string[]
+  currentModelDiscovered?: boolean
 }
 
 export interface ImageGenerationConfigViewState {
@@ -1890,6 +1973,12 @@ export interface ImageGenerationHealthCheckResult {
   provider: string
   code: string
   message: string
+  modelsProbe?: 'ok' | 'unavailable' | 'failed'
+  availableModels?: string[]
+  currentModelDiscovered?: boolean
+  usage?: {
+    estimatedCostUsd?: number
+  }
 }
 
 export type ImageGenerationHealthCheckRequest = Record<string, never>
@@ -2358,9 +2447,12 @@ export interface ControlCenterApi {
   clearActionFrameSelection: (payload: ActionFrameClearRequest) => Promise<OkResponse>
   importActionFrames: (payload?: ActionFrameImportRequest) => Promise<ActionFrameImportResult>
   saveActionsConfig: (payload: ActionsSaveConfigRequest) => Promise<ActionsMutationResult>
+  previewActionTriggerProposal: (payload: ActionTriggerProposalAcceptanceRequest) => Promise<ActionTriggerProposalPreviewResult>
   submitActionTriggerProposal: (payload: ActionTriggerProposalAcceptanceRequest) => Promise<ActionsMutationResult>
   acceptActionTriggerProposal: (proposalId: string) => Promise<ActionsMutationResult>
   rejectActionTriggerProposal: (proposalId: string, reason?: string) => Promise<ActionsMutationResult>
+  setActionTriggerRuleStatus: (ruleId: string, status: ActionTriggerRuleStatus) => Promise<ActionTriggerRuleMutationResult>
+  deleteActionTriggerRule: (ruleId: string) => Promise<ActionTriggerRuleMutationResult>
   deleteAction: (actionId: string) => Promise<ActionsMutationResult>
   listPetPacks: () => Promise<PetPacksViewState>
   inspectPetPackDirectory: () => Promise<PetPackInspectionResult>
@@ -2368,6 +2460,7 @@ export interface ControlCenterApi {
   importPetPack: (selectionId: string) => Promise<PetPackMutationResult>
   exportPetPack: (packId: string) => Promise<PetPackExportResult>
   setActivePetPack: (packId: string) => Promise<PetPackMutationResult>
+  onActivePetPackChanged?: (listener: (event: ActivePetPackChangedEvent) => void) => () => void
   removePetPack: (packId: string) => Promise<PetPackMutationResult>
   getAiConfig: () => Promise<AiConfigViewState>
   saveAiConfig: (config: Partial<AiConfigViewState>) => Promise<AiConfigViewState>
@@ -2386,6 +2479,7 @@ export interface ControlCenterApi {
   checkImageGenerationHealth: (payload?: ImageGenerationHealthCheckRequest) => Promise<ImageGenerationHealthCheckResult>
   getAiConversation: (conversationId: string) => Promise<ChatMessage[]>
   chat: (payload: AiChatRequest) => Promise<AiChatResponse>
+  exportAiTalkTraceDiagnostics: (filters?: AiTalkTraceDiagnosticsFilters) => Promise<string>
   getPetChatState: () => Promise<PetChatStateViewState>
   openPetBubbleChat: () => Promise<PetBubbleChatWindowStateViewState>
   openPetChatWindow: () => Promise<PetChatStateViewState>
