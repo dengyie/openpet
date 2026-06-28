@@ -781,6 +781,7 @@
           followUp.reason
             ? `<p>${escapeHtml(followUp.reason)}</p>`
             : '',
+          renderFollowUpCta(followUp, { tagName: 'p' }),
           '</div>'
         ].join('')
       }
@@ -1099,6 +1100,7 @@
           followUp.reason
             ? `<p>${escapeHtml(followUp.reason)}</p>`
             : '',
+          renderFollowUpCta(followUp, { tagName: 'p' }),
           '</div>'
         ].join('')
       }
@@ -1161,6 +1163,21 @@
           `<p>${escapeHtml(availabilityMessage)}</p>`,
           '</div>'
         ].join('')
+      }
+
+      const formatFollowUpCta = (followUp = {}) => {
+        if (followUp.surface === 'control-center' && followUp.location) {
+          return `Continue in Control Center at ${followUp.location}.`
+        }
+        if (followUp.surface === 'openpet') {
+          return 'Continue in OpenPet.'
+        }
+        return ''
+      }
+
+      const renderFollowUpCta = (followUp = {}, { tagName = 'p' } = {}) => {
+        const cta = formatFollowUpCta(followUp)
+        return cta ? `<${tagName}>${escapeHtml(cta)}</${tagName}>` : ''
       }
 
       const renderActionLane = (run) => {
@@ -1283,6 +1300,7 @@
             followUp.reason
               ? `<p>${escapeHtml(followUp.reason)}</p>`
               : '',
+            renderFollowUpCta(followUp, { tagName: 'p' }),
             renderImportedResultCard(run),
             '</div>'
           ].join('')
@@ -1340,6 +1358,7 @@
           followUp.reason
             ? `<span>${escapeHtml(followUp.reason)}</span>`
             : '',
+          renderFollowUpCta(followUp, { tagName: 'span' }),
           '</div>',
           '</div>'
         ].join('')
