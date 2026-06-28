@@ -95,6 +95,36 @@ test('active TODO doc links archived OpenPet gateway provider smoke evidence tru
   assert.match(readme, /does not prove image generation output quality/i)
 })
 
+test('live docs surface the AI Talk bubble acceptance smoke entrypoint with the right claim boundary', () => {
+  const todoArchitecture = readText('docs/openpet-current-todo-architecture.md')
+  const developmentSummary = readText('docs/development-summary.md')
+  const handoff = readText('docs/HANDOFF.md')
+  const docsReadme = readText('docs/README.md')
+
+  assert.match(
+    docsReadme,
+    /2026-06-28-real-provider-chat-acceptance-runbook\.md/i,
+    'docs/README.md should index the real-provider Bubble Chat acceptance runbook'
+  )
+
+  for (const [name, content] of [
+    ['openpet-current-todo-architecture.md', todoArchitecture],
+    ['development-summary.md', developmentSummary],
+    ['HANDOFF.md', handoff]
+  ]) {
+    assert.match(
+      content,
+      /run-ai-talk-local-smoke[\s\S]*bubbleAcceptance[\s\S]*providerLatencyMs[\s\S]*manualAcceptanceTemplate/i,
+      `${name} should mention the AI Talk Bubble Chat smoke entrypoint and its key acceptance fields`
+    )
+    assert.match(
+      content,
+      /does not by itself prove|not full desktop feel by itself|later human desktop validation/i,
+      `${name} should keep the human desktop-feel claim boundary explicit for the AI Talk Bubble Chat smoke`
+    )
+  }
+})
+
 test('live docs link archived OpenPet gateway provider smoke evidence with the right claim boundary', () => {
   const developmentSummary = readText('docs/development-summary.md')
   const handoff = readText('docs/HANDOFF.md')

@@ -98,11 +98,31 @@ test('project-context indexes the archived provider smoke evidence and current s
     /AI provider smoke report contracts[\s\S]*Creator Studio provider smoke report contracts/i,
     'project-context.json should include the current smoke report TypeScript contracts in the migration baseline'
   )
+  assert.match(
+    facts,
+    /run-ai-talk-local-smoke[\s\S]*bubbleAcceptance[\s\S]*providerLatencyMs[\s\S]*manualAcceptanceTemplate/i,
+    'project-context.json should describe the AI Talk Bubble Chat smoke entrypoint and acceptance fields'
+  )
+  assert.match(
+    facts,
+    /does not by itself prove[\s\S]*transparent popup placement|does not by itself prove[\s\S]*full human acceptance/i,
+    'project-context.json should keep the AI Talk Bubble Chat smoke claim boundary explicit'
+  )
 
   assert.match(
     docsReadme,
     /release-evidence\/.*ai-provider-smoke\/.*creator-studio-provider-smoke\/.*packaged-runtime\/.*signed-release-closure\//is,
     'docs/README.md should surface provider smoke and release-truth archives in the release evidence map'
+  )
+})
+
+test('project-context validation commands include the AI Talk Bubble Chat smoke entrypoint', () => {
+  const context = readProjectContext()
+
+  assert.equal(
+    context.validation.commands.includes('npm run run-ai-talk-local-smoke -- --message <text>'),
+    true,
+    'project-context.json should list the AI Talk Bubble Chat smoke command in validation.commands'
   )
 })
 
