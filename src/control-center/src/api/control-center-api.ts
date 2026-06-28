@@ -7,6 +7,7 @@ import type {
   ActionFrameReinspectRequest,
   ActionTriggerProposalInboxStatus,
   ActionTriggerProposalType,
+  ActionTriggerRuleSpec,
   ActionTriggerRuleStatus,
   ActionsConfigViewState,
   AiChatRequest,
@@ -1051,34 +1052,46 @@ const createDemoTriggerPreviewText = (type = '', actionId = '') => {
 const createDemoTriggerRuleSpec = (type: 'random' | 'state' | 'event', actionId: string, proposal: {
   binding?: string
   message?: string
+  ruleSpec?: Partial<ActionTriggerRuleSpec>
 } = {}) => {
-  const summary = proposal.message || createDemoTriggerPreviewText(type, actionId)
+  const ruleSpec = proposal.ruleSpec || {}
+  const summary = typeof ruleSpec.summary === 'string' && ruleSpec.summary
+    ? ruleSpec.summary
+    : (proposal.message || createDemoTriggerPreviewText(type, actionId))
   if (type === 'random') {
+    const schedule = ruleSpec.schedule || {}
+    const mode = schedule.mode === 'interval' ? 'interval' : 'opportunistic'
+    const intervalMs = Number(schedule.intervalMs)
     return {
       schemaVersion: 1,
       type,
       summary,
-      schedule: { mode: 'opportunistic' }
+      schedule: {
+        mode,
+        ...(mode === 'interval' && Number.isFinite(intervalMs) && intervalMs > 0 ? { intervalMs } : {})
+      }
     }
   }
   if (type === 'state') {
+    const state = ruleSpec.state || {}
     return {
       schemaVersion: 1,
       type,
       summary,
       state: {
-        predicate: proposal.binding || 'host.state.available',
-        source: 'host'
+        predicate: typeof state.predicate === 'string' && state.predicate ? state.predicate : (proposal.binding || 'host.state.available'),
+        source: typeof state.source === 'string' && state.source ? state.source : 'host'
       }
     }
   }
+  const event = ruleSpec.event || {}
   return {
     schemaVersion: 1,
     type,
     summary,
     event: {
-      name: proposal.binding || 'openpet.event',
-      source: 'host'
+      name: typeof event.name === 'string' && event.name ? event.name : (proposal.binding || 'openpet.event'),
+      source: typeof event.source === 'string' && event.source ? event.source : 'host'
     }
   }
 }
@@ -1091,6 +1104,8 @@ const createDemoTriggerProposalPreview = (proposal: {
   sourcePluginId?: string
   sourceRunId?: string
   sourceCommandId?: string
+  message?: string
+  ruleSpec?: Partial<ActionTriggerRuleSpec>
 }) => {
   const actionId = proposal.actionId || ''
   const type = proposal.type || 'unbound'
@@ -1109,7 +1124,9 @@ const createDemoTriggerProposalPreview = (proposal: {
         message: '',
         preview: createDemoTriggerPreviewText(type, actionId),
         ruleSpec: createDemoTriggerRuleSpec(type as 'random' | 'state' | 'event', actionId, {
-          binding: proposal.binding
+          binding: proposal.binding,
+          message: proposal.message,
+          ruleSpec: proposal.ruleSpec
         }),
         createdAt: '2026-06-22T00:00:00.000Z',
         updatedAt: '2026-06-22T00:00:00.000Z'
@@ -1210,7 +1227,8 @@ const demoApi: ControlCenterApi = {
           preview: `${ruleProposal.type} rule can play ${ruleProposal.actionId} after host validation.`,
           ruleSpec: createDemoTriggerRuleSpec(ruleProposal.type as 'random' | 'state' | 'event', ruleProposal.actionId, {
             binding: ruleProposal.binding,
-            message: ruleProposal.message || ruleProposal.notes || ''
+            message: ruleProposal.message || ruleProposal.notes || '',
+            ruleSpec: ruleProposal.ruleSpec
           }),
           createdAt: '2026-06-22T00:00:00.000Z',
           updatedAt: '2026-06-22T00:00:00.000Z'
@@ -1281,6 +1299,7 @@ const demoApi: ControlCenterApi = {
       status: 'pending' as const,
       triggerRuleId: '',
       preview: preview.preview || '',
+      ...(preview.triggerRule?.ruleSpec ? { ruleSpec: preview.triggerRule.ruleSpec } : {}),
       resultCode: '',
       resultMessage: '',
       rejectionReason: '',
@@ -1306,6 +1325,7 @@ const demoApi: ControlCenterApi = {
         type: proposal.type,
         binding: proposal.binding || undefined,
         message: proposal.message || undefined,
+        ruleSpec: proposal.ruleSpec,
         sourcePluginId: proposal.sourcePluginId,
         sourceRunId: proposal.sourceRunId,
         sourceCommandId: proposal.sourceCommandId

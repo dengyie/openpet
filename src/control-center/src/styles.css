@@ -579,6 +579,40 @@ button {
   overflow-wrap: anywhere;
 }
 
+.trigger-rule-spec {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 9px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 10px;
+  background: rgba(248, 250, 252, 0.82);
+}
+
+.trigger-rule-spec div {
+  display: grid;
+  grid-template-columns: minmax(54px, auto) minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+
+.trigger-rule-spec dt,
+.trigger-rule-spec dd {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.trigger-rule-spec dt {
+  color: #64748b;
+  font-weight: 650;
+}
+
+.trigger-rule-spec dd {
+  color: #1f2937;
+}
+
 .button-icon {
   display: inline-flex;
   width: 16px;

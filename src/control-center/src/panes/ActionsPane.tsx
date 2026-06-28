@@ -4,6 +4,7 @@ import type {
   ActionTriggerProposalInboxItem,
   ActionTriggerProposalAcceptanceResult,
   ActionTriggerProposalPreviewResult,
+  ActionTriggerRuleSpec,
   ActionTriggerRule,
   ActionTriggerRuleStatus,
   ActionTriggerProposalType,
@@ -115,6 +116,48 @@ const triggerProposalStatusLabel: Record<ActionTriggerProposalInboxItem['status'
   'pending-host-rule': '待规则'
 }
 
+const readSpecText = (value: unknown) => (typeof value === 'string' && value.trim() ? value.trim() : '')
+const readSpecNumber = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : 0)
+
+function TriggerRuleSpecSummary({ spec }: { spec?: ActionTriggerRuleSpec | null }) {
+  if (!spec) return null
+  const rows: Array<[string, string]> = []
+  const summary = readSpecText(spec.summary)
+  if (summary) rows.push(['意图', summary])
+
+  if (spec.type === 'random') {
+    const schedule = spec.schedule || {}
+    const mode = readSpecText(schedule.mode) || 'opportunistic'
+    rows.push(['调度', mode === 'interval' ? '固定间隔' : '机会触发'])
+    const intervalMs = readSpecNumber(schedule.intervalMs)
+    if (intervalMs > 0) rows.push(['间隔', `${Math.round(intervalMs / 1000)} 秒`])
+  }
+
+  if (spec.type === 'state') {
+    const state = spec.state || {}
+    rows.push(['状态条件', readSpecText(state.predicate) || 'host.state.available'])
+    rows.push(['状态来源', readSpecText(state.source) || 'host'])
+  }
+
+  if (spec.type === 'event') {
+    const event = spec.event || {}
+    rows.push(['事件名', readSpecText(event.name) || 'openpet.event'])
+    rows.push(['事件来源', readSpecText(event.source) || 'host'])
+  }
+
+  if (!rows.length) return null
+  return (
+    <dl className="trigger-rule-spec" aria-label="结构化触发规则">
+      {rows.map(([label, value]) => (
+        <div key={`${label}:${value}`}>
+          <dt>{label}</dt>
+          <dd>{value}</dd>
+        </div>
+      ))}
+    </dl>
+  )
+}
+
 function TriggerRulesPanel({
   rules,
   actions,
@@ -166,6 +209,7 @@ function TriggerRulesPanel({
                 <span className="trigger-badge applied">{rule.type}</span>
               </div>
               <p>{rule.preview || details.summary}</p>
+              <TriggerRuleSpecSummary spec={rule.ruleSpec} />
               <div className="trigger-inbox-meta">
                 <span>Rule：{rule.id}</span>
                 {rule.sourcePluginId ? <span>来源：{rule.sourcePluginId}</span> : null}
@@ -261,6 +305,7 @@ function TriggerProposalInbox({
               </div>
               {proposal.message ? <p>{proposal.message}</p> : <p>{details.summary}</p>}
               {proposal.preview ? <p>预览：{proposal.preview}</p> : null}
+              <TriggerRuleSpecSummary spec={proposal.ruleSpec} />
               <div className="trigger-inbox-meta">
                 {proposal.sourcePluginId ? <span>来源：{proposal.sourcePluginId}</span> : null}
                 {proposal.sourceRunId ? <span>Run：{proposal.sourceRunId}</span> : null}

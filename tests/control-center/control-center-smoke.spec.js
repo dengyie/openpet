@@ -190,6 +190,9 @@ test.describe('Control Center smoke', () => {
     const rulesPanel = page.locator('[aria-label="触发规则"]')
     await expect(rulesPanel).toContainText('Sleep')
     await expect(rulesPanel).toContainText('state')
+    await expect(rulesPanel).toContainText('意图')
+    await expect(rulesPanel).toContainText('状态条件')
+    await expect(rulesPanel).toContainText('host.state.available')
     await expect(clickAction).toHaveValue(beforeClickAction)
   })
 
@@ -217,6 +220,12 @@ test.describe('Control Center smoke', () => {
               sourceCommandId: 'import-approved-action',
               message: 'Use Sleep when the pet enters idle focus mode.',
               preview: 'State trigger rule can play sleep when a host state condition matches.',
+              ruleSpec: {
+                schemaVersion: 1,
+                type: 'state',
+                summary: 'Use Sleep when idle focus mode is detected.',
+                state: { predicate: 'pet.idle && focus.mode', source: 'creator-studio' }
+              },
               createdAt: '2026-06-24T08:00:00.000Z',
               updatedAt: '2026-06-24T08:00:00.000Z'
             }
@@ -231,6 +240,11 @@ test.describe('Control Center smoke', () => {
     const rulesPanel = page.locator('[aria-label="触发规则"]')
     const sleepRule = rulesPanel.locator('.trigger-inbox-item', { hasText: 'Sleep' })
     await expect(sleepRule).toContainText('active')
+    await expect(sleepRule).toContainText('Use Sleep when idle focus mode is detected.')
+    await expect(sleepRule).toContainText('状态条件')
+    await expect(sleepRule).toContainText('pet.idle && focus.mode')
+    await expect(sleepRule).toContainText('状态来源')
+    await expect(sleepRule).toContainText('creator-studio')
 
     await sleepRule.getByRole('button', { name: '停用规则' }).click()
     await expect(page.locator('.status-line')).toContainText('已停用触发规则：rule:state:sleep:test')
@@ -270,6 +284,12 @@ test.describe('Control Center smoke', () => {
               message: 'Use Sleep when the pet enters idle focus mode.',
               status: 'pending',
               preview: 'State trigger rule can play sleep when a host state condition matches.',
+              ruleSpec: {
+                schemaVersion: 1,
+                type: 'state',
+                summary: 'Use Sleep when idle focus mode is detected.',
+                state: { predicate: 'pet.idle && focus.mode', source: 'creator-studio' }
+              },
               resultCode: '',
               resultMessage: '',
               rejectionReason: '',
@@ -310,6 +330,8 @@ test.describe('Control Center smoke', () => {
     const sleepProposal = inbox.locator('.trigger-inbox-item', { hasText: 'Sleep' })
     await expect(sleepProposal).toContainText('待审核')
     await expect(sleepProposal).toContainText('State trigger rule can play sleep')
+    await expect(sleepProposal).toContainText('Use Sleep when idle focus mode is detected.')
+    await expect(sleepProposal).toContainText('pet.idle && focus.mode')
     await sleepProposal.getByRole('button', { name: '接受提案' }).click()
     await expect(page.locator('.status-line')).toContainText('已接受触发提案：sleep')
     await expect(sleepProposal).toContainText('已接受')
@@ -317,6 +339,8 @@ test.describe('Control Center smoke', () => {
     const rulesPanel = page.locator('[aria-label="触发规则"]')
     await expect(rulesPanel).toContainText('Sleep')
     await expect(rulesPanel).toContainText('state')
+    await expect(rulesPanel).toContainText('Use Sleep when idle focus mode is detected.')
+    await expect(rulesPanel).toContainText('pet.idle && focus.mode')
 
     const waveProposal = inbox.locator('.trigger-inbox-item', { hasText: 'Wave' })
     page.once('dialog', (dialog) => dialog.accept('Not for this pack'))
