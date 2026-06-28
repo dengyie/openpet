@@ -70,6 +70,7 @@ const extractCreatorStudioDetails = (resultRecord, commandId = '') => {
   const importedPack = isRecord(imported?.pack) ? imported.pack : null
   const importedResult = isRecord(imported?.result) ? imported.result : null
   const importedAction = isRecord(importedResult?.importedAction) ? importedResult.importedAction : null
+  const proposal = isRecord(resultRecord.proposal) ? resultRecord.proposal : null
   const bundle = isRecord(resultRecord.bundle) ? resultRecord.bundle : null
   const triggerProposalSubmission = isRecord(resultRecord.triggerProposalSubmission) ? resultRecord.triggerProposalSubmission : null
   const triggerProposal = isRecord(triggerProposalSubmission?.proposal) ? triggerProposalSubmission.proposal : null
@@ -81,12 +82,15 @@ const extractCreatorStudioDetails = (resultRecord, commandId = '') => {
   addDetail(details, '已导入 Pack', run?.importedPackId || importedPack?.id)
   addDetail(details, '已导入动作', run?.importedActionId || importedAction?.id)
   addDetail(details, '动作目录', actionFrames?.framesDir)
-  if (triggerProposalSubmission) {
+  addDetail(details, '触发建议', proposal?.type || triggerProposal?.type)
+  if (proposal?.status) {
+    addDetail(details, '入队状态', proposal.status)
+  } else if (triggerProposalSubmission) {
     const triggerProposalValue = triggerProposalSubmission.ok === true
-      ? `已提交${triggerProposal?.id ? ` · ${triggerProposal.id}` : ''}`
-      : `提交失败${triggerProposalSubmission.error ? ` · ${triggerProposalSubmission.error}` : ''}`
+      ? `submitted${triggerProposal?.id ? ` · ${triggerProposal.id}` : ''}`
+      : `failed${triggerProposalSubmission.error ? ` · ${triggerProposalSubmission.error}` : ''}`
     if (triggerProposalSubmission.ok === true) {
-      addDetail(details, '触发建议', triggerProposalValue)
+      addDetail(details, '入队状态', triggerProposalValue)
     } else {
       addCreatorStudioErrorDetail(details, '触发建议', triggerProposalValue)
     }

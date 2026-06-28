@@ -74,7 +74,8 @@ const runPluginCommandEntryProcess = async ({
   stopRuntimeProcessWithFallback,
   resolveStopWaiter,
   appendLog,
-  commandProcessTimeoutMs = LOCAL_PLUGIN_COMMAND_TIMEOUT_MS
+  commandProcessTimeoutMs = LOCAL_PLUGIN_COMMAND_TIMEOUT_MS,
+  transformParsedResult = (parsedResult) => parsedResult
 }) => {
   const pluginId = plugin.manifest.id
   const { file, args } = parsePluginProcessCommand(commandEntry.command)
@@ -221,7 +222,7 @@ const runPluginCommandEntryProcess = async ({
           reject(new Error(message))
           return
         }
-        const parsedResult = readCommandResult(stdoutText)
+        const parsedResult = transformParsedResult(readCommandResult(stdoutText))
         const sanitizedParsedResult = sanitizePluginCommandResultValue(parsedResult)
         resolve({
           ok: true,
