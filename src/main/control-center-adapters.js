@@ -115,6 +115,28 @@ const toPort = (value) => {
 }
 
 /**
+ * @param {Partial<ServiceLogEntry> | undefined} entry
+ * @returns {ServiceLogEntry}
+ */
+const createServiceLogEntryView = (entry = {}) => {
+  const statusCode = Number(entry.statusCode)
+  const rawStatusCode = entry.statusCode
+  const timestamp = typeof entry.timestamp === 'string' ? entry.timestamp : ''
+  const method = typeof entry.method === 'string' ? entry.method : ''
+  const path = typeof entry.path === 'string' ? entry.path : ''
+  return {
+    id: typeof entry.id === 'string' && entry.id ? entry.id : `${timestamp}-${method}-${path}-${rawStatusCode ?? ''}`,
+    timestamp,
+    method,
+    path,
+    statusCode: Number.isFinite(statusCode) ? Math.max(0, Math.round(statusCode)) : 0,
+    authorized: Boolean(entry.authorized),
+    remoteAddress: typeof entry.remoteAddress === 'string' ? entry.remoteAddress : '',
+    error: typeof entry.error === 'string' ? entry.error : ''
+  }
+}
+
+/**
  * @param {Partial<LocalHttpConfigViewState> | undefined} config
  * @returns {LocalHttpConfigViewState}
  */
@@ -123,7 +145,13 @@ const createLocalHttpConfigView = (config = {}) => ({
   host: typeof config.host === 'string' && config.host ? config.host : DEFAULT_LOOPBACK_HOST,
   port: toPort(config.port),
   token: typeof config.token === 'string' ? config.token : '',
-  logs: Array.isArray(config.logs) ? config.logs : /** @type {ServiceLogEntry[]} */ ([])
+  logs: Array.isArray(config.logs)
+    ? /** @type {ServiceLogEntry[]} */ (
+      config.logs
+        .filter((entry) => entry && typeof entry.path === 'string')
+        .map((entry) => createServiceLogEntryView(entry || {}))
+    )
+    : /** @type {ServiceLogEntry[]} */ ([]) 
 })
 
 /**

@@ -359,7 +359,11 @@ export const cloneImageGenerationConfig = (
 })
 
 export const cloneServiceStatus = (status: Partial<ServiceStatusViewState> | null | undefined): ServiceStatusViewState => ({
-  config: { ...defaultServiceStatus.config, ...(status?.config || {}) },
+  config: {
+    ...defaultServiceStatus.config,
+    ...(status?.config || {}),
+    logs: cloneServiceLogs(status?.config?.logs)
+  },
   runtime: {
     ...defaultServiceStatus.runtime,
     ...(status?.runtime || {}),

@@ -48,6 +48,62 @@ test('createServiceStatusView normalizes local HTTP config and runtime for Contr
   })
 })
 
+test('createLocalHttpConfigView normalizes service logs to the shared log-entry shape', () => {
+  assert.deepEqual(createLocalHttpConfigView({
+    enabled: true,
+    host: '127.0.0.1',
+    port: 4317,
+    token: 'demo-token',
+    logs: [
+      {
+        id: 'log-1',
+        timestamp: '2026-06-29T00:00:00.000Z',
+        method: 'GET',
+        path: '/health',
+        statusCode: '200',
+        authorized: 1,
+        remoteAddress: '127.0.0.1',
+        error: null,
+        internal: 'ignore-me'
+      },
+      {
+        timestamp: '2026-06-29T00:00:01.000Z',
+        method: 'POST',
+        path: '/mcp',
+        statusCode: 'oops'
+      },
+      'bad-log-entry'
+    ]
+  }), {
+    enabled: true,
+    host: '127.0.0.1',
+    port: 4317,
+    token: 'demo-token',
+    logs: [
+      {
+        id: 'log-1',
+        timestamp: '2026-06-29T00:00:00.000Z',
+        method: 'GET',
+        path: '/health',
+        statusCode: 200,
+        authorized: true,
+        remoteAddress: '127.0.0.1',
+        error: ''
+      },
+      {
+        id: '2026-06-29T00:00:01.000Z-POST-/mcp-oops',
+        timestamp: '2026-06-29T00:00:01.000Z',
+        method: 'POST',
+        path: '/mcp',
+        statusCode: 0,
+        authorized: false,
+        remoteAddress: '',
+        error: ''
+      }
+    ]
+  })
+})
+
 test('local HTTP view adapters provide stable defaults for missing fields', () => {
   assert.deepEqual(createLocalHttpConfigView(), {
     enabled: false,
