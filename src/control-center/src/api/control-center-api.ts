@@ -1361,7 +1361,6 @@ const demoApi: ControlCenterApi = {
       animations: cloneActionsConfig(demoState.actionsConfig)
     }
   },
-  onActivePetPackChanged: () => () => {},
   removePetPack: async () => ({ petPacks: clonePetPacks(demoState.petPacks) }),
   getAiConfig: async () => cloneAiConfig(demoState.aiConfig),
   saveAiConfig: async (config) => {
