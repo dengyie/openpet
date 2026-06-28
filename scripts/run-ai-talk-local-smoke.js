@@ -525,6 +525,12 @@ const runAiTalkLocalSmoke = async ({
       petSayReceived: false,
       bubbleStateVisible: false
     },
+    bubbleAcceptance: {
+      requestId: '',
+      providerLatencyMs: 0,
+      bubbleSegmentCount: 0,
+      replyChars: 0
+    },
     traces: [],
     logs: []
   }
@@ -542,7 +548,8 @@ const runAiTalkLocalSmoke = async ({
       }
     }
 
-    const result = await aiTalkService.chat({ message: content, entrypoint: 'control-center' })
+    const requestId = createBubbleRequestId()
+    const result = await aiTalkService.chat({ message: content, entrypoint: 'control-center', requestId })
     summary.chat = {
       ok: true,
       conversationId: sanitizeText(result.conversationId || '', 160),
@@ -552,6 +559,12 @@ const runAiTalkLocalSmoke = async ({
       messageCount: Array.isArray(result.messages) ? result.messages.length : 0,
       behaviorIntentIntent: sanitizeText(result.behaviorIntent?.intent || '', 80),
       behaviorActionId: sanitizeText(result.behaviorIntent?.actionId || '', 80)
+    }
+    summary.bubbleAcceptance = {
+      requestId: sanitizeText(result.requestId || requestId || '', 120),
+      providerLatencyMs: Number(result.providerLatencyMs) || 0,
+      bubbleSegmentCount: Array.isArray(result.bubbleSegments) ? result.bubbleSegments.length : 0,
+      replyChars: String(result.reply || '').length
     }
     summary.bubbleDispatch = bubbleDispatchHarness.dispatchAiReply(result)
 

@@ -129,7 +129,8 @@ test('runAiTalkLocalSmoke writes a redacted smoke summary using injected host se
       })
     }),
     createAiTalkServiceImpl: ({ appLogService }) => ({
-      chat: async () => {
+      chat: async ({ requestId }) => {
+        assert.match(requestId, /^chat-/)
         appLogService.record({
           scope: 'ai-talk',
           level: 'info',
@@ -138,12 +139,13 @@ test('runAiTalkLocalSmoke writes a redacted smoke summary using injected host se
           details: { replyChars: 4 }
         })
         return {
-          requestId: 'chat-req-1',
+          requestId,
           conversationId: 'control-center:legacy-cat:main',
           reply: '烟测完成',
           bubbleSegments: ['烟测完成'],
           messages: [{ role: 'user', content: 'hi' }, { role: 'assistant', content: '烟测完成' }],
-          behaviorIntent: { intent: 'comfort', actionId: 'idle' }
+          behaviorIntent: { intent: 'comfort', actionId: 'idle' },
+          providerLatencyMs: 820
         }
       },
       flushMemoryJobs: async () => {},
@@ -155,7 +157,7 @@ test('runAiTalkLocalSmoke writes a redacted smoke summary using injected host se
           success: true,
           provider: 'openai-compatible',
           model: 'gpt-5.5',
-          requestId: 'chat-req-1',
+          requestId: 'chat-from-trace',
           messagesCount: 3,
           memoryContextCount: 0,
           recentPetActivityCount: 0,
@@ -179,10 +181,13 @@ test('runAiTalkLocalSmoke writes a redacted smoke summary using injected host se
   assert.equal(result.bubbleDispatch.dialogueCount >= 1, true)
   assert.equal(result.bubbleDispatch.correlatedLogCount >= 2, true)
   assert.equal(result.bubbleDispatch.correlatedLogEvents.includes('pet-bubble-chat.message.displayed'), true)
+  assert.equal(result.bubbleAcceptance.providerLatencyMs, 820)
+  assert.match(result.bubbleAcceptance.requestId, /^chat-/)
+  assert.equal(result.bubbleAcceptance.bubbleSegmentCount, 1)
   assert.equal(result.traces.length, 1)
-  assert.equal(result.traces[0].requestId, 'chat-req-1')
-  assert.equal(result.traceRequestIds.includes('chat-req-1'), true)
-  assert.equal(result.bubbleDispatch.requestId, 'chat-req-1')
+  assert.equal(result.traces[0].requestId, 'chat-from-trace')
+  assert.equal(result.traceRequestIds.includes('chat-from-trace'), true)
+  assert.equal(result.bubbleDispatch.requestId, result.bubbleAcceptance.requestId)
   assert.equal(result.logs.some((entry) => entry.scope === 'ai-talk'), true)
   assert.equal(result.logs.some((entry) => entry.scope === 'pet-bubble-chat'), true)
   assert.equal(fs.existsSync(result.resultPath), true)
@@ -191,4 +196,5 @@ test('runAiTalkLocalSmoke writes a redacted smoke summary using injected host se
   assert.equal(persisted.bubbleDispatch.requestId, result.bubbleDispatch.requestId)
   assert.equal(persisted.bubbleDispatch.petSayReceived, true)
   assert.equal(persisted.bubbleDispatch.bubbleStateVisible, true)
+  assert.equal(persisted.bubbleAcceptance.providerLatencyMs, 820)
 })

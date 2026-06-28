@@ -847,6 +847,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
         details: {
           requestId,
           elapsedMs: Date.now() - startedAt,
+          providerLatencyMs: Number.isFinite(result.providerLatencyMs) ? result.providerLatencyMs : 0,
           conversationId: result.conversationId || '',
           replyChars: String(result.reply || '').length,
           messageCount: Array.isArray(result.messages) ? result.messages.length : 0,

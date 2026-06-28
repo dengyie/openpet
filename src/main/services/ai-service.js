@@ -561,7 +561,10 @@ const createAiService = ({
           hasBehaviorIntent: Boolean(result.behaviorIntent)
         }
       })
-      return result
+      return {
+        ...result,
+        elapsedMs: Date.now() - startedAt
+      }
     } catch (error) {
       recordLog({
         level: 'error',

@@ -1094,7 +1094,8 @@ const createAiTalkService = ({ aiService, aiTalkStore, petPackService, appLogSer
           bubbleSegments,
           behaviorIntent: result.behaviorIntent || undefined,
           messages: nextMessages,
-          requestId: diagnostics.requestId
+          requestId: diagnostics.requestId,
+          providerLatencyMs: Number.isFinite(result.elapsedMs) ? result.elapsedMs : 0
         }
       })
     } catch (error) {

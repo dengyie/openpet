@@ -578,7 +578,8 @@ test('pet bubble chat send reuses shared AI Talk conversation and updates popup 
           conversationId: 'control-center:legacy-cat:main',
           reply,
           bubbleSegments,
-          messages: conversationMessages
+          messages: conversationMessages,
+          providerLatencyMs: 820
         }
       }
     },
@@ -633,6 +634,8 @@ test('pet bubble chat send reuses shared AI Talk conversation and updates popup 
   const requestIds = logs.map((entry) => entry.details?.requestId).filter(Boolean)
   assert.equal(requestIds.length >= 4, true)
   assert.equal(new Set(requestIds).size, 1)
+  const completionLog = logs.find((entry) => entry.event === 'pet-bubble-chat.message.completed')
+  assert.equal(completionLog.details?.providerLatencyMs, 820)
 })
 
 test('pet chat send refreshes bubble chat items from the shared main conversation', async () => {
