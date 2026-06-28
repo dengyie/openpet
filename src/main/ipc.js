@@ -12,6 +12,9 @@ const { sanitizeDetails } = require('./services/app-log-service')
 const { choosePetContextMenuPoint, estimatePetContextMenuSize } = require('./pet-context-menu')
 const { showPetContextMenuWindow } = require('./pet-context-menu-window')
 const { createBubbleRequestId } = require('./pet-bubble-chat-window')
+const { registerPetRuntimeIpc } = require('./ipc/register-pet-runtime-ipc')
+const { registerSettingsIpc } = require('./ipc/register-settings-ipc')
+const { registerSystemIpc } = require('./ipc/register-system-ipc')
 const {
   collectCustomCursorAssetPaths,
   createPetRendererSettings,
@@ -503,195 +506,35 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     }
   })
 
-  // 渲染进程启动时请求动作列表（通过 preload 暴露的 getAnimations 调用）
-  ipcMainService.handle(IPC.PET_GET_ANIMATIONS, () => petService.getAnimations())
-
-  // 拖拽开始时读取窗口位置，用于计算鼠标偏移
-  ipcMainService.handle(IPC.PET_GET_BOUNDS, (event) => {
-    const win = browserWindowService.fromWebContents(event.sender)
-    return win.getBounds()
+  registerPetRuntimeIpc({
+    ipcMainService,
+    browserWindowService,
+    petService,
+    appService,
+    screenService,
+    getPetWindow,
+    applyPetViewport,
+    clampToWorkArea,
+    getMovementState,
+    createSettingsWindow,
+    petMovementPolicy,
+    petChatWindowService,
+    petBubbleChatWindowService,
+    choosePetContextMenuPoint,
+    estimatePetContextMenuSize,
+    showContextMenuWindow,
+    createPetRendererSettings,
+    recordAppLog,
+    requestAppQuit,
+    sanitizeDetails,
+    sendToPetWindow
   })
 
-  // 散步启动时查询窗口是否贴边，用于决定初始方向
-  ipcMainService.handle(IPC.PET_GET_MOVEMENT_STATE, (event) => {
-    const win = browserWindowService.fromWebContents(event.sender)
-    if (!win) return null
-    return getMovementState(win)
-  })
-
-  ipcMainService.on(IPC.PET_SET_VIEWPORT, (event, viewport) => {
-    const win = browserWindowService.fromWebContents(event.sender)
-    if (!win || !viewport) return
-    applyPetViewport(win, viewport)
-    petBubbleChatWindowService?.syncToPetWindow?.()
-  })
-
-  // 拖拽移动：直接设置窗口位置（主进程负责钳制到工作区）
-  ipcMainService.on(IPC.PET_SET_POSITION, (event, point) => {
-    const win = browserWindowService.fromWebContents(event.sender)
-    if (!win || !point) return
-    const next = petMovementPolicy
-      ? petMovementPolicy.clampDragPosition({
-          windowBounds: win.getBounds(),
-          requestedTopLeft: { x: point.x, y: point.y },
-          settings: petService.getSettings().petBehavior
-        })
-      : clampToWorkArea(win, point.x, point.y)
-    win.setPosition(next.x, next.y)
-    petBubbleChatWindowService?.syncToPetWindow?.()
-  })
-
-  ipcMainService.on(IPC.PET_DRAG_ENDED, (event) => {
-    if (!petMovementPolicy) return
-    const win = browserWindowService.fromWebContents(event.sender)
-    if (!win) return
-    const currentSettings = petService.getSettings()
-    const behavior = petMovementPolicy.normalizePetBehaviorSettings(currentSettings.petBehavior)
-    if (!behavior.home.enabled) return
-    const anchor = petMovementPolicy.createHomeAnchorFromWindow({ windowBounds: win.getBounds() })
-    const savedSettings = petService.saveSettings({
-      ...currentSettings,
-      petBehavior: {
-        ...behavior,
-        home: {
-          ...behavior.home,
-          anchor
-        }
-      }
-    })
-    sendToPetWindow(getPetWindow, IPC.SETTINGS_CHANGED, createPetRendererSettings(savedSettings))
-    petBubbleChatWindowService?.syncToPetWindow?.()
-  })
-
-  ipcMainService.on(IPC.PET_SET_MOUSE_PASSTHROUGH, (event, passthrough) => {
-    const win = browserWindowService.fromWebContents(event.sender)
-    if (!win || typeof win.setIgnoreMouseEvents !== 'function') return
-    if (passthrough) win.setIgnoreMouseEvents(true, { forward: true })
-    else win.setIgnoreMouseEvents(false)
-  })
-
-  ipcMainService.on(IPC.PET_REQUEST_FOCUS_FOR_CURSOR, (event) => {
-    const win = browserWindowService.fromWebContents(event.sender)
-    if (!win || typeof win.focus !== 'function') return
-    if (win.contextMenuWindow && !win.contextMenuWindow.isDestroyed?.()) return
-    if (typeof win.isFocused === 'function' && win.isFocused()) return
-    if (typeof win.isMinimized === 'function' && win.isMinimized() && typeof win.restore === 'function') win.restore()
-    win.moveTop?.()
-    appService.focus?.({ steal: true })
-    win.focus()
-    recordAppLog({
-      scope: 'pet-window',
-      level: 'debug',
-      actor: 'system',
-      event: 'pet.cursor.focus.requested',
-      message: 'Pet window focus requested for custom cursor'
-    })
-  })
-
-  ipcMainService.on(IPC.PET_RECORD_APP_LOG, (_event, entry = {}) => {
-    if (!entry || typeof entry !== 'object') return
-    recordAppLog({
-      scope: 'pet-renderer',
-      level: entry.level,
-      actor: entry.actor,
-      event: entry.event,
-      message: entry.message,
-      details: sanitizeDetails(entry.details)
-    })
-  })
-
-  // 散步移动：增量偏移窗口，返回是否撞到边界供渲染进程决定掉头
-  ipcMainService.handle(IPC.PET_MOVE_BY, (event, delta) => {
-    const win = browserWindowService.fromWebContents(event.sender)
-    if (!win || !delta) return null
-    const [x, y] = win.getPosition()
-    const next = petMovementPolicy
-      ? petMovementPolicy.clampMoveBy({
-          windowBounds: win.getBounds(),
-          delta,
-          settings: petService.getSettings().petBehavior
-        })
-      : clampToWorkArea(win, x + delta.x, y + delta.y)
-    win.setPosition(next.x, next.y)
-    petBubbleChatWindowService?.syncToPetWindow?.()
-    return next
-  })
-
-  // 右键菜单"退出"
-  ipcMainService.on(IPC.PET_QUIT, () => requestAppQuit('pet-renderer'))
-
-  ipcMainService.handle(IPC.PET_SHOW_CONTEXT_MENU, (event, point = {}) => {
-    const win = browserWindowService.fromWebContents(event.sender)
-    if (!win || win.isDestroyed()) return null
-    const actions = petService.getAnimations()?.actions || []
-    const bounds = win.getBounds()
-    const { workArea } = screenService.getDisplayMatching(bounds)
-    const menuSize = estimatePetContextMenuSize(actions, { extraItemCount: petChatWindowService ? 1 : 0 })
-    const settings = petService.getSettings?.() || {}
-    const requestedPoint = {
-      x: Number(point.x),
-      y: Number(point.y)
-    }
-    const placement = choosePetContextMenuPoint({
-      petBounds: bounds,
-      workArea,
-      menuSize,
-      menuPosition: settings.menuPosition,
-      preferredPoint: requestedPoint
-    })
-    const sendMenuCommand = (payload) => sendToPetWindow(() => win, IPC.PET_MENU_COMMAND, payload)
-    const template = [
-      ...actions.map((action) => ({
-        label: action.label || action.id,
-        click: () => sendMenuCommand({ command: 'action', actionId: action.id })
-      })),
-      { type: 'separator' },
-      { label: '散步', click: () => sendMenuCommand({ command: 'walk' }) },
-      ...(petChatWindowService ? [{ label: '打开扩展聊天面板', click: () => petChatWindowService.open?.() }] : []),
-      { label: '设置', click: () => createSettingsWindow(win) },
-      { type: 'separator' },
-      { label: '退出', click: () => requestAppQuit('pet-context-menu') }
-    ]
-    recordAppLog({
-      scope: 'pet-menu',
-      level: 'info',
-      actor: 'user',
-      event: 'pet.menu.popup',
-      message: 'Pet context menu popup requested',
-      details: {
-        petX: bounds.x,
-        petY: bounds.y,
-        petWidth: bounds.width,
-        petHeight: bounds.height,
-        workAreaX: workArea.x,
-        workAreaY: workArea.y,
-        workAreaWidth: workArea.width,
-        workAreaHeight: workArea.height,
-        menuWidth: menuSize.width,
-        menuHeight: menuSize.height,
-        requestedX: requestedPoint.x,
-        requestedY: requestedPoint.y,
-        placement: placement.placement,
-        menuX: placement.screenPoint.x,
-        menuY: placement.screenPoint.y,
-        popupX: placement.windowPoint.x,
-        popupY: placement.windowPoint.y
-      }
-    })
-    showContextMenuWindow({
-      BrowserWindow: browserWindowService,
-      parentWindow: win,
-      items: template,
-      point: placement.screenPoint,
-      size: menuSize,
-      onSelect: (item) => item?.click?.()
-    })
-    return placement
-  })
-
-  // 右键菜单"设置"：打开设置面板
-  ipcMainService.on(IPC.SETTINGS_OPEN, () => {
-    createSettingsWindow(getPetWindow())
+  registerSystemIpc({
+    ipcMainService,
+    getPetWindow,
+    createSettingsWindow,
+    requestAppQuit
   })
 
   ipcMainService.handle(IPC.PET_CHAT_GET_STATE, () => {
@@ -891,57 +734,19 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     }
   })
 
-  // 设置面板启动时读取当前设置
-  ipcMainService.handle(IPC.SETTINGS_GET, () => createPetRendererSettings(petService.getSettings()))
-
-  ipcMainService.handle(IPC.SETTINGS_IMPORT_CURSOR, async (event) => {
-    if (!cursorAssetService?.importCursor) throw new Error('Cursor asset import is not available')
-    recordAppLog({
-      scope: 'settings',
-      level: 'info',
-      actor: 'user',
-      event: 'settings.cursor.import.opened',
-      message: 'Cursor image picker opened'
-    })
-    try {
-      const selected = await showOpenDialogForEvent(event, {
-        title: '选择自定义鼠标指针图片',
-        properties: ['openFile'],
-        filters: [{ name: 'Cursor Images', extensions: ['png', 'webp'] }]
-      })
-      if (selected.canceled || !selected.filePaths[0]) {
-        recordAppLog({
-          scope: 'settings',
-          level: 'info',
-          actor: 'user',
-          event: 'settings.cursor.import.canceled',
-          message: 'Cursor image picker canceled'
-        })
-        return { canceled: true }
-      }
-      const cursor = await cursorAssetService.importCursor(selected.filePaths[0])
-      recordAppLog({
-        scope: 'settings',
-        level: 'info',
-        actor: 'system',
-        event: 'settings.cursor.import.completed',
-        message: 'Cursor image imported',
-        details: {
-          fileName: cursor.fileName,
-          enabled: cursor.enabled
-        }
-      })
-      return { canceled: false, cursor }
-    } catch (error) {
-      recordAppLog({
-        scope: 'settings',
-        level: 'error',
-        actor: 'system',
-        event: 'settings.cursor.import.failed',
-        message: error.message
-      })
-      throw error
-    }
+  registerSettingsIpc({
+    ipcMainService,
+    petService,
+    getPetWindow,
+    browserWindowService,
+    cursorAssetService,
+    petMovementPolicy,
+    showOpenDialogForEvent,
+    sendToPetWindow,
+    createPetRendererSettings,
+    collectCustomCursorAssetPaths,
+    mergePetSettingsViewIntoHostSettings,
+    recordAppLog
   })
 
   ipcMainService.handle(IPC.ACTIONS_GET, () => petService.getPreviewAnimations())
@@ -1185,45 +990,6 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
   ipcMainService.handle(IPC.PET_PACKS_REMOVE, (_event, payload) => {
     const result = petPackService.removePack(payload.packId)
     return createPetPackMutationResult(result, petPackService.listPacks())
-  })
-
-  // 设置面板点击"保存"：持久化并通知宠物窗口应用变更
-  ipcMainService.handle(IPC.SETTINGS_SAVE, (_event, settings) => {
-    const petWindow = getPetWindow()
-    const previousSettings = petService.getSettings()
-    const nextSettings = mergePetSettingsViewIntoHostSettings(petService.getSettings(), settings)
-    if (petMovementPolicy && petWindow && !petWindow.isDestroyed()) {
-      const behavior = petMovementPolicy.normalizePetBehaviorSettings(nextSettings.petBehavior)
-      const currentBehavior = petMovementPolicy.normalizePetBehaviorSettings(previousSettings.petBehavior)
-      const needsInitialHomeAnchor = behavior.home.enabled && !behavior.home.anchor
-      if (needsInitialHomeAnchor || (!currentBehavior.home.enabled && behavior.home.enabled)) {
-        behavior.home.anchor = petMovementPolicy.createHomeAnchorFromWindow({ windowBounds: petWindow.getBounds() })
-      }
-      nextSettings.petBehavior = behavior
-    }
-
-    const savedSettings = petService.saveSettings(nextSettings)
-    const previousAssetPaths = new Set(collectCustomCursorAssetPaths(previousSettings.customCursors))
-    const nextAssetPaths = new Set(collectCustomCursorAssetPaths(savedSettings.customCursors))
-    const orphanedAssetPaths = Array.from(previousAssetPaths).filter((assetPath) => !nextAssetPaths.has(assetPath))
-    if (orphanedAssetPaths.length > 0) cursorAssetService?.deleteAssets?.(orphanedAssetPaths)
-    const rendererSettings = createPetRendererSettings(savedSettings)
-    sendToPetWindow(getPetWindow, IPC.SETTINGS_CHANGED, rendererSettings)
-    recordAppLog({
-      scope: 'settings',
-      level: 'info',
-      actor: 'user',
-      event: 'settings.saved',
-      message: 'Settings saved',
-      details: {
-        grounded: Boolean(savedSettings.petBehavior?.grounded),
-        homeEnabled: Boolean(savedSettings.petBehavior?.home?.enabled),
-        homeRadius: savedSettings.petBehavior?.home?.radius || 'medium',
-        customCursorEnabled: Boolean(savedSettings.customCursor?.enabled),
-        customCursorFileName: savedSettings.customCursor?.fileName || ''
-      }
-    })
-    return rendererSettings
   })
 
   ipcMainService.handle(IPC.AI_GET_CONFIG, () => createAiConfigView(aiService.getConfig()))
@@ -1472,23 +1238,6 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     return createCatalogBlocklistResult(catalogService.listCatalog(), blocklist)
   })
 
-  // 设置面板拖动滑块：实时预览缩放（不持久化）
-  ipcMainService.on(IPC.SETTINGS_PREVIEW_SCALE, (_event, scale) => {
-    petService.previewSettings({ scale })
-    sendToPetWindow(getPetWindow, IPC.SETTINGS_CHANGED, { scale })
-  })
-
-  // 设置面板关闭：清理 settingsWindow 引用
-  ipcMainService.on(IPC.SETTINGS_CLOSE, (_event) => {
-    const win = browserWindowService.fromWebContents(_event.sender)
-    if (win) {
-      const petWindow = getPetWindow()
-      if (petWindow && petWindow.settingsWindow === win) {
-        petWindow.settingsWindow = null
-      }
-      win.close()
-    }
-  })
 }
 
 module.exports = { createPetRendererSettings, normalizeLocalHttpConfig, reloadAndSendAnimations, registerIpcHandlers, triggerAiSemanticAction, executeBehaviorDecision }

@@ -14,6 +14,16 @@ const { readLocalPluginManifests } = require('./plugin-discovery')
 const { createPluginProcessEnv, parsePluginProcessCommand } = require('./plugin-process-support')
 const { ACTIVE_PLUGIN_RUNTIME_STATUSES } = require('./plugin-runtime-status')
 const { createPluginRuntimeStopSupport } = require('./plugin-runtime-stop-support')
+const {
+  getPluginSignatureStatus: derivePluginSignatureStatus,
+  normalizeServiceHealthPolicy: normalizePluginServiceHealthPolicy,
+  normalizePluginConfig: normalizePluginServiceConfig,
+  getPluginStorageStats: computePluginStorageStats,
+  createRuntimeView: buildPluginRuntimeView,
+  createSetupRuntimeView: buildPluginSetupRuntimeView,
+  decorateEntriesWithRuntime: decoratePluginEntriesWithRuntime,
+  listPlugins: listPluginState
+} = require('./plugin-service-state')
 
 const SDK_REGISTERED_COMMANDS = Symbol('openpet.registeredCommands')
 const STORAGE_KEY_PATTERN = /^[a-zA-Z0-9_.:-]{1,128}$/
@@ -177,21 +187,6 @@ const readCommandResult = (stdoutText) => {
     if (parsed && typeof parsed === 'object') return parsed
   }
   return null
-}
-
-const getSignatureStatus = (manifest) => {
-  if (manifest.source === 'official') {
-    return { status: 'official', label: 'Official plugin', signer: 'openpet', algorithm: 'bundled' }
-  }
-  if (!manifest.signature) {
-    return { status: 'unsigned', label: 'Unsigned plugin', signer: '', algorithm: '' }
-  }
-  return {
-    status: 'present-unverified',
-    label: 'Signature metadata present, not verified',
-    signer: manifest.signature.signer || '',
-    algorithm: manifest.signature.algorithm || 'unknown'
-  }
 }
 
 const assertStorageValueSize = (value) => {
@@ -770,15 +765,11 @@ const createPluginService = ({ settingsService, petService, actionService, actio
 
   const getInstalledMap = () => settingsService.get().plugins?.installed || {}
 
-  const normalizeServiceHealthPolicy = (policy = {}) => {
-    const intervalMs = Number(policy.intervalMs)
-    return {
-      enabled: policy.enabled === true,
-      intervalMs: Number.isFinite(intervalMs)
-        ? Math.min(MAX_PLUGIN_SERVICE_HEALTH_INTERVAL_MS, Math.max(MIN_PLUGIN_SERVICE_HEALTH_INTERVAL_MS, intervalMs))
-        : DEFAULT_PLUGIN_SERVICE_HEALTH_INTERVAL_MS
-    }
-  }
+  const normalizeServiceHealthPolicy = (policy = {}) => normalizePluginServiceHealthPolicy(policy, {
+    minIntervalMs: MIN_PLUGIN_SERVICE_HEALTH_INTERVAL_MS,
+    maxIntervalMs: MAX_PLUGIN_SERVICE_HEALTH_INTERVAL_MS,
+    defaultIntervalMs: DEFAULT_PLUGIN_SERVICE_HEALTH_INTERVAL_MS
+  })
 
   const getServiceHealthPolicyMap = () => settingsService.get().plugins?.serviceHealthPolicies || {}
 
@@ -798,43 +789,14 @@ const createPluginService = ({ settingsService, petService, actionService, actio
     return status
   }
 
-  const getPluginSignatureStatus = (manifest) => {
-    if (manifest.source === 'official') return getSignatureStatus(manifest)
-    const installed = getInstalledMap()[manifest.id]
-    if (installed?.signatureStatus) {
-      if (installed.signatureStatus === 'hash-verified') {
-        return { status: 'hash-verified', label: 'Signature hash metadata verified', signer: installed.signer || '', algorithm: '' }
-      }
-      if (installed.signatureStatus === 'unsigned') {
-        return { status: 'unsigned', label: 'Unsigned plugin', signer: '', algorithm: '' }
-      }
-      return { status: installed.signatureStatus, label: 'Signature metadata present, not verified', signer: installed.signer || '', algorithm: '' }
-    }
-    return getSignatureStatus(manifest)
-  }
+  const getPluginSignatureStatus = (manifest) => derivePluginSignatureStatus(manifest, getInstalledMap()[manifest.id])
 
-  const getPluginStorageStats = (pluginId) => {
-    try {
-      const storage = getPluginStorage(pluginId)
-      return {
-        keyCount: Object.keys(storage).length,
-        byteSize: getJsonByteSize(storage),
-        valid: true
-      }
-    } catch (error) {
-      return {
-        keyCount: 0,
-        byteSize: 0,
-        valid: false,
-        error: error.message || 'Plugin storage is invalid'
-      }
-    }
-  }
+  const getPluginStorageStats = (pluginId) => computePluginStorageStats(pluginId, {
+    getPluginStorage,
+    getJsonByteSize
+  })
 
-  const normalizePluginConfig = (schema, config = {}) => {
-    if (!schema) return {}
-    return Object.fromEntries(schema.properties.map((field) => [field.key, coerceConfigValue(config[field.key], field)]))
-  }
+  const normalizePluginConfig = (schema, config = {}) => normalizePluginServiceConfig(schema, config, coerceConfigValue)
 
   const getPluginConfig = (pluginId, schema) => normalizePluginConfig(schema, getConfigMap()[pluginId] || {})
 
@@ -902,59 +864,33 @@ const createPluginService = ({ settingsService, petService, actionService, actio
     return listPlugins().find((candidate) => candidate.id === pluginId)
   }
 
-  const createRuntimeView = (runtime, serviceEntry = {}) => {
-    if (!runtime) {
-      return {
-        status: 'stopped',
-        health: createServiceHealthView({}, serviceEntry)
-      }
-    }
-    return {
-      status: runtime.status || 'stopped',
-      pid: runtime.pid || 0,
-      startedAt: runtime.startedAt || '',
-      stoppedAt: runtime.stoppedAt || '',
-      command: runtime.command || '',
-      cwd: runtime.cwd || '',
-      exitCode: Number.isFinite(runtime.exitCode) ? runtime.exitCode : null,
-      signal: runtime.signal || '',
-      error: runtime.error || '',
-      health: createServiceHealthView(runtime.health || {}, serviceEntry)
-    }
-  }
+  const createRuntimeView = (runtime, serviceEntry = {}) => buildPluginRuntimeView(
+    runtime,
+    serviceEntry,
+    createServiceHealthView
+  )
 
-  const createSetupRuntimeView = (runtime = {}) => ({
-    status: runtime.status || 'not-run',
-    lastRunAt: runtime.lastRunAt || '',
-    exitCode: Number.isFinite(runtime.exitCode) ? runtime.exitCode : null,
-    error: runtime.error || ''
+  const createSetupRuntimeView = (runtime = {}) => buildPluginSetupRuntimeView(runtime)
+
+  const decorateEntriesWithRuntime = (manifest) => decoratePluginEntriesWithRuntime({
+    manifest,
+    setupRuntimes,
+    serviceRuntimes,
+    createPluginServiceKey,
+    createSetupRuntimeView,
+    createRuntimeView,
+    getPluginServiceHealthPolicy
   })
 
-  const decorateEntriesWithRuntime = (manifest) => ({
-    ...manifest.entries,
-    setup: (manifest.entries?.setup || []).map((setupEntry) => ({
-      ...setupEntry,
-      runtime: createSetupRuntimeView(setupRuntimes.get(createPluginServiceKey(manifest.id, setupEntry.id)))
-    })),
-    services: (manifest.entries?.services || []).map((serviceEntry) => ({
-      ...serviceEntry,
-      healthPolicy: getPluginServiceHealthPolicy(manifest.id, serviceEntry.id),
-      runtime: createRuntimeView(serviceRuntimes.get(createPluginServiceKey(manifest.id, serviceEntry.id)), serviceEntry)
-    }))
+  const listPlugins = () => listPluginState({
+    plugins: getPlugins(),
+    enabledMap: getEnabledMap(),
+    decorateEntriesWithRuntime,
+    getPluginSignatureStatus,
+    getPluginPolicyStatus,
+    getPluginConfig,
+    getPluginStorageStats
   })
-
-  const listPlugins = () => getPlugins().map((plugin) => ({
-    ...plugin.manifest,
-    profile: plugin.manifest.profile || 'runtime',
-    entries: decorateEntriesWithRuntime(plugin.manifest),
-    enabled: Boolean(getEnabledMap()[plugin.manifest.id]),
-    runnable: typeof plugin.activate === 'function' || Boolean(plugin.mainPath) || Boolean(plugin.manifest.entries?.commands?.length),
-    signatureStatus: getPluginSignatureStatus(plugin.manifest),
-    blockStatus: getPluginPolicyStatus(plugin.manifest),
-    configSchema: plugin.configSchema,
-    config: getPluginConfig(plugin.manifest.id, plugin.configSchema),
-    storage: getPluginStorageStats(plugin.manifest.id)
-  }))
 
   const getServiceEntry = (plugin, serviceId) => {
     const serviceEntry = (plugin.manifest.entries?.services || []).find((entry) => entry.id === serviceId)
