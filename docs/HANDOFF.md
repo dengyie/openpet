@@ -67,6 +67,7 @@ npm run typecheck
 npm run check:syntax
 npm run check:docs-drift
 npm run run-ai-talk-local-smoke -- --message "你好，请用一句简短中文回复，用于 bubble chat 验收" --output-dir tmp/real-provider-chat-acceptance
+npm run create-ai-talk-local-smoke-archive -- --session-dir tmp/real-provider-chat-acceptance/<session>
 npm run smoke:ai-provider -- --base-url <url> --api-key-env OPENPET_AI_PROVIDER_API_KEY --chat-model <model> [--include-image] --image-model <model> --output <report.json>
 npm run smoke:creator-studio-provider -- --prompt "新增一个自定义动作：开心挥手，菜单手动触发，保持当前宠物风格。" [--user-data-dir <dir>] [--output-dir <dir>] [--width <n>] [--height <n>] [--timeout-ms <n>] [--skip-health-check]
 node --test tests/services/ai-service.test.js tests/services/action-service.test.js tests/main/control-center-adapters.test.js tests/main/ipc-plugin-install.test.js

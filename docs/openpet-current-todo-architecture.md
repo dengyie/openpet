@@ -19,7 +19,7 @@ This is not a promise to implement every item in one milestone. It is a map for 
 - P3: longer-term platform direction.
 - Manual-required: needs real provider accounts, signed artifacts, notarization, Windows machines, production credentials, or human review.
 
-Current P0 status: no known startup/build blocker in this TODO pass. Trigger proposal inbox closure is now landed; remaining work is P1 product polish or Manual-required release/provider evidence.
+Current P0 status: no known startup/build blocker in this TODO pass. Creator Studio review snapshots, AI provider verification evidence, and AI Talk Bubble Chat smoke evidence are now landed; remaining work is mostly bounded P1 drift prevention or Manual-required release evidence.
 
 ## Current Code Architecture
 
@@ -50,6 +50,7 @@ Current P0 status: no known startup/build blocker in this TODO pass. Trigger pro
 - Desktop chat window exists and routes through the same pet chat state/AI Talk flow instead of introducing a separate product brain.
 - Bubble chat is now the default lightweight pet dialogue surface, with the standalone desktop chat positioned as an extended panel for longer history and advanced interaction.
 - AI Talk also has a repeatable real-provider Bubble Chat smoke path through `npm run run-ai-talk-local-smoke -- --message <text>` plus the runbook `docs/superpowers/specs/2026-06-28-real-provider-chat-acceptance-runbook.md`; the smoke result captures `bubbleAcceptance.requestId`, `providerLatencyMs`, `bubbleDispatch` visibility evidence, and a `manualAcceptanceTemplate` placeholder for later human desktop validation.
+- AI Talk Bubble Chat smoke sessions can be copied into release evidence with `npm run create-ai-talk-local-smoke-archive -- --session-dir <session-dir>`; the archive helper refuses unsanitized local user-data paths, copies the redacted report/logs, writes hashes, and generates a README that keeps the telemetry-only claim boundary explicit.
 - A fresh archived AI Talk Bubble Chat smoke run now lives under `docs/release-evidence/ai-talk-local-smoke/2026-06-28T15-35-59-210Z/`: it confirms a real `gpt-5.5` reply reached Bubble Chat with correlated logs, `providerLatencyMs = 2141`, `bubbleDispatch.petSayReceived = true`, `bubbleDispatch.bubbleStateVisible = true`, and popup `ttlMs = 9835` before auto-hide.
 - Creator Studio already has `GenerationTask`, deterministic `conversation-wizard`, task answer/confirm commands, `openpet-prompt-builder`, host model bridge, run persistence, QA artifacts, dashboard-first wizard display, prompt snapshot, wizard-step rail, retry/recover for failed provider runs, sanitized developer-mode prompt provenance, workflow smoke guidance, and structured approved action/pet import command handoff that tells the dashboard which Control Center plugin command to run while preserving command-scoped bridge-token boundaries.
 - Creator Studio fixture single-action runs now produce reviewable action-frame artifacts, contact-sheet QA, repairable frame previews, and an `Import Approved Action` dashboard handoff, so the dashboard can validate the action-specific review/import path without a live provider.
@@ -306,17 +307,20 @@ P2/P3:
 
 Choose one of these when starting the next development milestone:
 
-1. Creator Studio Review Surface Polish
-   - User value: provider-backed action and full-pet runs stay easy to inspect, retry, and import as review states continue to grow.
-   - Main files: `examples/plugins/creator-studio/service/studio-service.js`, dashboard review surfaces, Creator Studio regression tests.
+1. TypeScript Adapter Boundary Migration
+   - User value: high-drift main-process payloads stay safer as Control Center, AI settings, Creator Studio review snapshots, and evidence tooling keep growing.
+   - Main files: `src/main/control-center-adapters.js`, `src/shared/openpet-contracts.ts`, `tests/main/control-center-adapters.test.js`, representative contract fixtures.
+   - Scope rule: migrate or type-check one adapter boundary at a time; do not rewrite the main process or change runtime behavior.
 
 2. Release Evidence Closure
    - User value: release readiness claims can be upgraded only when real evidence exists.
-   - Main files: release scripts/docs. This is mostly Manual-required.
+   - Main files: release scripts/docs.
+   - Boundary: mostly Manual-required until signed macOS artifacts, notarization/Gatekeeper output, real Windows execution, and human desktop picker evidence are available.
 
-3. AI Provider Verification Closure
-   - User value: provider preset wording stays aligned with real verified gateway behavior instead of drifting into guessed compatibility claims.
-   - Main files: AI provider docs, smoke evidence reports, and AI pane copy only when backed by verified behavior.
+3. Plugin Host Bridge Drift Guard
+   - User value: new plugin/Creator Studio host routes stay permission-gated, documented, and regression-covered instead of silently widening plugin authority.
+   - Main files: `src/main/services/plugin-service.js`, `src/main/plugins/`, `docs/plugin-authoring.md`, bridge route/permission regression tests.
+   - Scope rule: only start when adding or changing host bridge routes; otherwise keep this as a guardrail, not standalone polish.
 
 ## Verification Commands For Future Milestones
 

@@ -22,4 +22,5 @@ test('package scripts expose core and auxiliary test suites separately', () => {
   assert.match(scripts['test:tools'], /tests\/scripts\/\*\.test\.js/)
   assert.match(scripts['test:tools'], /tests\/release\/\*\.test\.js/)
   assert.equal(scripts['test:control-center'], 'node scripts/run-control-center-playwright.js')
+  assert.equal(scripts['create-ai-talk-local-smoke-archive'], 'node scripts/create-ai-talk-local-smoke-archive.js')
 })
