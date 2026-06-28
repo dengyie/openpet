@@ -1,4 +1,5 @@
 const PLUGIN_SERVICE_STOP_GRACE_PERIOD_MS = 1500
+const { createPluginRuntimeStopSupport } = require('./plugin-runtime-stop-support')
 
 const resolveStopGracePeriodMs = (runtime, fallbackMs = PLUGIN_SERVICE_STOP_GRACE_PERIOD_MS) => {
   const value = Number(runtime?.stopGracePeriodMs)
@@ -14,35 +15,12 @@ const createPluginServiceStopController = ({
   clearHealthSchedule = () => {},
   fallbackGracePeriodMs = PLUGIN_SERVICE_STOP_GRACE_PERIOD_MS
 } = {}) => {
-  const stopServiceProcess = (runtime, signal = 'SIGTERM') => {
-    const pid = Number(runtime?.pid) || 0
-    if (pid > 0) {
-      try {
-        killServiceProcess(-pid, signal)
-        return
-      } catch (_) {
-        try {
-          if (signalServiceProcessTree(pid, signal)) return
-        } catch (_) {}
-      }
-    }
-    runtime.child?.kill?.(signal)
-  }
-
-  const forceStopServiceProcess = (runtime, signal = 'SIGKILL') => {
-    const pid = Number(runtime?.pid) || 0
-    if (pid > 0) {
-      try {
-        killServiceProcess(-pid, signal)
-        return
-      } catch (_) {
-        try {
-          if (signalServiceProcessTree(pid, signal)) return
-        } catch (_) {}
-      }
-    }
-    runtime.child?.kill?.(signal)
-  }
+  const runtimeStopSupport = createPluginRuntimeStopSupport({
+    killProcess: killServiceProcess,
+    signalProcessTree: signalServiceProcessTree
+  })
+  const stopServiceProcess = runtimeStopSupport.stopDetachedProcess
+  const forceStopServiceProcess = runtimeStopSupport.forceStopDetachedProcess
 
   const clearStopTimerForRuntime = (runtime) => {
     if (!runtime?.stopTimer) return

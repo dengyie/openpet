@@ -13,6 +13,7 @@ const {
   createPluginProcessEnv,
   parsePluginProcessCommand
 } = require('./plugin-process-support')
+const { createPluginRuntimeStopSupport } = require('./plugin-runtime-stop-support')
 const { readLocalPluginManifests } = require('./plugin-discovery')
 const { createPluginCommandRuntimeManager } = require('./plugin-command-runtime-manager')
 const { createPluginCommandBridgeService } = require('./plugin-command-bridge-service')
@@ -453,54 +454,19 @@ const createPluginService = ({ settingsService, petService, actionService, actio
     }))
   }
 
-  const stopServiceProcess = (runtime, signal = 'SIGTERM') => {
-    const pid = Number(runtime?.pid) || 0
-    if (pid > 0) {
-      try {
-        killServiceProcess(-pid, signal)
-        return
-      } catch (_) {
-        try {
-          if (signalServiceProcessTree(pid, signal)) return
-        } catch (_) {}
-      }
-    }
-    runtime.child?.kill?.(signal)
-  }
-
-  const forceStopServiceProcess = (runtime, signal = 'SIGKILL') => {
-    const pid = Number(runtime?.pid) || 0
-    if (pid > 0) {
-      try {
-        killServiceProcess(-pid, signal)
-        return
-      } catch (_) {
-        try {
-          if (signalServiceProcessTree(pid, signal)) return
-        } catch (_) {}
-      }
-    }
-    runtime.child?.kill?.(signal)
-  }
-
-  const stopRuntimeProcessWithFallback = (runtime, signal = 'SIGTERM') => {
-    const pid = Number(runtime?.pid) || 0
-    if (pid > 0) {
-      try {
-        if (signalServiceProcessTree(pid, signal)) return
-      } catch (_) {}
-    }
-    runtime.child?.kill?.(signal)
-  }
+  const runtimeStopSupport = createPluginRuntimeStopSupport({
+    killProcess: killServiceProcess,
+    signalProcessTree: signalServiceProcessTree
+  })
 
   const commandRuntimeManager = createPluginCommandRuntimeManager({
     appendLog,
-    stopRuntimeProcess: stopRuntimeProcessWithFallback
+    stopRuntimeProcess: runtimeStopSupport.stopRuntimeProcessWithFallback
   })
 
   const setupRuntimeManager = createPluginSetupRuntimeManager({
     appendLog,
-    stopRuntimeProcess: stopRuntimeProcessWithFallback
+    stopRuntimeProcess: runtimeStopSupport.stopRuntimeProcessWithFallback
   })
 
   const healthController = createPluginServiceHealthController({
