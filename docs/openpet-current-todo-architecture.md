@@ -43,6 +43,7 @@ Current P0 status: no known startup/build blocker in this TODO pass. Trigger pro
 - Image generation settings use a host-owned OpenAI-compatible image Provider contract in Control Center. Legacy `fixture` / `cloud` / `local` vocabulary may still appear in Creator Studio run backends, but secrets and provider calls remain host-owned.
 - Control Center AI settings now include chat/image provider presets, an explicit OpenPet `127.0.0.1:8317/v1` gateway preset for `gpt-5.5` chat and `gpt-image-2` image generation, optional `/models` discovery with safe fallback wording, chat/image model compatibility hints, safe image generation usage/cost summaries when provider metadata is available, stale-result warnings when chat/image provider drafts are unsaved, and a model-settings-first AI pane where `聊天 Provider` / `图片 Provider` open by default while secondary memory/persona/behavior/chat sections stay collapsed until expanded.
 - AI Provider smoke evidence now has a repeatable CLI entry point: `npm run smoke:ai-provider -- --base-url <url> --api-key-env <env> --chat-model <model> [--include-image] --image-model <model> --output <report.json>`. It probes `/models`, tests chat completions, keeps image generation opt-in, and writes a sanitized report without raw API keys.
+- AI Provider smoke evidence for the user's OpenPet development gateway is archived under `docs/release-evidence/ai-provider-smoke/2026-06-28T11-08-10Z-openpet-gateway/`: `/models` exposed `gpt-5.5` and `gpt-image-2`, and `gpt-5.5` passed chat completion smoke; image generation was intentionally skipped.
 - AI Talk core exists: `AiTalkService`, `AiTalkStore`, pet-pack `persona`, local persona override, generated persona draft, pet-pack isolated main conversations, conservative legacy `settings.ai.conversations.control-center` migration, active pet-pack refresh signals for AI pane and desktop chat, redacted trace diagnostics export with pet-pack and conversation filters, trace-filter rebinding when the active pet-pack changes, background memory extraction, relevance-ranked memory injection with use tracking, compact bubble segmentation, current-pet action candidate tool hints, provider behavior `reason` / `displayMode` preservation through behavior decisions, memory profile UI, delete memory, and clear current pet-pack memories.
 - Desktop chat window exists and routes through the same pet chat state/AI Talk flow instead of introducing a separate product brain.
 - Bubble chat is now the default lightweight pet dialogue surface, with the standalone desktop chat positioned as an extended panel for longer history and advanced interaction.
@@ -73,11 +74,12 @@ Current state:
 - Chat/image provider health checks now perform optional `/models` discovery with safe fallback wording when probing is unavailable.
 - Chat/image model compatibility hints are visible in the AI pane, now keyed by provider family plus model where possible; image generation usage/cost summaries surface when safe provider metadata is returned, unsaved chat/image drafts now warn that `/models` and usage results still reflect saved config, and the AI pane foregrounds the chat/image Provider sections before collapsed memory/persona/behavior/chat sections while explicitly restating the host-owned trust and save/test boundaries.
 - `scripts/run-ai-provider-smoke.js` and `npm run smoke:ai-provider` provide a sanitized real-gateway smoke path for confirming chat model names, image model names, optional `/models` discovery, and opt-in image generation without exposing API keys in the output report.
+- The user's current OpenPet gateway has archived sanitized evidence confirming that `gpt-5.5` and `gpt-image-2` are discoverable model ids and that `gpt-5.5` can complete a chat smoke request.
 
 P1 work:
 
 - Keep the curated provider preset list small and verified instead of turning the AI pane into a large dynamic catalog.
-- Keep provider compatibility copy aligned with real verified gateway behavior, especially for transparent-background support details and provider-specific routing caveats.
+- Keep provider compatibility copy aligned with real verified gateway behavior for future provider presets and for any opt-in image-generation evidence.
 
 P2/P3:
 
@@ -88,7 +90,7 @@ P2/P3:
 Manual-required:
 
 - Real cloud/local provider smoke evidence for each supported provider preset.
-- Confirmation of exact image model names against the user's target gateway, because OpenAI-compatible gateways may alias names differently. Use `npm run smoke:ai-provider` as the evidence entry point, but do not treat a generated report as production asset-quality proof without human review.
+- Opt-in image generation smoke and human review of generated image quality before treating `gpt-image-2` output as production asset-quality evidence.
 
 ### 2. AI Talk And Pet Chat
 

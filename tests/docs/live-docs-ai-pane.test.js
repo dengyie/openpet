@@ -6,6 +6,7 @@ const path = require('node:path')
 const repoRoot = path.resolve(__dirname, '../..')
 
 const readText = (relativePath) => fs.readFileSync(path.join(repoRoot, relativePath), 'utf-8')
+const readJson = (relativePath) => JSON.parse(readText(relativePath))
 
 test('active TODO doc describes the current AI pane layout truthfully', () => {
   const todoArchitecture = readText('docs/openpet-current-todo-architecture.md')
@@ -43,4 +44,30 @@ test('active TODO doc describes the AI provider smoke evidence entrypoint truthf
     /without raw API keys|without exposing API keys/i,
     'openpet-current-todo-architecture.md should describe the sanitized API key boundary'
   )
+})
+
+test('active TODO doc links archived OpenPet gateway provider smoke evidence truthfully', () => {
+  const evidencePath = 'docs/release-evidence/ai-provider-smoke/2026-06-28T11-08-10Z-openpet-gateway/ai-provider-smoke-report.json'
+  const readmePath = 'docs/release-evidence/ai-provider-smoke/2026-06-28T11-08-10Z-openpet-gateway/README.md'
+  const todoArchitecture = readText('docs/openpet-current-todo-architecture.md')
+  const evidence = readJson(evidencePath)
+  const readme = readText(readmePath)
+  const checks = Object.fromEntries(evidence.checks.map((check) => [check.id, check]))
+
+  assert.match(
+    todoArchitecture,
+    /docs\/release-evidence\/ai-provider-smoke\/2026-06-28T11-08-10Z-openpet-gateway\//,
+    'openpet-current-todo-architecture.md should link the archived OpenPet gateway smoke evidence'
+  )
+  assert.equal(evidence.baseUrl, 'http://127.0.0.1:8317/v1')
+  assert.equal(evidence.chatModel, 'gpt-5.5')
+  assert.equal(evidence.imageModel, 'gpt-image-2')
+  assert.equal(checks.models.status, 'pass')
+  assert.equal(checks.models.containsChatModel, true)
+  assert.equal(checks.models.containsImageModel, true)
+  assert.equal(checks['chat-completions'].status, 'pass')
+  assert.equal(checks['image-generations'].status, 'skipped')
+  assert.equal(evidence.secret.apiKeyPreview, 'redacted')
+  assert.doesNotMatch(JSON.stringify(evidence), /sk-[A-Za-z0-9_-]{8,}/)
+  assert.match(readme, /does not prove image generation output quality/i)
 })
