@@ -25,6 +25,14 @@ const openDashboardPage = async (server) => {
   return { browser, page }
 }
 
+const waitForGeneratedOutput = async (page, outputLabel) => {
+  await page.waitForFunction((expectedStatus) => {
+    const statusText = document.querySelector('#status-line')?.textContent || ''
+    const approveButton = document.querySelector('#approve-button')
+    return statusText.includes(expectedStatus) && approveButton && !approveButton.disabled
+  }, `Generated ${outputLabel} output`)
+}
+
 const writeSolidPng = async (targetPath, { width, height, background }) => {
   fs.mkdirSync(path.dirname(targetPath), { recursive: true })
   await sharp({
@@ -535,7 +543,7 @@ test('creator studio dashboard drives a single-action fixture run to the host im
     assert.match(await page.locator('#status-line').textContent(), /Task confirmed/i)
 
     await page.locator('#generate-button').click()
-    await page.waitForFunction(() => !document.querySelector('#approve-button').disabled)
+    await waitForGeneratedOutput(page, 'action')
     assert.match(await page.locator('#action-review-panel').textContent(), /Review status/i)
     assert.match(await page.locator('#import-handoff-panel').textContent(), /Review the generated frames, repair any bad frame, then approve the action/i)
 
@@ -573,7 +581,7 @@ test('creator studio dashboard drives a full-pet fixture run to the host import 
     assert.match(await page.locator('#status-line').textContent(), /Task confirmed/i)
 
     await page.locator('#generate-button').click()
-    await page.waitForFunction(() => !document.querySelector('#approve-button').disabled)
+    await waitForGeneratedOutput(page, 'pet-pack')
     assert.match(await page.locator('#status-line').textContent(), /Generated pet-pack output/i)
     assert.match(await page.locator('#full-pet-review-panel').textContent(), /Atlas QA/i)
     assert.match(await page.locator('#import-handoff-panel').textContent(), /Review the generated pet-pack output and approve the run before host-owned pet import/i)
@@ -995,7 +1003,7 @@ test('creator studio dashboard lets users edit a drafted action task before conf
     await page.locator('#confirm-button').click()
     await page.waitForFunction(() => !document.querySelector('#generate-button').disabled)
     await page.locator('#generate-button').click()
-    await page.waitForFunction(() => !document.querySelector('#approve-button').disabled)
+    await waitForGeneratedOutput(page, 'action')
 
     const reviewText = await page.locator('#action-review-panel').textContent()
     assert.match(reviewText, /害羞打滚/i)
@@ -1034,7 +1042,7 @@ test('creator studio dashboard lets users edit a drafted full-pet task before co
     await page.locator('#confirm-button').click()
     await page.waitForFunction(() => !document.querySelector('#generate-button').disabled)
     await page.locator('#generate-button').click()
-    await page.waitForFunction(() => !document.querySelector('#approve-button').disabled)
+    await waitForGeneratedOutput(page, 'pet-pack')
 
     const reviewText = await page.locator('#full-pet-review-panel').textContent()
     assert.match(reviewText, /Atlas QA/i)
@@ -1136,7 +1144,7 @@ test('creator studio dashboard shows failed generation recovery and retries the 
 
     const runIdBeforeRetry = await page.locator('#run-select').inputValue()
     await page.locator('#generate-button').click()
-    await page.waitForFunction(() => !document.querySelector('#approve-button').disabled)
+    await waitForGeneratedOutput(page, 'action')
 
     const runIdAfterRetry = await page.locator('#run-select').inputValue()
     assert.equal(runIdAfterRetry, runIdBeforeRetry)
@@ -1246,7 +1254,7 @@ test('creator studio dashboard shows full-pet validation recovery and retries th
 
     const runIdBeforeRetry = await page.locator('#run-select').inputValue()
     await page.locator('#generate-button').click()
-    await page.waitForFunction(() => !document.querySelector('#approve-button').disabled)
+    await waitForGeneratedOutput(page, 'pet-pack')
 
     const runIdAfterRetry = await page.locator('#run-select').inputValue()
     assert.equal(runIdAfterRetry, runIdBeforeRetry)

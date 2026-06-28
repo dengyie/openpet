@@ -1500,10 +1500,10 @@
           state.fullPetReview = payload.fullPetReview || null
           if (!state.actionReview) await fetchRunDetail()
           renderRun()
-          await refreshLogs()
-          await refreshRunList()
           const outputLabel = isFullPetRun(payload.run) ? 'pet-pack' : 'action'
           setStatus(`Generated ${outputLabel} output in ${payload.outputDir || 'run workspace'}.`, 'ok')
+          await refreshLogs()
+          await refreshRunList()
         } catch (error) {
           if (error.payload?.run) {
             state.run = error.payload.run
