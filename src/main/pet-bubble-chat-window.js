@@ -5,9 +5,10 @@ const { IPC } = require('../shared/ipc-channels')
 const projectRoot = path.join(__dirname, '..', '..')
 const DEFAULT_BUBBLE_WIDTH = 340
 const DEFAULT_BUBBLE_HEIGHT = 260
+const MIN_BUBBLE_HEIGHT = 176
 const MIN_BUBBLE_WIDTH = 240
 const MAX_BUBBLE_WIDTH = 380
-const MAX_BUBBLE_HEIGHT = 280
+const MAX_BUBBLE_HEIGHT = 360
 const BUBBLE_GAP = 8
 const WORK_AREA_MARGIN = 8
 const MIN_TTL_MS = 6000
@@ -19,6 +20,7 @@ const MAX_NOTICE_BUFFER_ITEMS = 20
 const DEFAULT_HISTORY_TTL_MS = 8000
 const MIN_HISTORY_TTL_MS = 6000
 const MAX_HISTORY_TTL_MS = 30000
+const BUBBLE_ALWAYS_ON_TOP_LEVEL = 'pop-up-menu'
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max)
 
@@ -237,6 +239,20 @@ const createPendingBubbleItem = (pendingMessage = {}) => ({
   flowState: pendingMessage.status
 })
 
+const estimateBubbleHeight = (state = {}) => {
+  const items = Array.isArray(state.items) ? state.items : []
+  const estimatedItemsHeight = items.slice(-8).reduce((total, item) => {
+    const text = String(item?.text || '')
+    const estimatedLines = Math.max(1, Math.ceil(text.length / 14))
+    const baseHeight = item?.kind === 'notice' ? 30 : 36
+    return total + baseHeight + (estimatedLines - 1) * 18
+  }, 0)
+  const waitingExtra = state.awaitingReply || state.error ? 30 : 0
+  const composerHeight = 72
+  const verticalGaps = items.length > 0 ? Math.min(items.length, 8) * 8 : 8
+  return clamp(estimatedItemsHeight + waitingExtra + composerHeight + verticalGaps, MIN_BUBBLE_HEIGHT, MAX_BUBBLE_HEIGHT)
+}
+
 const buildBubbleChatItems = ({ conversationMessages = [], noticeItems = [] } = {}) => {
   const dialogueItems = createDialogueItemsFromMessages(conversationMessages)
   const notices = (Array.isArray(noticeItems) ? noticeItems : [])
@@ -247,6 +263,8 @@ const buildBubbleChatItems = ({ conversationMessages = [], noticeItems = [] } = 
 }
 
 const createManualOpenMessage = () => ({
+  kind: 'dialogue',
+  role: 'pet',
   text: MANUAL_OPEN_PROMPT,
   source: 'Pet',
   ttlMs: 0,
@@ -277,6 +295,7 @@ const createPetBubbleChatWindowManager = ({
     message: null,
     items: [],
     noticeItems: [],
+    transientDialogueItems: [],
     pendingUserMessages: [],
     unseenCount: 0,
     hitTestInteractive: false,
@@ -429,11 +448,12 @@ const createPetBubbleChatWindowManager = ({
 
   const calculateBounds = () => {
     const petBounds = getPetBounds()
+    const height = estimateBubbleHeight(state)
     return resolveBubbleBounds({
       petBounds,
       workArea: getWorkAreaForPetBounds(screen, petBounds),
       width: DEFAULT_BUBBLE_WIDTH,
-      height: DEFAULT_BUBBLE_HEIGHT
+      height
     })
   }
 
@@ -476,6 +496,7 @@ const createPetBubbleChatWindowManager = ({
       }
     })
     bubbleWindow.setVisibleOnAllWorkspaces?.(true, { visibleOnFullScreen: true })
+    bubbleWindow.setAlwaysOnTop?.(true, BUBBLE_ALWAYS_ON_TOP_LEVEL)
     applyHitTestMode(false)
     bubbleWindow.on?.('close', (event) => {
       if (allowClose) return
@@ -534,8 +555,8 @@ const createPetBubbleChatWindowManager = ({
     if (focus && typeof win.show === 'function') win.show()
     else if (typeof win.showInactive === 'function') win.showInactive()
     else win.show?.()
+    win.moveTop?.()
     if (focus) {
-      win.moveTop?.()
       win.focus?.()
       setHitTestMode({ interactive: true, source: 'manual-open-focus' })
     } else {
@@ -550,16 +571,34 @@ const createPetBubbleChatWindowManager = ({
     return getState()
   }
 
-  const rebuildItems = ({ conversationMessages = [], noticeItems = state.noticeItems, reason = 'manual' } = {}) => {
+  const rebuildItems = ({
+    conversationMessages = [],
+    noticeItems = state.noticeItems,
+    transientDialogueItems = state.transientDialogueItems,
+    reason = 'manual'
+  } = {}) => {
     lastConversationMessages = Array.isArray(conversationMessages) ? [...conversationMessages] : []
     const normalizedNotices = (Array.isArray(noticeItems) ? noticeItems : [])
       .map((item) => normalizeBubbleChatItem({ ...item, kind: 'notice', role: item.role || 'system' }))
       .filter(Boolean)
       .slice(-MAX_NOTICE_BUFFER_ITEMS)
-    const dialogueItems = createDialogueItemsFromMessages(lastConversationMessages)
+    const normalizedTransientDialogues = (Array.isArray(transientDialogueItems) ? transientDialogueItems : [])
+      .map((item) => normalizeBubbleChatItem({ ...item, kind: 'dialogue', role: item.role || 'pet' }))
+      .filter(Boolean)
+      .slice(-MAX_DIALOGUE_ITEMS)
+    const dialogueItems = sortBubbleItems([
+      ...createDialogueItemsFromMessages(lastConversationMessages),
+      ...normalizedTransientDialogues
+    ])
     markDialogueVisibility(dialogueItems)
     pruneDialogueVisibility(dialogueItems)
     const visibleDialogueItems = dialogueItems
+      .filter((item) => {
+        const visibility = dialogueVisibility.get(getDialogueVisibilityKey(item))
+        return !visibility?.hidden
+      })
+      .slice(-MAX_DIALOGUE_ITEMS)
+    const nextTransientDialogues = normalizedTransientDialogues
       .filter((item) => {
         const visibility = dialogueVisibility.get(getDialogueVisibilityKey(item))
         return !visibility?.hidden
@@ -569,12 +608,22 @@ const createPetBubbleChatWindowManager = ({
       .map((item) => normalizePendingUserMessage(item))
       .filter(Boolean)
       .map((item) => createPendingBubbleItem(item))
+    const dialoguePresent = visibleDialogueItems.length > 0 || pendingItems.length > 0
+    const displayNotices = normalizedNotices
+      .filter((item) => !(dialoguePresent && item.source === 'pet-renderer'))
+      .slice(-MAX_NOTICE_ITEMS)
     const items = sortBubbleItems([
       ...visibleDialogueItems,
       ...pendingItems,
-      ...normalizedNotices.slice(-MAX_NOTICE_ITEMS)
+      ...displayNotices
     ])
-    patchState({ items, noticeItems: normalizedNotices, message: getLatestBubbleItem(items, state.message) })
+    patchState({
+      items,
+      noticeItems: normalizedNotices,
+      transientDialogueItems: nextTransientDialogues,
+      message: getLatestBubbleItem(items, state.message)
+    })
+    syncToPetWindow()
     scheduleHistoryPrune()
     recordLog({
       level: 'debug',
@@ -600,11 +649,13 @@ const createPetBubbleChatWindowManager = ({
     if (!item) return getState()
     if (item.kind === 'notice') {
       const noticeItems = [...state.noticeItems, item].slice(-MAX_NOTICE_BUFFER_ITEMS)
-      const items = sortBubbleItems([
-        ...getCurrentDialogueItems(state.items),
-        ...noticeItems.slice(-MAX_NOTICE_ITEMS)
-      ])
-      patchState({ message: { ...item, ttlMs: item.ttlMs }, items, noticeItems })
+      patchState({ message: { ...item, ttlMs: item.ttlMs }, noticeItems })
+      const nextState = rebuildItems({
+        conversationMessages: lastConversationMessages,
+        noticeItems,
+        transientDialogueItems: state.transientDialogueItems,
+        reason: 'notice-buffered'
+      })
       recordLog({
         level: 'debug',
         event: 'pet-bubble-chat.notice.buffered',
@@ -617,10 +668,27 @@ const createPetBubbleChatWindowManager = ({
           requestId: item.requestId || ''
         }
       })
-      return getState()
+      return nextState
+    }
+    if (item.source !== 'ai') {
+      const transientDialogueItems = [
+        ...state.transientDialogueItems.filter((existing) => existing.id !== item.id),
+        item
+      ].slice(-MAX_DIALOGUE_ITEMS)
+      patchState({
+        transientDialogueItems,
+        message: { ...item, ttlMs: item.ttlMs }
+      })
+      return rebuildItems({
+        conversationMessages: lastConversationMessages,
+        noticeItems: state.noticeItems,
+        transientDialogueItems,
+        reason: 'transient-dialogue'
+      })
     }
     const items = sortBubbleItems([...state.items.filter((existing) => existing.kind !== 'dialogue' || existing.id !== item.id), item]).slice(-MAX_DIALOGUE_ITEMS - MAX_NOTICE_ITEMS)
     patchState({ message: { ...item, ttlMs: item.ttlMs }, items })
+    syncToPetWindow()
     return getState()
   }
 
@@ -645,7 +713,7 @@ const createPetBubbleChatWindowManager = ({
     }
     const message = normalizeMessagePayload(payload)
     if (!message) return getState()
-    appendNoticeOrDialogue(message)
+    appendNoticeOrDialogue({ ...payload, ...message })
     const win = ensureWindow()
     syncToPetWindow()
     patchState({
@@ -657,6 +725,8 @@ const createPetBubbleChatWindowManager = ({
       visible: true
     })
     win.showInactive?.()
+    win.moveTop?.()
+    syncToPetWindow()
     recordLog({
       level: 'info',
       event: 'pet-bubble-chat.message.displayed',
@@ -675,6 +745,7 @@ const createPetBubbleChatWindowManager = ({
 
   const setPinned = (pinned, { source = 'pet-bubble-chat-renderer' } = {}) => {
     patchState({ pinned: Boolean(pinned) })
+    syncToPetWindow()
     recordLog({
       level: 'info',
       event: Boolean(pinned) ? 'pet-bubble-chat.interaction.pinned' : 'pet-bubble-chat.interaction.unpinned',
@@ -688,6 +759,7 @@ const createPetBubbleChatWindowManager = ({
 
   const setInteracting = (interacting, { source = 'pet-bubble-chat-renderer' } = {}) => {
     patchState({ interacting: Boolean(interacting) })
+    syncToPetWindow()
     recordLog({
       level: 'debug',
       event: 'pet-bubble-chat.interaction.changed',
@@ -726,6 +798,7 @@ const createPetBubbleChatWindowManager = ({
       error: String(error || '').slice(0, 240),
       interacting: Boolean(sending) || Boolean(error) || state.interacting
     })
+    syncToPetWindow()
     scheduleAutoHide()
     scheduleHistoryPrune()
     return getState()

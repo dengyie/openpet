@@ -124,15 +124,18 @@ test('focus timer example plugin runs through the local plugin service sdk', asy
   assert.deepEqual(petEvents, [
     {
       text: 'Deep work started for 45 minutes. No distractions.',
-      source: `plugin:${EXAMPLE_PLUGIN_ID}`
+      source: `plugin:${EXAMPLE_PLUGIN_ID}`,
+      sourceSurface: 'plugin-runtime'
     },
     {
       text: 'Deep work started for 15 minutes. No distractions.',
-      source: `plugin:${EXAMPLE_PLUGIN_ID}`
+      source: `plugin:${EXAMPLE_PLUGIN_ID}`,
+      sourceSurface: 'plugin-runtime'
     },
     {
       text: 'Focus timer sessions reset.',
-      source: `plugin:${EXAMPLE_PLUGIN_ID}`
+      source: `plugin:${EXAMPLE_PLUGIN_ID}`,
+      sourceSurface: 'plugin-runtime'
     }
   ])
   assert.deepEqual(settingsService.get().plugins.storage[EXAMPLE_PLUGIN_ID], {

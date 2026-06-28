@@ -1,5 +1,6 @@
 const statusEl = document.getElementById('window-status')
 const bubbleChatButton = document.getElementById('bubble-chat-button')
+const bubblePinButton = document.getElementById('bubble-pin-button')
 const topmostButton = document.getElementById('topmost-button')
 const settingsButton = document.getElementById('settings-button')
 const closeButton = document.getElementById('close-button')
@@ -63,6 +64,7 @@ const renderWindowState = (state = {}) => {
     messages: Array.isArray(state.messages) ? state.messages : currentState.messages
   }
   const alwaysOnTop = currentState.alwaysOnTop !== false
+  const bubblePinned = currentState.bubbleChat?.pinned === true
   const petName = currentState.petPack?.displayName || currentState.petPack?.id || '当前宠物'
   const aiReady = currentState.ai?.ready === true
   statusEl.textContent = aiReady
@@ -70,6 +72,8 @@ const renderWindowState = (state = {}) => {
     : (currentState.ai?.reason || (alwaysOnTop ? '已置顶' : '未置顶'))
   topmostButton.textContent = alwaysOnTop ? '取消置顶' : '置顶'
   topmostButton.classList.toggle('active', alwaysOnTop)
+  bubblePinButton.textContent = bubblePinned ? '取消定格' : '定格轻气泡'
+  bubblePinButton.classList.toggle('active', bubblePinned)
   chatInput.disabled = sending || !aiReady
   sendButton.disabled = sending || !aiReady || !chatInput.value.trim()
   chatInput.placeholder = aiReady
@@ -98,6 +102,18 @@ bubbleChatButton.addEventListener('click', async () => {
     window.petChatAPI.hide()
   } catch (_) {
     // Keep the full chat window available when the bubble handoff fails.
+  }
+})
+
+bubblePinButton.addEventListener('click', async () => {
+  try {
+    if (currentState.bubbleChat?.visible !== true) {
+      await window.petChatAPI.openBubbleChat?.()
+    }
+    const pinned = currentState.bubbleChat?.pinned === true
+    renderWindowState(await window.petChatAPI.setBubblePinned?.(!pinned))
+  } catch (_) {
+    // Keep the full chat window available when the bubble pin toggle fails.
   }
 })
 

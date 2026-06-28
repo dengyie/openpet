@@ -66,7 +66,8 @@ const createHarness = async () => {
     openBubbleChat: [],
     openSettings: [],
     sendMessage: [],
-    setAlwaysOnTop: []
+    setAlwaysOnTop: [],
+    setBubblePinned: []
   }
   let failOpenBubbleChat = false
   let latestState = {
@@ -74,6 +75,7 @@ const createHarness = async () => {
     ai: { ready: true, model: 'gpt-5.5' },
     petPack: { id: 'legacy-cat', displayName: 'Legacy Cat' },
     bubble: { text: '你好', source: 'ai', ttlMs: 6000, updatedAt: '2026-06-27T00:00:00.000Z' },
+    bubbleChat: { visible: true, hasWindow: true, pinned: false, placement: 'above' },
     messages: [{ role: 'assistant', content: '喵，我在。' }]
   }
   const documentListeners = {}
@@ -82,6 +84,7 @@ const createHarness = async () => {
   const elements = {
     'window-status': createElement('window-status'),
     'bubble-chat-button': createElement('bubble-chat-button'),
+    'bubble-pin-button': createElement('bubble-pin-button'),
     'topmost-button': createElement('topmost-button'),
     'settings-button': createElement('settings-button'),
     'close-button': createElement('close-button'),
@@ -107,6 +110,18 @@ const createHarness = async () => {
         setAlwaysOnTop: async (alwaysOnTop) => {
           apiCalls.setAlwaysOnTop.push(alwaysOnTop)
           latestState = { ...latestState, alwaysOnTop }
+          return latestState
+        },
+        setBubblePinned: async (pinned) => {
+          apiCalls.setBubblePinned.push(pinned)
+          latestState = {
+            ...latestState,
+            bubbleChat: {
+              ...(latestState.bubbleChat || {}),
+              visible: true,
+              pinned
+            }
+          }
           return latestState
         },
         openBubbleChat: async () => {
@@ -198,6 +213,16 @@ test('pet chat renderer still supports composer send flow after bubble handoff a
   assert.deepEqual(apiCalls.sendMessage, ['你好呀'])
   assert.equal(input.value, '')
   assert.equal(elements.messages.innerHTML.includes('收到'), true)
+})
+
+test('pet chat renderer can pin the lightweight bubble surface from the full chat window', async () => {
+  const harness = await createHarness()
+  const { apiCalls, elements } = harness
+
+  await dispatch(elements['bubble-pin-button'], 'click')
+
+  assert.deepEqual(apiCalls.setBubblePinned, [true])
+  assert.equal(elements['bubble-pin-button'].textContent, '取消定格')
 })
 
 test('pet chat renderer Escape still hides the full window', async () => {

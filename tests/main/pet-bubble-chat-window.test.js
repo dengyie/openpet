@@ -32,6 +32,7 @@ const createFakeBrowserWindow = () => {
       this.webContents = {
         send: (channel, payload) => this.sent.push({ channel, payload })
       }
+      this.setAlwaysOnTopCalls = []
       instances.push(this)
     }
 
@@ -43,6 +44,11 @@ const createFakeBrowserWindow = () => {
     showInactive() { this.visible = true }
     focus() { this.focused = true }
     moveTop() { this.movedTop = true }
+    setAlwaysOnTop(flag, level) {
+      this.alwaysOnTop = flag
+      this.alwaysOnTopLevel = level
+      this.setAlwaysOnTopCalls.push({ flag, level })
+    }
     hide() { this.visible = false }
     loadFile() { return Promise.resolve() }
     setIgnoreMouseEvents(ignore, options) {
@@ -204,9 +210,13 @@ test('pet bubble chat manager opens manually with a chat prompt even when auto p
   assert.equal(instances.length, 1)
   assert.equal(instances[0].visible, true)
   assert.equal(instances[0].focused, true)
+  assert.deepEqual(instances[0].setAlwaysOnTopCalls.at(-1), { flag: true, level: 'pop-up-menu' })
+  assert.ok(instances[0].bounds.height < 260)
   assert.equal(state.visible, true)
   assert.equal(state.interacting, true)
   assert.equal(state.message.text, '想聊点什么？')
+  assert.equal(state.message.kind, 'dialogue')
+  assert.equal(state.message.role, 'pet')
   assert.equal(logs.some((entry) => entry.event === 'pet-bubble-chat.window.open-requested'), true)
 })
 
@@ -245,8 +255,8 @@ test('pet bubble chat manager shows latest message and auto hides when idle', ()
 
     assert.equal(instances.length, 1)
     assert.equal(instances[0].visible, true)
-    assert.equal(instances[0].options.height, 260)
-    assert.equal(instances[0].bounds.height, 260)
+    assert.ok(instances[0].options.height < 260)
+    assert.ok(instances[0].bounds.height < 260)
     assert.equal(state.message.text, 'hello there')
     assert.deepEqual(state.items.map((item) => [item.kind, item.role, item.text]), [['notice', 'system', 'hello there']])
     assert.equal(state.noticeItems.length, 1)
@@ -427,7 +437,7 @@ test('pet bubble chat manager keeps only the latest dialogue slice while preserv
   )
   assert.deepEqual(
     state.items.filter((item) => item.kind === 'notice').map((item) => item.text),
-    ['提示1', '提示2', '提示3']
+    ['提示1', '提示2']
   )
   assert.equal(state.noticeItems.length, 3)
 })
@@ -457,6 +467,38 @@ test('pet bubble chat showMessage compatibility path treats ai source as pet dia
     ['dialogue', 'pet', 'ai', 'AI 正式回复']
   ])
   assert.equal(state.noticeItems.length, 0)
+})
+
+test('pet bubble chat preserves non-ai pet say dialogue in the left-side bubble stream', () => {
+  const { FakeBrowserWindow } = createFakeBrowserWindow()
+  const { createPetBubbleChatWindowManager } = loadModuleWithElectron({
+    BrowserWindow: FakeBrowserWindow,
+    app: { on: () => {} },
+    screen: {
+      getDisplayMatching: () => ({ workArea: { x: 0, y: 0, width: 900, height: 700 } })
+    }
+  })
+  const manager = createPetBubbleChatWindowManager({
+    BrowserWindow: FakeBrowserWindow,
+    screen: { getDisplayMatching: () => ({ workArea: { x: 0, y: 0, width: 900, height: 700 } }) },
+    settingsService: { get: () => ({ petBubbleChat: { enabled: true, autoPopup: true, autoHide: true } }) },
+    getPetWindow: () => ({
+      isDestroyed: () => false,
+      getBounds: () => ({ x: 300, y: 300, width: 120, height: 120 })
+    })
+  })
+
+  const state = manager.showMessage({
+    text: '我先自己说一句',
+    source: 'pet:event',
+    kind: 'dialogue',
+    role: 'pet',
+    createdAt: '2026-06-24T00:00:02.000Z'
+  })
+
+  assert.deepEqual(state.items.map((item) => [item.kind, item.role, item.text]), [
+    ['dialogue', 'pet', '我先自己说一句']
+  ])
 })
 
 test('pet bubble chat manager reuses a single window and latest message replaces prior auto-hide timer', () => {

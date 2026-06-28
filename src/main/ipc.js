@@ -247,7 +247,9 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
       bubble: lastPetBubble,
       bubbleChat: {
         visible: Boolean(bubbleChatState.visible),
-        hasWindow: Boolean(bubbleChatState.hasWindow)
+        hasWindow: Boolean(bubbleChatState.hasWindow),
+        pinned: Boolean(bubbleChatState.pinned),
+        placement: typeof bubbleChatState.placement === 'string' ? bubbleChatState.placement : ''
       },
       messages: sanitizeChatMessages(messages)
     }
@@ -521,9 +523,11 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     })
     petBubbleChatWindowService?.showMessage?.({
       ...payload,
+      kind: 'dialogue',
+      role: 'pet',
       petPackId: getActivePetPackId()
     })
-    refreshBubbleChatItems({ reason: 'pet-say' })
+    if (payload?.source === 'ai') refreshBubbleChatItems({ reason: 'pet-say' })
   })
   petService.onAction?.((payload) => {
     sendToPetWindow(getPetWindow, IPC.PET_PLAY_ACTION, payload)

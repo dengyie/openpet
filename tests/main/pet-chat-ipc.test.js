@@ -115,7 +115,7 @@ test('pet chat state exposes provider readiness and current pet-pack main conver
       getState: () => ({ alwaysOnTop: true, visible: true, hasWindow: true })
     },
     petBubbleChatWindowService: {
-      getState: () => ({ visible: true, hasWindow: true })
+      getState: () => ({ visible: true, hasWindow: true, pinned: false, placement: 'above' })
     }
   })
 
@@ -127,7 +127,7 @@ test('pet chat state exposes provider readiness and current pet-pack main conver
   assert.equal(state.ai.baseUrl, 'http://127.0.0.1:8317/v1')
   assert.deepEqual(state.petPack, { id: 'legacy-cat', displayName: 'Legacy Cat' })
   assert.deepEqual(state.bubble, { text: '', source: '', ttlMs: 0, updatedAt: '' })
-  assert.deepEqual(state.bubbleChat, { visible: true, hasWindow: true })
+  assert.deepEqual(state.bubbleChat, { visible: true, hasWindow: true, pinned: false, placement: 'above' })
   assert.deepEqual(state.messages, [{ id: 'm1', role: 'assistant', content: 'hello', createdAt: '2026-06-24T00:00:00.000Z' }])
   assert.deepEqual(conversationRequests, [''])
 })
@@ -339,6 +339,8 @@ test('pet chat state tracks latest pet bubble from say events', async () => {
     text: '刚刚打了个招呼',
     ttlMs: 1800,
     source: 'pet:event',
+    kind: 'dialogue',
+    role: 'pet',
     petPackId: 'legacy-cat'
   }])
   assert.deepEqual(utterances, [{
@@ -347,7 +349,7 @@ test('pet chat state tracks latest pet bubble from say events', async () => {
     source: 'pet:event',
     ttlMs: 1800
   }])
-  assert.deepEqual(refreshCalls, [{ conversationMessages, reason: 'pet-say' }])
+  assert.deepEqual(refreshCalls, [])
 })
 
 test('pet chat does not record ai say events as pet utterances while still showing bubble chat', async () => {
@@ -384,6 +386,8 @@ test('pet chat does not record ai say events as pet utterances while still showi
     text: '正式回复',
     ttlMs: 2000,
     source: 'ai',
+    kind: 'dialogue',
+    role: 'pet',
     petPackId: 'legacy-cat'
   }])
   const state = await ipcMain.handlers.get(IPC.PET_CHAT_GET_STATE)()

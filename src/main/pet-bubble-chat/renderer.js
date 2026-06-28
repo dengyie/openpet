@@ -1,11 +1,7 @@
 const shell = document.getElementById('bubble-shell')
-const sourceLabel = document.getElementById('source-label')
 const bubbleStream = document.getElementById('bubble-stream')
 const bubbleItems = document.getElementById('bubble-items')
 const newMessageButton = document.getElementById('new-message-button')
-const openFullChatButton = document.getElementById('open-full-chat-button')
-const pinButton = document.getElementById('pin-button')
-const closeButton = document.getElementById('close-button')
 const lastUserMessage = document.getElementById('last-user-message')
 const errorMessage = document.getElementById('error-message')
 const inputForm = document.getElementById('mini-input-form')
@@ -53,7 +49,7 @@ const getRenderableItems = (state = {}) => {
 }
 
 const getItemKey = (item = {}, index = 0) => (
-  item.id || `${item.kind || ''}:${item.role || ''}:${item.source || ''}:${item.createdAt || ''}:${item.text || ''}:${index}`
+  item.id || `${item.kind || ''}:${item.role || ''}:${item.source || ''}:${item.createdAt || ''}:${item.text || ''}:${item.status || ''}:${item.flowState || ''}:${index}`
 )
 
 const getSourceLabel = (item = {}) => {
@@ -66,6 +62,7 @@ const getSourceLabel = (item = {}) => {
 
 const shouldHoldScroll = () => Boolean(
   currentState.pinned ||
+  currentState.interacting ||
   hovering ||
   document.activeElement === miniInput ||
   miniInput.value.trim() ||
@@ -74,9 +71,52 @@ const shouldHoldScroll = () => Boolean(
   currentState.error
 )
 
+const canScrollHistory = () => {
+  const itemCount = Array.isArray(currentState.items) ? currentState.items.length : 0
+  return itemCount > 1
+}
+
+const shouldAcceptHitTest = () => {
+  const hasDraft = Boolean(miniInput.value.trim())
+  const focused = document.activeElement === miniInput
+  return hovering ||
+    focused ||
+    hasDraft ||
+    hasTextSelection() ||
+    Boolean(currentState.sending) ||
+    Boolean(currentState.error) ||
+    canScrollHistory()
+}
+
 const scrollToLatest = () => {
   if (!bubbleStream) return
   bubbleStream.scrollTop = bubbleStream.scrollHeight || 0
+}
+
+const scrollBubbleStreamBy = (deltaY = 0) => {
+  if (!bubbleStream || !Number.isFinite(deltaY) || deltaY === 0) return
+  bubbleStream.scrollTop = Math.max(0, (bubbleStream.scrollTop || 0) + deltaY)
+}
+
+const isComposerTarget = (target) => {
+  if (!target || typeof target.closest !== 'function') return false
+  return Boolean(target.closest('#mini-input-form'))
+}
+
+const handleBubbleWheel = (event) => {
+  event.preventDefault?.()
+  event.stopPropagation?.()
+  expanded = true
+  const wasInteracting = Boolean(currentState.interacting)
+  const hadHitTest = Boolean(currentState.hitTestInteractive)
+  currentState = {
+    ...currentState,
+    interacting: true,
+    hitTestInteractive: true
+  }
+  if (!wasInteracting) setInteracting(true)
+  if (!hadHitTest) setHitTestMode(true, 'renderer-bubble-wheel')
+  scrollBubbleStreamBy(event.deltaY)
 }
 
 const updateUnseenButton = () => {
@@ -140,23 +180,17 @@ const renderState = (state = {}) => {
   const items = getRenderableItems(currentState)
   const signature = items.map(getItemKey).join('|')
   const holdScroll = shouldHoldScroll()
+  let itemsChanged = false
   if (signature !== lastItemSignature) {
-    if (holdScroll) {
-      if (items.length < lastItemCount) localUnseenCount = 0
-      else localUnseenCount += Math.max(1, items.length - lastItemCount)
-    } else {
-      localUnseenCount = 0
-    }
+    itemsChanged = true
+    localUnseenCount = 0
     lastItemSignature = signature
     lastItemCount = items.length
   } else if (!holdScroll) {
     localUnseenCount = 0
   }
 
-  renderBubbleItems(items)
-  sourceLabel.textContent = getSourceLabel(items.at(-1) || currentState.message || {})
-  pinButton.setAttribute('aria-pressed', currentState.pinned ? 'true' : 'false')
-  pinButton.textContent = currentState.pinned ? '已定格' : '定格'
+  if (itemsChanged) renderBubbleItems(items)
   const composerHint = currentState.error
     ? '宠物刚才没接住，再试一次'
     : (currentState.awaitingReply ? '宠物正在回复…' : '')
@@ -169,13 +203,14 @@ const renderState = (state = {}) => {
   sendButton.disabled = !miniInput.value.trim()
   sendButton.textContent = currentState.awaitingReply ? '继续发送' : '发送'
   shell.hidden = !items.length && !currentState.error && !currentState.sending && !currentState.awaitingReply
-  if (!holdScroll) scrollToLatest()
+  if (itemsChanged || !holdScroll) scrollToLatest()
   updateUnseenButton()
 }
 
 const refreshState = async () => {
   try {
     renderState(await window.petBubbleChatAPI.getState())
+    syncPassiveHitTestMode('renderer-refresh-state')
   } catch (_) {
     renderState({})
   }
@@ -189,13 +224,19 @@ const setHitTestMode = (interactive, source = 'pet-bubble-chat-renderer') => {
   window.petBubbleChatAPI.setHitTestMode?.({ interactive, source }).then(renderState).catch(() => {})
 }
 
+const syncPassiveHitTestMode = (source = 'renderer-state-sync') => {
+  const interactive = shouldAcceptHitTest()
+  if (Boolean(currentState.hitTestInteractive) === interactive) return
+  setHitTestMode(interactive, source)
+}
+
 const syncUiInteractionState = () => {
   const hasDraft = Boolean(miniInput.value.trim())
   const focused = document.activeElement === miniInput
   const shouldInteract = hovering || focused || hasDraft || hasTextSelection() || Boolean(currentState.sending) || Boolean(currentState.error)
   if (!shouldInteract) expanded = false
   setInteracting(shouldInteract)
-  setHitTestMode(shouldInteract, 'renderer-interaction-sync')
+  setHitTestMode(shouldAcceptHitTest(), 'renderer-interaction-sync')
   renderState(currentState)
 }
 
@@ -236,63 +277,59 @@ document.addEventListener('click', () => {
   renderState(currentState)
 })
 
-pinButton.addEventListener('click', async (event) => {
-  event.stopPropagation()
-  renderState(await window.petBubbleChatAPI.setPinned(!currentState.pinned))
-})
-
-closeButton.addEventListener('click', (event) => {
-  event.stopPropagation()
-  window.petBubbleChatAPI.hide()
-})
-
-newMessageButton.addEventListener('click', (event) => {
+newMessageButton?.addEventListener('click', (event) => {
   event.stopPropagation()
   localUnseenCount = 0
   scrollToLatest()
   updateUnseenButton()
 })
 
-openFullChatButton.addEventListener('click', async (event) => {
-  event.stopPropagation()
-  try {
-    await window.petBubbleChatAPI.openFullChat?.()
-    expanded = false
-    setInteracting(false)
-    setHitTestMode(false, 'renderer-open-full-chat')
-    window.petBubbleChatAPI.hide()
-  } catch (_) {
-    expanded = true
-    setInteracting(true)
-    setHitTestMode(true, 'renderer-open-full-chat-failed')
-  }
-})
+bubbleStream?.addEventListener('wheel', handleBubbleWheel)
 
-miniInput.addEventListener('focus', () => {
+document.addEventListener('wheel', (event) => {
+  if (isComposerTarget(event.target)) {
+    event.preventDefault?.()
+    event.stopPropagation?.()
+    return
+  }
+  handleBubbleWheel(event)
+}, { passive: false, capture: true })
+
+miniInput?.addEventListener('focus', () => {
   expanded = true
   setInteracting(true)
   setHitTestMode(true, 'renderer-input-focus')
   renderState(currentState)
 })
 
-miniInput.addEventListener('input', () => {
+miniInput?.addEventListener('input', () => {
   expanded = true
   syncUiInteractionState()
   renderState(currentState)
 })
 
-miniInput.addEventListener('blur', () => {
+miniInput?.addEventListener('blur', () => {
   syncUiInteractionState()
 })
 
-miniInput.addEventListener('keydown', (event) => {
+miniInput?.addEventListener('keydown', (event) => {
   if (event.key === 'Enter' && !event.shiftKey) {
     event.preventDefault()
     inputForm.requestSubmit()
   }
 })
 
-inputForm.addEventListener('submit', async (event) => {
+miniInput?.addEventListener('wheel', (event) => {
+  event.preventDefault?.()
+  event.stopPropagation?.()
+})
+
+inputForm?.addEventListener('wheel', (event) => {
+  event.preventDefault?.()
+  event.stopPropagation?.()
+})
+
+inputForm?.addEventListener('submit', async (event) => {
   event.preventDefault()
   const message = miniInput.value.trim()
   if (!message) return
@@ -318,5 +355,8 @@ inputForm.addEventListener('submit', async (event) => {
 })
 
 window.addEventListener('focus', refreshState)
-window.petBubbleChatAPI.onStateChanged(renderState)
+window.petBubbleChatAPI.onStateChanged((state) => {
+  renderState(state)
+  syncPassiveHitTestMode('renderer-state-changed')
+})
 refreshState()

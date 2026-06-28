@@ -169,11 +169,13 @@ test('weather status example plugin runs network and storage through the local p
   assert.deepEqual(petEvents, [
     {
       text: 'Berlin: Sunny, 22F. Humidity 40%.',
-      source: `plugin:${EXAMPLE_PLUGIN_ID}`
+      source: `plugin:${EXAMPLE_PLUGIN_ID}`,
+      sourceSurface: 'plugin-runtime'
     },
     {
       text: 'Berlin: Sunny, 22F. Humidity 40%.',
-      source: `plugin:${EXAMPLE_PLUGIN_ID}`
+      source: `plugin:${EXAMPLE_PLUGIN_ID}`,
+      sourceSurface: 'plugin-runtime'
     }
   ])
   assert.deepEqual(settingsService.get().plugins.storage[EXAMPLE_PLUGIN_ID], {

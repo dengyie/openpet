@@ -195,11 +195,13 @@ test('rss reader example plugin fetches and caches feed items through the local 
   assert.deepEqual(petEvents, [
     {
       text: 'OpenPet Updates: Phase 22 lands. RSS example plugin ready.',
-      source: `plugin:${EXAMPLE_PLUGIN_ID}`
+      source: `plugin:${EXAMPLE_PLUGIN_ID}`,
+      sourceSurface: 'plugin-runtime'
     },
     {
       text: 'OpenPet Updates: Phase 22 lands. RSS example plugin ready.',
-      source: `plugin:${EXAMPLE_PLUGIN_ID}`
+      source: `plugin:${EXAMPLE_PLUGIN_ID}`,
+      sourceSurface: 'plugin-runtime'
     }
   ])
   assert.deepEqual(settingsService.get().plugins.storage[EXAMPLE_PLUGIN_ID], {
