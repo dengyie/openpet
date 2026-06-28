@@ -133,6 +133,33 @@ const buildPersonaOverrideFromDraft = (draft: ReturnType<typeof personaToDraft>)
   return override
 }
 
+const rebindTraceDiagnosticsFilters = ({
+  currentFilters,
+  petPackId,
+  conversationId
+}: {
+  currentFilters: AiTalkTraceDiagnosticsFilters
+  petPackId: string
+  conversationId: string
+}): AiTalkTraceDiagnosticsFilters => {
+  if (String(currentFilters.conversationId || '').trim()) {
+    return {
+      petPackId,
+      conversationId
+    }
+  }
+  if (String(currentFilters.petPackId || '').trim()) {
+    return {
+      petPackId,
+      conversationId: ''
+    }
+  }
+  return {
+    petPackId: '',
+    conversationId: ''
+  }
+}
+
 const formatConnectionStatus = ({
   result,
   hasUnsavedConfigChanges,
@@ -286,7 +313,16 @@ export function useAiPane(activeTab = 'ai') {
     setPersonaDraft(personaToDraft(nextPersonaProfile.overridePersona))
     setGeneratedPersonaDraft((current) => (current?.petPackId === nextPersonaProfile.petPackId ? current : null))
     setMemoryProfile(cloneAiMemoryProfile(memory))
-    applyPetChatState(state)
+    const nextPetChatState = applyPetChatState(state)
+    setTraceDiagnosticsFilters((current) => {
+      const activePetPackId = String(nextPetChatState.petPack.id || nextPersonaProfile.petPackId || '').trim()
+      const activeConversationId = String(nextPetChatState.conversationId || `control-center:${activePetPackId}:main`).trim()
+      return rebindTraceDiagnosticsFilters({
+        currentFilters: current,
+        petPackId: activePetPackId,
+        conversationId: activeConversationId
+      })
+    })
     const behaviorConfig = cloneAiBehavior(nextBehavior)
     setBehavior(behaviorConfig)
     setBehaviorRulesText(JSON.stringify(behaviorConfig.rules || [], null, 2))
@@ -402,6 +438,7 @@ export function useAiPane(activeTab = 'ai') {
   const hasUnsavedConfigChanges = hasProviderConfigChanges(config, activeConfig)
   const hasUnsavedApiKeyDraft = Boolean(apiKeyDraft.trim())
   const hasUnsavedImageGenerationChanges = pickImageGenerationComparableFields(imageGenerationConfig) !== pickImageGenerationComparableFields(activeImageGenerationConfig)
+  const hasUnsavedImageApiKeyDraft = Boolean(imageApiKeyDraft.trim())
 
   const onSave = async () => {
     setSaving(true)
@@ -834,6 +871,7 @@ export function useAiPane(activeTab = 'ai') {
     hasUnsavedConfigChanges,
     hasUnsavedApiKeyDraft,
     hasUnsavedImageGenerationChanges,
+    hasUnsavedImageApiKeyDraft,
     apiKeyDraft,
     setApiKeyDraft,
     imageApiKeyDraft,
