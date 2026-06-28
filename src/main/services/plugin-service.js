@@ -152,21 +152,29 @@ const createServiceHealthView = (health = {}, serviceEntry = {}) => {
   }
 }
 
-const parseServiceCommand = (command) => {
+const parseServiceCommand = (command, { platform = process.platform } = {}) => {
   const input = String(command || '').trim()
   if (!input) throw new Error('Plugin service command is required')
   const parts = []
   let current = ''
   let quote = ''
   let escaping = false
+  const allowBackslashEscapes = platform !== 'win32'
 
   for (const char of input) {
     if (escaping) {
-      current += char
+      if (quote) {
+        if (char === quote || char === '\\') current += char
+        else current += `\\${char}`
+      } else if (/\s/.test(char) || char === '"' || char === "'" || char === '\\') {
+        current += char
+      } else {
+        current += `\\${char}`
+      }
       escaping = false
       continue
     }
-    if (char === '\\') {
+    if (allowBackslashEscapes && char === '\\') {
       escaping = true
       continue
     }
@@ -275,6 +283,21 @@ const createPluginService = ({ settingsService, petService, actionService, actio
   const commandBridgeRuntimes = new Map()
   let commandBridgeServer = null
   let commandBridgePort = 0
+
+  const ensureStopWaiter = (runtime) => {
+    if (!runtime) return null
+    if (!runtime.stopCompleted) {
+      runtime.stopCompleted = new Promise((resolve) => {
+        runtime.resolveStopCompleted = resolve
+      })
+    }
+    return runtime.stopCompleted
+  }
+
+  const resolveStopWaiter = (runtime) => {
+    runtime?.resolveStopCompleted?.()
+    if (runtime) runtime.resolveStopCompleted = null
+  }
 
   const getLogStore = () => {
     const logs = settingsService.get().plugins?.logs
@@ -1183,6 +1206,7 @@ const createPluginService = ({ settingsService, petService, actionService, actio
 
   const stopPluginServiceRuntime = (pluginId, serviceId, runtime, { log = true } = {}) => {
     if (!runtime || runtime.status !== 'running') return runtime
+    ensureStopWaiter(runtime)
     runtime.status = 'stopping'
     runtime.stoppedAt = new Date().toISOString()
     runtime.error = ''
@@ -1193,6 +1217,7 @@ const createPluginService = ({ settingsService, petService, actionService, actio
     } catch (error) {
       runtime.error = error.message || 'Plugin service stop failed'
       runtime.status = 'failed'
+      resolveStopWaiter(runtime)
     }
     clearServiceStopTimer(runtime)
     clearServiceHealthSchedule(runtime)
@@ -1214,6 +1239,7 @@ const createPluginService = ({ settingsService, petService, actionService, actio
         } catch (error) {
           runtime.error = error.message || 'Plugin service force stop failed'
           runtime.status = 'failed'
+          resolveStopWaiter(runtime)
           appendLog({
             pluginId,
             commandId: `service:${serviceId}`,
@@ -1249,6 +1275,7 @@ const createPluginService = ({ settingsService, petService, actionService, actio
 
   const stopPluginSetupRuntime = (pluginId, setupId, runtime, { log = true } = {}) => {
     if (!runtime || runtime.status !== 'running') return runtime
+    ensureStopWaiter(runtime)
     runtime.status = 'stopping'
     runtime.error = ''
     runtime.exitCode = null
@@ -1258,6 +1285,7 @@ const createPluginService = ({ settingsService, petService, actionService, actio
     } catch (error) {
       runtime.error = error.message || 'Plugin setup stop failed'
       runtime.status = 'failed'
+      resolveStopWaiter(runtime)
     }
     if (log) appendLog({
       pluginId,
@@ -1280,11 +1308,13 @@ const createPluginService = ({ settingsService, petService, actionService, actio
   const stopPluginCommandRuntime = (pluginId, commandId, runtime, _options = {}) => {
     if (!runtime || runtime.status !== 'running') return runtime
     try {
+      ensureStopWaiter(runtime)
       runtime.stop?.({ reason: 'Command stopped' })
       appendLog({ pluginId, commandId, level: 'info', message: 'Command stop requested' })
     } catch (error) {
       runtime.status = 'failed'
       runtime.error = error.message || 'Plugin command stop failed'
+      resolveStopWaiter(runtime)
       error.openpetLogged = true
       appendLog({ pluginId, commandId, level: 'error', message: runtime.error })
       runtime.failStop?.(error)
@@ -1505,7 +1535,9 @@ const createPluginService = ({ settingsService, petService, actionService, actio
       child,
       stopReason: '',
       stop: null,
-      failStop: null
+      failStop: null,
+      stopCompleted: null,
+      resolveStopCompleted: null
     }
     commandBridgeRuntimes.set(bridgeRuntimeKey, {
       pluginId,
@@ -1538,7 +1570,10 @@ const createPluginService = ({ settingsService, petService, actionService, actio
         callback()
       }
       runtime.failStop = (error) => {
-        settle(() => reject(error))
+        settle(() => {
+          resolveStopWaiter(runtime)
+          reject(error)
+        })
       }
       runtime.stop = ({ reason = 'Command stopped', signal = 'SIGTERM' } = {}) => {
         runtime.status = 'stopping'
@@ -1571,16 +1606,21 @@ const createPluginService = ({ settingsService, petService, actionService, actio
         if (message) appendLog({ pluginId: plugin.manifest.id, commandId, level: 'error', message: `Command stderr: ${message}`.slice(0, 500) })
       })
       child.on?.('error', (error) => {
-        settle(() => reject(error))
+        settle(() => {
+          resolveStopWaiter(runtime)
+          reject(error)
+        })
       })
       child.stdin?.on?.('error', (error) => {
         settle(() => {
+          resolveStopWaiter(runtime)
           safeKillChild()
           reject(error)
         })
       })
       child.on?.('exit', (code, signal) => {
         settle(() => {
+          resolveStopWaiter(runtime)
           const exitCode = Number.isFinite(Number(code)) ? Number(code) : null
           if (runtime.status === 'stopping') {
             runtime.status = 'failed'
@@ -1617,6 +1657,7 @@ const createPluginService = ({ settingsService, petService, actionService, actio
         child.stdin?.end?.(`${JSON.stringify(commandContext)}\n`)
       } catch (error) {
         settle(() => {
+          resolveStopWaiter(runtime)
           safeKillChild()
           reject(error)
         })
@@ -1702,7 +1743,9 @@ const createPluginService = ({ settingsService, petService, actionService, actio
         exitCode: null,
         error: '',
         child,
-        failStop: null
+        failStop: null,
+        stopCompleted: null,
+        resolveStopCompleted: null
       })
 
       appendLog({ pluginId, commandId, level: 'info', message: 'Setup started' })
@@ -1715,7 +1758,10 @@ const createPluginService = ({ settingsService, petService, actionService, actio
           callback()
         }
         runtime.failStop = (error) => {
-          settle(() => reject(error))
+          settle(() => {
+            resolveStopWaiter(runtime)
+            reject(error)
+          })
         }
 
         child.stdout?.on?.('data', (chunk) => {
@@ -1732,6 +1778,7 @@ const createPluginService = ({ settingsService, petService, actionService, actio
             runtime.error = error.message || 'Plugin setup failed'
             runtime.exitCode = null
             runtime.lastRunAt = new Date().toISOString()
+            resolveStopWaiter(runtime)
             appendLog({ pluginId, commandId, level: 'error', message: 'Setup failed' })
             reject(error)
           })
@@ -1748,6 +1795,7 @@ const createPluginService = ({ settingsService, petService, actionService, actio
               ? 'Setup stopped'
               : (runtime.status === 'failed' ? (signal ? `Setup exited with signal ${signal}` : `Setup exited with code ${exitCode ?? 'unknown'}`) : '')
             runtime.lastRunAt = new Date().toISOString()
+            resolveStopWaiter(runtime)
             appendLog({
               pluginId,
               commandId,
@@ -1838,6 +1886,8 @@ const createPluginService = ({ settingsService, petService, actionService, actio
         error: '',
         child,
         stopTimer: null,
+        stopCompleted: null,
+        resolveStopCompleted: null,
         healthTimer: null,
         healthChecking: false,
         stopGracePeriodMs: Number.isFinite(Number(serviceStopGracePeriodMs)) ? Math.max(0, Number(serviceStopGracePeriodMs)) : PLUGIN_SERVICE_STOP_GRACE_PERIOD_MS,
@@ -1857,6 +1907,7 @@ const createPluginService = ({ settingsService, petService, actionService, actio
         runtime.status = 'failed'
         runtime.error = error.message || 'Plugin service failed'
         runtime.stoppedAt = new Date().toISOString()
+        resolveStopWaiter(runtime)
         appendLog({ pluginId, commandId, level: 'error', message: runtime.error })
       })
       child.on?.('exit', (code, signal) => {
@@ -1876,6 +1927,7 @@ const createPluginService = ({ settingsService, petService, actionService, actio
         runtime.signal = signal || ''
         runtime.child = null
         runtime.stoppedAt = runtime.stoppedAt || new Date().toISOString()
+        resolveStopWaiter(runtime)
         if (stoppedByRequest) {
           appendLog({
             pluginId,
@@ -2011,7 +2063,16 @@ const createPluginService = ({ settingsService, petService, actionService, actio
     return getLogs()
   }
 
-  const stopAllServices = () => {
+  const stopAllServices = async () => {
+    const setupWaiters = Array.from(setupRuntimes.values())
+      .filter((runtime) => runtime?.status === 'running')
+      .map((runtime) => ensureStopWaiter(runtime))
+      .filter(Boolean)
+    const commandWaiters = Array.from(commandRuntimes.values())
+      .filter((runtime) => runtime?.status === 'running')
+      .map((runtime) => ensureStopWaiter(runtime))
+      .filter(Boolean)
+
     for (const runtime of serviceRuntimes.values()) {
       stopPluginServiceRuntime(runtime.pluginId, runtime.serviceId, runtime, { log: false })
     }
@@ -2027,6 +2088,26 @@ const createPluginService = ({ settingsService, petService, actionService, actio
       commandBridgeServer = null
       commandBridgePort = 0
     }
+
+    const serviceWaiters = Array.from(serviceRuntimes.values())
+      .filter((runtime) => runtime?.status === 'stopping' && runtime.stopCompleted instanceof Promise)
+      .map((runtime) => runtime.stopCompleted)
+
+    const waitForShutdown = Promise.allSettled([
+      ...serviceWaiters,
+      ...setupWaiters,
+      ...commandWaiters
+    ])
+
+    await Promise.race([
+      waitForShutdown,
+      new Promise((resolve) => {
+        const timeoutId = setTimeout(resolve, 2000)
+        timeoutId?.unref?.()
+        waitForShutdown.finally(() => clearTimeout(timeoutId))
+      })
+    ])
+
     return { ok: true }
   }
 

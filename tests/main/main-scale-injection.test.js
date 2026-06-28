@@ -7,6 +7,7 @@ const mainPath = require.resolve('../../main')
 const flushAsync = async (times = 6) => {
   for (let index = 0; index < times; index += 1) await Promise.resolve()
 }
+const flushImmediate = async () => new Promise((resolve) => setImmediate(resolve))
 
 test('main forwards IPC-provided scale values to the window scaler', async () => {
   delete require.cache[mainPath]
@@ -16,6 +17,8 @@ test('main forwards IPC-provided scale values to the window scaler', async () =>
   const appHandlers = new Map()
   const appLogs = []
   let stopAllServicesCalls = 0
+  let resolveShutdown = null
+  let quitCalls = 0
   let registeredIpcDependencies = null
   let registeredPluginDependencies = null
   let createdAiTalkStorePath = null
@@ -36,7 +39,7 @@ test('main forwards IPC-provided scale values to the window scaler', async () =>
           getPath: () => path.join(__dirname, '..', '.tmp-main-scale-injection'),
           isPackaged: false,
           on: (eventName, handler) => { appHandlers.set(eventName, handler) },
-          quit: () => {},
+          quit: () => { quitCalls += 1 },
           requestSingleInstanceLock: () => true,
           setLoginItemSettings: () => {},
           whenReady: () => ({ then: (callback) => { callback(); return { catch: () => {} } } })
@@ -159,7 +162,12 @@ test('main forwards IPC-provided scale values to the window scaler', async () =>
       './src/main/services/plugin-service': {
         createPluginService: (dependencies) => {
           registeredPluginDependencies = dependencies
-          return { stopAllServices: () => { stopAllServicesCalls += 1 } }
+          return {
+            stopAllServices: () => {
+              stopAllServicesCalls += 1
+              return new Promise((resolve) => { resolveShutdown = resolve })
+            }
+          }
         }
       },
       './src/main/services/plugin-install-service': { createPluginInstallService: () => ({}) },
@@ -194,8 +202,17 @@ test('main forwards IPC-provided scale values to the window scaler', async () =>
     const ipcWindow = { id: 'ipc-window' }
     registeredIpcDependencies.applyWindowScale(ipcWindow, 0.5)
     registeredPluginDependencies.onPetPackActivated()
-    appHandlers.get('before-quit')()
+    let preventDefaultCalls = 0
+    appHandlers.get('before-quit')({ preventDefault: () => { preventDefaultCalls += 1 } })
     appHandlers.get('will-quit')()
+
+    await flushAsync()
+    assert.equal(preventDefaultCalls, 1)
+    assert.equal(stopAllServicesCalls, 1)
+    assert.equal(quitCalls, 0)
+
+    resolveShutdown()
+    await flushImmediate()
 
     assert.deepEqual(scaleCalls, [{ targetWindow: ipcWindow, scale: 0.5 }])
     assert.equal(animationReloadCalls.length, 1)
@@ -212,7 +229,7 @@ test('main forwards IPC-provided scale values to the window scaler', async () =>
       'app.before-quit',
       'app.will-quit'
     ])
-    assert.equal(stopAllServicesCalls, 1)
+    assert.equal(quitCalls, 1)
   } finally {
     Module._load = originalLoad
     delete require.cache[mainPath]
@@ -224,6 +241,8 @@ test('main still stops plugin services when lifecycle logging fails during quit'
 
   const appHandlers = new Map()
   let stopAllServicesCalls = 0
+  let resolveShutdown = null
+  let quitCalls = 0
   const petWindow = {
     webContents: { on: () => {}, send: () => {} },
     isMinimized: () => false,
@@ -239,7 +258,7 @@ test('main still stops plugin services when lifecycle logging fails during quit'
           getPath: () => path.join(__dirname, '..', '.tmp-main-scale-injection'),
           isPackaged: false,
           on: (eventName, handler) => { appHandlers.set(eventName, handler) },
-          quit: () => {},
+          quit: () => { quitCalls += 1 },
           requestSingleInstanceLock: () => true,
           setLoginItemSettings: () => {},
           whenReady: () => ({ then: (callback) => { callback(); return { catch: () => {} } } })
@@ -347,7 +366,14 @@ test('main still stops plugin services when lifecycle logging fails during quit'
       './src/main/services/ai-talk-store': { createAiTalkStore: () => ({}) },
       './src/main/services/ai-talk-service': { createAiTalkService: () => ({}) },
       './src/main/services/behavior-orchestrator-service': { createBehaviorOrchestratorService: () => ({ getConfig: () => ({ enabled: false }) }) },
-      './src/main/services/plugin-service': { createPluginService: () => ({ stopAllServices: () => { stopAllServicesCalls += 1 } }) },
+      './src/main/services/plugin-service': {
+        createPluginService: () => ({
+          stopAllServices: () => {
+            stopAllServicesCalls += 1
+            return new Promise((resolve) => { resolveShutdown = resolve })
+          }
+        })
+      },
       './src/main/services/plugin-install-service': { createPluginInstallService: () => ({}) },
       './src/main/services/bundled-plugin-sync-service': {
         syncBundledPlugins: () => ({ synced: [{ pluginId: 'openpet.creator-studio', removed: [] }] })
@@ -373,9 +399,18 @@ test('main still stops plugin services when lifecycle logging fails during quit'
     require(mainPath)
     await flushAsync()
 
-    appHandlers.get('before-quit')()
+    let preventDefaultCalls = 0
+    appHandlers.get('before-quit')({ preventDefault: () => { preventDefaultCalls += 1 } })
+
+    await flushAsync()
+    assert.equal(preventDefaultCalls, 1)
+    assert.equal(quitCalls, 0)
+
+    resolveShutdown()
+    await flushImmediate()
 
     assert.equal(stopAllServicesCalls, 1)
+    assert.equal(quitCalls, 1)
   } finally {
     Module._load = originalLoad
     delete require.cache[mainPath]

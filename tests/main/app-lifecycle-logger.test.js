@@ -9,8 +9,8 @@ const createAppStub = () => {
     on(eventName, handler) {
       handlers.set(eventName, handler)
     },
-    emit(eventName) {
-      handlers.get(eventName)?.()
+    emit(eventName, ...args) {
+      handlers.get(eventName)?.(...args)
     },
     hasHandler(eventName) {
       return handlers.has(eventName)
@@ -75,4 +75,20 @@ test('registerAppLifecycleLogs never throws when the log service fails', () => {
   }))
   assert.doesNotThrow(() => app.emit('before-quit'))
   assert.doesNotThrow(() => app.emit('will-quit'))
+})
+
+test('registerAppLifecycleLogs forwards before-quit event into the callback', () => {
+  const app = createAppStub()
+  const event = { preventDefault: () => {} }
+  const received = []
+
+  registerAppLifecycleLogs({
+    app,
+    appLogService: { logPath: '/tmp/openpet-app.jsonl', record: () => {} },
+    onBeforeQuit: (nextEvent) => received.push(nextEvent)
+  })
+
+  app.emit('before-quit', event)
+
+  assert.deepEqual(received, [event])
 })
