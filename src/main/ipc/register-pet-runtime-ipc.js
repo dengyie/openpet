@@ -165,11 +165,17 @@ const registerPetRuntimeIpc = ({
         ]
       })
     }
-    if (petChatWindowService) {
+    if (petBubbleChatWindowService || petChatWindowService) {
       template.push({
         type: 'action',
         label: '和宠物聊天',
-        onSelect: () => petChatWindowService.open?.()
+        onSelect: () => {
+          if (petBubbleChatWindowService?.open) {
+            const bubbleState = petBubbleChatWindowService.open({ source: 'pet-context-menu', focus: true })
+            if (bubbleState?.visible || bubbleState?.hasWindow) return
+          }
+          petChatWindowService?.open?.()
+        }
       })
     }
     if (template.length > 0) template.push({ type: 'separator' })
