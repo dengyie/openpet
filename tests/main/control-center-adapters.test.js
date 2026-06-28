@@ -18,6 +18,7 @@ const {
   createLocalHttpRuntimeView,
   createPetPackMutationResult,
   createPetBubbleChatWindowStateView,
+  createPetChatMessageResultView,
   createPetChatStateView,
   createPluginCommandRunResult,
   createPluginDashboardOpenResult,
@@ -402,6 +403,58 @@ test('pet chat adapters strip service-only state from renderer payloads', () => 
   assert.equal(JSON.stringify(state).includes('sk-hidden'), false)
   assert.equal(JSON.stringify(state).includes('/Users/mango/private-pack'), false)
   assert.equal(JSON.stringify(state).includes('rawPrompt'), false)
+})
+
+test('pet chat message result adapter preserves safe behavior fields only', () => {
+  const result = createPetChatMessageResultView({
+    conversationId: 'control-center:legacy-cat:main',
+    reply: 'safe reply',
+    behavior: {
+      id: 7,
+      timestamp: '2026-06-24T00:00:00.000Z',
+      matched: true,
+      type: 'playAction',
+      actionId: 'wave',
+      label: 'Wave',
+      reason: 'Greeting intent matched.',
+      ruleId: 'greeting-wave',
+      intent: 'greeting',
+      displayMode: 'action',
+      text: 'hello',
+      event: 'greeted',
+      message: 'Pet greeted the user.',
+      error: 'safe error text',
+      replay: { reply: 'raw replay', behaviorIntent: { rawPrompt: 'do not leak' } },
+      rawPrompt: 'do not leak',
+      providerRaw: { apiKey: 'sk-hidden' },
+      tools: [{ name: 'danger' }],
+      result: { bridgeToken: 'secret-token' },
+      internal: { path: '/Users/mango/private' }
+    }
+  })
+
+  assert.deepEqual(result, {
+    conversationId: 'control-center:legacy-cat:main',
+    reply: 'safe reply',
+    behavior: {
+      matched: true,
+      type: 'playAction',
+      actionId: 'wave',
+      label: 'Wave',
+      reason: 'Greeting intent matched.',
+      ruleId: 'greeting-wave',
+      intent: 'greeting',
+      displayMode: 'action',
+      text: 'hello',
+      event: 'greeted',
+      message: 'Pet greeted the user.',
+      error: 'safe error text'
+    }
+  })
+  assert.equal(JSON.stringify(result).includes('rawPrompt'), false)
+  assert.equal(JSON.stringify(result).includes('sk-hidden'), false)
+  assert.equal(JSON.stringify(result).includes('secret-token'), false)
+  assert.equal(JSON.stringify(result).includes('/Users/mango/private'), false)
 })
 
 test('plugin runtime result adapters normalize IPC payloads and strip private fields', () => {

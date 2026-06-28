@@ -317,6 +317,73 @@ test('pet chat send uses shared control-center entrypoint and compact pet bubble
   ])
 })
 
+test('pet chat send preserves sanitized behavior decision fields', async () => {
+  const prompt = 'hello'
+  const reply = 'hello back'
+  const sayCalls = []
+  const ipcMain = registerPetChatHandlers({
+    aiService: {
+      getConfig: () => ({
+        enabled: true,
+        hasApiKey: true,
+        provider: 'openai-compatible',
+        baseUrl: 'http://127.0.0.1:8317/v1',
+        model: 'gpt-5.5'
+      })
+    },
+    aiTalkService: {
+      getPersonaProfile: () => ({ petPackId: 'legacy-cat', petPackDisplayName: 'Legacy Cat' }),
+      getConversation: () => [],
+      chat: async () => ({
+        conversationId: 'control-center:legacy-cat:main',
+        reply,
+        messages: [{ id: 'a1', role: 'assistant', content: reply, createdAt: '2026-06-24T00:00:01.000Z' }],
+        rawPrompt: 'do not leak',
+        providerRaw: { apiKey: 'sk-hidden' }
+      })
+    },
+    behaviorOrchestratorService: {
+      getConfig: () => ({ enabled: true }),
+      evaluate: () => ({
+        matched: true,
+        type: 'playAction',
+        actionId: 'wave',
+        label: 'Wave',
+        reason: 'Greeting intent matched.',
+        ruleId: 'greeting-wave',
+        intent: 'greeting',
+        displayMode: 'action',
+        replay: { reply: 'raw replay', behaviorIntent: { rawPrompt: 'do not leak' } },
+        providerRaw: { apiKey: 'sk-hidden' },
+        internal: { result: 'do not leak' }
+      })
+    },
+    petService: {
+      ...createRequiredServices().petService,
+      say: (payload) => {
+        sayCalls.push(payload)
+        return payload
+      },
+      playAction: (payload) => ({ ...payload, played: true, rawPrompt: 'do not leak' })
+    },
+    petChatWindowService: {
+      getState: () => ({ alwaysOnTop: true, visible: true, hasWindow: true })
+    }
+  })
+
+  const result = await ipcMain.handlers.get(IPC.PET_CHAT_SEND_MESSAGE)(null, { message: prompt })
+
+  assert.equal(result.behavior.actionId, 'wave')
+  assert.equal(result.behavior.displayMode, 'action')
+  assert.equal(result.behavior.reason, 'Greeting intent matched.')
+  assert.equal(result.action.actionId, 'wave')
+  assert.equal(sayCalls[0].text, reply)
+  assert.equal(JSON.stringify(result).includes('replay'), false)
+  assert.equal(JSON.stringify(result).includes('rawPrompt'), false)
+  assert.equal(JSON.stringify(result).includes('sk-hidden'), false)
+  assert.equal(JSON.stringify(result).includes('internal'), false)
+})
+
 test('pet chat send emits through PetService so the floating bubble window is displayed', async () => {
   const prompt = 'hello'
   const reply = 'Floating bubble reply should be visible above the desktop pet.'

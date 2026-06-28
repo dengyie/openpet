@@ -43,6 +43,7 @@ const PLUGIN_SETUP_RUNTIME_STATUSES = new Set(['not-run', 'running', 'stopping',
 const PLUGIN_SERVICE_RUNTIME_STATUSES = new Set(['stopped', 'starting', 'running', 'stopping', 'exited', 'failed'])
 const PLUGIN_SERVICE_HEALTH_STATUSES = new Set(['not-configured', 'unknown', 'checking', 'healthy', 'unhealthy'])
 const IMAGE_HEALTH_MODEL_PROBE_STATUSES = new Set(['ok', 'unavailable', 'failed'])
+const AI_BEHAVIOR_DISPLAY_MODES = new Set(['none', 'bubble', 'action', 'event'])
 const MAX_PET_CHAT_MESSAGES = 100
 
 /**
@@ -625,6 +626,36 @@ const createPetChatActionView = (action) => {
 }
 
 /**
+ * @param {unknown} behavior
+ * @returns {Partial<import('../shared/openpet-contracts').AiBehaviorDecision> & {
+ *   text?: string,
+ *   event?: string,
+ *   message?: string,
+ *   error?: string
+ * } | undefined}
+ */
+const createPetChatBehaviorView = (behavior) => {
+  if (!behavior || typeof behavior !== 'object' || Array.isArray(behavior)) return undefined
+  const input = toRecord(behavior)
+  return {
+    ...(input.matched !== undefined ? { matched: Boolean(input.matched) } : {}),
+    ...(typeof input.type === 'string' ? { type: input.type } : {}),
+    ...(typeof input.actionId === 'string' ? { actionId: input.actionId } : {}),
+    ...(typeof input.label === 'string' ? { label: input.label } : {}),
+    ...(typeof input.reason === 'string' ? { reason: input.reason } : {}),
+    ...(typeof input.ruleId === 'string' ? { ruleId: input.ruleId } : {}),
+    ...(typeof input.intent === 'string' ? { intent: input.intent } : {}),
+    ...(typeof input.displayMode === 'string' && AI_BEHAVIOR_DISPLAY_MODES.has(input.displayMode)
+      ? { displayMode: /** @type {'none' | 'bubble' | 'action' | 'event'} */ (input.displayMode) }
+      : {}),
+    ...(typeof input.text === 'string' ? { text: input.text } : {}),
+    ...(typeof input.event === 'string' ? { event: input.event } : {}),
+    ...(typeof input.message === 'string' ? { message: input.message } : {}),
+    ...(typeof input.error === 'string' ? { error: input.error } : {})
+  }
+}
+
+/**
  * @param {unknown} response
  * @returns {import('../shared/openpet-contracts').AiChatResponse & { bubbleSegments?: string[], providerLatencyMs?: number }}
  */
@@ -632,6 +663,7 @@ const createPetChatMessageResultView = (response = {}) => {
   const input = toRecord(response)
   const providerLatencyMs = Number(input.providerLatencyMs)
   const action = createPetChatActionView(input.action)
+  const behavior = createPetChatBehaviorView(input.behavior)
   return {
     ...(input.conversationId !== undefined ? { conversationId: toStringValue(input.conversationId) } : {}),
     reply: toStringValue(input.reply),
@@ -639,6 +671,7 @@ const createPetChatMessageResultView = (response = {}) => {
     ...(input.bubble !== undefined ? { bubble: createPetChatBubbleView(input.bubble) } : {}),
     ...(input.state !== undefined ? { state: createPetChatStateView(input.state) } : {}),
     ...(action ? { action } : {}),
+    ...(behavior ? { behavior } : {}),
     ...(Array.isArray(input.bubbleSegments) ? { bubbleSegments: toStringArray(input.bubbleSegments) } : {}),
     ...(Number.isFinite(providerLatencyMs) ? { providerLatencyMs } : {})
   }
