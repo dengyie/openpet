@@ -23,8 +23,8 @@ const renderMessages = (messages = []) => {
   if (!Array.isArray(messages) || !messages.length) {
     messagesEl.innerHTML = [
       '<article class="empty-state">',
-      '<span>喵，聊天面板已经就位。</span>',
-      '<small>这里会显示当前宠物包的主会话历史。</small>',
+      '<span>扩展聊天面板已经就位。</span>',
+      '<small>这里显示当前宠物包的主会话历史和较长对话。</small>',
       '</article>'
     ].join('')
     return

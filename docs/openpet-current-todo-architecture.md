@@ -103,6 +103,7 @@ Current state:
 - Memory profile UI can show global and pet-pack memories, delete one memory, and clear current pet-pack relationship memories.
 - Trace diagnostics export already supports pet-pack-specific and conversation-specific slices.
 - Desktop chat is connected to the same chat state rather than a separate AI implementation.
+- User-facing chat entry wording now reflects the intended split: Bubble Chat is the default lightweight surface, while `PetChatWindow` is labeled as an extended panel rather than a parallel primary chat entry.
 - The lightweight pet bubble chat is the right product direction for default interaction, but `main` still needs an explicit convergence pass so the transparent bubble becomes the default entry while the desktop chat becomes an extended view instead of a second primary chat surface.
 
 P1 work:

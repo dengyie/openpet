@@ -165,6 +165,7 @@ test('pet chat window opens next to the pet and saves moved bounds', () => {
   assert.equal(FakeChatWindow.instances.length, 1)
   assert.equal(chatWindow.options.frame, false)
   assert.equal(chatWindow.options.alwaysOnTop, true)
+  assert.equal(chatWindow.options.title, 'OpenPet Extended Chat')
   assert.equal(chatWindow.options.x, 262)
   assert.equal(chatWindow.options.y, 200)
   assert.equal(chatWindow.visible, true)

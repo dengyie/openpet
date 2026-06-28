@@ -246,7 +246,7 @@ test('pet context menu exposes desktop chat entry when chat window service is av
     sender: petWindow.webContents
   }, { x: 70, y: 80 })
 
-  const chatItem = menuWindowRequest.items.find((item) => item.label === '和宠物聊天')
+  const chatItem = menuWindowRequest.items.find((item) => item.label === '打开扩展聊天面板')
   assert.ok(chatItem)
   assert.equal(menuWindowRequest.size.height, 206)
 

@@ -245,7 +245,7 @@ const createPetChatWindowManager = ({
       show: false,
       alwaysOnTop: desktopChat.alwaysOnTop,
       skipTaskbar: true,
-      title: 'OpenPet Chat',
+      title: 'OpenPet Extended Chat',
       backgroundColor: '#fff8ef',
       webPreferences: {
         preload: path.join(projectRoot, 'src', 'main', 'pet-chat-preload.js'),
@@ -273,7 +273,7 @@ const createPetChatWindowManager = ({
     })
     Promise.resolve(chatWindow.loadFile?.(path.join(projectRoot, 'src', 'main', 'pet-chat', 'index.html'))).catch((error) => {
       if (chatWindow && !chatWindow.isDestroyed?.()) {
-        chatWindow.loadURL?.(`data:text/html;charset=utf-8,${encodeURIComponent(`<!doctype html><title>OpenPet Chat</title><body style="font-family: sans-serif; padding: 16px;">聊天面板加载失败：${error.message}</body>`)}`)
+        chatWindow.loadURL?.(`data:text/html;charset=utf-8,${encodeURIComponent(`<!doctype html><title>OpenPet Extended Chat</title><body style="font-family: sans-serif; padding: 16px;">扩展聊天面板加载失败：${error.message}</body>`)}`)
       }
     })
 

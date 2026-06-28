@@ -120,7 +120,7 @@ export function PetPane({
         <div className="field-row">
           <div>
             <div className="field-label">头顶轻聊天 Popup</div>
-            <div className="field-note">宠物说话时在头顶显示可回复的小弹窗，不影响普通气泡和完整聊天窗。</div>
+            <div className="field-note">宠物说话时在头顶显示可回复的小弹窗，不影响普通气泡和扩展聊天面板。</div>
           </div>
           <Toggle
             ariaLabel="Enable pet bubble chat popup"

@@ -720,7 +720,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
       })),
       { type: 'separator' },
       { label: '散步', click: () => sendMenuCommand({ command: 'walk' }) },
-      ...(petChatWindowService ? [{ label: '和宠物聊天', click: () => petChatWindowService.open?.() }] : []),
+      ...(petChatWindowService ? [{ label: '打开扩展聊天面板', click: () => petChatWindowService.open?.() }] : []),
       { label: '设置', click: () => createSettingsWindow(win) },
       { type: 'separator' },
       { label: '退出', click: () => requestAppQuit('pet-context-menu') }
