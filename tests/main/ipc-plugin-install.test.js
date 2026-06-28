@@ -273,8 +273,8 @@ test('ai persona profile IPC delegates to ai talk service when available', async
       }
     }),
     aiTalkService: {
-      getPersonaProfile: () => profile,
-      generatePersonaDraft: (request) => {
+      getPersonaProfile: async () => profile,
+      generatePersonaDraft: async (request) => {
         generateCalls.push(request)
         return {
           petPackId: 'legacy-cat',
@@ -284,7 +284,7 @@ test('ai persona profile IPC delegates to ai talk service when available', async
           rawProviderReply: 'do-not-forward'
         }
       },
-      savePersonaOverride: (override) => {
+      savePersonaOverride: async (override) => {
         saveCalls.push(override)
         return { ...profile, overridePersona: override, effectivePersona: { ...profile.effectivePersona, ...override } }
       }
@@ -338,15 +338,15 @@ test('ai memory management IPC delegates to ai talk service when available', asy
       }
     }),
     aiTalkService: {
-      getMemoryProfile: () => {
+      getMemoryProfile: async () => {
         calls.push(['getMemoryProfile'])
         return profile
       },
-      deleteMemory: (memoryId) => {
+      deleteMemory: async (memoryId) => {
         calls.push(['deleteMemory', memoryId])
         return { ...profile, globalMemories: [] }
       },
-      clearPetPackMemories: () => {
+      clearPetPackMemories: async () => {
         calls.push(['clearPetPackMemories'])
         return { ...profile, petPackMemories: [] }
       }
