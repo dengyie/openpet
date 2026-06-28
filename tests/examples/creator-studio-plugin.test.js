@@ -1961,6 +1961,73 @@ test('creator studio commands infer latest run for generic plugin button flow', 
   assert.equal(fs.existsSync(exported.json.bundle.path), true)
 })
 
+test('creator studio task commands preserve the dashboard-first workflow as an automation entry path', () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-task-commands-'))
+
+  const drafted = runCreatorCommand({
+    command: 'draft-task',
+    dataDir,
+    payload: {
+      prompt: '新增一个自定义动作：原地打滚，动作要循环。'
+    }
+  })
+  const answered = runCreatorCommand({
+    command: 'answer-question',
+    dataDir,
+    payload: {
+      runId: drafted.json.run.runId,
+      questionId: drafted.json.run.generationTask.questions[0].id,
+      answer: 'click'
+    }
+  })
+  const confirmed = runCreatorCommand({
+    command: 'confirm-task',
+    dataDir,
+    payload: { runId: drafted.json.run.runId }
+  })
+  const generated = runCreatorCommand({
+    command: 'run-step',
+    dataDir,
+    payload: { runId: drafted.json.run.runId }
+  })
+  const approved = runCreatorCommand({
+    command: 'approve-run',
+    dataDir,
+    payload: { runId: drafted.json.run.runId }
+  })
+  const stored = JSON.parse(fs.readFileSync(path.join(dataDir, 'runs', drafted.json.run.runId, 'run.json'), 'utf-8'))
+
+  assert.equal(drafted.status, 0)
+  assert.equal(answered.status, 0)
+  assert.equal(confirmed.status, 0)
+  assert.equal(generated.status, 0)
+  assert.equal(approved.status, 0)
+
+  assert.equal(drafted.json.run.taskStatus, 'needs_input')
+  assert.equal(drafted.json.run.generationTask.questions[0].id, 'trigger')
+  assert.equal(answered.json.run.taskStatus, 'ready_for_confirmation')
+  assert.equal(answered.json.run.generationTask.questions.length, 0)
+  assert.deepEqual(answered.json.run.generationTask.actions[0].triggerProposal, {
+    type: 'click',
+    binding: 'clickAction',
+    notes: 'User selected click trigger.'
+  })
+  assert.equal(confirmed.json.run.taskStatus, 'confirmed')
+  assert.equal(confirmed.json.run.currentStep, 'confirmed')
+  assert.equal(generated.json.run.status, 'ready_for_review')
+  assert.equal(approved.json.run.status, 'approved')
+  assert.equal(approved.json.run.reviewStatus, 'approved')
+
+  assert.equal(stored.taskStatus, 'confirmed')
+  assert.equal(stored.status, 'approved')
+  assert.equal(stored.currentStep, 'approved')
+  assert.deepEqual(stored.conversation.answers, [{
+    questionId: 'trigger',
+    answer: 'click',
+    answeredAt: stored.conversation.answers[0].answeredAt
+  }])
+})
+
 test('creator studio export-bundle skips action-only runs when inferring latest run', () => {
   const { createRun, updateRunStatus } = require('../../examples/plugins/creator-studio/lib/run-store')
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-export-filter-'))
