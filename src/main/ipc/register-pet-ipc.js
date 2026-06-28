@@ -23,39 +23,12 @@ const registerPetIpc = (context) => {
   } = context
   const {
     recordAppLog,
-    recordPetUtterance,
-    capturePetBubble,
-    getActivePetPackId,
     notifyPetChatStateChanged,
     requestAppQuit,
     sendToControlCenterWindow,
     sendToPetWindow,
     createPetRendererSettings
   } = helpers
-
-  petService.onSay?.((payload) => {
-    recordPetUtterance(payload)
-    capturePetBubble(payload)
-    petBubbleChatWindowService?.showMessage?.({
-      ...payload,
-      petPackId: getActivePetPackId()
-    })
-  })
-  petService.onAction?.((payload) => {
-    sendToPetWindow(getPetWindow, IPC.PET_PLAY_ACTION, payload)
-    petBubbleChatWindowService?.syncToPetWindow?.()
-  })
-  petService.onEvent?.((payload) => {
-    if (payload?.message) {
-      const bubble = { text: payload.message, ttlMs: payload.ttlMs, source: payload.source }
-      recordPetUtterance(bubble)
-      capturePetBubble(bubble)
-      petBubbleChatWindowService?.showMessage?.({
-        ...bubble,
-        petPackId: getActivePetPackId()
-      })
-    }
-  })
 
   ipcMainService.handle(IPC.PET_GET_ANIMATIONS, () => petService.getAnimations())
 
