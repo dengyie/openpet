@@ -57,6 +57,22 @@ test('checkDocsDrift fails when release-evidence archive classes disappear from 
   assert.match(result.errors.join('\n'), /release-evidence archive classes/i)
 })
 
+test('checkDocsDrift fails when active TODO recommendations reopen closed milestones', () => {
+  const docsRoot = createDocsFixture()
+  const todoPath = path.join(docsRoot, 'openpet-current-todo-architecture.md')
+  const todo = fs.readFileSync(todoPath, 'utf-8')
+  fs.writeFileSync(
+    todoPath,
+    todo.replace(/TypeScript Adapter Boundary Migration/g, 'Creator Studio Review Surface Polish'),
+    'utf-8'
+  )
+
+  const result = checkDocsDrift({ docsRoot })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors.join('\n'), /closed milestone|local\/manual-required split/i)
+})
+
 test('cli prints JSON and exits non-zero for drift failures', () => {
   const docsRoot = createDocsFixture()
   fs.appendFileSync(path.join(docsRoot, 'HANDOFF.md'), '\nBranch: `codex/dev`\n')

@@ -179,6 +179,31 @@ test('createAiTalkLocalSmokeArchive rejects unsanitized reports', () => {
   assert.throws(() => createAiTalkLocalSmokeArchive({ sessionDir, archiveDir, now: fixedNow }), /Smoke report is not sanitized for archive/)
 })
 
+test('createAiTalkLocalSmokeArchive rejects raw API key-like tokens in reports', () => {
+  const { rootDir, sessionDir } = createSessionFixture()
+  const reportPath = path.join(sessionDir, 'ai-talk-local-smoke-result.json')
+  const report = JSON.parse(fs.readFileSync(reportPath, 'utf-8'))
+  report.config.apiKey = 'sk-cpa-1234567890abcdef'
+  fs.writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`)
+
+  const archiveDir = path.join(rootDir, 'archive', '2026-06-28T15-35-59-210Z')
+  assert.throws(
+    () => createAiTalkLocalSmokeArchive({ sessionDir, archiveDir, now: fixedNow }),
+    /raw API key-like token/
+  )
+})
+
+test('createAiTalkLocalSmokeArchive rejects sensitive authorization text in logs', () => {
+  const { rootDir, sessionDir } = createSessionFixture()
+  fs.appendFileSync(path.join(sessionDir, 'logs', 'openpet-app.jsonl'), 'Authorization: Bearer secret-token\n')
+
+  const archiveDir = path.join(rootDir, 'archive', '2026-06-28T15-35-59-210Z')
+  assert.throws(
+    () => createAiTalkLocalSmokeArchive({ sessionDir, archiveDir, now: fixedNow }),
+    /authorization header-like text/
+  )
+})
+
 test('createAiTalkLocalSmokeArchive refuses to overwrite an existing archive directory', () => {
   const { rootDir, sessionDir } = createSessionFixture()
   const archiveDir = path.join(rootDir, 'archive', '2026-06-28T15-35-59-210Z')

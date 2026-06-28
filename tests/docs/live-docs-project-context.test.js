@@ -229,3 +229,34 @@ test('live docs describe the current plugin host bridge generation boundary trut
     'openpet-current-todo-architecture.md should not keep unsupported provider credential wording as an open P1 item once live docs already state it'
   )
 })
+
+test('active TODO recommended milestones do not point at already-closed work', () => {
+  const todoArchitecture = fs.readFileSync(path.join(repoRoot, 'docs/openpet-current-todo-architecture.md'), 'utf-8')
+  const recommendedSection = todoArchitecture.split('## Recommended Next Milestone Options')[1] || ''
+
+  assert.match(
+    recommendedSection,
+    /TypeScript Adapter Boundary Migration/i,
+    'recommended next milestones should include a locally actionable P1 boundary-migration option'
+  )
+  assert.match(
+    recommendedSection,
+    /Release Evidence Closure[\s\S]*mostly Manual-required/i,
+    'recommended next milestones should preserve release evidence as mostly Manual-required'
+  )
+  assert.match(
+    recommendedSection,
+    /Plugin Host Bridge Drift Guard/i,
+    'recommended next milestones should keep plugin bridge changes behind drift-guard work'
+  )
+  assert.doesNotMatch(
+    recommendedSection,
+    /Creator Studio Review Surface Polish/i,
+    'Creator Studio review surface polish should not remain a recommended next milestone after reviewSnapshot landed'
+  )
+  assert.doesNotMatch(
+    recommendedSection,
+    /AI Provider Verification Closure/i,
+    'AI Provider verification closure should not remain a recommended next milestone after provider smoke evidence landed'
+  )
+})

@@ -97,6 +97,19 @@ const requireSanitizedReport = (report) => {
   }
 }
 
+const assertNoSensitiveArchiveText = (content, role) => {
+  const text = Buffer.isBuffer(content) ? content.toString('utf-8') : String(content || '')
+  if (/sk-[A-Za-z0-9_-]{8,}/.test(text)) {
+    throw new Error(`${role} is not sanitized for archive: raw API key-like token found`)
+  }
+  if (/\bAuthorization\b|\bBearer\s+[A-Za-z0-9._-]+/i.test(text)) {
+    throw new Error(`${role} is not sanitized for archive: authorization header-like text found`)
+  }
+  if (/\/Users\/[^"'\s]+/.test(text)) {
+    throw new Error(`${role} is not sanitized for archive: local user path found`)
+  }
+}
+
 const createReadme = ({ report, archiveDir }) => {
   const provider = sanitizeText(report?.config?.provider || '', 80)
   const baseUrl = sanitizeText(report?.config?.baseUrl || '', 200)
@@ -217,6 +230,10 @@ const createAiTalkLocalSmokeArchive = ({
 
   const report = JSON.parse(fsImpl.readFileSync(sourceResultPath, 'utf-8'))
   requireSanitizedReport(report)
+  assertNoSensitiveArchiveText(JSON.stringify(report), 'aiTalkLocalSmokeResult')
+
+  const logContent = fsImpl.readFileSync(sourceLogPath)
+  assertNoSensitiveArchiveText(logContent, 'aiTalkLocalSmokeLog')
 
   fsImpl.mkdirSync(absoluteArchiveDir, { recursive: true })
   const files = [

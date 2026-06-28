@@ -87,6 +87,17 @@ const createChecks = (docsRoot) => {
       description: 'project-context should keep packaged runtime and signed release closure archive facts.',
       run: () => /docs\/release-evidence\/packaged-runtime\/2026-06-16T14-52-13-074Z-darwin-arm64\/[\s\S]*docs\/release-evidence\/signed-release-closure\/2026-06-16T15-00-00Z\//i.test(projectContext),
       failure: 'docs/project-context.json is missing the current packaged runtime or signed release closure archive facts.'
+    },
+    {
+      id: 'todo-recommendations-do-not-reopen-closed-milestones',
+      description: 'Active TODO recommendations should not point at Creator Studio review polish or AI Provider verification closure after those paths landed.',
+      run: () => {
+        const recommendedSection = todoArchitecture.split('## Recommended Next Milestone Options')[1] || ''
+        return /TypeScript Adapter Boundary Migration/i.test(recommendedSection) &&
+          /Release Evidence Closure[\s\S]*mostly Manual-required/i.test(recommendedSection) &&
+          !/Creator Studio Review Surface Polish|AI Provider Verification Closure/i.test(recommendedSection)
+      },
+      failure: 'docs/openpet-current-todo-architecture.md recommends a closed milestone or lacks the current local/manual-required split.'
     }
   ]
 }
