@@ -531,6 +531,12 @@ const runAiTalkLocalSmoke = async ({
       bubbleSegmentCount: 0,
       replyChars: 0
     },
+    manualAcceptanceTemplate: {
+      bubbleVisibleLongEnough: null,
+      inputUsable: null,
+      desktopFeelNotes: '',
+      requestId: ''
+    },
     traces: [],
     logs: []
   }
@@ -565,6 +571,12 @@ const runAiTalkLocalSmoke = async ({
       providerLatencyMs: Number(result.providerLatencyMs) || 0,
       bubbleSegmentCount: Array.isArray(result.bubbleSegments) ? result.bubbleSegments.length : 0,
       replyChars: String(result.reply || '').length
+    }
+    summary.manualAcceptanceTemplate = {
+      bubbleVisibleLongEnough: null,
+      inputUsable: null,
+      desktopFeelNotes: '',
+      requestId: summary.bubbleAcceptance.requestId
     }
     summary.bubbleDispatch = bubbleDispatchHarness.dispatchAiReply(result)
 

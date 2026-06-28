@@ -184,6 +184,12 @@ test('runAiTalkLocalSmoke writes a redacted smoke summary using injected host se
   assert.equal(result.bubbleAcceptance.providerLatencyMs, 820)
   assert.match(result.bubbleAcceptance.requestId, /^chat-/)
   assert.equal(result.bubbleAcceptance.bubbleSegmentCount, 1)
+  assert.deepEqual(result.manualAcceptanceTemplate, {
+    bubbleVisibleLongEnough: null,
+    inputUsable: null,
+    desktopFeelNotes: '',
+    requestId: result.bubbleAcceptance.requestId
+  })
   assert.equal(result.traces.length, 1)
   assert.equal(result.traces[0].requestId, 'chat-from-trace')
   assert.equal(result.traceRequestIds.includes('chat-from-trace'), true)
@@ -197,4 +203,5 @@ test('runAiTalkLocalSmoke writes a redacted smoke summary using injected host se
   assert.equal(persisted.bubbleDispatch.petSayReceived, true)
   assert.equal(persisted.bubbleDispatch.bubbleStateVisible, true)
   assert.equal(persisted.bubbleAcceptance.providerLatencyMs, 820)
+  assert.equal(persisted.manualAcceptanceTemplate.requestId, persisted.bubbleAcceptance.requestId)
 })
