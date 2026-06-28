@@ -574,6 +574,9 @@ test.describe('Control Center smoke', () => {
     await expect(chatProviderSection.getByRole('button', { name: 'vLLM' })).toHaveCount(1)
     await expect(chatProviderSection.getByRole('button', { name: 'OpenRouter' })).toHaveCount(1)
     await expect(chatProviderSection.getByRole('button', { name: 'Together' })).toHaveCount(1)
+    await expect(chatProviderSection.getByText('除 OpenPet 8317 外，预设只是 endpoint 模板，需要保存后测试确认。')).toBeVisible()
+    await expect(chatProviderSection.getByRole('button', { name: 'OpenRouter' })).toContainText('endpoint 模板')
+    await expect(chatProviderSection.getByRole('button', { name: 'OpenRouter' })).toContainText('未包含当前 OpenPet smoke 证据')
     await page.getByRole('textbox', { name: 'Base URL', exact: true }).fill('https://dirty.example.test/v1')
     await page.getByRole('textbox', { name: 'Model', exact: true }).fill('dirty-model')
     await page.getByPlaceholder('输入 API Key').fill('sk-dirty-secret')
@@ -605,6 +608,8 @@ test.describe('Control Center smoke', () => {
     await page.getByRole('textbox', { name: 'Base URL', exact: true }).fill('https://dirty-chat.example.test/v1')
     await page.getByRole('textbox', { name: 'Model', exact: true }).fill('dirty-chat-model')
     await page.getByPlaceholder('输入 API Key').fill('sk-chat-draft-secret')
+    await expect(chatProviderSection.getByRole('button', { name: /OpenPet 8317 网关/ })).toContainText('已有归档 AI smoke')
+    await expect(chatProviderSection.getByRole('button', { name: /OpenPet 8317 网关/ })).toContainText('/models 发现 gpt-5.5')
     await chatProviderSection.getByRole('button', { name: /OpenPet 8317 网关/ }).click()
 
     await expect(page.getByRole('textbox', { name: 'Base URL', exact: true })).toHaveValue('http://127.0.0.1:8317/v1')
@@ -614,6 +619,9 @@ test.describe('Control Center smoke', () => {
     const imageProviderSection = await expandAiSection(page, '图片 Provider')
     await expect(imageProviderSection.getByRole('button', { name: 'Together' })).toHaveCount(1)
     await expect(imageProviderSection.getByRole('button', { name: 'OpenRouter' })).toHaveCount(1)
+    await expect(imageProviderSection.getByText('除 OpenPet 8317 外，预设只是 endpoint 模板，需要保存后健康检查确认。')).toBeVisible()
+    await expect(imageProviderSection.getByRole('button', { name: 'Together' })).toContainText('endpoint 模板')
+    await expect(imageProviderSection.getByRole('button', { name: 'Together' })).toContainText('未包含当前 OpenPet smoke 证据')
     await page.getByLabel('图片 Base URL').fill('https://dirty-image.example.test/v1')
     await page.getByLabel('图片 Model').fill('dirty-image-model')
     const imageApiKeyRow = page.locator('.field-row', { hasText: '图片 API Key' })
@@ -626,6 +634,8 @@ test.describe('Control Center smoke', () => {
     await expect(page.getByLabel('图片最大并发')).toHaveValue('1')
     await expect(imageApiKeyRow.locator('input[type="password"]')).toHaveValue('sk-image-draft-secret')
 
+    await expect(imageProviderSection.getByRole('button', { name: /OpenPet 8317 网关/ })).toContainText('已有归档 Creator Studio smoke')
+    await expect(imageProviderSection.getByRole('button', { name: /OpenPet 8317 网关/ })).toContainText('不代表图片质量批准')
     await imageProviderSection.getByRole('button', { name: /OpenPet 8317 网关/ }).click()
 
     await expect(page.getByLabel('图片 Base URL')).toHaveValue('http://127.0.0.1:8317/v1')

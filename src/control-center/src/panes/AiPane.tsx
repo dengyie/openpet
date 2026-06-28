@@ -41,7 +41,7 @@ const imageProviderPresets: readonly ImageProviderPreset[] = [
   {
     id: 'openai',
     title: 'OpenAI 官方',
-    description: '使用官方 OpenAI 图片接口；API Key 保存在主进程。',
+    description: '官方图片 endpoint 模板；保存后请用健康检查确认当前账号和模型权限。',
     baseUrl: 'https://api.openai.com/v1',
     model: 'gpt-image-2',
     timeoutMs: 120000,
@@ -50,7 +50,7 @@ const imageProviderPresets: readonly ImageProviderPreset[] = [
   {
     id: 'together',
     title: 'Together',
-    description: '云端 OpenAI-compatible 图片网关；默认保留当前模型名，请按 Together 已开通模型调整。',
+    description: '常见云端图片 endpoint 模板；未包含当前 OpenPet smoke 证据，请按 Together 已开通模型调整并健康检查。',
     baseUrl: 'https://api.together.xyz/v1',
     timeoutMs: 120000,
     maxConcurrentJobs: 1
@@ -58,7 +58,7 @@ const imageProviderPresets: readonly ImageProviderPreset[] = [
   {
     id: 'openrouter',
     title: 'OpenRouter',
-    description: '云端 OpenAI-compatible 图片网关；默认保留当前模型名，请按 OpenRouter 实际可用模型调整。',
+    description: '常见云端图片 endpoint 模板；未包含当前 OpenPet smoke 证据，请按 OpenRouter 实际可用模型调整并健康检查。',
     baseUrl: 'https://openrouter.ai/api/v1',
     timeoutMs: 120000,
     maxConcurrentJobs: 1
@@ -66,7 +66,7 @@ const imageProviderPresets: readonly ImageProviderPreset[] = [
   {
     id: 'local-openai-compatible',
     title: '本地/代理 OpenAI-compatible',
-    description: '适合本机网关、反代或局域网模型服务；本地和云端共用同一套 Provider 配置。',
+    description: '本机、反代或局域网 endpoint 模板；保存后请用健康检查确认实际 /models 和图片接口。',
     baseUrl: 'http://127.0.0.1:8317/v1',
     model: 'gpt-image-2',
     timeoutMs: 120000,
@@ -75,7 +75,7 @@ const imageProviderPresets: readonly ImageProviderPreset[] = [
   {
     id: 'openpet-8317-gateway',
     title: 'OpenPet 8317 网关',
-    description: '使用当前开发网关，图片默认 gpt-image-2；只填充 Provider 草稿，不覆盖密钥。',
+    description: '当前开发网关已有归档 Creator Studio smoke：gpt-image-2 路径可跑通；仍不代表图片质量批准。',
     baseUrl: 'http://127.0.0.1:8317/v1',
     model: 'gpt-image-2',
     timeoutMs: 120000,
@@ -87,45 +87,45 @@ const chatProviderPresets: readonly ChatProviderPreset[] = [
   {
     id: 'openai',
     title: 'OpenAI 官方',
-    description: '使用官方 OpenAI 聊天接口；API Key 保存在主进程。',
+    description: '官方聊天 endpoint 模板；保存后请测试当前账号、模型和网关可达性。',
     baseUrl: 'https://api.openai.com/v1',
     model: 'gpt-4o-mini'
   },
   {
     id: 'lm-studio',
     title: 'LM Studio',
-    description: '本地 LM Studio OpenAI-compatible server；默认保留当前模型名，请按已加载模型调整。',
+    description: '本地 endpoint 模板；未包含当前 OpenPet smoke 证据，请按已加载模型调整并测试。',
     baseUrl: 'http://127.0.0.1:1234/v1'
   },
   {
     id: 'vllm',
     title: 'vLLM',
-    description: '自托管 vLLM OpenAI-compatible server；默认保留当前模型名，请按部署模型调整。',
+    description: '自托管 endpoint 模板；未包含当前 OpenPet smoke 证据，请按部署模型调整并测试。',
     baseUrl: 'http://127.0.0.1:8000/v1'
   },
   {
     id: 'openrouter',
     title: 'OpenRouter',
-    description: '云端 OpenAI-compatible 聚合网关；默认保留当前模型名，请按路由模型调整。',
+    description: '常见云端聚合 endpoint 模板；未包含当前 OpenPet smoke 证据，请按路由模型调整并测试。',
     baseUrl: 'https://openrouter.ai/api/v1'
   },
   {
     id: 'together',
     title: 'Together',
-    description: '云端 OpenAI-compatible 推理网关；默认保留当前模型名，请按 Together 模型列表调整。',
+    description: '常见云端推理 endpoint 模板；未包含当前 OpenPet smoke 证据，请按 Together 模型列表调整并测试。',
     baseUrl: 'https://api.together.xyz/v1'
   },
   {
     id: 'local-openai-compatible',
     title: '本地/代理 OpenAI-compatible',
-    description: '适合本机网关、反代或局域网模型服务；本地和云端共用同一套 Provider 配置。',
+    description: '本机、反代或局域网 endpoint 模板；保存后请测试实际 /models 和聊天接口。',
     baseUrl: 'http://127.0.0.1:8317/v1',
     model: 'gpt-4o-mini'
   },
   {
     id: 'openpet-8317-gateway',
     title: 'OpenPet 8317 网关',
-    description: '使用当前开发网关，聊天默认 gpt-5.5；只填充 Provider 草稿，不覆盖密钥。',
+    description: '当前开发网关已有归档 AI smoke：/models 发现 gpt-5.5，聊天可达；只填草稿不覆盖密钥。',
     baseUrl: 'http://127.0.0.1:8317/v1',
     model: 'gpt-5.5'
   }
@@ -697,7 +697,7 @@ export function AiPane({
           <div className="field-row tall">
             <div>
               <div className="field-label">聊天 Provider 预设</div>
-              <div className="field-note">预设只填充 Base URL / 可安全默认的 Model；不会读取或覆盖 API Key。</div>
+              <div className="field-note">预设只填充 Base URL / 可安全默认的 Model；不会读取或覆盖 API Key。除 OpenPet 8317 外，预设只是 endpoint 模板，需要保存后测试确认。</div>
             </div>
             <div className="provider-preset-grid">
               {chatProviderPresets.map((preset) => (
@@ -833,7 +833,7 @@ export function AiPane({
           <div className="field-row tall">
             <div>
               <div className="field-label">图片 Provider 预设</div>
-              <div className="field-note">预设只填充 Base URL / 可安全默认的 Model / 超时；不会读取或覆盖 API Key。</div>
+              <div className="field-note">预设只填充 Base URL / 可安全默认的 Model / 超时；不会读取或覆盖 API Key。除 OpenPet 8317 外，预设只是 endpoint 模板，需要保存后健康检查确认。</div>
             </div>
             <div className="provider-preset-grid">
               {imageProviderPresets.map((preset) => (

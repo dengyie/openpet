@@ -24,6 +24,29 @@ test('active TODO doc describes the current AI pane layout truthfully', () => {
   )
 })
 
+test('active TODO doc describes provider presets as templates except for verified OpenPet gateway evidence', () => {
+  const todoArchitecture = readText('docs/openpet-current-todo-architecture.md')
+  const developmentSummary = readText('docs/development-summary.md')
+  const projectContextFacts = readJson('docs/project-context.json').currentFacts.join('\n')
+
+  for (const [name, content] of [
+    ['openpet-current-todo-architecture.md', todoArchitecture],
+    ['development-summary.md', developmentSummary],
+    ['project-context.json', projectContextFacts]
+  ]) {
+    assert.match(
+      content,
+      /OpenRouter[\s\S]*Together[\s\S]*(?:endpoint templates|endpoint 模板|模板)/i,
+      `${name} should describe common provider presets as templates rather than verified integrations`
+    )
+    assert.match(
+      content,
+      /only the OpenPet 8317 gateway preset|the only preset tied|只有.*OpenPet 8317/i,
+      `${name} should identify OpenPet 8317 as the preset tied to current archived smoke evidence`
+    )
+  }
+})
+
 test('active TODO doc describes the AI provider smoke evidence entrypoint truthfully', () => {
   const todoArchitecture = readText('docs/openpet-current-todo-architecture.md')
 
