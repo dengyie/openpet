@@ -276,6 +276,13 @@ test('action adapters package import and mutation results without leaking servic
         sourceCommandId: 'import-approved-action',
         message: 'Sleep when idle.',
         preview: 'State trigger rule can play sleep when a host state condition matches.',
+        ruleSpec: {
+          schemaVersion: 1,
+          type: 'state',
+          summary: 'Sleep when idle with sk-test-secret.',
+          state: { predicate: 'pet.idle && source=/Users/mango/private/state.json', source: 'creator-studio' },
+          internal: 'ignore-me'
+        },
         createdAt: '2026-06-22T10:00:00.000Z',
         updatedAt: '2026-06-22T10:00:00.000Z',
         internal: 'ignore-me'
@@ -305,6 +312,12 @@ test('action adapters package import and mutation results without leaking servic
         sourceCommandId: 'import-approved-action',
         message: 'Sleep when idle.',
         preview: 'State trigger rule can play sleep when a host state condition matches.',
+        ruleSpec: {
+          schemaVersion: 1,
+          type: 'state',
+          summary: 'Sleep when idle with [redacted-secret].',
+          state: { predicate: 'pet.idle && source=[redacted-path]', source: 'creator-studio' }
+        },
         createdAt: '2026-06-22T10:00:00.000Z',
         updatedAt: '2026-06-22T10:00:00.000Z'
       }
@@ -334,6 +347,13 @@ test('action trigger proposal preview adapter strips internal fields', () => {
       sourceCommandId: 'import-approved-action',
       message: 'Sleep when idle.',
       preview: 'State trigger rule can play sleep when a host state condition matches.',
+      ruleSpec: {
+        schemaVersion: 1,
+        type: 'state',
+        summary: 'Sleep when idle with sk-test-secret.',
+        state: { predicate: 'pet.idle && source=/Users/mango/private/state.json', source: 'creator-studio' },
+        internal: 'ignore-me'
+      },
       createdAt: '2026-06-22T10:00:00.000Z',
       updatedAt: '2026-06-22T10:00:00.000Z',
       internal: 'ignore-me'
@@ -363,6 +383,12 @@ test('action trigger proposal preview adapter strips internal fields', () => {
       sourceCommandId: 'import-approved-action',
       message: 'Sleep when idle.',
       preview: 'State trigger rule can play sleep when a host state condition matches.',
+      ruleSpec: {
+        schemaVersion: 1,
+        type: 'state',
+        summary: 'Sleep when idle with [redacted-secret].',
+        state: { predicate: 'pet.idle && source=[redacted-path]', source: 'creator-studio' }
+      },
       createdAt: '2026-06-22T10:00:00.000Z',
       updatedAt: '2026-06-22T10:00:00.000Z'
     },

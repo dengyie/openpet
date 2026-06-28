@@ -61,7 +61,8 @@ const describeTrigger = (action) => {
   return [
     sanitizeCreativeBrief(trigger.type || 'unbound'),
     trigger.binding ? `binding=${sanitizeCreativeBrief(trigger.binding)}` : '',
-    trigger.notes ? `notes=${sanitizeCreativeBrief(trigger.notes)}` : ''
+    trigger.notes ? `notes=${sanitizeCreativeBrief(trigger.notes)}` : '',
+    trigger.ruleSpec?.summary ? `rule=${sanitizeCreativeBrief(trigger.ruleSpec.summary)}` : ''
   ].filter(Boolean).join(', ')
 }
 

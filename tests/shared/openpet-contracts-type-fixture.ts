@@ -225,6 +225,15 @@ const triggerProposalPreviewFixture = {
     sourceCommandId: 'import-approved-action',
     message: 'Play when idle.',
     preview: 'State trigger rule can play wave when a host state condition matches.',
+    ruleSpec: {
+      schemaVersion: 1,
+      type: 'state',
+      summary: 'Play when idle.',
+      state: {
+        predicate: 'host.state.available',
+        source: 'host'
+      }
+    },
     createdAt: '2026-06-22T10:00:00.000Z',
     updatedAt: '2026-06-22T10:00:00.000Z'
   }

@@ -310,6 +310,15 @@ export type ActionTriggerProposalInboxStatus = 'pending' | 'accepted' | 'rejecte
 export type ActionTriggerRuleType = 'random' | 'state' | 'event'
 export type ActionTriggerRuleStatus = 'active' | 'disabled'
 
+export interface ActionTriggerRuleSpec {
+  schemaVersion: number
+  type: ActionTriggerRuleType
+  summary: string
+  schedule?: JsonObject
+  state?: JsonObject
+  event?: JsonObject
+}
+
 export interface ActionTriggerRule {
   id: string
   actionId: string
@@ -321,6 +330,7 @@ export interface ActionTriggerRule {
   sourceCommandId: string
   message: string
   preview: string
+  ruleSpec: ActionTriggerRuleSpec
   createdAt: string
   updatedAt: string
 }
@@ -337,6 +347,7 @@ export interface ActionTriggerProposalInboxItem {
   status: ActionTriggerProposalInboxStatus
   triggerRuleId: string
   preview: string
+  ruleSpec?: ActionTriggerRuleSpec
   resultCode: string
   resultMessage: string
   rejectionReason: string
@@ -356,6 +367,7 @@ export interface ActionTriggerProposalAcceptanceRequest {
   sourceCommandId?: string
   message?: string
   notes?: string
+  ruleSpec?: Partial<ActionTriggerRuleSpec>
 }
 
 export interface ActionTriggerProposalAcceptanceResult {

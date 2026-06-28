@@ -647,11 +647,74 @@ test('action service stores preview text on submitted non-click trigger proposal
   const submitted = service.submitTriggerProposal({
     actionId: 'wave',
     type: 'state',
-    message: 'Play when the pet looks idle.'
+    message: 'Play when the pet looks idle.',
+    ruleSpec: {
+      summary: 'Play when idle. API key sk-test-secret should not persist.',
+      state: {
+        predicate: 'pet.idle && cursor.nearby',
+        source: 'creator-studio'
+      }
+    }
   })
 
   assert.equal(submitted.proposal.preview, 'State trigger rule can play wave when a host state condition matches.')
+  assert.deepEqual(submitted.proposal.ruleSpec, {
+    schemaVersion: 1,
+    type: 'state',
+    summary: 'Play when idle. API key [redacted-secret] should not persist.',
+    state: {
+      predicate: 'pet.idle && cursor.nearby',
+      source: 'creator-studio'
+    }
+  })
   assert.equal(service.getConfig().triggerProposalInbox[0].preview, submitted.proposal.preview)
+  assert.deepEqual(service.getConfig().triggerProposalInbox[0].ruleSpec, submitted.proposal.ruleSpec)
+})
+
+test('action service carries structured trigger rule specs from inbox proposal to accepted host rule', () => {
+  let savedConfig = null
+  const service = createActionService({
+    projectRoot: '/app/openpet',
+    now: () => '2026-06-22T10:02:45.000Z',
+    loadLegacyAnimations: () => savedConfig || ({
+      defaultAction: 'idle',
+      clickAction: 'idle',
+      actions: [
+        { id: 'idle', label: 'Idle', kind: 'idle', loop: true, frameCount: 1, frameMs: 100, frameWidth: 32, frameHeight: 32, sprite: 'cat_anime/sprites/idle.png' },
+        { id: 'wave', label: 'Wave', kind: 'greeting', loop: false, frameCount: 1, frameMs: 100, frameWidth: 32, frameHeight: 32, sprite: 'cat_anime/sprites/wave.png' }
+      ]
+    }),
+    saveLegacyAnimations: (config) => {
+      savedConfig = config
+      return config
+    }
+  })
+
+  const submitted = service.submitTriggerProposal({
+    id: 'proposal:event:wave:structured',
+    actionId: 'wave',
+    type: 'event',
+    ruleSpec: {
+      summary: 'Play when weather plugin emits sunny status.',
+      event: {
+        name: 'weather.sunny',
+        source: 'plugin:weather'
+      }
+    }
+  })
+  const accepted = service.acceptTriggerProposalItem(submitted.proposal.id)
+
+  assert.deepEqual(accepted.triggerProposal.triggerRule.ruleSpec, {
+    schemaVersion: 1,
+    type: 'event',
+    summary: 'Play when weather plugin emits sunny status.',
+    event: {
+      name: 'weather.sunny',
+      source: 'plugin:weather'
+    }
+  })
+  assert.deepEqual(savedConfig.triggerRules[0].ruleSpec, accepted.triggerProposal.triggerRule.ruleSpec)
+  assert.deepEqual(service.getConfig().triggerRules[0].ruleSpec, accepted.triggerProposal.triggerRule.ruleSpec)
 })
 
 test('action service persists host trigger rules and rejected inbox proposals', () => {

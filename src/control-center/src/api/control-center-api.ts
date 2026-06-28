@@ -1048,6 +1048,41 @@ const createDemoTriggerPreviewText = (type = '', actionId = '') => {
   return `Unbound trigger keeps ${actionId} imported without automatic scheduling.`
 }
 
+const createDemoTriggerRuleSpec = (type: 'random' | 'state' | 'event', actionId: string, proposal: {
+  binding?: string
+  message?: string
+} = {}) => {
+  const summary = proposal.message || createDemoTriggerPreviewText(type, actionId)
+  if (type === 'random') {
+    return {
+      schemaVersion: 1,
+      type,
+      summary,
+      schedule: { mode: 'opportunistic' }
+    }
+  }
+  if (type === 'state') {
+    return {
+      schemaVersion: 1,
+      type,
+      summary,
+      state: {
+        predicate: proposal.binding || 'host.state.available',
+        source: 'host'
+      }
+    }
+  }
+  return {
+    schemaVersion: 1,
+    type,
+    summary,
+    event: {
+      name: proposal.binding || 'openpet.event',
+      source: 'host'
+    }
+  }
+}
+
 const createDemoTriggerProposalPreview = (proposal: {
   id?: string
   actionId?: string
@@ -1073,6 +1108,9 @@ const createDemoTriggerProposalPreview = (proposal: {
         sourceCommandId: proposal.sourceCommandId || '',
         message: '',
         preview: createDemoTriggerPreviewText(type, actionId),
+        ruleSpec: createDemoTriggerRuleSpec(type as 'random' | 'state' | 'event', actionId, {
+          binding: proposal.binding
+        }),
         createdAt: '2026-06-22T00:00:00.000Z',
         updatedAt: '2026-06-22T00:00:00.000Z'
       }
@@ -1170,6 +1208,10 @@ const demoApi: ControlCenterApi = {
           sourceCommandId: ruleProposal.sourceCommandId || '',
           message: ruleProposal.message || ruleProposal.notes || '',
           preview: `${ruleProposal.type} rule can play ${ruleProposal.actionId} after host validation.`,
+          ruleSpec: createDemoTriggerRuleSpec(ruleProposal.type as 'random' | 'state' | 'event', ruleProposal.actionId, {
+            binding: ruleProposal.binding,
+            message: ruleProposal.message || ruleProposal.notes || ''
+          }),
           createdAt: '2026-06-22T00:00:00.000Z',
           updatedAt: '2026-06-22T00:00:00.000Z'
         }

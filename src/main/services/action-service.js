@@ -146,10 +146,71 @@ const TRIGGER_PROPOSAL_STATUSES = new Set(['pending', 'accepted', 'rejected', 'a
 const SAFE_TRIGGER_PROPOSAL_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9:_-]*$/
 const SAFE_TRIGGER_RULE_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9:_-]*$/
 const MAX_TRIGGER_PROPOSAL_SOURCE_LENGTH = 160
+const MAX_TRIGGER_RULE_SPEC_TEXT_LENGTH = 240
 
 const normalizeOptionalText = (value) => {
   if (typeof value !== 'string') return ''
   return value.slice(0, MAX_TRIGGER_PROPOSAL_SOURCE_LENGTH)
+}
+
+const sanitizeTriggerRuleSpecText = (value, fallback = '') => {
+  const text = typeof value === 'string' ? value : fallback
+  return String(text || '')
+    .replace(/\bsk-[A-Za-z0-9_-]{8,}\b/g, '[redacted-secret]')
+    .replace(/\b[A-Za-z0-9_-]*token[A-Za-z0-9_-]*\b/gi, '[redacted-token]')
+    .replace(/https?:\/\/(?:127\.0\.0\.1|localhost|\[::1\])(?::\d+)?(?:\/[^\s]*)?/gi, '[redacted-local-url]')
+    .replace(/(?:\/Users|\/var|\/tmp|\/private|\/Volumes)\/[^\s,，。)]+/g, '[redacted-path]')
+    .slice(0, MAX_TRIGGER_RULE_SPEC_TEXT_LENGTH)
+}
+
+const createDefaultTriggerRuleSpec = ({ type, actionId, proposal = {} }) => {
+  const ruleSpec = proposal.ruleSpec && typeof proposal.ruleSpec === 'object' ? proposal.ruleSpec : {}
+  const summary = sanitizeTriggerRuleSpecText(
+    ruleSpec.summary || proposal.notes || proposal.message || createTriggerRulePreview({ type, actionId }),
+    createTriggerRulePreview({ type, actionId })
+  )
+  const baseSpec = { schemaVersion: 1, type, summary }
+  if (type === 'random') {
+    const schedule = ruleSpec.schedule && typeof ruleSpec.schedule === 'object' ? ruleSpec.schedule : {}
+    const requestedMode = schedule.mode
+    const mode = requestedMode === 'interval' ? 'interval' : 'opportunistic'
+    const intervalMs = Number(schedule.intervalMs)
+    return {
+      ...baseSpec,
+      schedule: {
+        mode,
+        ...(mode === 'interval' && Number.isFinite(intervalMs) && intervalMs > 0
+          ? { intervalMs: Math.min(Math.round(intervalMs), 24 * 60 * 60 * 1000) }
+          : {})
+      }
+    }
+  }
+  if (type === 'state') {
+    const state = ruleSpec.state && typeof ruleSpec.state === 'object' ? ruleSpec.state : {}
+    return {
+      ...baseSpec,
+      state: {
+        predicate: sanitizeTriggerRuleSpecText(state.predicate || proposal.binding, 'host.state.available'),
+        source: sanitizeTriggerRuleSpecText(state.source, 'host')
+      }
+    }
+  }
+  if (type === 'event') {
+    const event = ruleSpec.event && typeof ruleSpec.event === 'object' ? ruleSpec.event : {}
+    return {
+      ...baseSpec,
+      event: {
+        name: sanitizeTriggerRuleSpecText(event.name || proposal.binding, 'openpet.event'),
+        source: sanitizeTriggerRuleSpecText(event.source, 'host')
+      }
+    }
+  }
+  return baseSpec
+}
+
+const normalizeTriggerRuleSpec = ({ type, actionId, value, proposal = {} }) => {
+  const spec = createDefaultTriggerRuleSpec({ type, actionId, proposal: { ...proposal, ruleSpec: value } })
+  return spec
 }
 
 const normalizeTriggerProposalId = (value, fieldName = 'trigger proposal id') => {
@@ -178,9 +239,10 @@ const normalizeTriggerRuleItem = (item = {}) => {
   if (!HOST_RULE_REQUIRED_TYPES.has(type)) {
     throw new Error(`Unsupported trigger rule type: ${type || 'unknown'}`)
   }
+  const actionId = normalizeActionId(item.actionId, 'trigger rule action id')
   return {
     id: normalizeTriggerRuleId(item.id),
-    actionId: normalizeActionId(item.actionId, 'trigger rule action id'),
+    actionId,
     type,
     status: item.status === 'disabled' ? 'disabled' : 'active',
     sourceProposalId: normalizeOptionalText(item.sourceProposalId),
@@ -189,6 +251,7 @@ const normalizeTriggerRuleItem = (item = {}) => {
     sourceCommandId: normalizeOptionalText(item.sourceCommandId),
     message: normalizeOptionalText(item.message),
     preview: normalizeOptionalText(item.preview || createTriggerRulePreview(item)),
+    ruleSpec: normalizeTriggerRuleSpec({ type, actionId, value: item.ruleSpec, proposal: item }),
     createdAt: normalizeOptionalText(item.createdAt),
     updatedAt: normalizeOptionalText(item.updatedAt)
   }
@@ -204,6 +267,7 @@ const normalizeTriggerProposalInboxItem = (item = {}) => {
   const actionId = typeof item.actionId === 'string' ? item.actionId : ''
   const type = typeof item.type === 'string' && TRIGGER_PROPOSAL_TYPES.has(item.type) ? item.type : 'unbound'
   const status = typeof item.status === 'string' && TRIGGER_PROPOSAL_STATUSES.has(item.status) ? item.status : 'pending'
+  const isHostRuleProposal = HOST_RULE_REQUIRED_TYPES.has(type) && SAFE_ACTION_ID_PATTERN.test(actionId)
   return {
     id: normalizeOptionalText(item.id || `${type}:${actionId}`),
     actionId: normalizeOptionalText(actionId),
@@ -216,6 +280,9 @@ const normalizeTriggerProposalInboxItem = (item = {}) => {
     status,
     triggerRuleId: normalizeOptionalText(item.triggerRuleId),
     preview: normalizeOptionalText(item.preview),
+    ...(isHostRuleProposal
+      ? { ruleSpec: normalizeTriggerRuleSpec({ type, actionId, value: item.ruleSpec, proposal: item }) }
+      : {}),
     resultCode: normalizeOptionalText(item.resultCode),
     resultMessage: normalizeOptionalText(item.resultMessage),
     rejectionReason: normalizeOptionalText(item.rejectionReason),
@@ -419,6 +486,7 @@ const createActionService = ({ petPackService, loadPetPack, loadLegacyAnimations
       sourceRunId: proposal.sourceRunId,
       sourceCommandId: proposal.sourceCommandId,
       message: proposal.notes || proposal.message,
+      ruleSpec: proposal.ruleSpec,
       createdAt: now(),
       updatedAt: now()
     })
@@ -556,7 +624,8 @@ const createActionService = ({ petPackService, loadPetPack, loadLegacyAnimations
         sourceRunId: proposal.sourceRunId,
         sourceCommandId: proposal.sourceCommandId,
         message: proposal.notes || proposal.message,
-        preview
+        preview,
+        ruleSpec: proposal.ruleSpec
       })
       return {
         ...baseResult,
@@ -612,6 +681,7 @@ const createActionService = ({ petPackService, loadPetPack, loadLegacyAnimations
       preview: HOST_RULE_REQUIRED_TYPES.has(type)
         ? createTriggerRulePreview({ type, actionId })
         : '',
+      ruleSpec: payload.ruleSpec,
       createdAt: now(),
       updatedAt: now()
     })
@@ -649,7 +719,8 @@ const createActionService = ({ petPackService, loadPetPack, loadLegacyAnimations
       sourcePluginId: proposal.sourcePluginId,
       sourceRunId: proposal.sourceRunId,
       sourceCommandId: proposal.sourceCommandId,
-      notes: proposal.message
+      notes: proposal.message,
+      ruleSpec: proposal.ruleSpec
     })
     const nextCurrent = getMutableConfig()
     const nextIndex = nextCurrent.triggerProposalInbox.findIndex((item) => item.id === proposal.id)

@@ -4,8 +4,10 @@ const VALID_MODES = new Set(['single-action', 'full-pet'])
 const VALID_TARGET_PETS = new Set(['current', 'new'])
 const VALID_STYLE_SOURCES = new Set(['currentPet', 'referenceImage', 'textOnly'])
 const VALID_TRIGGER_TYPES = new Set(['manual', 'click', 'random', 'state', 'event', 'unbound'])
+const HOST_RULE_TRIGGER_TYPES = new Set(['random', 'state', 'event'])
 const SAFE_ACTION_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/
 const MAX_ACTION_FRAME_COUNT = 32
+const MAX_TRIGGER_SPEC_TEXT_LENGTH = 240
 
 const hashActionId = (value) => `action-${crypto.createHash('sha1').update(String(value || 'action')).digest('hex').slice(0, 8)}`
 
@@ -15,13 +17,74 @@ const clampFrameCount = (value, fallback) => {
   return Math.min(Math.max(Math.round(number), 1), MAX_ACTION_FRAME_COUNT)
 }
 
+const sanitizeTriggerSpecText = (value, fallback = '') => String(typeof value === 'string' ? value : fallback)
+  .replace(/\bsk-[A-Za-z0-9_-]+\b/g, '[redacted-secret]')
+  .replace(/\b[A-Za-z0-9_-]*token[A-Za-z0-9_-]*\b/gi, '[redacted-token]')
+  .replace(/https?:\/\/(?:127\.0\.0\.1|localhost|\[::1\])(?::\d+)?(?:\/[^\s]*)?/gi, '[redacted-local-url]')
+  .replace(/(?:\/Users|\/var|\/tmp|\/private|\/Volumes)\/[^\s,，。)]+/g, '[redacted-path]')
+  .slice(0, MAX_TRIGGER_SPEC_TEXT_LENGTH)
+
+const createTriggerRuleSpec = (proposal = {}) => {
+  const type = String(proposal.type || 'unbound')
+  if (!HOST_RULE_TRIGGER_TYPES.has(type)) return undefined
+  const ruleSpec = proposal.ruleSpec && typeof proposal.ruleSpec === 'object' ? proposal.ruleSpec : {}
+  const summary = sanitizeTriggerSpecText(
+    ruleSpec.summary || proposal.notes,
+    type === 'random'
+      ? 'Use as a host-owned random or occasional behavior.'
+      : type === 'state'
+        ? 'Use when a host-owned state predicate matches.'
+        : 'Use when a host-owned event is received.'
+  )
+  if (type === 'random') {
+    const schedule = ruleSpec.schedule && typeof ruleSpec.schedule === 'object' ? ruleSpec.schedule : {}
+    const mode = schedule.mode === 'interval' ? 'interval' : 'opportunistic'
+    const intervalMs = Number(schedule.intervalMs)
+    return {
+      schemaVersion: 1,
+      type,
+      summary,
+      schedule: {
+        mode,
+        ...(mode === 'interval' && Number.isFinite(intervalMs) && intervalMs > 0
+          ? { intervalMs: Math.min(Math.round(intervalMs), 24 * 60 * 60 * 1000) }
+          : {})
+      }
+    }
+  }
+  if (type === 'state') {
+    const state = ruleSpec.state && typeof ruleSpec.state === 'object' ? ruleSpec.state : {}
+    return {
+      schemaVersion: 1,
+      type,
+      summary,
+      state: {
+        predicate: sanitizeTriggerSpecText(state.predicate || proposal.binding, 'host.state.available'),
+        source: sanitizeTriggerSpecText(state.source, 'creator-studio')
+      }
+    }
+  }
+  const event = ruleSpec.event && typeof ruleSpec.event === 'object' ? ruleSpec.event : {}
+  return {
+    schemaVersion: 1,
+    type,
+    summary,
+    event: {
+      name: sanitizeTriggerSpecText(event.name || proposal.binding, 'openpet.event'),
+      source: sanitizeTriggerSpecText(event.source, 'creator-studio')
+    }
+  }
+}
+
 const normalizeTriggerProposal = (proposal = {}) => {
   const type = String(proposal.type || 'unbound')
   if (!VALID_TRIGGER_TYPES.has(type)) throw new Error(`Creator Studio trigger type is invalid: ${type}`)
+  const ruleSpec = createTriggerRuleSpec({ ...proposal, type })
   return {
     type,
     ...(proposal.binding ? { binding: String(proposal.binding) } : {}),
-    ...(proposal.notes ? { notes: String(proposal.notes) } : {})
+    ...(proposal.notes ? { notes: String(proposal.notes) } : {}),
+    ...(ruleSpec ? { ruleSpec } : {})
   }
 }
 
@@ -67,6 +130,7 @@ const normalizeGenerationTask = (task = {}) => {
 }
 
 module.exports = {
+  createTriggerRuleSpec,
   hashActionId,
   normalizeGenerationTask
 }

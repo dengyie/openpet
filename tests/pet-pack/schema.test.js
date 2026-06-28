@@ -108,6 +108,12 @@ test('normalizes trigger rules and rejects rules for missing actions', () => {
       status: 'active',
       sourceProposalId: 'proposal:state:idle:test',
       preview: 'State trigger rule can play idle.',
+      ruleSpec: {
+        schemaVersion: 1,
+        type: 'state',
+        summary: 'State trigger rule can play idle.',
+        state: { predicate: 'pet.idle', source: 'host' }
+      },
       internal: 'ignore'
     }]
   })
@@ -123,6 +129,12 @@ test('normalizes trigger rules and rejects rules for missing actions', () => {
     sourceCommandId: '',
     message: '',
     preview: 'State trigger rule can play idle.',
+    ruleSpec: {
+      schemaVersion: 1,
+      type: 'state',
+      summary: 'State trigger rule can play idle.',
+      state: { predicate: 'pet.idle', source: 'host' }
+    },
     createdAt: '',
     updatedAt: ''
   })

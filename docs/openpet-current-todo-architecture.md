@@ -173,13 +173,14 @@ Current state:
 - `triggerRules` is part of the action config view state, active pet-pack manifest, legacy animation config, and Control Center demo contract.
 - `ActionService.submitTriggerProposal`, `acceptTriggerProposalItem`, and `rejectTriggerProposalItem` persist proposal status: pending, accepted, rejected, applied, or pending-host-rule.
 - Trigger-rule persistence validates that every rule references an existing imported action and survives action regeneration.
+- `random`, `state`, and `event` trigger proposals and saved host trigger rules carry a structured `ruleSpec` with scheduler/state/event intent, so Creator Studio handoff is aligned with future rule-editor and scheduler contracts without giving plugins direct rule mutation rights.
 - Control Center Actions pane shows a trigger proposal inbox and can accept/reject queued proposals.
 - Control Center Actions pane shows saved host trigger rules for non-click proposal types.
 - Legacy action regeneration preserves the trigger proposal inbox and trigger rules.
 
 P1 work:
 
-- Keep Creator Studio-trigger proposal handoff aligned with future trigger-rule editor and scheduler semantics.
+- Keep Creator Studio-trigger proposal handoff aligned if future rule-editor fields expand beyond the current `ruleSpec` contract.
 
 P2/P3:
 

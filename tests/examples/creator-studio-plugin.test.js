@@ -129,6 +129,25 @@ test('creator studio wizard drafts a custom click-triggered single-action task',
   assert.deepEqual(draft.generationTask.questions, [])
 })
 
+test('creator studio wizard drafts structured host-rule trigger specs for non-click actions', () => {
+  const { draftGenerationTask } = require('../../examples/plugins/creator-studio/lib/conversation-wizard')
+
+  const draft = draftGenerationTask({
+    prompt: '新增一个动作：天气晴朗事件触发开心挥手，事件 event 来自 API。'
+  })
+
+  assert.equal(draft.generationTask.actions[0].triggerProposal.type, 'event')
+  assert.deepEqual(draft.generationTask.actions[0].triggerProposal.ruleSpec, {
+    schemaVersion: 1,
+    type: 'event',
+    summary: 'User requested event trigger.',
+    event: {
+      name: 'openpet.event',
+      source: 'creator-studio'
+    }
+  })
+})
+
 test('creator studio wizard asks one trigger question for ambiguous custom actions', () => {
   const { draftGenerationTask } = require('../../examples/plugins/creator-studio/lib/conversation-wizard')
 
@@ -175,6 +194,42 @@ test('creator studio generation task validation rejects unsafe trigger proposals
     }),
     /trigger type is invalid/
   )
+})
+
+test('creator studio generation task normalizes structured trigger rule specs', () => {
+  const { normalizeGenerationTask } = require('../../examples/plugins/creator-studio/lib/generation-task')
+
+  const task = normalizeGenerationTask({
+    mode: 'single-action',
+    targetPet: 'current',
+    styleSource: 'currentPet',
+    actions: [{
+      actionId: 'sunny-wave',
+      name: 'Sunny Wave',
+      motionPrompt: 'wave when the weather is sunny',
+      triggerProposal: {
+        type: 'event',
+        binding: 'weather.sunny',
+        notes: 'Use the weather event. API key sk-test-secret must not persist.',
+        ruleSpec: {
+          event: {
+            name: 'weather.sunny',
+            source: 'plugin:weather'
+          }
+        }
+      }
+    }]
+  })
+
+  assert.deepEqual(task.actions[0].triggerProposal.ruleSpec, {
+    schemaVersion: 1,
+    type: 'event',
+    summary: 'Use the weather event. API key [redacted-secret] must not persist.',
+    event: {
+      name: 'weather.sunny',
+      source: 'plugin:weather'
+    }
+  })
 })
 
 test('creator studio generation task validation clamps action frame count to builder limits', () => {
@@ -5075,6 +5130,15 @@ test('creator studio service lets dashboard update a drafted full-pet task befor
     assert.equal(updated.run.generationTask.actions[0].name, 'Lazy Idle')
     assert.equal(updated.run.generationTask.actions[0].motionPrompt, 'slow breathing with tiny ear flicks')
     assert.equal(updated.run.generationTask.actions[0].triggerProposal.type, 'state')
+    assert.deepEqual(updated.run.generationTask.actions[0].triggerProposal.ruleSpec, {
+      schemaVersion: 1,
+      type: 'state',
+      summary: 'User selected state trigger.',
+      state: {
+        predicate: 'host.state.available',
+        source: 'creator-studio'
+      }
+    })
     assert.equal(updated.run.generationTask.actions[1].name, 'Shy Twirl')
     assert.equal(updated.run.generationTask.actions[1].motionPrompt, 'curl up first, then twirl bashfully once')
     assert.equal(updated.run.generationTask.actions[1].triggerProposal.type, 'manual')

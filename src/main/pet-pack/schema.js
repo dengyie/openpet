@@ -168,7 +168,7 @@ const normalizeTriggerRule = (rule, actionIds) => {
   if (!TRIGGER_RULE_STATUSES.has(status)) {
     throw new Error(`pet pack trigger rule status is unsupported: ${status}`)
   }
-  return {
+  const normalized = {
     id: rule.id,
     actionId,
     type,
@@ -182,6 +182,10 @@ const normalizeTriggerRule = (rule, actionIds) => {
     createdAt: optionalString(rule.createdAt),
     updatedAt: optionalString(rule.updatedAt)
   }
+  if (rule.ruleSpec && typeof rule.ruleSpec === 'object' && !Array.isArray(rule.ruleSpec)) {
+    normalized.ruleSpec = { ...rule.ruleSpec }
+  }
+  return normalized
 }
 
 const normalizePetPackManifest = (manifest) => {

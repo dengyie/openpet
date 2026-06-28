@@ -1,12 +1,21 @@
 const { draftGenerationTask } = require('./conversation-wizard')
+const { createTriggerRuleSpec } = require('./generation-task')
 const { appendRunLog, createRun, readRun, writeRun } = require('./run-store')
+
+const createTriggerAnswer = (proposal) => {
+  const ruleSpec = createTriggerRuleSpec(proposal)
+  return {
+    ...proposal,
+    ...(ruleSpec ? { ruleSpec } : {})
+  }
+}
 
 const TRIGGER_ANSWERS = {
   manual: { type: 'manual', notes: 'User selected manual trigger.' },
   click: { type: 'click', binding: 'clickAction', notes: 'User selected click trigger.' },
-  random: { type: 'random', notes: 'User selected random trigger.' },
-  state: { type: 'state', notes: 'User selected state trigger.' },
-  event: { type: 'event', notes: 'User selected event trigger.' },
+  random: createTriggerAnswer({ type: 'random', notes: 'User selected random trigger.' }),
+  state: createTriggerAnswer({ type: 'state', binding: 'host.state.available', notes: 'User selected state trigger.' }),
+  event: createTriggerAnswer({ type: 'event', binding: 'openpet.event', notes: 'User selected event trigger.' }),
   unbound: { type: 'unbound', notes: 'User selected unbound trigger.' }
 }
 

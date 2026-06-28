@@ -27,6 +27,83 @@ const TRIGGER_PROPOSAL_RESULT_CODES = new Set(['applied', 'no_binding_required',
 const TRIGGER_PROPOSAL_PREVIEW_CODES = new Set(['will_apply', 'no_binding_required', 'will_create_rule'])
 const TRIGGER_RULE_TYPES = new Set(['random', 'state', 'event'])
 const TRIGGER_RULE_STATUSES = new Set(['active', 'disabled'])
+const MAX_TRIGGER_RULE_SPEC_TEXT_LENGTH = 240
+
+/**
+ * @param {unknown} value
+ * @returns {'random' | 'state' | 'event' | ''}
+ */
+const toTriggerRuleType = (value) => (
+  typeof value === 'string' && TRIGGER_RULE_TYPES.has(value)
+    ? /** @type {'random' | 'state' | 'event'} */ (value)
+    : ''
+)
+
+/**
+ * @param {unknown} value
+ * @param {string} [fallback]
+ * @returns {string}
+ */
+const sanitizeTriggerRuleSpecText = (value, fallback = '') => String(typeof value === 'string' ? value : fallback)
+  .replace(/\bsk-[A-Za-z0-9_-]{8,}\b/g, '[redacted-secret]')
+  .replace(/\b[A-Za-z0-9_-]*token[A-Za-z0-9_-]*\b/gi, '[redacted-token]')
+  .replace(/https?:\/\/(?:127\.0\.0\.1|localhost|\[::1\])(?::\d+)?(?:\/[^\s]*)?/gi, '[redacted-local-url]')
+  .replace(/(?:\/Users|\/var|\/tmp|\/private|\/Volumes)\/[^\s,，。)]+/g, '[redacted-path]')
+  .slice(0, MAX_TRIGGER_RULE_SPEC_TEXT_LENGTH)
+
+/**
+ * @param {'random' | 'state' | 'event'} type
+ * @param {string} actionId
+ * @param {{ message?: string, preview?: string } & Record<string, any>} [rule]
+ * @returns {import('../shared/openpet-contracts').ActionTriggerRuleSpec}
+ */
+const createTriggerRuleSpec = (type, actionId, rule = {}) => {
+  const ruleSpec = rule.ruleSpec && typeof rule.ruleSpec === 'object' && !Array.isArray(rule.ruleSpec) ? rule.ruleSpec : {}
+  const rawSummary = typeof ruleSpec.summary === 'string' && ruleSpec.summary
+    ? ruleSpec.summary
+    : typeof rule.message === 'string' && rule.message
+    ? rule.message
+    : (typeof rule.preview === 'string' && rule.preview ? rule.preview : `Trigger rule can play ${actionId}.`)
+  const summary = sanitizeTriggerRuleSpecText(rawSummary)
+  if (type === 'random') {
+    const schedule = ruleSpec.schedule && typeof ruleSpec.schedule === 'object' && !Array.isArray(ruleSpec.schedule) ? ruleSpec.schedule : {}
+    const mode = schedule.mode === 'interval' ? 'interval' : 'opportunistic'
+    const intervalMs = Number(schedule.intervalMs)
+    return {
+      schemaVersion: 1,
+      type,
+      summary,
+      schedule: {
+        mode,
+        ...(mode === 'interval' && Number.isFinite(intervalMs) && intervalMs > 0
+          ? { intervalMs: Math.min(Math.round(intervalMs), 24 * 60 * 60 * 1000) }
+          : {})
+      }
+    }
+  }
+  if (type === 'state') {
+    const state = ruleSpec.state && typeof ruleSpec.state === 'object' && !Array.isArray(ruleSpec.state) ? ruleSpec.state : {}
+    return {
+      schemaVersion: 1,
+      type,
+      summary,
+      state: {
+        predicate: sanitizeTriggerRuleSpecText(state.predicate, 'host.state.available'),
+        source: sanitizeTriggerRuleSpecText(state.source, 'host')
+      }
+    }
+  }
+  const event = ruleSpec.event && typeof ruleSpec.event === 'object' && !Array.isArray(ruleSpec.event) ? ruleSpec.event : {}
+  return {
+    schemaVersion: 1,
+    type,
+    summary,
+    event: {
+      name: sanitizeTriggerRuleSpecText(event.name, 'openpet.event'),
+      source: sanitizeTriggerRuleSpecText(event.source, 'host')
+    }
+  }
+}
 
 /**
  * @param {unknown} value
@@ -159,6 +236,11 @@ const createTriggerRuleItem = (rule = {}) => ({
   sourceCommandId: typeof rule.sourceCommandId === 'string' ? rule.sourceCommandId : '',
   message: typeof rule.message === 'string' ? rule.message : '',
   preview: typeof rule.preview === 'string' ? rule.preview : '',
+  ruleSpec: createTriggerRuleSpec(
+    toTriggerRuleType(rule.type) || 'random',
+    typeof rule.actionId === 'string' ? rule.actionId : '',
+    rule
+  ),
   createdAt: typeof rule.createdAt === 'string' ? rule.createdAt : '',
   updatedAt: typeof rule.updatedAt === 'string' ? rule.updatedAt : ''
 })
@@ -167,26 +249,37 @@ const createTriggerRuleItem = (rule = {}) => ({
  * @param {Partial<import('../shared/openpet-contracts').ActionTriggerProposalInboxItem>} proposal
  * @returns {import('../shared/openpet-contracts').ActionTriggerProposalInboxItem}
  */
-const createTriggerProposalInboxItem = (proposal = {}) => ({
-  id: typeof proposal.id === 'string' ? proposal.id : '',
-  actionId: typeof proposal.actionId === 'string' ? proposal.actionId : '',
-  type: typeof proposal.type === 'string' && TRIGGER_PROPOSAL_TYPES.has(proposal.type) ? proposal.type : 'unbound',
-  binding: typeof proposal.binding === 'string' ? proposal.binding : '',
-  sourcePluginId: typeof proposal.sourcePluginId === 'string' ? proposal.sourcePluginId : '',
-  sourceRunId: typeof proposal.sourceRunId === 'string' ? proposal.sourceRunId : '',
-  sourceCommandId: typeof proposal.sourceCommandId === 'string' ? proposal.sourceCommandId : '',
-  message: typeof proposal.message === 'string' ? proposal.message : '',
-  status: typeof proposal.status === 'string' && TRIGGER_PROPOSAL_STATUSES.has(proposal.status) ? proposal.status : 'pending',
-  triggerRuleId: typeof proposal.triggerRuleId === 'string' ? proposal.triggerRuleId : '',
-  preview: typeof proposal.preview === 'string' ? proposal.preview : '',
-  resultCode: typeof proposal.resultCode === 'string' ? proposal.resultCode : '',
-  resultMessage: typeof proposal.resultMessage === 'string' ? proposal.resultMessage : '',
-  rejectionReason: typeof proposal.rejectionReason === 'string' ? proposal.rejectionReason : '',
-  createdAt: typeof proposal.createdAt === 'string' ? proposal.createdAt : '',
-  updatedAt: typeof proposal.updatedAt === 'string' ? proposal.updatedAt : '',
-  acceptedAt: typeof proposal.acceptedAt === 'string' ? proposal.acceptedAt : '',
-  rejectedAt: typeof proposal.rejectedAt === 'string' ? proposal.rejectedAt : ''
-})
+const createTriggerProposalInboxItem = (proposal = {}) => {
+  const proposalType = typeof proposal.type === 'string' && TRIGGER_PROPOSAL_TYPES.has(proposal.type) ? proposal.type : 'unbound'
+  /** @type {'random' | 'state' | 'event' | null} */
+  const hostRuleType = proposalType === 'random' || proposalType === 'state' || proposalType === 'event'
+    ? proposalType
+    : null
+  const actionId = typeof proposal.actionId === 'string' ? proposal.actionId : ''
+  return {
+    id: typeof proposal.id === 'string' ? proposal.id : '',
+    actionId,
+    type: proposalType,
+    binding: typeof proposal.binding === 'string' ? proposal.binding : '',
+    sourcePluginId: typeof proposal.sourcePluginId === 'string' ? proposal.sourcePluginId : '',
+    sourceRunId: typeof proposal.sourceRunId === 'string' ? proposal.sourceRunId : '',
+    sourceCommandId: typeof proposal.sourceCommandId === 'string' ? proposal.sourceCommandId : '',
+    message: typeof proposal.message === 'string' ? proposal.message : '',
+    status: typeof proposal.status === 'string' && TRIGGER_PROPOSAL_STATUSES.has(proposal.status) ? proposal.status : 'pending',
+    triggerRuleId: typeof proposal.triggerRuleId === 'string' ? proposal.triggerRuleId : '',
+    preview: typeof proposal.preview === 'string' ? proposal.preview : '',
+    ...(hostRuleType
+      ? { ruleSpec: createTriggerRuleSpec(hostRuleType, actionId, proposal) }
+      : {}),
+    resultCode: typeof proposal.resultCode === 'string' ? proposal.resultCode : '',
+    resultMessage: typeof proposal.resultMessage === 'string' ? proposal.resultMessage : '',
+    rejectionReason: typeof proposal.rejectionReason === 'string' ? proposal.rejectionReason : '',
+    createdAt: typeof proposal.createdAt === 'string' ? proposal.createdAt : '',
+    updatedAt: typeof proposal.updatedAt === 'string' ? proposal.updatedAt : '',
+    acceptedAt: typeof proposal.acceptedAt === 'string' ? proposal.acceptedAt : '',
+    rejectedAt: typeof proposal.rejectedAt === 'string' ? proposal.rejectedAt : ''
+  }
+}
 
 /**
  * @param {Partial<import('../shared/openpet-contracts').ActionTriggerProposalPreviewResult>} proposal
