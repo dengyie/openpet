@@ -437,7 +437,23 @@ test('ai provider settings IPC delegates config save key save and connection tes
     },
     hasApiKey: false
   })
-  assert.deepEqual(savedConfig, { model: 'next-model', hasApiKey: false })
+  assert.deepEqual(savedConfig, {
+    enabled: false,
+    provider: '',
+    baseUrl: '',
+    model: 'next-model',
+    apiKeyRef: '',
+    systemPrompt: '',
+    memory: { enabled: false },
+    behavior: {
+      enabled: false,
+      useTools: false,
+      cooldownMs: 0,
+      rules: [],
+      decisions: []
+    },
+    hasApiKey: false
+  })
   assert.deepEqual(savedKey, { apiKeyRef: 'ai.default', hasApiKey: true, updatedAt: '2026-06-24T00:00:00.000Z' })
   assert.deepEqual(connection, {
     ok: true,

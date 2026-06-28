@@ -68,7 +68,7 @@ Current P0 status: no known startup/build blocker in this TODO pass. Creator Stu
 - Action frame import failure payloads now normalize `inspectionResult` through the main-process Control Center adapter: canceled/completed shapes are explicit, nested inspection/frame fields are numeric/boolean/string-stable, and private selection/service-only fields are not forwarded to the renderer.
 - Pet-pack mutation payloads now normalize renderer-facing `PetPackSummary` view state through the main-process Control Center adapter: mutation `pack` and nested `petPacks.packs[]` entries now stabilize preview/provenance/block/conflict fields instead of forwarding raw service payloads.
 - Catalog IPC payloads now normalize renderer-facing `CatalogState` / `BlocklistState` through the main-process Control Center adapter: `catalog:get`, install-selection follow-up results, and blocklist mutation responses no longer forward raw catalog service payloads.
-- `AI_GET_CONFIG` now normalizes renderer-facing `AiConfigViewState` through the main-process Control Center adapter, so the Control Center no longer depends on raw `aiService.getConfig()` payload shape for memory/behavior/provider fields.
+- AI config IPC payloads now normalize renderer-facing `AiConfigViewState` through the main-process Control Center adapter: `ai:get-config` and `ai:save-config` strip secret/internal fields and stabilize memory/behavior sub-shapes before reaching the renderer.
 
 ## P1 Architecture TODOs
 
