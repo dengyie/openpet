@@ -18,6 +18,7 @@ const { createPluginServiceHealthController } = require('./plugin-service-health
 const { createPluginServiceLifecycleController } = require('./plugin-service-lifecycle-controller')
 const { createPluginServiceLaunchController } = require('./plugin-service-launch-controller')
 const { createPluginCommandEntryProcessController } = require('./plugin-command-entry-process-controller')
+const { createPluginDeclarationCommandController } = require('./plugin-declaration-command-controller')
 const { createPluginSetupProcessController } = require('./plugin-setup-process-controller')
 const { createPluginCommandRunController } = require('./plugin-command-run-controller')
 const { createPluginCommandOrchestrationController } = require('./plugin-command-orchestration-controller')
@@ -638,8 +639,6 @@ const createPluginService = ({ settingsService, petService, actionService, actio
 
   const stopPluginSetups = (pluginId, options = {}) => setupRuntimeManager.stopPlugin(pluginId, options)
 
-  const stopPluginCommands = (pluginId) => commandRuntimeManager.stopPlugin(pluginId)
-
   const runtimeSdkController = createPluginRuntimeSdkController({
     getConfig: getPluginConfig,
     getStorage: getPluginStorage,
@@ -655,23 +654,17 @@ const createPluginService = ({ settingsService, petService, actionService, actio
 
   const createSdk = runtimeSdkController.createSdk
 
-  const runCommandEntryProcess = async ({ plugin, commandEntry, commandId, payload, config }) => {
-    commandRuntimeManager.assertNotActive(plugin.manifest.id, commandId)
-    return commandEntryProcessController.run({
-      plugin,
-      commandEntry,
-      commandId,
-      payload,
-      config
-    })
-  }
+  const declarationCommandController = createPluginDeclarationCommandController({
+    runtimeManager: commandRuntimeManager,
+    entryProcessController: commandEntryProcessController
+  })
 
   const commandRunController = createPluginCommandRunController({
     appendLog,
     createSdk,
     getConfig: (pluginId) => getPluginConfig(pluginId, getPlugins().find((candidate) => candidate.manifest.id === pluginId)?.configSchema),
     runLocalCommand: (args) => runLocalPluginCommand(args),
-    runCommandEntryProcess,
+    runCommandEntryProcess: (args) => declarationCommandController.run(args),
     getCommandEntry,
     getRegisteredCommands: (sdk) => sdk[runtimeSdkController.registeredCommandsSymbol]?.() || {}
   })
@@ -696,7 +689,7 @@ const createPluginService = ({ settingsService, petService, actionService, actio
   const managementController = createPluginManagementController({
     settingsService,
     assertPluginAllowed,
-    stopPluginCommands,
+    stopPluginCommands: (pluginId) => declarationCommandController.stopPlugin(pluginId),
     stopPluginServices,
     stopPluginSetups,
     appendLog,
@@ -842,7 +835,7 @@ const createPluginService = ({ settingsService, petService, actionService, actio
   const stopAllServices = () => {
     serviceRuntimeManager.stopAll({ log: false })
     setupRuntimeManager.stopAll({ log: false })
-    commandRuntimeManager.stopAll()
+    declarationCommandController.stopAll()
     commandBridgeService.close()
     return { ok: true }
   }
