@@ -1,5 +1,6 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
+const { EventEmitter } = require('events')
 const http = require('http')
 
 const {
@@ -153,4 +154,38 @@ test('plugin command bridge server maps handler permission errors to 403 and bad
   assert.deepEqual(invalidJson.body, { ok: false, error: 'Invalid JSON body' })
 
   server.close()
+})
+
+test('plugin command bridge server shares one startup across concurrent ensureStarted calls', async () => {
+  const createdServers = []
+  const createServer = () => {
+    const server = new EventEmitter()
+    server.listening = false
+    server.off = server.removeListener.bind(server)
+    server.listen = () => {
+      createdServers.push(server)
+    }
+    server.address = () => ({ port: 8317 })
+    server.unref = () => {}
+    server.close = () => {
+      server.listening = false
+    }
+    return server
+  }
+  const bridgeServer = createPluginCommandBridgeServer({
+    commandBridgeRuntimes: new Map(),
+    createServer
+  })
+
+  const firstStart = bridgeServer.ensureStarted()
+  const secondStart = bridgeServer.ensureStarted()
+  assert.equal(createdServers.length, 1)
+
+  createdServers[0].listening = true
+  createdServers[0].emit('listening')
+
+  await assert.doesNotReject(Promise.all([firstStart, secondStart]))
+  assert.deepEqual(await Promise.all([firstStart, secondStart]), [8317, 8317])
+
+  bridgeServer.close()
 })

@@ -96,6 +96,7 @@ const createPluginCommandBridgeServer = ({
 
   let server = null
   let port = 0
+  let startingPromise = null
 
   const handleRequest = async (request, response) => {
     try {
@@ -146,32 +147,48 @@ const createPluginCommandBridgeServer = ({
 
   const ensureStarted = async () => {
     if (server?.listening) return port
-    if (server && !server.listening) {
-      server.removeAllListeners()
-      server = null
-      port = 0
+    if (startingPromise) return startingPromise
+
+    startingPromise = (async () => {
+      if (server && !server.listening) {
+        server.removeAllListeners()
+        server.close?.()
+        server = null
+        port = 0
+      }
+
+      const nextServer = createServer(handleRequest)
+      server = nextServer
+
+      await new Promise((resolve, reject) => {
+        const onError = (error) => {
+          nextServer?.off?.('listening', onListening)
+          if (server === nextServer) {
+            server = null
+            port = 0
+          }
+          reject(error)
+        }
+        const onListening = () => {
+          nextServer?.off?.('error', onError)
+          const address = nextServer.address()
+          port = typeof address === 'object' && address ? Number(address.port) || 0 : 0
+          nextServer?.unref?.()
+          resolve()
+        }
+        nextServer.once('error', onError)
+        nextServer.once('listening', onListening)
+        nextServer.listen(0, host)
+      })
+
+      return port
+    })()
+
+    try {
+      return await startingPromise
+    } finally {
+      startingPromise = null
     }
-
-    server = createServer(handleRequest)
-
-    await new Promise((resolve, reject) => {
-      const onError = (error) => {
-        server?.off?.('listening', onListening)
-        reject(error)
-      }
-      const onListening = () => {
-        server?.off?.('error', onError)
-        const address = server.address()
-        port = typeof address === 'object' && address ? Number(address.port) || 0 : 0
-        server?.unref?.()
-        resolve()
-      }
-      server.once('error', onError)
-      server.once('listening', onListening)
-      server.listen(0, host)
-    })
-
-    return port
   }
 
   const createBridgeBaseUrl = ({ pluginId, commandId, runId }) => (
@@ -186,6 +203,7 @@ const createPluginCommandBridgeServer = ({
     server?.close?.()
     server = null
     port = 0
+    startingPromise = null
   }
 
   return {
