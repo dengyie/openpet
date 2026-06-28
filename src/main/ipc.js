@@ -12,8 +12,13 @@ const { sanitizeDetails } = require('./services/app-log-service')
 const { choosePetContextMenuPoint, estimatePetContextMenuSize } = require('./pet-context-menu')
 const { showPetContextMenuWindow } = require('./pet-context-menu-window')
 const { createBubbleRequestId } = require('./pet-bubble-chat-window')
+const { createLocalHttpToken } = require('./services/local-http-service')
+const { registerAiIpc } = require('./ipc/register-ai-ipc')
+const { registerCatalogIpc } = require('./ipc/register-catalog-ipc')
 const { registerPetRuntimeIpc } = require('./ipc/register-pet-runtime-ipc')
+const { registerPluginIpc } = require('./ipc/register-plugin-ipc')
 const { registerSettingsIpc } = require('./ipc/register-settings-ipc')
+const { registerServiceIpc } = require('./ipc/register-service-ipc')
 const { registerSystemIpc } = require('./ipc/register-system-ipc')
 const {
   collectCustomCursorAssetPaths,
@@ -992,250 +997,54 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     return createPetPackMutationResult(result, petPackService.listPacks())
   })
 
-  ipcMainService.handle(IPC.AI_GET_CONFIG, () => createAiConfigView(aiService.getConfig()))
-
-  ipcMainService.handle(IPC.AI_SAVE_CONFIG, (_event, config) => createAiConfigView(aiService.saveConfig(config)))
-
-  ipcMainService.handle(IPC.AI_SAVE_API_KEY, (_event, apiKey) => aiService.saveApiKey(apiKey))
-
-  ipcMainService.handle(IPC.AI_TEST_CONNECTION, () => aiService.testConnection())
-
-  ipcMainService.handle(IPC.AI_GET_PERSONA_PROFILE, async () => {
-    if (!aiTalkService?.getPersonaProfile) throw new Error('AI talk persona profile is not available')
-    return createAiPersonaProfileView(await aiTalkService.getPersonaProfile())
-  })
-
-  ipcMainService.handle(IPC.AI_GENERATE_PERSONA_DRAFT, async (_event, request) => {
-    if (!aiTalkService?.generatePersonaDraft) throw new Error('AI talk persona generation is not available')
-    return createAiPersonaDraftView(await aiTalkService.generatePersonaDraft(request || {}))
-  })
-
-  ipcMainService.handle(IPC.AI_SAVE_PERSONA_OVERRIDE, async (_event, override) => {
-    if (!aiTalkService?.savePersonaOverride) throw new Error('AI talk persona overrides are not available')
-    return createAiPersonaProfileView(await aiTalkService.savePersonaOverride(override || {}))
-  })
-
-  ipcMainService.handle(IPC.AI_GET_MEMORY_PROFILE, async () => {
-    if (!aiTalkService?.getMemoryProfile) throw new Error('AI talk memories are not available')
-    return createAiMemoryProfileView(await aiTalkService.getMemoryProfile())
-  })
-
-  ipcMainService.handle(IPC.AI_DELETE_MEMORY, async (_event, payload) => {
-    if (!aiTalkService?.deleteMemory) throw new Error('AI talk memory deletion is not available')
-    return createAiMemoryProfileView(await aiTalkService.deleteMemory(payload?.memoryId || payload))
-  })
-
-  ipcMainService.handle(IPC.AI_CLEAR_PET_PACK_MEMORIES, async () => {
-    if (!aiTalkService?.clearPetPackMemories) throw new Error('AI talk memory clearing is not available')
-    return createAiMemoryProfileView(await aiTalkService.clearPetPackMemories())
-  })
-
-  ipcMainService.handle(IPC.IMAGE_GENERATION_GET_CONFIG, () => createImageGenerationConfigView(imageGenerationModelService.getConfig()))
-
-  ipcMainService.handle(IPC.IMAGE_GENERATION_SAVE_CONFIG, (_event, config) => {
-    return createImageGenerationConfigView(imageGenerationModelService.saveConfig(config))
-  })
-
-  ipcMainService.handle(IPC.IMAGE_GENERATION_SAVE_API_KEY, (_event, apiKey) => {
-    return createImageGenerationApiKeyResult(imageGenerationModelService.saveCloudApiKey(apiKey))
-  })
-
-  ipcMainService.handle(IPC.IMAGE_GENERATION_CLEAR_API_KEY, () => {
-    return createImageGenerationApiKeyResult(imageGenerationModelService.clearCloudApiKey())
-  })
-
-  ipcMainService.handle(IPC.IMAGE_GENERATION_CHECK_HEALTH, async (_event, payload) => {
-    return createImageGenerationHealthCheckResult(await imageGenerationModelService.checkHealth(payload || {}))
-  })
-
-  ipcMainService.handle(IPC.AI_GET_CONVERSATION, (_event, payload) => {
-    const conversationId = payload?.conversationId || payload
-    return (aiTalkService || aiService).getConversation(conversationId)
-  })
-
-  ipcMainService.handle(IPC.AI_CHAT, async (_event, payload) => runAiChatRequest(payload, { source: 'control-center' }))
-
-  ipcMainService.handle(IPC.AI_EXPORT_TRACE_DIAGNOSTICS, (_event, payload) => {
-    if (!aiTalkService?.exportTraceDiagnostics) throw new Error('AI talk trace diagnostics are not available')
-    return aiTalkService.exportTraceDiagnostics({
-      filters: payload || {},
-      behaviorDecisions: behaviorOrchestratorService.getConfig?.().decisions || []
-    })
-  })
-
-  ipcMainService.handle(IPC.AI_BEHAVIOR_GET, () => behaviorOrchestratorService.getConfig())
-
-  ipcMainService.handle(IPC.AI_BEHAVIOR_SAVE, (_event, payload) => behaviorOrchestratorService.saveConfig(payload))
-
-  ipcMainService.handle(IPC.AI_BEHAVIOR_DRY_RUN, (_event, payload) => {
-    return behaviorOrchestratorService.dryRun({
-      ...payload,
-      actions: petService.getAnimations()?.actions || []
-    })
-  })
-
-  ipcMainService.handle(IPC.AI_BEHAVIOR_REPLAY_DECISION, (_event, payload) => {
-    return behaviorOrchestratorService.replayDecision({
-      decisionId: payload?.decisionId,
-      actions: petService.getAnimations()?.actions || []
-    })
-  })
-
-  ipcMainService.handle(IPC.AI_BEHAVIOR_EXPORT_DIAGNOSTICS, () => behaviorOrchestratorService.exportDiagnostics())
-
-  ipcMainService.handle(IPC.AI_BEHAVIOR_CLEAR_DECISIONS, () => behaviorOrchestratorService.clearDecisions())
-
-  ipcMainService.handle(IPC.PLUGINS_LIST, () => createPluginListView(pluginService.listPlugins()))
-
-  ipcMainService.handle(IPC.PLUGINS_SET_ENABLED, (_event, payload) => {
-    return pluginService.setEnabled(payload.pluginId, payload.enabled)
-  })
-
-  ipcMainService.handle(IPC.PLUGINS_SAVE_CONFIG, (_event, payload) => {
-    return pluginService.saveConfig(payload.pluginId, payload.config)
-  })
-
-  ipcMainService.handle(IPC.PLUGINS_RUN_COMMAND, (_event, payload) => {
-    return pluginService.runCommand(payload.pluginId, payload.commandId, payload.payload)
-  })
-
-  ipcMainService.handle(IPC.PLUGINS_RUN_SETUP, (_event, payload) => {
-    return pluginService.runSetup(payload.pluginId, payload.setupId)
-  })
-
-  ipcMainService.handle(IPC.PLUGINS_OPEN_DASHBOARD, (_event, payload) => {
-    return pluginService.openDashboard(payload.pluginId, payload.dashboardId)
-  })
-
-  ipcMainService.handle(IPC.PLUGINS_START_SERVICE, (_event, payload) => {
-    return pluginService.startService(payload.pluginId, payload.serviceId)
-  })
-
-  ipcMainService.handle(IPC.PLUGINS_STOP_SERVICE, (_event, payload) => {
-    return pluginService.stopService(payload.pluginId, payload.serviceId)
-  })
-
-  ipcMainService.handle(IPC.PLUGINS_CHECK_SERVICE_HEALTH, (_event, payload) => {
-    return pluginService.checkServiceHealth(payload.pluginId, payload.serviceId)
-  })
-
-  ipcMainService.handle(IPC.PLUGINS_SAVE_SERVICE_HEALTH_POLICY, (_event, payload) => {
-    return pluginService.saveServiceHealthPolicy(payload.pluginId, payload.serviceId, payload.policy)
-  })
-
-  ipcMainService.handle(IPC.PLUGINS_INSPECT_PACKAGE, async () => {
-    const selected = await dialogService.showOpenDialog({
-      title: '选择插件目录或 OpenPet 插件包',
-      properties: ['openFile', 'openDirectory'],
-      filters: [
-        { name: 'OpenPet Plugin Package', extensions: ['zip'] },
-        { name: 'All Files', extensions: ['*'] }
-      ]
-    })
-    if (selected.canceled || !selected.filePaths[0]) return { canceled: true }
-    return { canceled: false, ...pluginInstallService.inspectPluginPackage(selected.filePaths[0]) }
-  })
-
-  ipcMainService.handle(IPC.PLUGINS_INSPECT_GITHUB_REPOSITORY, async (_event, payload) => {
-    if (!pluginGithubImportService?.inspectRepositoryUrl) throw new Error('GitHub plugin import is not available')
-    return { canceled: false, ...await pluginGithubImportService.inspectRepositoryUrl(payload?.repositoryUrl) }
-  })
-
-  ipcMainService.handle(IPC.PLUGINS_CLEAR_SELECTION, (_event, payload) => {
-    return pluginInstallService.clearPendingSelection(payload?.selectionId)
-  })
-
-  ipcMainService.handle(IPC.PLUGINS_INSTALL, (_event, payload) => {
-    const result = pluginInstallService.installPlugin(payload.selectionId)
-    return createPluginMutationResult(result, pluginService.listPlugins())
-  })
-
-  ipcMainService.handle(IPC.PLUGINS_UPDATE, (_event, payload) => {
-    const result = pluginInstallService.updatePlugin(payload.selectionId)
-    return createPluginMutationResult(result, pluginService.listPlugins())
-  })
-
-  ipcMainService.handle(IPC.PLUGINS_UNINSTALL, (_event, payload) => {
-    const result = pluginInstallService.uninstallPlugin(payload.pluginId, { removeStorage: Boolean(payload.removeStorage) })
-    return createPluginMutationResult(result, pluginService.listPlugins())
-  })
-
-  ipcMainService.handle(IPC.PLUGINS_GET_LOGS, (_event, filters) => pluginService.getLogs(filters))
-
-  ipcMainService.handle(IPC.PLUGINS_EXPORT_LOGS, (_event, filters) => pluginService.exportLogs(filters))
-
-  ipcMainService.handle(IPC.PLUGINS_CLEAR_LOGS, () => pluginService.clearLogs())
-
-  ipcMainService.handle(IPC.PLUGINS_CLEAR_STORAGE, (_event, payload) => pluginService.clearStorage(payload.pluginId))
-
-  const getServiceStatusView = () => createServiceStatusView(
-    petService.getSettings().localHttp,
-    localHttpService.getStatus()
-  )
-
-  ipcMainService.handle(IPC.SERVICE_GET_STATUS, getServiceStatusView)
-
-  ipcMainService.handle(IPC.SERVICE_GET_LOGS, (_event, filters) => localHttpService.getLogs(filters))
-
-  ipcMainService.handle(IPC.SERVICE_EXPORT_LOGS, (_event, filters) => localHttpService.exportLogs(filters))
-
-  ipcMainService.handle(IPC.SERVICE_CLEAR_LOGS, () => localHttpService.clearLogs())
-
-  ipcMainService.handle(IPC.SERVICE_ROTATE_TOKEN, async () => {
-    const currentSettings = petService.getSettings()
-    const nextConfig = normalizeLocalHttpConfig(currentSettings.localHttp, {
-      ...currentSettings.localHttp,
-      token: createLocalHttpToken()
-    })
-    const runtime = nextConfig.enabled
-      ? await localHttpService.start(nextConfig)
-      : localHttpService.getStatus()
-    const savedSettings = petService.saveSettings({ ...currentSettings, localHttp: nextConfig })
-    return createServiceStatusView(savedSettings.localHttp, localHttpService.getStatus() || runtime)
-  })
-
-  ipcMainService.handle(IPC.SERVICE_REVOKE_MCP_SESSIONS, () => {
-    const mcp = localHttpService.revokeMcpSessions()
-    return createServiceStatusView(petService.getSettings().localHttp, { ...localHttpService.getStatus(), mcp })
-  })
-
-  ipcMainService.handle(IPC.SERVICE_SAVE_CONFIG, async (_event, config) => {
-    const currentSettings = petService.getSettings()
-    const nextConfig = normalizeLocalHttpConfig(currentSettings.localHttp, config)
-    const runtime = nextConfig.enabled
-      ? await localHttpService.start(nextConfig)
-      : await localHttpService.stop()
-    const savedSettings = petService.saveSettings({ ...currentSettings, localHttp: nextConfig })
-    return createServiceStatusView(savedSettings.localHttp, localHttpService.getStatus() || runtime)
-  })
-
   ipcMainService.handle(IPC.ABOUT_GET_INFO, () => createAboutInfoView(aboutService.getInfo()))
 
   ipcMainService.handle(IPC.ABOUT_CHECK_UPDATES, async () => createUpdateCheckView(await aboutService.checkForUpdates()))
 
-  ipcMainService.handle(IPC.CATALOG_GET, () => createCatalogView(catalogService.listCatalog()))
-
-  ipcMainService.handle(IPC.CATALOG_PREPARE_INSTALL, (_event, payload) => catalogService.prepareInstall(payload))
-
-  ipcMainService.handle(IPC.CATALOG_INSTALL_SELECTION, (_event, payload) => {
-    const result = catalogService.installSelection(payload.selectionId)
-    if (result.kind === 'pet-pack' && result.petPacks?.activePackId === result.itemId) {
-      reloadAndSendAnimations(getPetWindow, petService)
-      return { ...result, animations: petService.getPreviewAnimations(), catalog: createCatalogView(catalogService.listCatalog()) }
-    }
-    return { ...result, catalog: createCatalogView(catalogService.listCatalog()) }
+  registerAiIpc({
+    ipcMainService,
+    aiService,
+    aiTalkService,
+    imageGenerationModelService,
+    behaviorOrchestratorService,
+    petService,
+    runAiChatRequest,
+    createAiConfigView,
+    createAiPersonaProfileView,
+    createAiPersonaDraftView,
+    createAiMemoryProfileView,
+    createImageGenerationConfigView,
+    createImageGenerationApiKeyResult,
+    createImageGenerationHealthCheckResult
   })
 
-  ipcMainService.handle(IPC.CATALOG_CLEAR_SELECTION, (_event, payload) => catalogService.clearSelection(payload?.selectionId))
-
-  ipcMainService.handle(IPC.CATALOG_ADD_BLOCKLIST, (_event, payload) => {
-    const blocklist = catalogService.addBlocklistEntry(payload)
-    return createCatalogBlocklistResult(catalogService.listCatalog(), blocklist)
+  registerPluginIpc({
+    ipcMainService,
+    dialogService,
+    pluginService,
+    pluginInstallService,
+    pluginGithubImportService,
+    createPluginListView,
+    createPluginMutationResult
   })
 
-  ipcMainService.handle(IPC.CATALOG_REMOVE_BLOCKLIST, (_event, payload) => {
-    const blocklist = catalogService.removeBlocklistEntry(payload)
-    return createCatalogBlocklistResult(catalogService.listCatalog(), blocklist)
+  registerServiceIpc({
+    ipcMainService,
+    petService,
+    localHttpService,
+    normalizeLocalHttpConfig,
+    createLocalHttpToken,
+    createServiceStatusView
+  })
+
+  registerCatalogIpc({
+    ipcMainService,
+    catalogService,
+    getPetWindow,
+    petService,
+    reloadAndSendAnimations,
+    createCatalogView,
+    createCatalogBlocklistResult
   })
 
 }
