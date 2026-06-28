@@ -32,6 +32,7 @@ const TRIGGER_RULE_STATUSES = new Set(['active', 'disabled'])
 const MAX_TRIGGER_RULE_SPEC_TEXT_LENGTH = 240
 const PLUGIN_PROFILES = new Set(['runtime', 'creator-tools', 'hybrid'])
 const PLUGIN_CONFIG_FIELD_TYPES = new Set(['string', 'number', 'boolean'])
+const IMAGE_HEALTH_MODEL_PROBE_STATUSES = new Set(['ok', 'unavailable', 'failed'])
 
 /**
  * @param {unknown} value
@@ -249,6 +250,77 @@ const createAiConfigView = (config = {}) => {
       decisions: Array.isArray(behavior.decisions) ? behavior.decisions.filter((item) => item && typeof item === 'object') : []
     },
     hasApiKey: Boolean(input.hasApiKey)
+  }
+}
+
+/**
+ * @param {unknown[]} items
+ * @returns {string[]}
+ */
+const uniqueStrings = (items) => {
+  /** @type {string[]} */
+  const values = []
+  for (const item of Array.isArray(items) ? items : []) {
+    if (typeof item !== 'string' || !item || values.includes(item)) continue
+    values.push(item)
+  }
+  return values
+}
+
+/**
+ * @param {unknown} config
+ * @returns {import('../shared/openpet-contracts').ImageGenerationConfigViewState}
+ */
+const createImageGenerationConfigView = (config = {}) => {
+  const input = toRecord(config)
+  return {
+    provider: typeof input.provider === 'string' ? input.provider : '',
+    baseUrl: typeof input.baseUrl === 'string' ? input.baseUrl : '',
+    model: typeof input.model === 'string' ? input.model : '',
+    apiKeyRef: typeof input.apiKeyRef === 'string' ? input.apiKeyRef : '',
+    organization: typeof input.organization === 'string' ? input.organization : '',
+    project: typeof input.project === 'string' ? input.project : '',
+    timeoutMs: toNonNegativeInteger(input.timeoutMs),
+    maxConcurrentJobs: toNonNegativeInteger(input.maxConcurrentJobs),
+    hasApiKey: Boolean(input.hasApiKey),
+    apiKeyPreview: typeof input.apiKeyPreview === 'string' ? input.apiKeyPreview : '',
+    apiKeyLabel: typeof input.apiKeyLabel === 'string' && input.apiKeyLabel ? input.apiKeyLabel : 'Image API Key'
+  }
+}
+
+/**
+ * @param {unknown} result
+ * @returns {import('../shared/openpet-contracts').ImageGenerationSaveApiKeyResult}
+ */
+const createImageGenerationApiKeyResult = (result = {}) => {
+  const input = toRecord(result)
+  return {
+    apiKeyRef: typeof input.apiKeyRef === 'string' ? input.apiKeyRef : '',
+    hasApiKey: Boolean(input.hasApiKey),
+    apiKeyPreview: typeof input.apiKeyPreview === 'string' ? input.apiKeyPreview : ''
+  }
+}
+
+/**
+ * @param {unknown} result
+ * @returns {import('../shared/openpet-contracts').ImageGenerationHealthCheckResult}
+ */
+const createImageGenerationHealthCheckResult = (result = {}) => {
+  const input = toRecord(result)
+  const modelsProbe = typeof input.modelsProbe === 'string' && IMAGE_HEALTH_MODEL_PROBE_STATUSES.has(input.modelsProbe)
+    ? /** @type {'ok' | 'unavailable' | 'failed'} */ (input.modelsProbe)
+    : undefined
+  const usage = toRecord(input.usage)
+  const estimatedCostUsd = Number(usage.estimatedCostUsd)
+  return {
+    ok: Boolean(input.ok),
+    provider: typeof input.provider === 'string' ? input.provider : '',
+    code: typeof input.code === 'string' ? input.code : '',
+    message: typeof input.message === 'string' ? input.message : '',
+    ...(modelsProbe ? { modelsProbe } : {}),
+    ...(Array.isArray(input.availableModels) ? { availableModels: uniqueStrings(input.availableModels) } : {}),
+    ...(input.currentModelDiscovered !== undefined ? { currentModelDiscovered: Boolean(input.currentModelDiscovered) } : {}),
+    ...(Number.isFinite(estimatedCostUsd) ? { usage: { estimatedCostUsd } } : {})
   }
 }
 
@@ -897,6 +969,9 @@ module.exports = {
   createAboutUpdateInfo,
   createCatalogBlocklistResult,
   createCatalogView,
+  createImageGenerationApiKeyResult,
+  createImageGenerationConfigView,
+  createImageGenerationHealthCheckResult,
   createLocalHttpConfigView,
   createLocalHttpRuntimeView,
   createPetPackMutationResult,

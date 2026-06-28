@@ -623,23 +623,48 @@ test('image generation handlers delegate to the model service', async () => {
     imageGenerationModelService: {
       getConfig: () => {
         calls.push(['getConfig'])
-        return { defaultBackend: 'fixture' }
+        return {
+          provider: 'openai-compatible',
+          baseUrl: 42,
+          model: 'gpt-image-2',
+          apiKeyRef: null,
+          organization: 'org-demo',
+          project: 7,
+          timeoutMs: '420000',
+          maxConcurrentJobs: '2',
+          hasApiKey: 'yes',
+          apiKeyPreview: 1234,
+          apiKeyLabel: '',
+          defaultBackend: 'fixture',
+          secretValue: 'sk-hidden'
+        }
       },
       saveConfig: (config) => {
         calls.push(['saveConfig', config])
-        return { defaultBackend: config.defaultBackend }
+        return { ...config, model: 'gpt-image-2', hasApiKey: false, secretValue: 'sk-hidden' }
       },
       saveCloudApiKey: (apiKey) => {
         calls.push(['saveCloudApiKey', apiKey])
-        return { apiKeyRef: 'secret:model.image.openai.apiKey', hasApiKey: true, apiKeyPreview: '••••1234' }
+        return { apiKeyRef: 'secret:model.image.openai.apiKey', hasApiKey: true, apiKeyPreview: '••••1234', secretValue: 'sk-hidden' }
       },
       clearCloudApiKey: () => {
         calls.push(['clearCloudApiKey'])
-        return { apiKeyRef: 'secret:model.image.openai.apiKey', hasApiKey: false, apiKeyPreview: '' }
+        return { apiKeyRef: 'secret:model.image.openai.apiKey', hasApiKey: false, apiKeyPreview: '', secretValue: 'sk-hidden' }
       },
       checkHealth: (payload) => {
         calls.push(['checkHealth', payload])
-        return { ok: true, backend: payload.backend || 'fixture', code: 'fixture_ready', message: 'ok' }
+        return {
+          ok: true,
+          provider: 'openai-compatible',
+          backend: payload.backend || 'fixture',
+          code: 'provider_healthy',
+          message: 'ok',
+          modelsProbe: 'ok',
+          availableModels: ['gpt-image-2', 42, 'gpt-image-2'],
+          currentModelDiscovered: 'yes',
+          usage: { estimatedCostUsd: '0.02', internal: 'ignore-me' },
+          secretValue: 'sk-hidden'
+        }
       }
     },
     ipcMainService: ipcMain
@@ -651,8 +676,32 @@ test('image generation handlers delegate to the model service', async () => {
   const clearedApiKey = await ipcMain.handlers.get(IPC.IMAGE_GENERATION_CLEAR_API_KEY)()
   const health = await ipcMain.handlers.get(IPC.IMAGE_GENERATION_CHECK_HEALTH)(null, { backend: 'cloud' })
 
-  assert.deepEqual(config, { defaultBackend: 'fixture' })
-  assert.deepEqual(saved, { defaultBackend: 'local' })
+  assert.deepEqual(config, {
+    provider: 'openai-compatible',
+    baseUrl: '',
+    model: 'gpt-image-2',
+    apiKeyRef: '',
+    organization: 'org-demo',
+    project: '',
+    timeoutMs: 420000,
+    maxConcurrentJobs: 2,
+    hasApiKey: true,
+    apiKeyPreview: '',
+    apiKeyLabel: 'Image API Key'
+  })
+  assert.deepEqual(saved, {
+    provider: '',
+    baseUrl: '',
+    model: 'gpt-image-2',
+    apiKeyRef: '',
+    organization: '',
+    project: '',
+    timeoutMs: 0,
+    maxConcurrentJobs: 0,
+    hasApiKey: false,
+    apiKeyPreview: '',
+    apiKeyLabel: 'Image API Key'
+  })
   assert.deepEqual(savedApiKey, {
     apiKeyRef: 'secret:model.image.openai.apiKey',
     hasApiKey: true,
@@ -665,9 +714,13 @@ test('image generation handlers delegate to the model service', async () => {
   })
   assert.deepEqual(health, {
     ok: true,
-    backend: 'cloud',
-    code: 'fixture_ready',
-    message: 'ok'
+    provider: 'openai-compatible',
+    code: 'provider_healthy',
+    message: 'ok',
+    modelsProbe: 'ok',
+    availableModels: ['gpt-image-2'],
+    currentModelDiscovered: true,
+    usage: { estimatedCostUsd: 0.02 }
   })
   assert.deepEqual(calls, [
     ['getConfig'],

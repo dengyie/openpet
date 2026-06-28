@@ -69,6 +69,7 @@ Current P0 status: no known startup/build blocker in this TODO pass. Creator Stu
 - Pet-pack mutation payloads now normalize renderer-facing `PetPackSummary` view state through the main-process Control Center adapter: mutation `pack` and nested `petPacks.packs[]` entries now stabilize preview/provenance/block/conflict fields instead of forwarding raw service payloads.
 - Catalog IPC payloads now normalize renderer-facing `CatalogState` / `BlocklistState` through the main-process Control Center adapter: `catalog:get`, install-selection follow-up results, and blocklist mutation responses no longer forward raw catalog service payloads.
 - AI config IPC payloads now normalize renderer-facing `AiConfigViewState` through the main-process Control Center adapter: `ai:get-config` and `ai:save-config` strip secret/internal fields and stabilize memory/behavior sub-shapes before reaching the renderer.
+- Image generation Provider IPC payloads now normalize renderer-facing config, API key result, and health-check result shapes through the main-process Control Center adapter: `image-generation:*` settings responses no longer forward legacy backend fields, secret values, or service-only health details.
 
 ## P1 Architecture TODOs
 
@@ -315,7 +316,7 @@ Choose one of these when starting the next development milestone:
 1. TypeScript Adapter Boundary Migration
    - User value: high-drift main-process payloads stay safer as Control Center, AI settings, Creator Studio review snapshots, and evidence tooling keep growing.
    - Main files: `src/main/control-center-adapters.js`, `src/shared/openpet-contracts.ts`, `tests/main/control-center-adapters.test.js`, representative contract fixtures.
-   - Scope rule: migrate or type-check one adapter boundary at a time; do not rewrite the main process or change runtime behavior. The plugin view config/storage/signature slice, action-frame `inspectionResult` slice, pet-pack mutation view slice, catalog state view slice, and `AI_GET_CONFIG` slice are complete, so choose a different high-drift payload next.
+   - Scope rule: migrate or type-check one adapter boundary at a time; do not rewrite the main process or change runtime behavior. The plugin view config/storage/signature slice, action-frame `inspectionResult` slice, pet-pack mutation view slice, catalog state view slice, AI config view slice, and image generation Provider settings slice are complete, so choose a different high-drift payload next.
 
 2. Release Evidence Closure
    - User value: release readiness claims can be upgraded only when real evidence exists.

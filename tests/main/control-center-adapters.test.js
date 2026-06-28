@@ -8,6 +8,9 @@ const {
   createActionsMutationResult,
   createAboutInfoView,
   createCatalogBlocklistResult,
+  createImageGenerationApiKeyResult,
+  createImageGenerationConfigView,
+  createImageGenerationHealthCheckResult,
   createLocalHttpConfigView,
   createLocalHttpRuntimeView,
   createPetPackMutationResult,
@@ -51,6 +54,69 @@ test('createAiConfigView normalizes AI config payloads for Control Center', () =
       decisions: [],
     },
     hasApiKey: true
+  })
+})
+
+test('image generation adapters normalize provider payloads for Control Center', () => {
+  assert.deepEqual(createImageGenerationConfigView({
+    provider: 'openai-compatible',
+    baseUrl: 42,
+    model: 'gpt-image-2',
+    apiKeyRef: null,
+    organization: 'org-demo',
+    project: 7,
+    timeoutMs: '420000',
+    maxConcurrentJobs: '2',
+    hasApiKey: 'yes',
+    apiKeyPreview: 1234,
+    apiKeyLabel: '',
+    defaultBackend: 'cloud',
+    secretValue: 'sk-hidden'
+  }), {
+    provider: 'openai-compatible',
+    baseUrl: '',
+    model: 'gpt-image-2',
+    apiKeyRef: '',
+    organization: 'org-demo',
+    project: '',
+    timeoutMs: 420000,
+    maxConcurrentJobs: 2,
+    hasApiKey: true,
+    apiKeyPreview: '',
+    apiKeyLabel: 'Image API Key'
+  })
+
+  assert.deepEqual(createImageGenerationApiKeyResult({
+    apiKeyRef: 'secret:model.image.openai.apiKey',
+    hasApiKey: 1,
+    apiKeyPreview: '••••1234',
+    secretValue: 'sk-hidden'
+  }), {
+    apiKeyRef: 'secret:model.image.openai.apiKey',
+    hasApiKey: true,
+    apiKeyPreview: '••••1234'
+  })
+
+  assert.deepEqual(createImageGenerationHealthCheckResult({
+    ok: 1,
+    provider: 'openai-compatible',
+    backend: 'cloud',
+    code: 'provider_healthy',
+    message: 'ok',
+    modelsProbe: 'ok',
+    availableModels: ['gpt-image-2', 42, 'gpt-image-2'],
+    currentModelDiscovered: 'yes',
+    usage: { estimatedCostUsd: '0.02', internal: 'ignore-me' },
+    secretValue: 'sk-hidden'
+  }), {
+    ok: true,
+    provider: 'openai-compatible',
+    code: 'provider_healthy',
+    message: 'ok',
+    modelsProbe: 'ok',
+    availableModels: ['gpt-image-2'],
+    currentModelDiscovered: true,
+    usage: { estimatedCostUsd: 0.02 }
   })
 })
 
