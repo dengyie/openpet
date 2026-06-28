@@ -111,6 +111,8 @@ const createRendererHarness = async () => {
 test('pet renderer routes local speech to the floating bubble chat and keeps legacy inline bubble hidden', async () => {
   const { bubbleChatMessages, callbacks, elements } = await createRendererHarness()
 
+  assert.deepEqual(bubbleChatMessages, [])
+
   callbacks.settings({ bubbleDuration: 1300 })
   callbacks.menuCommand({ command: 'walk' })
   await new Promise((resolve) => setImmediate(resolve))

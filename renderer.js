@@ -960,7 +960,6 @@ const start = async () => {
 
   if (!state.defaultAction) { say('没有找到动作图片'); return }
 
-  say('喵')
   state.walkTimer = window.setInterval(tickWalk, 40)
 }
 
