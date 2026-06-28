@@ -403,12 +403,12 @@ test.describe('Control Center smoke', () => {
 
     await expect(page.getByTestId('ai-provider-summary')).toContainText('当前生效配置')
     await expect(page.getByTestId('ai-provider-active-summary')).toContainText('OpenAI compatible')
-    await page.getByRole('textbox', { name: 'Base URL', exact: true }).fill('https://user:pass@ai.example.test/v1?token=secret')
+    await page.getByLabel('Base URL', { exact: true }).fill('https://user:pass@ai.example.test/v1?token=secret')
     await expect(page.getByTestId('ai-provider-validation-error')).toContainText('Base URL 不能包含用户名或密码')
     await expect(chatProviderSection.getByRole('button', { name: '保存聊天 Provider' })).toBeDisabled()
 
-    await page.getByRole('textbox', { name: 'Base URL', exact: true }).fill('https://ai.example.test/v1')
-    await page.getByRole('textbox', { name: 'Model', exact: true }).fill('openpet-test-model')
+    await page.getByLabel('Base URL', { exact: true }).fill('https://ai.example.test/v1')
+    await page.getByLabel('Model', { exact: true }).fill('openpet-test-model')
     await page.getByLabel('System Prompt').fill('Stay tiny, helpful, and local-first.')
     await page.getByRole('switch', { name: 'Enable AI memory' }).click()
     await expect(page.getByTestId('ai-provider-dirty-warning')).toContainText('未保存的 Provider 草稿')
@@ -425,7 +425,7 @@ test.describe('Control Center smoke', () => {
     await expect(page.getByTestId('ai-connection-result')).toContainText('gpt-4o-mini')
     await expect(page.getByTestId('ai-provider-active-summary')).not.toContainText('https://ai.example.test/v1')
     await expect(page.getByTestId('ai-chat-discovered-models')).toContainText('gpt-4o-mini')
-    await expect(page.getByRole('textbox', { name: 'Model', exact: true })).toHaveAttribute('list', 'ai-chat-model-options')
+    await expect(page.getByLabel('Model', { exact: true })).toHaveAttribute('list', 'ai-chat-model-options')
 
     await chatProviderSection.getByRole('button', { name: '保存聊天 Provider' }).click()
     await expect(page.getByTestId('ai-provider-feedback')).toContainText('AI 配置已保存：Base URL / Model / System Prompt / 长期记忆')
@@ -447,8 +447,8 @@ test.describe('Control Center smoke', () => {
     await page.reload()
     await page.getByRole('button', { name: 'AI' }).click()
     await expandAiSection(page, '聊天 Provider')
-    await expect(page.getByRole('textbox', { name: 'Base URL', exact: true })).toHaveValue('https://ai.example.test/v1')
-    await expect(page.getByRole('textbox', { name: 'Model', exact: true })).toHaveValue('openpet-test-model')
+    await expect(page.getByLabel('Base URL', { exact: true })).toHaveValue('https://ai.example.test/v1')
+    await expect(page.getByLabel('Model', { exact: true })).toHaveValue('openpet-test-model')
     await expect(page.getByLabel('System Prompt')).toHaveValue('Stay tiny, helpful, and local-first.')
     await expect(page.getByRole('switch', { name: 'Enable AI memory' })).toHaveAttribute('aria-checked', 'true')
     await expect(page.locator('.field-row').filter({ has: page.getByText('API Key', { exact: true }) })).toContainText('已保存')
@@ -459,8 +459,8 @@ test.describe('Control Center smoke', () => {
     await page.getByRole('button', { name: 'AI' }).click()
     const chatProviderSection = await expandAiSection(page, '聊天 Provider')
 
-    await page.getByRole('textbox', { name: 'Base URL', exact: true }).fill('https://combo.example.test/v1')
-    await page.getByRole('textbox', { name: 'Model', exact: true }).fill('combo-test-model')
+    await page.getByLabel('Base URL', { exact: true }).fill('https://combo.example.test/v1')
+    await page.getByLabel('Model', { exact: true }).fill('combo-test-model')
     await page.getByPlaceholder('输入 API Key').fill('sk-combo-secret')
 
     await chatProviderSection.getByRole('button', { name: '测试已保存配置' }).click()
@@ -477,20 +477,24 @@ test.describe('Control Center smoke', () => {
     await expect(page.locator('.field-row').filter({ has: page.getByText('API Key', { exact: true }) })).toContainText('已保存')
   })
 
-  test('chat provider test surfaces optional models probe fallback without blocking setup', async ({ page }) => {
+  test('chat provider test tolerates optional models probe fallback without blocking setup', async ({ page }) => {
     await page.goto('/')
     await page.getByRole('button', { name: 'AI' }).click()
     const chatProviderSection = await expandAiSection(page, '聊天 Provider')
+    const chatApiKeyRow = page.locator('.field-row').filter({ has: page.getByText('API Key', { exact: true }) })
 
-    await page.getByRole('textbox', { name: 'Base URL', exact: true }).fill('https://chat-models-unavailable.example.test/v1')
-    await page.getByRole('textbox', { name: 'Model', exact: true }).fill('fallback-model')
+    await page.getByLabel('Base URL', { exact: true }).fill('https://chat-models-unavailable.example.test/v1')
+    await page.getByLabel('Model', { exact: true }).fill('fallback-model')
+    await chatApiKeyRow.locator('input[type="password"]').fill('sk-fallback-demo-1234')
     await chatProviderSection.getByRole('button', { name: '保存聊天 Provider' }).click()
-    await page.locator('.field-row').filter({ has: page.getByText('API Key', { exact: true }) }).getByRole('button', { name: '保存密钥' }).click()
+    await chatApiKeyRow.getByRole('button', { name: '保存密钥' }).click()
     await chatProviderSection.getByRole('button', { name: '测试已保存配置' }).click()
 
-    await expect(page.getByTestId('ai-provider-feedback')).toContainText('模型列表探测不可用')
     await expect(page.getByTestId('ai-connection-result')).toContainText('fallback-model')
     await expect(page.getByTestId('ai-connection-result')).toContainText('连接测试通过')
+    await expect(page.getByTestId('ai-chat-discovered-models')).toContainText('fallback-model')
+    await expect(page.getByTestId('ai-chat-discovered-models')).not.toContainText('gpt-4.1-mini')
+    await expect(page.getByTestId('ai-chat-discovered-models')).not.toContainText('gpt-4o')
   })
 
   test('chat provider presets fill common OpenAI-compatible endpoints without saving immediately', async ({ page }) => {
@@ -499,14 +503,34 @@ test.describe('Control Center smoke', () => {
 
     const chatProviderSection = await expandAiSection(page, '聊天 Provider')
     await chatProviderSection.getByRole('button', { name: /OpenAI 官方/ }).click()
-    await expect(page.getByRole('textbox', { name: 'Base URL', exact: true })).toHaveValue('https://api.openai.com/v1')
-    await expect(page.getByRole('textbox', { name: 'Model', exact: true })).toHaveValue('gpt-4o-mini')
+    await expect(page.getByLabel('Base URL', { exact: true })).toHaveValue('https://api.openai.com/v1')
+    await expect(page.getByLabel('Model', { exact: true })).toHaveValue('gpt-4o-mini')
 
     await chatProviderSection.getByRole('button', { name: /本地\/代理 OpenAI-compatible/ }).click()
-    await expect(page.getByRole('textbox', { name: 'Base URL', exact: true })).toHaveValue('http://127.0.0.1:11434/v1')
-    await expect(page.getByRole('textbox', { name: 'Model', exact: true })).toHaveValue('qwen2.5:7b-instruct')
-    await expect(page.locator('.readonly-row', { hasText: '草稿状态' })).toContainText('配置草稿未保存')
-    await expect(page.locator('.readonly-row', { hasText: '当前生效配置' })).not.toContainText('http://127.0.0.1:11434/v1')
+    await expect(page.getByLabel('Base URL', { exact: true })).toHaveValue('http://127.0.0.1:11434/v1')
+    await expect(page.getByLabel('Model', { exact: true })).toHaveValue('qwen2.5:7b-instruct')
+    await expect(chatProviderSection.locator('.readonly-row', { hasText: '草稿状态' })).toContainText('配置草稿未保存')
+    await expect(chatProviderSection.locator('.readonly-row', { hasText: '当前生效配置' })).not.toContainText('http://127.0.0.1:11434/v1')
+  })
+
+  test('chat discovered models can be applied to the draft without saving automatically', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: 'AI' }).click()
+    const chatProviderSection = await expandAiSection(page, '聊天 Provider')
+    const chatApiKeyRow = page.locator('.field-row').filter({ has: page.getByText('API Key', { exact: true }) })
+
+    await page.getByLabel('Base URL', { exact: true }).fill('https://chat.example.test/v1')
+    await page.getByLabel('Model', { exact: true }).fill('draft-before-save')
+    await chatApiKeyRow.locator('input[type="password"]').fill('sk-chat-demo-1234')
+    await chatProviderSection.getByRole('button', { name: '保存聊天 Provider' }).click()
+    await chatApiKeyRow.getByRole('button', { name: '保存密钥' }).click()
+    await chatProviderSection.getByRole('button', { name: '测试已保存配置' }).click()
+
+    await expect(page.getByTestId('ai-chat-discovered-models')).toContainText('gpt-4.1-mini')
+    await page.getByRole('button', { name: '使用聊天模型 gpt-4.1-mini' }).click()
+    await expect(page.getByLabel('Model', { exact: true })).toHaveValue('gpt-4.1-mini')
+    await expect(chatProviderSection.locator('.readonly-row', { hasText: '当前生效配置' })).toContainText('draft-before-save')
+    await expect(chatProviderSection.locator('.readonly-row', { hasText: '草稿状态' })).toContainText('配置草稿未保存')
   })
 
   test('persists image generation config and supports key health actions in the demo API', async ({ page }) => {
@@ -578,6 +602,26 @@ test.describe('Control Center smoke', () => {
     await expect(page.getByLabel('图片 Timeout MS')).toHaveValue('90000')
     await expect(page.getByLabel('图片最大并发')).toHaveValue('2')
     await expect(page.locator('.field-row', { hasText: '图片 API Key' })).toContainText('未保存')
+  })
+
+  test('image discovered models can be applied to the draft without saving automatically', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: 'AI' }).click()
+    const imageProviderSection = await expandAiSection(page, '图片 Provider')
+
+    await page.getByLabel('图片 Base URL').fill('https://image-models.example.test/v1')
+    await page.getByLabel('图片 Model').fill('draft-image-model')
+    await imageProviderSection.getByRole('button', { name: '保存图片 Provider' }).click()
+    const imageApiKeyRow = page.locator('.field-row', { hasText: '图片 API Key' })
+    await imageApiKeyRow.locator('input[type="password"]').fill('sk-image-demo-5678')
+    await page.getByRole('button', { name: '保存图片密钥' }).click()
+    await page.getByRole('button', { name: '检查图片健康' }).click()
+
+    await expect(page.getByTestId('ai-image-discovered-models')).toContainText('openpet-image-fast')
+    await page.getByRole('button', { name: '使用图片模型 openpet-image-fast' }).click()
+    await expect(page.getByLabel('图片 Model')).toHaveValue('openpet-image-fast')
+    await expect(page.locator('.readonly-row', { hasText: '图片当前 Provider' })).toContainText('draft-image-model')
+    await expect(page.locator('.readonly-row', { hasText: '图片草稿状态' })).toContainText('图片配置草稿未保存')
   })
 
   test('persists pet persona override and follows the active pet-pack in the demo API', async ({ page }) => {

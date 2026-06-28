@@ -47,6 +47,77 @@ const CollapsibleAiSection = ({
   </details>
 )
 
+const AiConfigGroup = ({
+  title,
+  note,
+  children
+}: {
+  title: string
+  note?: string
+  children: ReactNode
+}) => (
+  <section className="ai-config-group">
+    <header className="ai-config-group-header">
+      <div>
+        <h3>{title}</h3>
+        {note ? <p>{note}</p> : null}
+      </div>
+    </header>
+    <div className="ai-config-group-body">
+      {children}
+    </div>
+  </section>
+)
+
+const ModelOptionButtons = ({
+  title,
+  note,
+  options,
+  activeValue,
+  emptyText,
+  onSelect,
+  testId,
+  buttonLabelPrefix
+}: {
+  title: string
+  note: string
+  options: Array<{ value: string, label: string }>
+  activeValue: string
+  emptyText: string
+  onSelect: (value: string) => void
+  testId?: string
+  buttonLabelPrefix: string
+}) => {
+  const normalizedActiveValue = String(activeValue || '').trim()
+  return (
+    <div className="model-option-panel" data-testid={testId}>
+      <div className="model-option-header">
+        <strong>{title}</strong>
+        <span>{note}</span>
+      </div>
+      {options.length ? (
+        <div className="model-option-list">
+          {options.map((option) => {
+            const selected = option.value === normalizedActiveValue
+            return (
+              <button
+                type="button"
+                key={option.value}
+                className={selected ? 'model-option-chip active' : 'model-option-chip'}
+                onClick={() => onSelect(option.value)}
+                aria-pressed={selected}
+                aria-label={`${buttonLabelPrefix}${option.label}`}
+              >
+                {option.label}
+              </button>
+            )
+          })}
+        </div>
+      ) : <div className="model-option-empty">{emptyText}</div>}
+    </div>
+  )
+}
+
 const formatMemoryScore = (value: number) => `${Math.round(Math.max(0, Math.min(1, Number(value) || 0)) * 100)}%`
 
 const MemoryList = ({
@@ -293,136 +364,149 @@ export function AiPane({
 
       <CollapsibleAiSection title="聊天 Provider" note="OpenAI-compatible 聊天模型配置" defaultOpen>
         <div className="section provider-summary" data-testid="ai-provider-summary">
-          <div className="readonly-row">
-            <strong>当前生效配置</strong>
-            <span className="endpoint-text" data-testid="ai-provider-active-summary">{activeProviderSummary}</span>
-          </div>
-
-          <div className="readonly-row">
-            <strong>草稿状态</strong>
-            <span>{draftSummary || '当前没有未保存修改'}</span>
-          </div>
-
-          {providerConfigDirty ? (
-            <div className="provider-warning" data-testid="ai-provider-dirty-warning">
-              <strong>未保存修改：</strong> {providerConfigChanges.join(' / ') || 'Provider 草稿'}
-              <br />
-              你有未保存的 Provider 草稿。点击“保存聊天 Provider”只保存配置；点击“测试已保存配置”只测试当前已保存配置，不会偷用草稿。
+          <AiConfigGroup title="配置状态" note="区分当前生效配置、草稿和验证结果。">
+            <div className="readonly-row">
+              <strong>当前生效配置</strong>
+              <span className="endpoint-text" data-testid="ai-provider-active-summary">{activeProviderSummary}</span>
             </div>
-          ) : null}
-          {providerConfigValidationError ? (
-            <div className="provider-warning error" data-testid="ai-provider-validation-error">{providerConfigValidationError}</div>
-          ) : null}
 
-          <div className="field-row">
-            <div className="field-label">启用聊天</div>
-            <Toggle ariaLabel="Enable AI chat" checked={config.enabled} onChange={(enabled) => onChange({ enabled })} />
-          </div>
-
-          <label className="field-row">
-            <span className="field-label">Provider</span>
-            <select
-              className="text-input"
-              value={config.provider}
-              onChange={(event) => onChange({ provider: event.target.value })}
-            >
-              <option value="openai-compatible">OpenAI compatible</option>
-            </select>
-          </label>
-
-          <div className="field-row tall">
-            <div>
-              <div className="field-label">聊天 Provider 预设</div>
-              <div className="field-note">预设只填充 Base URL / Model，不会自动保存，也不会覆盖已保存密钥。</div>
+            <div className="readonly-row">
+              <strong>草稿状态</strong>
+              <span>{draftSummary || '当前没有未保存修改'}</span>
             </div>
-            <div className="provider-preset-grid">
-              {chatProviderPresets.map((preset) => (
-                <button
-                  type="button"
-                  key={preset.id}
-                  className="provider-preset-card"
-                  onClick={() => applyChatProviderPreset(preset)}
-                  disabled={saving}
-                >
-                  <strong>{preset.title}</strong>
-                  <span>{preset.description}</span>
-                  <code>{preset.baseUrl}</code>
-                </button>
-              ))}
+
+            {providerConfigDirty ? (
+              <div className="provider-warning" data-testid="ai-provider-dirty-warning">
+                <strong>未保存修改：</strong> {providerConfigChanges.join(' / ') || 'Provider 草稿'}
+                <br />
+                你有未保存的 Provider 草稿。点击“保存聊天 Provider”只保存配置；点击“测试已保存配置”只测试当前已保存配置，不会偷用草稿。
+              </div>
+            ) : null}
+            {providerConfigValidationError ? (
+              <div className="provider-warning error" data-testid="ai-provider-validation-error">{providerConfigValidationError}</div>
+            ) : null}
+          </AiConfigGroup>
+
+          <AiConfigGroup title="接入配置" note="先确认 Provider 类型与接入地址，再决定使用哪个模型。">
+            <div className="field-row">
+              <div className="field-label">启用聊天</div>
+              <Toggle ariaLabel="Enable AI chat" checked={config.enabled} onChange={(enabled) => onChange({ enabled })} />
             </div>
-          </div>
 
-          <label className="field-row">
-            <span className="field-label">Base URL</span>
-            <input
-              className="text-input"
-              value={config.baseUrl}
-              onChange={(event) => onChange({ baseUrl: event.target.value })}
-            />
-          </label>
-
-          <label className="field-row">
-            <span className="field-label">Model</span>
-            <input
-              className="text-input"
-              list="ai-chat-model-options"
-              value={config.model}
-              onChange={(event) => onChange({ model: event.target.value })}
-            />
-          </label>
-
-          <datalist id="ai-chat-model-options">
-            {chatDiscoveredModelOptions.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </datalist>
-
-          {chatDiscoveredModelOptions.length ? (
-            <div className="readonly-row" data-testid="ai-chat-discovered-models">
-              <strong>发现的聊天模型</strong>
-              <span>{chatDiscoveredModelOptions.map((option) => option.label).join(' / ')}</span>
-            </div>
-          ) : null}
-
-          <div className="field-row">
-            <div>
-              <div className="field-label">API Key</div>
-              <div className="field-note">{config.hasApiKey ? '已保存' : '未保存'}</div>
-            </div>
-            <div className="inline-action">
-              <input
+            <label className="field-row">
+              <span className="field-label">Provider</span>
+              <select
                 className="text-input"
-                type="password"
-                value={apiKeyDraft}
-                placeholder={config.hasApiKey ? '输入新密钥覆盖' : '输入 API Key'}
-                onChange={(event) => setApiKeyDraft(event.target.value)}
+                value={config.provider}
+                onChange={(event) => onChange({ provider: event.target.value })}
+              >
+                <option value="openai-compatible">OpenAI compatible</option>
+              </select>
+            </label>
+
+            <div className="field-row tall">
+              <div>
+                <div className="field-label">聊天 Provider 预设</div>
+                <div className="field-note">预设只填充 Base URL / Model，不会自动保存，也不会覆盖已保存密钥。</div>
+              </div>
+              <div className="provider-preset-grid">
+                {chatProviderPresets.map((preset) => (
+                  <button
+                    type="button"
+                    key={preset.id}
+                    className="provider-preset-card"
+                    onClick={() => applyChatProviderPreset(preset)}
+                    disabled={saving}
+                  >
+                    <strong>{preset.title}</strong>
+                    <span>{preset.description}</span>
+                    <code>{preset.baseUrl}</code>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <label className="field-row">
+              <span className="field-label">Base URL</span>
+              <input
+                aria-label="Base URL"
+                className="text-input"
+                value={config.baseUrl}
+                onChange={(event) => onChange({ baseUrl: event.target.value })}
               />
-              <button type="button" className="ghost" onClick={onSaveApiKey} disabled={!apiKeyDraftReady || saving}>
-                保存密钥
-              </button>
-            </div>
-          </div>
+            </label>
 
-          <label className="field-row tall">
-            <span className="field-label">System Prompt</span>
-            <textarea
-              className="text-input textarea"
-              value={config.systemPrompt}
-              onChange={(event) => onChange({ systemPrompt: event.target.value })}
-            />
-          </label>
+            <label className="field-row">
+              <span className="field-label">Model</span>
+              <input
+                aria-label="Model"
+                className="text-input"
+                list="ai-chat-model-options"
+                value={config.model}
+                onChange={(event) => onChange({ model: event.target.value })}
+              />
+            </label>
 
-          <div className="field-row">
-            <div>
-              <div className="field-label">长期记忆</div>
-              <div className="field-note">主回复不阻塞，后台自动抽取用户与宠物关系记忆</div>
-            </div>
-            <Toggle
-              ariaLabel="Enable AI memory"
-              checked={config.memory.enabled}
-              onChange={(enabled) => onChange({ memory: { ...config.memory, enabled } })}
+            <datalist id="ai-chat-model-options">
+              {chatDiscoveredModelOptions.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </datalist>
+
+            <ModelOptionButtons
+              title="发现的聊天模型"
+              note="点击任一模型即可填充到当前草稿；不会自动保存。"
+              options={chatDiscoveredModelOptions}
+              activeValue={config.model}
+              emptyText="先测试已保存配置，再把发现的模型直接应用到草稿。"
+              onSelect={(value) => onChange({ model: value })}
+              testId="ai-chat-discovered-models"
+              buttonLabelPrefix="使用聊天模型 "
             />
-          </div>
+          </AiConfigGroup>
+
+          <AiConfigGroup title="凭证与回复策略" note="密钥单独保存；System Prompt 和长期记忆仍然走配置草稿。">
+            <div className="field-row">
+              <div>
+                <div className="field-label">API Key</div>
+                <div className="field-note">{config.hasApiKey ? '已保存' : '未保存'}</div>
+              </div>
+              <div className="inline-action">
+                <input
+                  className="text-input"
+                  type="password"
+                  value={apiKeyDraft}
+                  placeholder={config.hasApiKey ? '输入新密钥覆盖' : '输入 API Key'}
+                  onChange={(event) => setApiKeyDraft(event.target.value)}
+                />
+                <button type="button" className="ghost" onClick={onSaveApiKey} disabled={!apiKeyDraftReady || saving}>
+                  保存密钥
+                </button>
+              </div>
+            </div>
+
+            <label className="field-row tall">
+              <span className="field-label">System Prompt</span>
+              <textarea
+                aria-label="System Prompt"
+                className="text-input textarea"
+                value={config.systemPrompt}
+                onChange={(event) => onChange({ systemPrompt: event.target.value })}
+              />
+            </label>
+
+            <div className="field-row">
+              <div>
+                <div className="field-label">长期记忆</div>
+                <div className="field-note">主回复不阻塞，后台自动抽取用户与宠物关系记忆</div>
+              </div>
+              <Toggle
+                ariaLabel="Enable AI memory"
+                checked={config.memory.enabled}
+                onChange={(enabled) => onChange({ memory: { ...config.memory, enabled } })}
+              />
+            </div>
+          </AiConfigGroup>
         </div>
 
         {(connectionStatus || connectionTestResult) ? (
@@ -515,149 +599,159 @@ export function AiPane({
         </div>
 
         <div className="section">
-          <div className="readonly-row">
-            <strong>图片当前 Provider</strong>
-            <span className="endpoint-text">{imageTargetSummary}</span>
-          </div>
-
-          <div className="readonly-row">
-            <strong>图片草稿状态</strong>
-            <span>{hasUnsavedImageGenerationChanges ? '图片配置草稿未保存；健康检查使用当前已保存配置。' : '当前没有未保存的图片配置修改'}</span>
-          </div>
-
-          <div className="readonly-row">
-            <strong>生成边界</strong>
-            <span>Creator Studio 只提交提示词和输出目录；Provider 调用、API Key、图片写入都由 OpenPet host 执行。</span>
-          </div>
-
-          <div className="readonly-row">
-            <strong>图片兼容性提示</strong>
-            <span>{imageCompatibilityHint}</span>
-          </div>
-
-          <div className="field-row tall">
-            <div>
-              <div className="field-label">图片 Provider 预设</div>
-              <div className="field-note">预设只填充 Base URL / Model / 超时；不会读取或覆盖 API Key。</div>
-            </div>
-            <div className="provider-preset-grid">
-              {imageProviderPresets.map((preset) => (
-                <button
-                  type="button"
-                  key={preset.id}
-                  className="provider-preset-card"
-                  onClick={() => applyImageProviderPreset(preset)}
-                  disabled={saving}
-                >
-                  <strong>{preset.title}</strong>
-                  <span>{preset.description}</span>
-                  <code>{preset.baseUrl}</code>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {imageProviderValidationError ? (
-            <div className="provider-warning error">{imageProviderValidationError}</div>
-          ) : null}
-
-          {imageHealthStatus ? (
+          <AiConfigGroup title="配置状态" note="图片 Provider 与聊天 Provider 一样，草稿和已保存配置严格分离。">
             <div className="readonly-row">
-              <strong>图片健康状态</strong>
-              <span>{imageHealthStatus}</span>
+              <strong>图片当前 Provider</strong>
+              <span className="endpoint-text">{imageTargetSummary}</span>
             </div>
-          ) : null}
 
-          <label className="field-row">
-            <span className="field-label">图片 Base URL</span>
-            <input
-              aria-label="图片 Base URL"
-              className="text-input"
-              value={imageGenerationConfig.baseUrl}
-              onChange={(event) => onChangeImageGeneration({ baseUrl: event.target.value })}
-            />
-          </label>
-
-          <label className="field-row">
-            <span className="field-label">图片 Model</span>
-            <input
-              aria-label="图片 Model"
-              className="text-input"
-              list="ai-image-model-options"
-              value={imageGenerationConfig.model}
-              onChange={(event) => onChangeImageGeneration({ model: event.target.value })}
-            />
-          </label>
-
-          <datalist id="ai-image-model-options">
-            {imageDiscoveredModelOptions.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </datalist>
-
-          {imageDiscoveredModelOptions.length ? (
-            <div className="readonly-row" data-testid="ai-image-discovered-models">
-              <strong>发现的图片模型</strong>
-              <span>{imageDiscoveredModelOptions.map((option) => option.label).join(' / ')}</span>
+            <div className="readonly-row">
+              <strong>图片草稿状态</strong>
+              <span>{hasUnsavedImageGenerationChanges ? '图片配置草稿未保存；健康检查使用当前已保存配置。' : '当前没有未保存的图片配置修改'}</span>
             </div>
-          ) : null}
 
-          <label className="field-row">
-            <div>
-              <div className="field-label">图片 Timeout</div>
-              <div className="field-note">Provider 生成请求的最长等待时间，单位毫秒。</div>
+            <div className="readonly-row">
+              <strong>生成边界</strong>
+              <span>Creator Studio 只提交提示词和输出目录；Provider 调用、API Key、图片写入都由 OpenPet host 执行。</span>
             </div>
-            <input
-              aria-label="图片 Timeout MS"
-              className="text-input"
-              type="number"
-              min={1000}
-              step={1000}
-              value={imageGenerationConfig.timeoutMs}
-              onChange={(event) => onChangeImageGeneration({ timeoutMs: Number(event.target.value) })}
-            />
-          </label>
 
-          <label className="field-row">
-            <div>
-              <div className="field-label">图片最大并发</div>
-              <div className="field-note">当前建议保持 1，避免桌宠生成任务互相抢占。</div>
+            <div className="readonly-row">
+              <strong>图片兼容性提示</strong>
+              <span>{imageCompatibilityHint}</span>
             </div>
-            <input
-              aria-label="图片最大并发"
-              className="text-input"
-              type="number"
-              min={1}
-              step={1}
-              value={imageGenerationConfig.maxConcurrentJobs}
-              onChange={(event) => onChangeImageGeneration({ maxConcurrentJobs: Number(event.target.value) })}
-            />
-          </label>
 
-          <div className="field-row">
-            <div>
-              <div className="field-label">图片 API Key</div>
-              <div className="field-note">
-                {imageGenerationConfig.hasApiKey ? '已保存' : '未保存'}
-                {imageGenerationConfig.apiKeyPreview ? ` · ${imageGenerationConfig.apiKeyPreview}` : ''}
+            {imageProviderValidationError ? (
+              <div className="provider-warning error">{imageProviderValidationError}</div>
+            ) : null}
+
+            {imageHealthStatus ? (
+              <div className="readonly-row">
+                <strong>图片健康状态</strong>
+                <span>{imageHealthStatus}</span>
+              </div>
+            ) : null}
+          </AiConfigGroup>
+
+          <AiConfigGroup title="接入与模型" note="先选预设，再根据健康检查结果把模型直接应用到草稿。">
+            <div className="field-row tall">
+              <div>
+                <div className="field-label">图片 Provider 预设</div>
+                <div className="field-note">预设只填充 Base URL / Model / 超时；不会读取或覆盖 API Key。</div>
+              </div>
+              <div className="provider-preset-grid">
+                {imageProviderPresets.map((preset) => (
+                  <button
+                    type="button"
+                    key={preset.id}
+                    className="provider-preset-card"
+                    onClick={() => applyImageProviderPreset(preset)}
+                    disabled={saving}
+                  >
+                    <strong>{preset.title}</strong>
+                    <span>{preset.description}</span>
+                    <code>{preset.baseUrl}</code>
+                  </button>
+                ))}
               </div>
             </div>
-            <div className="inline-action">
+
+            <label className="field-row">
+              <span className="field-label">图片 Base URL</span>
               <input
+                aria-label="图片 Base URL"
                 className="text-input"
-                type="password"
-                value={imageApiKeyDraft}
-                placeholder={imageGenerationConfig.hasApiKey ? '输入新密钥覆盖' : '输入图片 API Key'}
-                onChange={(event) => setImageApiKeyDraft(event.target.value)}
+                value={imageGenerationConfig.baseUrl}
+                onChange={(event) => onChangeImageGeneration({ baseUrl: event.target.value })}
               />
-              <button type="button" className="ghost" onClick={onSaveImageGenerationApiKey} disabled={!imageApiKeyDraft.trim() || saving}>
-                保存图片密钥
-              </button>
-              <button type="button" className="danger-text" onClick={onClearImageGenerationApiKey} disabled={saving || !imageGenerationConfig.hasApiKey}>
-                清除图片密钥
-              </button>
+            </label>
+
+            <label className="field-row">
+              <span className="field-label">图片 Model</span>
+              <input
+                aria-label="图片 Model"
+                className="text-input"
+                list="ai-image-model-options"
+                value={imageGenerationConfig.model}
+                onChange={(event) => onChangeImageGeneration({ model: event.target.value })}
+              />
+            </label>
+
+            <datalist id="ai-image-model-options">
+              {imageDiscoveredModelOptions.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </datalist>
+
+            <ModelOptionButtons
+              title="发现的图片模型"
+              note="点击任一模型即可填充到当前图片草稿；不会自动保存。"
+              options={imageDiscoveredModelOptions}
+              activeValue={imageGenerationConfig.model}
+              emptyText="先检查图片健康，再把发现的模型直接应用到图片草稿。"
+              onSelect={(value) => onChangeImageGeneration({ model: value })}
+              testId="ai-image-discovered-models"
+              buttonLabelPrefix="使用图片模型 "
+            />
+          </AiConfigGroup>
+
+          <AiConfigGroup title="凭证与运行限制" note="图片密钥单独保存；超时和并发仍然属于图片配置草稿。">
+            <label className="field-row">
+              <div>
+                <div className="field-label">图片 Timeout</div>
+                <div className="field-note">Provider 生成请求的最长等待时间，单位毫秒。</div>
+              </div>
+              <input
+                aria-label="图片 Timeout MS"
+                className="text-input"
+                type="number"
+                min={1000}
+                step={1000}
+                value={imageGenerationConfig.timeoutMs}
+                onChange={(event) => onChangeImageGeneration({ timeoutMs: Number(event.target.value) })}
+              />
+            </label>
+
+            <label className="field-row">
+              <div>
+                <div className="field-label">图片最大并发</div>
+                <div className="field-note">当前建议保持 1，避免桌宠生成任务互相抢占。</div>
+              </div>
+              <input
+                aria-label="图片最大并发"
+                className="text-input"
+                type="number"
+                min={1}
+                step={1}
+                value={imageGenerationConfig.maxConcurrentJobs}
+                onChange={(event) => onChangeImageGeneration({ maxConcurrentJobs: Number(event.target.value) })}
+              />
+            </label>
+
+            <div className="field-row">
+              <div>
+                <div className="field-label">图片 API Key</div>
+                <div className="field-note">
+                  {imageGenerationConfig.hasApiKey ? '已保存' : '未保存'}
+                  {imageGenerationConfig.apiKeyPreview ? ` · ${imageGenerationConfig.apiKeyPreview}` : ''}
+                </div>
+              </div>
+              <div className="inline-action">
+                <input
+                  className="text-input"
+                  type="password"
+                  value={imageApiKeyDraft}
+                  placeholder={imageGenerationConfig.hasApiKey ? '输入新密钥覆盖' : '输入图片 API Key'}
+                  onChange={(event) => setImageApiKeyDraft(event.target.value)}
+                />
+                <button type="button" className="ghost" onClick={onSaveImageGenerationApiKey} disabled={!imageApiKeyDraft.trim() || saving}>
+                  保存图片密钥
+                </button>
+                <button type="button" className="danger-text" onClick={onClearImageGenerationApiKey} disabled={saving || !imageGenerationConfig.hasApiKey}>
+                  清除图片密钥
+                </button>
+              </div>
             </div>
-          </div>
+          </AiConfigGroup>
         </div>
       </CollapsibleAiSection>
 
