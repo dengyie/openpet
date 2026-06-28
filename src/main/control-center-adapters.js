@@ -224,13 +224,109 @@ const createServiceStatusView = (config, runtime) => ({
 })
 
 /**
+ * @param {unknown} blocklist
+ * @returns {BlocklistState}
+ */
+const createBlocklistStateView = (blocklist = {}) => {
+  const input = toRecord(blocklist)
+  return {
+    pluginIds: Array.isArray(input.pluginIds) ? input.pluginIds.filter((item) => typeof item === 'string' && item) : [],
+    packIds: Array.isArray(input.packIds) ? input.packIds.filter((item) => typeof item === 'string' && item) : [],
+    sha256: Array.isArray(input.sha256) ? input.sha256.filter((item) => typeof item === 'string' && item) : []
+  }
+}
+
+/**
+ * @param {unknown} review
+ * @returns {import('../shared/openpet-contracts').CatalogReviewState | undefined}
+ */
+const createCatalogReviewStateView = (review) => {
+  if (!review || typeof review !== 'object' || Array.isArray(review)) return undefined
+  const input = toRecord(review)
+  return {
+    blocked: Boolean(input.blocked),
+    reasons: Array.isArray(input.reasons) ? input.reasons.filter((item) => typeof item === 'string' && item) : []
+  }
+}
+
+/**
+ * @param {unknown} plugin
+ * @returns {import('../shared/openpet-contracts').CatalogPluginEntry}
+ */
+const createCatalogPluginEntryView = (plugin = {}) => {
+  const input = toRecord(plugin)
+  const blockStatus = createCatalogReviewStateView(input.blockStatus)
+  return {
+    id: typeof input.id === 'string' ? input.id : '',
+    name: typeof input.name === 'string' ? input.name : '',
+    version: typeof input.version === 'string' ? input.version : '',
+    ...(typeof input.author === 'string' ? { author: input.author } : {}),
+    ...(typeof input.description === 'string' ? { description: input.description } : {}),
+    ...(typeof input.openpetApiVersion === 'string' ? { openpetApiVersion: input.openpetApiVersion } : {}),
+    ...(Array.isArray(input.permissions)
+      ? { permissions: input.permissions.filter((item) => typeof item === 'string' && item) }
+      : {}),
+    ...(input.downloadable !== undefined ? { downloadable: Boolean(input.downloadable) } : {}),
+    ...(input.installed !== undefined ? { installed: Boolean(input.installed) } : {}),
+    ...(typeof input.installedVersion === 'string' ? { installedVersion: input.installedVersion } : {}),
+    ...(input.updateAvailable !== undefined ? { updateAvailable: Boolean(input.updateAvailable) } : {}),
+    ...(typeof input.sha256 === 'string' ? { sha256: input.sha256 } : {}),
+    ...(typeof input.reportUrl === 'string' ? { reportUrl: input.reportUrl } : {}),
+    ...(blockStatus ? { blockStatus } : {})
+  }
+}
+
+/**
+ * @param {unknown} petPack
+ * @returns {import('../shared/openpet-contracts').CatalogPetPackEntry}
+ */
+const createCatalogPetPackEntryView = (petPack = {}) => {
+  const input = toRecord(petPack)
+  const blockStatus = createCatalogReviewStateView(input.blockStatus)
+  return {
+    id: typeof input.id === 'string' ? input.id : '',
+    displayName: typeof input.displayName === 'string' ? input.displayName : '',
+    version: typeof input.version === 'string' ? input.version : '',
+    ...(typeof input.author === 'string' ? { author: input.author } : {}),
+    ...(typeof input.description === 'string' ? { description: input.description } : {}),
+    ...(typeof input.previewImage === 'string' ? { previewImage: input.previewImage } : {}),
+    ...(input.actionCount !== undefined ? { actionCount: toNonNegativeInteger(input.actionCount) } : {}),
+    ...(input.downloadable !== undefined ? { downloadable: Boolean(input.downloadable) } : {}),
+    ...(input.installed !== undefined ? { installed: Boolean(input.installed) } : {}),
+    ...(typeof input.installedVersion === 'string' ? { installedVersion: input.installedVersion } : {}),
+    ...(input.updateAvailable !== undefined ? { updateAvailable: Boolean(input.updateAvailable) } : {}),
+    ...(typeof input.sha256 === 'string' ? { sha256: input.sha256 } : {}),
+    ...(typeof input.reportUrl === 'string' ? { reportUrl: input.reportUrl } : {}),
+    ...(blockStatus ? { blockStatus } : {})
+  }
+}
+
+/**
+ * @param {unknown} catalog
+ * @returns {CatalogState}
+ */
+const createCatalogView = (catalog = {}) => {
+  const input = toRecord(catalog)
+  return {
+    schemaVersion: toNonNegativeInteger(input.schemaVersion) || 1,
+    updatedAt: typeof input.updatedAt === 'string' ? input.updatedAt : '',
+    feedbackUrl: typeof input.feedbackUrl === 'string' ? input.feedbackUrl : '',
+    localBlocklist: createBlocklistStateView(input.localBlocklist),
+    catalogBlocklist: createBlocklistStateView(input.catalogBlocklist),
+    blocklist: createBlocklistStateView(input.blocklist),
+    plugins: Array.isArray(input.plugins) ? input.plugins.map((plugin) => createCatalogPluginEntryView(plugin)) : [],
+    petPacks: Array.isArray(input.petPacks) ? input.petPacks.map((petPack) => createCatalogPetPackEntryView(petPack)) : []
+  }
+}
+
+/**
  * @param {CatalogState} catalog
  * @param {BlocklistState} blocklist
  * @returns {CatalogBlocklistResult}
  */
 const createCatalogBlocklistResult = (catalog, blocklist) => ({
-  catalog,
-  blocklist
+  catalog: createCatalogView(catalog),
+  blocklist: createBlocklistStateView(blocklist)
 })
 
 /**
@@ -770,6 +866,7 @@ module.exports = {
   createAboutInfoView,
   createAboutUpdateInfo,
   createCatalogBlocklistResult,
+  createCatalogView,
   createLocalHttpConfigView,
   createLocalHttpRuntimeView,
   createPetPackMutationResult,

@@ -19,6 +19,7 @@ const {
   createActionsMutationResult,
   createAboutInfoView,
   createCatalogBlocklistResult,
+  createCatalogView,
   createPetPackMutationResult,
   createPluginMutationResult,
   createServiceStatusView,
@@ -1520,7 +1521,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
 
   ipcMainService.handle(IPC.ABOUT_CHECK_UPDATES, async () => createUpdateCheckView(await aboutService.checkForUpdates()))
 
-  ipcMainService.handle(IPC.CATALOG_GET, () => catalogService.listCatalog())
+  ipcMainService.handle(IPC.CATALOG_GET, () => createCatalogView(catalogService.listCatalog()))
 
   ipcMainService.handle(IPC.CATALOG_PREPARE_INSTALL, (_event, payload) => catalogService.prepareInstall(payload))
 
@@ -1528,9 +1529,9 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     const result = catalogService.installSelection(payload.selectionId)
     if (result.kind === 'pet-pack' && result.petPacks?.activePackId === result.itemId) {
       reloadAndSendAnimations(getPetWindow, petService)
-      return { ...result, animations: petService.getPreviewAnimations(), catalog: catalogService.listCatalog() }
+      return { ...result, animations: petService.getPreviewAnimations(), catalog: createCatalogView(catalogService.listCatalog()) }
     }
-    return { ...result, catalog: catalogService.listCatalog() }
+    return { ...result, catalog: createCatalogView(catalogService.listCatalog()) }
   })
 
   ipcMainService.handle(IPC.CATALOG_CLEAR_SELECTION, (_event, payload) => catalogService.clearSelection(payload?.selectionId))
