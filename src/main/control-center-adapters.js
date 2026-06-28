@@ -319,6 +319,142 @@ const createPluginBlockStatusView = (blockStatus) => {
 }
 
 /**
+ * @param {unknown} blockStatus
+ * @returns {import('../shared/openpet-contracts').PetPackSummary['blockStatus']}
+ */
+const createPetPackBlockStatusView = (blockStatus) => {
+  if (!blockStatus || typeof blockStatus !== 'object' || Array.isArray(blockStatus)) return undefined
+  const input = toRecord(blockStatus)
+  return {
+    blocked: Boolean(input.blocked),
+    reasons: Array.isArray(input.reasons) ? input.reasons.filter((reason) => typeof reason === 'string' && reason) : []
+  }
+}
+
+/**
+ * @param {unknown} atlas
+ * @returns {import('../shared/openpet-contracts').SpriteAtlas | undefined}
+ */
+const createSpriteAtlasView = (atlas) => {
+  if (!atlas || typeof atlas !== 'object' || Array.isArray(atlas)) return undefined
+  const input = toRecord(atlas)
+  return {
+    columns: toNonNegativeInteger(input.columns),
+    rows: toNonNegativeInteger(input.rows),
+    width: toNonNegativeInteger(input.width),
+    height: toNonNegativeInteger(input.height)
+  }
+}
+
+/**
+ * @param {unknown} previewAction
+ * @returns {import('../shared/openpet-contracts').PetPackPreviewAction | null}
+ */
+const createPetPackPreviewActionView = (previewAction) => {
+  if (!previewAction || typeof previewAction !== 'object' || Array.isArray(previewAction)) return null
+  const input = toRecord(previewAction)
+  if (typeof input.id !== 'string' || !input.id) return null
+  const atlas = createSpriteAtlasView(input.atlas)
+  return {
+    id: input.id,
+    ...(typeof input.label === 'string' ? { label: input.label } : {}),
+    ...(input.frameCount !== undefined ? { frameCount: toNonNegativeInteger(input.frameCount) } : {}),
+    ...(input.frameWidth !== undefined ? { frameWidth: toNonNegativeInteger(input.frameWidth) } : {}),
+    ...(input.frameHeight !== undefined ? { frameHeight: toNonNegativeInteger(input.frameHeight) } : {}),
+    ...(input.frameMs !== undefined ? { frameMs: toNonNegativeInteger(input.frameMs) } : {}),
+    ...(input.frameRow !== undefined ? { frameRow: toNonNegativeInteger(input.frameRow) } : {}),
+    ...(input.frameColumn !== undefined ? { frameColumn: toNonNegativeInteger(input.frameColumn) } : {}),
+    ...(atlas ? { atlas } : {}),
+    ...(Array.isArray(input.frameDurations)
+      ? { frameDurations: input.frameDurations.map((duration) => toNonNegativeInteger(duration)) }
+      : {}),
+    ...(input.loop !== undefined ? { loop: Boolean(input.loop) } : {})
+  }
+}
+
+/**
+ * @param {unknown} provenance
+ * @returns {import('../shared/openpet-contracts').PetPackProvenance | undefined}
+ */
+const createPetPackProvenanceView = (provenance) => {
+  if (!provenance || typeof provenance !== 'object' || Array.isArray(provenance)) return undefined
+  const input = toRecord(provenance)
+  return {
+    ...(typeof input.sourceUrl === 'string' ? { sourceUrl: input.sourceUrl } : {}),
+    ...(typeof input.assetAuthor === 'string' ? { assetAuthor: input.assetAuthor } : {}),
+    ...(typeof input.license === 'string' ? { license: input.license } : {}),
+    ...(typeof input.licenseUrl === 'string' ? { licenseUrl: input.licenseUrl } : {}),
+    ...(typeof input.importedAt === 'string' ? { importedAt: input.importedAt } : {}),
+    ...(typeof input.originalFormat === 'string' ? { originalFormat: input.originalFormat } : {})
+  }
+}
+
+/**
+ * @param {unknown} conflict
+ * @returns {import('../shared/openpet-contracts').PetPackVersionConflict | undefined}
+ */
+const createPetPackVersionConflictView = (conflict) => {
+  if (!conflict || typeof conflict !== 'object' || Array.isArray(conflict)) return undefined
+  const input = toRecord(conflict)
+  const validDecisions = new Set(['new-install', 'upgrade', 'downgrade', 'same-version'])
+  return {
+    installed: Boolean(input.installed),
+    decision: typeof input.decision === 'string' && validDecisions.has(input.decision)
+      ? /** @type {'new-install' | 'upgrade' | 'downgrade' | 'same-version'} */ (input.decision)
+      : 'same-version',
+    requiresReview: Boolean(input.requiresReview),
+    installedVersion: typeof input.installedVersion === 'string' ? input.installedVersion : '',
+    incomingVersion: typeof input.incomingVersion === 'string' ? input.incomingVersion : ''
+  }
+}
+
+/**
+ * @param {unknown} pack
+ * @returns {import('../shared/openpet-contracts').PetPackSummary}
+ */
+const createPetPackSummaryView = (pack = {}) => {
+  const input = toRecord(pack)
+  const previewAction = createPetPackPreviewActionView(input.previewAction)
+  const provenance = createPetPackProvenanceView(input.provenance)
+  const blockStatus = createPetPackBlockStatusView(input.blockStatus)
+  const conflict = createPetPackVersionConflictView(input.conflict)
+  return {
+    id: typeof input.id === 'string' ? input.id : '',
+    displayName: typeof input.displayName === 'string' ? input.displayName : '',
+    version: typeof input.version === 'string' ? input.version : '',
+    source: typeof input.source === 'string' ? input.source : '',
+    rootPath: typeof input.rootPath === 'string' ? input.rootPath : '',
+    ...(input.active !== undefined ? { active: Boolean(input.active) } : {}),
+    ...(typeof input.installedAt === 'string' ? { installedAt: input.installedAt } : {}),
+    ...(typeof input.updatedAt === 'string' ? { updatedAt: input.updatedAt } : {}),
+    ...(typeof input.packageHash === 'string' ? { packageHash: input.packageHash } : {}),
+    ...(typeof input.sourcePackageHash === 'string' ? { sourcePackageHash: input.sourcePackageHash } : {}),
+    ...(provenance ? { provenance } : {}),
+    ...(input.actionCount !== undefined ? { actionCount: toNonNegativeInteger(input.actionCount) } : {}),
+    ...(typeof input.defaultAction === 'string' ? { defaultAction: input.defaultAction } : {}),
+    ...(typeof input.clickAction === 'string' ? { clickAction: input.clickAction } : {}),
+    ...(typeof input.previewSprite === 'string' ? { previewSprite: input.previewSprite } : {}),
+    ...(previewAction ? { previewAction } : {}),
+    ...(input.valid !== undefined ? { valid: Boolean(input.valid) } : {}),
+    ...(typeof input.error === 'string' ? { error: input.error } : {}),
+    ...(blockStatus ? { blockStatus } : {}),
+    ...(conflict ? { conflict } : {})
+  }
+}
+
+/**
+ * @param {unknown} petPacks
+ * @returns {PetPacksViewState}
+ */
+const createPetPacksView = (petPacks = {}) => {
+  const input = toRecord(petPacks)
+  return {
+    activePackId: typeof input.activePackId === 'string' ? input.activePackId : '',
+    packs: Array.isArray(input.packs) ? input.packs.map((pack) => createPetPackSummaryView(pack)) : []
+  }
+}
+
+/**
  * @param {unknown} plugin
  * @returns {PluginViewState}
  */
@@ -372,9 +508,9 @@ const createPluginMutationResult = (result, plugins) => ({
  * @returns {PetPackMutationResult}
  */
 const createPetPackMutationResult = (result, petPacks, animations) => ({
-  ...(result.pack !== undefined ? { pack: result.pack } : {}),
-  ...(result.activePackId !== undefined ? { activePackId: result.activePackId } : {}),
-  petPacks,
+  ...(result.pack !== undefined ? { pack: createPetPackSummaryView(result.pack) } : {}),
+  ...(result.activePackId !== undefined ? { activePackId: typeof result.activePackId === 'string' ? result.activePackId : '' } : {}),
+  petPacks: createPetPacksView(petPacks),
   ...(animations !== undefined ? { animations } : {})
 })
 

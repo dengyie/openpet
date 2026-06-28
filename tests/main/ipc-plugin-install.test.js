@@ -1442,10 +1442,57 @@ test('pet-packs:inspect-directory opens native folder or zip picker and delegate
 
 test('pet pack mutation handlers return refreshed pet pack views and active animations', async () => {
   const ipcMain = createIpcMainStub()
-  const pack = { id: 'doro', displayName: 'Doro', version: '1.0.0', source: 'bundled', rootPath: '/packs/doro' }
-  const activePack = { ...pack, active: true }
+  const pack = {
+    id: 'doro',
+    displayName: 'Doro',
+    version: '1.0.0',
+    source: 'bundled',
+    rootPath: '/packs/doro',
+    actionCount: '4',
+    previewAction: {
+      id: 'idle',
+      frameCount: '4',
+      frameWidth: '64',
+      frameHeight: '64',
+      frameMs: '120',
+      frameDurations: ['120', 'bad']
+    },
+    blockStatus: { blocked: 0, reasons: ['ok', 42] }
+  }
+  const activePack = {
+    ...pack,
+    active: 1,
+    provenance: { sourceUrl: 'https://example.com/doro', originalFormat: 'directory', rawPath: '/Users/mango/private' },
+    conflict: { installed: 1, decision: 'upgrade', requiresReview: '', installedVersion: '0.9.0', incomingVersion: '1.0.0' }
+  }
   const petPacks = { activePackId: 'doro', packs: [activePack] }
   const animations = { defaultAction: 'idle', clickAction: 'happy', actions: [{ id: 'idle', label: 'Idle' }] }
+  const normalizedActivePack = {
+    id: 'doro',
+    displayName: 'Doro',
+    version: '1.0.0',
+    source: 'bundled',
+    rootPath: '/packs/doro',
+    active: true,
+    provenance: { sourceUrl: 'https://example.com/doro', originalFormat: 'directory' },
+    actionCount: 4,
+    previewAction: {
+      id: 'idle',
+      frameCount: 4,
+      frameWidth: 64,
+      frameHeight: 64,
+      frameMs: 120,
+      frameDurations: [120, 0]
+    },
+    blockStatus: { blocked: false, reasons: ['ok'] },
+    conflict: {
+      installed: true,
+      decision: 'upgrade',
+      requiresReview: false,
+      installedVersion: '0.9.0',
+      incomingVersion: '1.0.0'
+    }
+  }
   const calls = []
   const petWindowMessages = []
   const chatStateChanges = []
@@ -1534,9 +1581,34 @@ test('pet pack mutation handlers return refreshed pet pack views and active anim
   }, { packId: 'doro' })
   const removeResult = await ipcMain.handlers.get(IPC.PET_PACKS_REMOVE)(null, { packId: 'doro' })
 
-  assert.deepEqual(importResult, { pack, petPacks, animations })
-  assert.deepEqual(activeResult, { activePackId: 'doro', pack: activePack, petPacks, animations })
-  assert.deepEqual(removeResult, { petPacks })
+  assert.deepEqual(importResult, {
+    pack: {
+      id: 'doro',
+      displayName: 'Doro',
+      version: '1.0.0',
+      source: 'bundled',
+      rootPath: '/packs/doro',
+      actionCount: 4,
+      previewAction: {
+        id: 'idle',
+        frameCount: 4,
+        frameWidth: 64,
+        frameHeight: 64,
+        frameMs: 120,
+        frameDurations: [120, 0]
+      },
+      blockStatus: { blocked: false, reasons: ['ok'] }
+    },
+    petPacks: { activePackId: 'doro', packs: [normalizedActivePack] },
+    animations
+  })
+  assert.deepEqual(activeResult, {
+    activePackId: 'doro',
+    pack: normalizedActivePack,
+    petPacks: { activePackId: 'doro', packs: [normalizedActivePack] },
+    animations
+  })
+  assert.deepEqual(removeResult, { petPacks: { activePackId: 'doro', packs: [normalizedActivePack] } })
   assert.deepEqual(calls, [
     ['import', 'selection-doro'],
     ['set-active', 'doro'],

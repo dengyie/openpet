@@ -313,9 +313,98 @@ test('createPetPackMutationResult packages pack metadata with refreshed packs an
     version: '1.0.0',
     source: 'bundled',
     rootPath: '/assets/pet-packs/doro',
-    active: true
+    active: true,
+    actionCount: '4',
+    defaultAction: 'idle',
+    clickAction: 'happy',
+    previewSprite: 'file:///assets/pet-packs/doro/idle.png',
+    previewAction: {
+      id: 'idle',
+      label: 'Idle',
+      frameCount: '4',
+      frameWidth: '64',
+      frameHeight: '64',
+      frameMs: '120',
+      frameRow: '0',
+      frameColumn: '1',
+      atlas: {
+        columns: '2',
+        rows: '2',
+        width: '128',
+        height: '128',
+        secretPath: '/Users/mango/private'
+      },
+      frameDurations: ['120', 90, 'bad'],
+      loop: 1,
+      internal: 'ignore-me'
+    },
+    provenance: {
+      sourceUrl: 'https://example.com/doro',
+      assetAuthor: 'OpenPet',
+      license: 'CC-BY',
+      licenseUrl: 'https://example.com/license',
+      importedAt: '2026-06-20T00:00:00.000Z',
+      originalFormat: 'directory',
+      rawPath: '/Users/mango/private'
+    },
+    blockStatus: { blocked: 0, reasons: ['ok', 42], internal: 'ignore-me' },
+    conflict: {
+      installed: 1,
+      decision: 'upgrade',
+      requiresReview: '',
+      installedVersion: '0.9.0',
+      incomingVersion: '1.0.0',
+      privateNote: 'ignore-me'
+    },
+    internalOnly: 'service-field'
   }
   const petPacks = { activePackId: 'doro', packs: [pack] }
+  const normalizedPack = {
+    id: 'doro',
+    displayName: 'Doro',
+    version: '1.0.0',
+    source: 'bundled',
+    rootPath: '/assets/pet-packs/doro',
+    active: true,
+    actionCount: 4,
+    defaultAction: 'idle',
+    clickAction: 'happy',
+    previewSprite: 'file:///assets/pet-packs/doro/idle.png',
+    previewAction: {
+      id: 'idle',
+      label: 'Idle',
+      frameCount: 4,
+      frameWidth: 64,
+      frameHeight: 64,
+      frameMs: 120,
+      frameRow: 0,
+      frameColumn: 1,
+      atlas: {
+        columns: 2,
+        rows: 2,
+        width: 128,
+        height: 128
+      },
+      frameDurations: [120, 90, 0],
+      loop: true
+    },
+    provenance: {
+      sourceUrl: 'https://example.com/doro',
+      assetAuthor: 'OpenPet',
+      license: 'CC-BY',
+      licenseUrl: 'https://example.com/license',
+      importedAt: '2026-06-20T00:00:00.000Z',
+      originalFormat: 'directory'
+    },
+    blockStatus: { blocked: false, reasons: ['ok'] },
+    conflict: {
+      installed: true,
+      decision: 'upgrade',
+      requiresReview: false,
+      installedVersion: '0.9.0',
+      incomingVersion: '1.0.0'
+    }
+  }
   const animations = {
     defaultAction: 'idle',
     clickAction: 'happy',
@@ -326,13 +415,21 @@ test('createPetPackMutationResult packages pack metadata with refreshed packs an
     pack,
     activePackId: 'doro'
   }, petPacks, animations), {
-    pack,
+    pack: normalizedPack,
     activePackId: 'doro',
-    petPacks,
+    petPacks: {
+      activePackId: 'doro',
+      packs: [normalizedPack]
+    },
     animations
   })
 
-  assert.deepEqual(createPetPackMutationResult({}, petPacks), { petPacks })
+  assert.deepEqual(createPetPackMutationResult({}, petPacks), {
+    petPacks: {
+      activePackId: 'doro',
+      packs: [normalizedPack]
+    }
+  })
 })
 
 test('action adapters package import and mutation results without leaking service internals', () => {
