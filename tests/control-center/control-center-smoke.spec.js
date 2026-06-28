@@ -781,6 +781,24 @@ test.describe('Control Center smoke', () => {
     await expect(citrusMemorySection).not.toContainText('Legacy Cat should greet the user softly before focus sessions.')
   })
 
+  test('shows AI memory diagnostics and exports redacted traces in the demo API', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: 'AI' }).click()
+
+    const memorySection = await expandAiSection(page, '长期记忆')
+    await expect(memorySection).toContainText('reason: Demo durable user preference')
+    await expect(memorySection).toContainText('used 0')
+    await expect(memorySection).toContainText('1 条后台任务')
+    await expect(memorySection.getByTestId('ai-memory-job-demo-memory-job-legacy-1')).toContainText('applied 1')
+
+    const downloadPromise = page.waitForEvent('download')
+    await memorySection.getByRole('button', { name: '导出 AI Talk Trace' }).click()
+    const download = await downloadPromise
+
+    await expect(page.locator('.status-line')).toContainText('AI Talk Trace 已导出')
+    expect(download.suggestedFilename()).toBe('openpet-ai-talk-traces.json')
+  })
+
   test('shows AI behavior decisions and supports replay and clearing diagnostics', async ({ page }) => {
     await page.goto('/')
     await page.getByRole('button', { name: 'AI' }).click()

@@ -120,6 +120,13 @@ const ModelOptionButtons = ({
 
 const formatMemoryScore = (value: number) => `${Math.round(Math.max(0, Math.min(1, Number(value) || 0)) * 100)}%`
 
+const formatTimestamp = (value: string) => {
+  if (!value) return ''
+  const timestamp = Date.parse(value)
+  if (Number.isNaN(timestamp)) return value
+  return new Date(timestamp).toLocaleString()
+}
+
 const MemoryList = ({
   title,
   memories,
@@ -148,8 +155,11 @@ const MemoryList = ({
             <div className="memory-meta">
               <span>importance {formatMemoryScore(memory.importance)}</span>
               <span>confidence {formatMemoryScore(memory.confidence)}</span>
-              {memory.updatedAt ? <span>{memory.updatedAt}</span> : null}
+              <span>used {memory.useCount}</span>
+              {memory.lastUsedAt ? <span>last used {formatTimestamp(memory.lastUsedAt)}</span> : null}
+              {memory.updatedAt ? <span>{formatTimestamp(memory.updatedAt)}</span> : null}
             </div>
+            {memory.reason ? <div className="field-note">reason: {memory.reason}</div> : null}
             {memory.tags.length ? (
               <div className="memory-tags">
                 {memory.tags.map((tag) => <span key={tag}>{tag}</span>)}
@@ -248,6 +258,7 @@ export interface AiPaneProps {
   onRefreshMemoryProfile: () => void | Promise<void>
   onDeleteMemory: (memoryId: string) => void | Promise<void>
   onClearPetPackMemories: () => void | Promise<void>
+  onExportAiTraces: () => void | Promise<void>
   onOpenDesktopChat: () => void | Promise<void>
 }
 
@@ -319,6 +330,7 @@ export function AiPane({
   onRefreshMemoryProfile,
   onDeleteMemory,
   onClearPetPackMemories,
+  onExportAiTraces,
   onOpenDesktopChat
 }: AiPaneProps) {
   const decisions = Array.isArray(behavior.decisions) ? behavior.decisions : []
@@ -553,6 +565,9 @@ export function AiPane({
               <button type="button" className="ghost" onClick={onRefreshMemoryProfile} disabled={saving}>
                 刷新记忆
               </button>
+              <button type="button" className="ghost" onClick={onExportAiTraces} disabled={saving}>
+                导出 AI Talk Trace
+              </button>
               <button type="button" className="danger-text" onClick={onClearPetPackMemories} disabled={saving || memoryProfile.petPackMemories.length === 0}>
                 清空当前宠物记忆
               </button>
@@ -578,12 +593,23 @@ export function AiPane({
 
           <div className="readonly-row">
             <strong>最近记忆任务</strong>
-            {latestMemoryJob ? (
-              <span>
-                {latestMemoryJob.status} · applied {latestMemoryJob.appliedCount} · filtered {latestMemoryJob.filteredCount}
-                {latestMemoryJob.errorCode ? ` · ${latestMemoryJob.errorCode}` : ''}
-              </span>
-            ) : <span>暂无后台抽取任务</span>}
+            <span>{latestMemoryJob ? `${memoryProfile.recentJobs.length} 条后台任务` : '暂无后台抽取任务'}</span>
+          </div>
+
+          <div className="behavior-decision-list">
+            {latestMemoryJob ? memoryProfile.recentJobs.map((job) => (
+              <div className="behavior-decision-row" key={job.id} data-testid={`ai-memory-job-${job.id}`}>
+                <div>
+                  <strong>{job.status}</strong>
+                  <span>{job.errorCode ? `error ${job.errorCode}` : 'memory extraction job'}</span>
+                  <span>{job.updatedAt ? formatTimestamp(job.updatedAt) : job.id}</span>
+                </div>
+                <div className="behavior-decision-meta">
+                  <span>applied {job.appliedCount}</span>
+                  <span>filtered {job.filteredCount}</span>
+                </div>
+              </div>
+            )) : <div className="empty-chat">暂无后台抽取任务</div>}
           </div>
         </div>
       </CollapsibleAiSection>

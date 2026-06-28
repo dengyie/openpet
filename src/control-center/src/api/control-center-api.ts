@@ -646,7 +646,30 @@ const createDefaultDemoState = (): DemoState => ({
       reason: 'Demo pet-pack relationship memory'
     })
   ],
-  aiMemoryJobs: [],
+  aiMemoryJobs: [
+    {
+      id: 'demo-memory-job-legacy-1',
+      petPackId: 'legacy-cat',
+      conversationId: 'control-center:legacy-cat:main',
+      status: 'succeeded',
+      createdAt: '2026-06-24T00:10:00.000Z',
+      updatedAt: '2026-06-24T00:10:05.000Z',
+      errorCode: '',
+      appliedCount: 1,
+      filteredCount: 0
+    },
+    {
+      id: 'demo-memory-job-citrus-1',
+      petPackId: 'citrus-cat',
+      conversationId: 'control-center:citrus-cat:main',
+      status: 'succeeded',
+      createdAt: '2026-06-24T00:12:00.000Z',
+      updatedAt: '2026-06-24T00:12:04.000Z',
+      errorCode: '',
+      appliedCount: 1,
+      filteredCount: 1
+    }
+  ],
   petChatMessages: [],
   petChatBubble: defaultPetChatState.bubble,
   imageGenerationConfig: cloneImageGenerationConfig(defaultImageGenerationConfig),

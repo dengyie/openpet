@@ -623,6 +623,17 @@ export function useAiPane(activeTab = 'ai') {
     }
   }
 
+  const onExportAiTraces = async () => {
+    setStatus('导出 AI Talk Trace 中')
+    try {
+      const content = await api.exportAiTraces()
+      downloadTextFile('openpet-ai-talk-traces.json', content, 'application/json;charset=utf-8')
+      setStatus('AI Talk Trace 已导出')
+    } catch (error) {
+      setStatus(messageFromError(error, 'AI Talk Trace 导出失败'))
+    }
+  }
+
   const onDeleteMemory = async (memoryId: string) => {
     if (!memoryId) return
     setSaving(true)
@@ -772,6 +783,7 @@ export function useAiPane(activeTab = 'ai') {
     onExportBehaviorDiagnostics,
     onClearBehaviorDecisions,
     onRefreshMemoryProfile,
+    onExportAiTraces,
     onDeleteMemory,
     onClearPetPackMemories,
     onSendChat,

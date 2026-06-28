@@ -47,6 +47,7 @@ Current P0 status: no known startup/build blocker in this TODO pass. The highest
 - AI Talk core exists: `AiTalkService`, `AiTalkStore`, pet-pack `persona`, local persona override, generated persona draft, pet-pack isolated main conversations, background memory extraction, relevance-ranked memory injection, injected-memory usage tracking, memory profile UI, delete memory, and clear current pet-pack memories.
 - AI Talk segmented bubble playback now preserves visible reply order: the first segment shows immediately, later segments are scheduled by bubble TTL, and the full assistant reply still stays in transcript/history.
 - AI Talk main-conversation reads no longer rewrite or persist unchanged timestamps when the default conversation already exists.
+- AI pane now exposes AI Talk diagnostics that were previously host-only: memory cards show reason and use-count context, recent memory jobs are listed instead of collapsed into one summary line, and users can export redacted AI Talk traces directly from Control Center.
 - Desktop chat window exists and routes through the same pet chat state/AI Talk flow instead of introducing a separate product brain.
 - Active pet-pack changes now emit explicit refresh signals so the AI pane reloads persona, memory profile, and chat state without requiring a tab switch or window reopen.
 - Creator Studio already has `GenerationTask`, deterministic `conversation-wizard`, task answer/confirm commands, `openpet-prompt-builder`, host model bridge, run persistence, QA artifacts, dashboard display, approved action import paths, dashboard-visible prompt provenance with a sanitized final prompt preview, sanitized generation usage summaries, explicit backend recovery guidance for failed generation runs, dashboard-visible provider smoke guidance for non-fixture host image runs, a dashboard-visible workflow status summary with current stage plus next-step guidance, and full-pet/action import flows that can submit generated trigger proposals into the host inbox.
@@ -100,6 +101,8 @@ Current state:
 - Desktop chat is connected to the same chat state rather than a separate AI implementation.
 
 P1 work:
+
+- Expose AI Talk diagnostics and memory explainability in Control Center without revealing prompts, secrets, or raw filtered memory text. Completed in current branch: the AI pane now shows memory `reason` plus usage context, lists recent memory jobs, and adds a redacted AI Talk trace export action backed by the existing host export path and focused smoke coverage.
 
 - Upgrade the action tool schema with `reason`, `displayMode`, and a current-pet action candidate whitelist. Completed in current branch: `AiService` now exposes and parses the upgraded `openpet_behavior` fields, `AiTalkService` injects current pet-pack action candidates only when behavior tools are enabled, and host-side validation remains authoritative through existing behavior orchestrator checks.
 - Add reply bubble segmentation while keeping the full assistant reply in transcript. Completed in current branch: `AiTalkService` now returns `bubbleSegments`, IPC shows the first bubble segment immediately, schedules later segments by TTL so visible speech does not collapse to the last segment, preserves the full assistant reply in transcript/history, and covers the sequencing behavior with core regressions.
