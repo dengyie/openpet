@@ -213,7 +213,7 @@ const sanitizeChatMessages = (messages = []) => (
 /**
  * 注册所有 IPC 处理器。接收依赖注入对象，各 handler 只通过注入的函数访问外部能力。
  */
-const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiService, aiTalkService = null, petUtteranceLogService = null, petBubbleChatWindowService = null, imageGenerationModelService, behaviorOrchestratorService, pluginService, pluginInstallService, pluginGithubImportService, catalogService, localHttpService, aboutService, actionService, actionImportService, cursorAssetService, appLogService, applyWindowScale, applyPetViewport = () => {},
+const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiService, aiTalkService = null, petUtteranceLogService = null, petBubbleChatWindowService = null, imageGenerationModelService, behaviorOrchestratorService, creatorStudioDefaultFlowService = null, pluginService, pluginInstallService, pluginGithubImportService, catalogService, localHttpService, aboutService, actionService, actionImportService, cursorAssetService, appLogService, applyWindowScale, applyPetViewport = () => {},
   clampToWorkArea, getMovementState, createSettingsWindow, petMovementPolicy, petChatWindowService = null, browserWindowService = BrowserWindow, dialogService = dialog, ipcMainService = ipcMain, screenService = screen, appService = app, showContextMenuWindow = showPetContextMenuWindow }) => {
   let pendingActionFrameSelection = null
   let lastPetBubble = createEmptyPetBubble()
@@ -1411,6 +1411,15 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     return pluginService.saveConfig(payload.pluginId, payload.config)
   })
 
+  ipcMainService.handle(IPC.PLUGINS_RUN_CREATOR_STUDIO_DEFAULT_FLOW, (_event, payload) => {
+    if (!creatorStudioDefaultFlowService?.runDefaultFlow) {
+      throw new Error('Creator Studio default flow is not available')
+    }
+    return creatorStudioDefaultFlowService.runDefaultFlow({
+      prompt: payload?.prompt
+    })
+  })
+
   ipcMainService.handle(IPC.PLUGINS_RUN_COMMAND, (_event, payload) => {
     return pluginService.runCommand(payload.pluginId, payload.commandId, payload.payload)
   })
@@ -1420,7 +1429,7 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
   })
 
   ipcMainService.handle(IPC.PLUGINS_OPEN_DASHBOARD, (_event, payload) => {
-    return pluginService.openDashboard(payload.pluginId, payload.dashboardId)
+    return pluginService.openDashboard(payload.pluginId, payload.dashboardId, payload?.options || {})
   })
 
   ipcMainService.handle(IPC.PLUGINS_START_SERVICE, (_event, payload) => {

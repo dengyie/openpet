@@ -607,6 +607,30 @@ const createPublicTextList = ({ dataDir, values = [] }) => (
     : []
 )
 
+const createProviderSmokeCommandGuidance = ({ dataDir, usesProviderRun }) => {
+  const command = 'npm run smoke:ai-provider -- --base-url <url> --api-key-env OPENPET_AI_PROVIDER_API_KEY --chat-model <chat-model> --image-model <image-model> --include-image --json'
+  const note = usesProviderRun
+    ? 'Image generation stays opt-in and may spend real provider credits; run the smoke command with your saved Provider values without exposing API keys.'
+    : 'After fixture workflow QA, switch to provider generation and use the same opt-in smoke command with your saved Provider values without exposing API keys.'
+  return {
+    available: true,
+    command: createPublicText({ dataDir, value: command }),
+    note: createPublicText({ dataDir, value: note })
+  }
+}
+
+const createCreatorStudioProviderSmokeCommandGuidance = ({ dataDir, usesProviderRun }) => {
+  const command = 'npm run smoke:creator-studio-provider -- --base-url <url> --api-key-env OPENPET_AI_PROVIDER_API_KEY --image-model <image-model> --backend provider --json'
+  const note = usesProviderRun
+    ? 'This reruns Creator Studio create-run -> run-step through a temporary host bridge to verify the technical generation chain. Inspect the generated assets separately before claiming visual quality readiness.'
+    : 'After fixture workflow QA, use this Creator Studio provider smoke command to verify the technical generation chain through the same host-owned model bridge before manual visual review.'
+  return {
+    available: true,
+    command: createPublicText({ dataDir, value: command }),
+    note: createPublicText({ dataDir, value: note })
+  }
+}
+
 const createImportedResultCard = ({ dataDir, run, hasActionFrames, triggerProposalSummary }) => {
   if (run.status !== 'imported') {
     return {
@@ -1121,6 +1145,8 @@ const createWorkflowGuidance = ({ dataDir, run }) => {
       mode: usesProviderRun ? 'host-provider' : 'fixture-preview',
       summary: createPublicText({ dataDir, value: generationSummary }),
       smokeChecklist: createPublicTextList({ dataDir, values: smokeChecklist }),
+      smokeCommand: createProviderSmokeCommandGuidance({ dataDir, usesProviderRun }),
+      creatorStudioSmokeCommand: createCreatorStudioProviderSmokeCommandGuidance({ dataDir, usesProviderRun }),
       usageSummary
     },
     import: {

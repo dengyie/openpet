@@ -1704,6 +1704,61 @@ test('creator studio dashboard syncs prompt and backend controls when loading ex
   }
 })
 
+test('creator studio dashboard loads the requested run from the runId query parameter', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-dashboard-browser-query-run-'))
+  const firstRun = createRun({
+    dataDir,
+    input: {
+      prompt: '先创建一个旧 run',
+      backend: 'fixture'
+    },
+    now: () => '2026-06-29T00:00:00.000Z'
+  })
+  const targetRun = createRun({
+    dataDir,
+    input: {
+      prompt: '打开时应直接定位到这个 run',
+      backend: 'provider'
+    },
+    now: () => '2026-06-29T00:01:00.000Z'
+  })
+  createRun({
+    dataDir,
+    input: {
+      prompt: '这是更新的最新 run，不应该被默认选中',
+      backend: 'fixture'
+    },
+    now: () => '2026-06-29T00:02:00.000Z'
+  })
+  writeRun({
+    dataDir,
+    run: {
+      ...readRun({ dataDir, runId: targetRun.runId }),
+      taskStatus: 'confirmed',
+      status: 'ready_for_review',
+      currentStep: 'generated'
+    }
+  })
+  const server = await openDashboardServer(dataDir)
+  const browser = await chromium.launch({ headless: true })
+  const page = await browser.newPage()
+
+  try {
+    await page.goto(`http://127.0.0.1:${server.address().port}/?runId=${encodeURIComponent(targetRun.runId)}`)
+    await page.waitForFunction((expectedRunId) => document.querySelector('#run-select')?.value === expectedRunId, targetRun.runId)
+
+    const selectedRunId = await page.locator('#run-select').inputValue()
+    const promptValue = await page.locator('#prompt-input').inputValue()
+
+    assert.equal(selectedRunId, targetRun.runId)
+    assert.equal(promptValue, '打开时应直接定位到这个 run')
+    assert.notEqual(selectedRunId, firstRun.runId)
+  } finally {
+    await browser.close()
+    await new Promise((resolve) => server.close(resolve))
+  }
+})
+
 test('creator studio dashboard normalizes legacy run backends when syncing loaded runs', async () => {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-dashboard-browser-run-sync-legacy-backend-'))
   const legacyCloudRun = createRun({
@@ -2007,6 +2062,144 @@ test('creator studio dashboard preserves retry-before-approval guidance for lega
   } finally {
     await browser.close()
     await new Promise((resolve) => server.close(resolve))
+  }
+})
+
+test('creator studio dashboard shows sanitized prompt provenance and can replay action playback previews', { concurrency: false }, async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-dashboard-browser-provenance-playback-'))
+  const bridgeServer = http.createServer((request, response) => {
+    let body = ''
+    request.on('data', (chunk) => { body += chunk })
+    request.on('end', () => {
+      const payload = body ? JSON.parse(body) : {}
+      response.setHeader('Content-Type', 'application/json')
+      if (request.url.endsWith('/creator/model-settings')) {
+        response.end(JSON.stringify({
+          ok: true,
+          config: {
+            provider: 'openai-compatible',
+            baseUrl: 'http://127.0.0.1:7860/v1',
+            model: 'local-custom-sprite-v2',
+            hasApiKey: true,
+            apiKeyPreview: '••••test'
+          }
+        }))
+        return
+      }
+      if (request.url.endsWith('/creator/model-image-generate')) {
+        const dataRelativePath = `runs/${payload.output.dataRelativeDir.split('/')[1]}/frames/base/0001.png`
+        const generatedPath = path.join(dataDir, dataRelativePath)
+        fs.mkdirSync(path.dirname(generatedPath), { recursive: true })
+        sharp({
+          create: {
+            width: 96,
+            height: 112,
+            channels: 4,
+            background: { r: 255, g: 170, b: 90, alpha: 1 }
+          }
+        })
+          .png()
+          .toFile(generatedPath)
+          .then(() => {
+            response.end(JSON.stringify({
+              ok: true,
+              result: {
+                ok: true,
+                backend: 'provider',
+                model: 'local-custom-sprite-v2',
+                generatedAt: '2026-06-29T00:00:00.000Z',
+                outputs: [{
+                  dataRelativePath,
+                  mimeType: 'image/png',
+                  sha256: 'provenance-playback-sha'
+                }]
+              }
+            }))
+          })
+          .catch((error) => {
+            response.statusCode = 500
+            response.end(JSON.stringify({ ok: false, error: error.message }))
+          })
+        return
+      }
+      response.statusCode = 404
+      response.end(JSON.stringify({ ok: false, error: 'Unknown route' }))
+    })
+  })
+  await new Promise((resolve) => bridgeServer.listen(0, '127.0.0.1', resolve))
+  const previousBridgeUrl = process.env.OPENPET_BRIDGE_URL
+  const previousBridgeToken = process.env.OPENPET_BRIDGE_TOKEN
+  process.env.OPENPET_BRIDGE_URL = `http://127.0.0.1:${bridgeServer.address().port}`
+  process.env.OPENPET_BRIDGE_TOKEN = 'bridge-token'
+  const server = await openDashboardServer(dataDir)
+  const { browser, page } = await openDashboardPage(server)
+
+  try {
+    await page.locator('#backend-select').selectOption('provider')
+    await page.locator('#prompt-input').fill('新增一个自定义动作：害羞转圈，手动触发，风格保持一致。API key sk-test-secret at /Users/mango/private/ref.png via http://127.0.0.1:8317/v1 and bridge-token.')
+    await page.locator('#draft-button').click()
+    await page.waitForFunction(() => !document.querySelector('#confirm-button').disabled)
+
+    await page.locator('#confirm-button').click()
+    await page.waitForFunction(() => !document.querySelector('#generate-button').disabled)
+
+    await page.locator('#generate-button').click()
+    await page.waitForFunction(() => !document.querySelector('#approve-button').disabled)
+    await page.waitForFunction(() => /Host model prompt-builder provenance/.test(document.querySelector('#prompt-provenance-panel')?.textContent || ''))
+    await page.waitForFunction(() => document.querySelectorAll('#playback-panel .timeline-row').length > 1)
+
+    const provenanceText = await page.locator('#prompt-provenance-panel').textContent()
+    const workflowGuidanceText = await page.locator('#workflow-guidance-panel').textContent()
+    assert.match(provenanceText, /Host model prompt-builder provenance/i)
+    assert.match(provenanceText, /Source: host-model-bridge/i)
+    assert.match(provenanceText, /local-custom-sprite-v2/i)
+    assert.match(provenanceText, /openai-compatible/i)
+    assert.match(provenanceText, /creative_brief_sanitized/i)
+    assert.match(provenanceText, /OpenPet desktop pet sprite asset/i)
+    assert.match(provenanceText, /\[redacted-secret\]/i)
+    assert.doesNotMatch(provenanceText, /sk-test-secret/i)
+    assert.doesNotMatch(provenanceText, /\/Users\/mango\/private\/ref\.png/i)
+    assert.doesNotMatch(provenanceText, /127\.0\.0\.1:8317/i)
+    assert.doesNotMatch(provenanceText, /127\.0\.0\.1:7860/i)
+    assert.doesNotMatch(provenanceText, /bridge-token/i)
+    assert.match(workflowGuidanceText, /npm run smoke:ai-provider/i)
+    assert.match(workflowGuidanceText, /--include-image/i)
+    assert.match(workflowGuidanceText, /OPENPET_AI_PROVIDER_API_KEY/i)
+    assert.match(workflowGuidanceText, /npm run smoke:creator-studio-provider/i)
+    assert.match(workflowGuidanceText, /technical generation chain/i)
+    assert.match(workflowGuidanceText, /opt-?in/i)
+
+    const replayButton = page.locator('#replay-playback-button')
+    await replayButton.waitFor()
+    const frameCount = await page.locator('#playback-panel .timeline-row').count()
+    await page.waitForFunction((expectedCount) => {
+      const text = document.querySelector('#playback-meta')?.textContent || ''
+      return text.includes(`Frame 2 / ${expectedCount}`) || text.includes(`Frame 3 / ${expectedCount}`)
+    }, frameCount)
+
+    const preReplayMeta = await page.locator('#playback-meta').textContent()
+    assert.match(preReplayMeta, /Current duration:/i)
+    assert.match(preReplayMeta, /Total duration:/i)
+
+    await replayButton.click()
+    await page.waitForFunction((expectedCount) => {
+      const text = document.querySelector('#playback-meta')?.textContent || ''
+      return text.includes(`Frame 1 / ${expectedCount}`)
+    }, frameCount)
+
+    const postReplayMeta = await page.locator('#playback-meta').textContent()
+    assert.match(postReplayMeta, new RegExp(`Frame 1 / ${frameCount}`))
+    assert.match(postReplayMeta, /Current duration:/i)
+    assert.match(postReplayMeta, /Total duration:/i)
+  } finally {
+    await browser.close()
+    await new Promise((resolve) => server.close(resolve))
+    bridgeServer.closeAllConnections?.()
+    await new Promise((resolve) => bridgeServer.close(resolve))
+    if (previousBridgeUrl == null) delete process.env.OPENPET_BRIDGE_URL
+    else process.env.OPENPET_BRIDGE_URL = previousBridgeUrl
+    if (previousBridgeToken == null) delete process.env.OPENPET_BRIDGE_TOKEN
+    else process.env.OPENPET_BRIDGE_TOKEN = previousBridgeToken
   }
 })
 

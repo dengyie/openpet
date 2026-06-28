@@ -1507,4 +1507,493 @@ test.describe('Control Center smoke', () => {
     await expect(pluginRow).toContainText('已提交')
     await expect(pluginRow).toContainText('proposal:click:shy-spin:test')
   })
+
+  test('shows a host-owned Creator Studio generate-and-import entry in the Plugins pane', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.sessionStorage.setItem('openpet.controlCenter.demoState', JSON.stringify({
+        imageGenerationConfig: {
+          provider: 'openai-compatible',
+          baseUrl: 'https://healthy-models.example.test/v1',
+          model: 'gpt-image-2',
+          timeoutMs: 45000,
+          maxConcurrentJobs: 2,
+          apiKeyRef: 'image-provider-key',
+          hasApiKey: true,
+          apiKeyPreview: 'sk-demo'
+        },
+        plugins: [
+          {
+            id: 'openpet.creator-studio',
+            name: 'Creator Studio',
+            version: '1.0.0',
+            source: 'local',
+            enabled: true,
+            runnable: true,
+            permissions: ['model:image-generate', 'pet-pack:import', 'assets:generate', 'trigger-proposals:write'],
+            commands: [
+              { id: 'draft-task', title: 'Draft Creator Task' },
+              { id: 'import-approved-action', title: 'Import Approved Action' }
+            ],
+            entries: {
+              setup: [],
+              commands: [
+                { id: 'draft-task', title: 'Draft Creator Task', command: 'node ./commands/draft-task.js', cwd: '.' },
+                { id: 'import-approved-action', title: 'Import Approved Action', command: 'node ./commands/import-approved-action.js', cwd: '.' }
+              ],
+              services: [
+                {
+                  id: 'studio',
+                  title: 'Creator Studio Service',
+                  command: 'node ./service/studio-service.js',
+                  cwd: '.',
+                  health: { type: 'http', url: 'http://127.0.0.1:8794/health' },
+                  runtime: {
+                    status: 'running',
+                    pid: 4321,
+                    startedAt: '2026-06-29T10:00:00.000Z',
+                    health: { status: 'healthy', url: 'http://127.0.0.1:8794/health' }
+                  }
+                }
+              ],
+              dashboards: [
+                { id: 'main', title: 'Creator Studio', url: 'http://127.0.0.1:8794' }
+              ]
+            },
+            configSchema: { properties: [] },
+            config: {},
+            storage: { keyCount: 0, byteSize: 2, valid: true },
+            signatureStatus: { label: 'Unsigned local demo' }
+          }
+        ]
+      }))
+    })
+
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Plugins' }).click()
+
+    const pluginRow = page.locator('.plugin-row', { hasText: 'Creator Studio' })
+    await expect(pluginRow.getByLabel('Creator Studio 请求')).toBeVisible()
+    await expect(pluginRow.getByRole('button', { name: '生成并导入' })).toBeVisible()
+    await expect(pluginRow).toContainText('高级入口')
+    await expect(pluginRow).toContainText('查看任务详情')
+  })
+
+  test('blocks host-owned Creator Studio generate-and-import when the saved image provider is not configured', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.sessionStorage.setItem('openpet.controlCenter.demoState', JSON.stringify({
+        imageGenerationConfig: {
+          provider: 'openai-compatible',
+          baseUrl: 'https://image.example.test/v1',
+          model: 'gpt-image-2',
+          timeoutMs: 45000,
+          maxConcurrentJobs: 2,
+          apiKeyRef: '',
+          hasApiKey: false,
+          apiKeyPreview: ''
+        },
+        plugins: [
+          {
+            id: 'openpet.creator-studio',
+            name: 'Creator Studio',
+            version: '1.0.0',
+            source: 'local',
+            enabled: true,
+            runnable: true,
+            permissions: ['model:image-generate', 'pet-pack:import', 'assets:generate', 'trigger-proposals:write'],
+            commands: [
+              { id: 'draft-task', title: 'Draft Creator Task' }
+            ],
+            entries: {
+              setup: [],
+              commands: [
+                { id: 'draft-task', title: 'Draft Creator Task', command: 'node ./commands/draft-task.js', cwd: '.' }
+              ],
+              services: [
+                {
+                  id: 'studio',
+                  title: 'Creator Studio Service',
+                  command: 'node ./service/studio-service.js',
+                  cwd: '.',
+                  health: { type: 'http', url: 'http://127.0.0.1:8794/health' },
+                  runtime: {
+                    status: 'running',
+                    pid: 4321,
+                    startedAt: '2026-06-29T10:00:00.000Z',
+                    health: { status: 'healthy', url: 'http://127.0.0.1:8794/health' }
+                  }
+                }
+              ],
+              dashboards: [
+                { id: 'main', title: 'Creator Studio', url: 'http://127.0.0.1:8794' }
+              ]
+            },
+            configSchema: { properties: [] },
+            config: {},
+            storage: { keyCount: 0, byteSize: 2, valid: true },
+            signatureStatus: { label: 'Unsigned local demo' }
+          }
+        ]
+      }))
+    })
+
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Plugins' }).click()
+
+    const pluginRow = page.locator('.plugin-row', { hasText: 'Creator Studio' })
+    await pluginRow.getByLabel('Creator Studio 请求').fill('给当前猫猫新增一个转圈动作')
+    await pluginRow.getByRole('button', { name: '生成并导入' }).click()
+
+    await expect(page.locator('.status-line')).toContainText('请先到 AI -> 图片 Provider 配置并保存可用模型')
+    await expect(pluginRow).not.toContainText('最近命令结果')
+  })
+
+  test('runs the host-owned Creator Studio generate-and-import flow to imported action in the demo API', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.sessionStorage.setItem('openpet.controlCenter.demoState', JSON.stringify({
+        imageGenerationConfig: {
+          provider: 'openai-compatible',
+          baseUrl: 'https://healthy-models.example.test/v1',
+          model: 'gpt-image-2',
+          timeoutMs: 45000,
+          maxConcurrentJobs: 2,
+          apiKeyRef: 'image-provider-key',
+          hasApiKey: true,
+          apiKeyPreview: 'sk-demo'
+        },
+        plugins: [
+          {
+            id: 'openpet.creator-studio',
+            name: 'Creator Studio',
+            version: '1.0.0',
+            source: 'local',
+            enabled: true,
+            runnable: true,
+            permissions: ['model:image-generate', 'pet-pack:import', 'assets:generate', 'trigger-proposals:write'],
+            commands: [
+              { id: 'draft-task', title: 'Draft Creator Task' },
+              { id: 'answer-question', title: 'Answer Question' },
+              { id: 'confirm-task', title: 'Confirm Task' },
+              { id: 'run-step', title: 'Run Step' },
+              { id: 'approve-run', title: 'Approve Run' },
+              { id: 'import-approved-action', title: 'Import Approved Action' }
+            ],
+            entries: {
+              setup: [],
+              commands: [
+                { id: 'draft-task', title: 'Draft Creator Task', command: 'node ./commands/draft-task.js', cwd: '.' },
+                { id: 'answer-question', title: 'Answer Question', command: 'node ./commands/answer-question.js', cwd: '.' },
+                { id: 'confirm-task', title: 'Confirm Task', command: 'node ./commands/confirm-task.js', cwd: '.' },
+                { id: 'run-step', title: 'Run Step', command: 'node ./commands/run-step.js', cwd: '.' },
+                { id: 'approve-run', title: 'Approve Run', command: 'node ./commands/approve-run.js', cwd: '.' },
+                { id: 'import-approved-action', title: 'Import Approved Action', command: 'node ./commands/import-approved-action.js', cwd: '.' }
+              ],
+              services: [
+                {
+                  id: 'studio',
+                  title: 'Creator Studio Service',
+                  command: 'node ./service/studio-service.js',
+                  cwd: '.',
+                  health: { type: 'http', url: 'http://127.0.0.1:8794/health' },
+                  runtime: {
+                    status: 'running',
+                    pid: 4321,
+                    startedAt: '2026-06-29T10:00:00.000Z',
+                    health: { status: 'healthy', url: 'http://127.0.0.1:8794/health' }
+                  }
+                }
+              ],
+              dashboards: [
+                { id: 'main', title: 'Creator Studio', url: 'http://127.0.0.1:8794' }
+              ]
+            },
+            configSchema: { properties: [] },
+            config: {},
+            storage: { keyCount: 0, byteSize: 2, valid: true },
+            signatureStatus: { label: 'Unsigned local demo' }
+          }
+        ]
+      }))
+    })
+
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Plugins' }).click()
+
+    const pluginRow = page.locator('.plugin-row', { hasText: 'Creator Studio' })
+    await pluginRow.getByLabel('Creator Studio 请求').fill('给当前猫猫新增一个害羞转圈动作')
+    await pluginRow.getByRole('button', { name: '生成并导入' }).click()
+
+    await expect(page.locator('.status-line')).toContainText('Imported action shy-spin from run run-demo-action-123')
+    await expect(pluginRow).toContainText('最近命令结果')
+    await expect(pluginRow).toContainText('import-approved-action · exit 0')
+    await expect(pluginRow).toContainText('run-demo-action-123')
+    await expect(pluginRow).toContainText('已导入动作')
+    await expect(pluginRow).toContainText('shy-spin')
+    await expect(pluginRow).toContainText('触发建议')
+    await expect(pluginRow).toContainText('已提交')
+  })
+
+  test('routes failed host-owned Creator Studio generate-and-import runs to the advanced details path', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.sessionStorage.setItem('openpet.controlCenter.demoState', JSON.stringify({
+        imageGenerationConfig: {
+          provider: 'openai-compatible',
+          baseUrl: 'https://healthy-models.example.test/v1',
+          model: 'gpt-image-2',
+          timeoutMs: 45000,
+          maxConcurrentJobs: 2,
+          apiKeyRef: 'image-provider-key',
+          hasApiKey: true,
+          apiKeyPreview: 'sk-demo'
+        },
+        plugins: [
+          {
+            id: 'openpet.creator-studio',
+            name: 'Creator Studio',
+            version: '1.0.0',
+            source: 'local',
+            enabled: true,
+            runnable: true,
+            permissions: ['model:image-generate', 'pet-pack:import', 'assets:generate', 'trigger-proposals:write'],
+            commands: [
+              { id: 'draft-task', title: 'Draft Creator Task' },
+              { id: 'answer-question', title: 'Answer Question' },
+              { id: 'confirm-task', title: 'Confirm Task' },
+              { id: 'run-step', title: 'Run Step' },
+              { id: 'approve-run', title: 'Approve Run' },
+              { id: 'import-approved-action', title: 'Import Approved Action' }
+            ],
+            entries: {
+              setup: [],
+              commands: [
+                { id: 'draft-task', title: 'Draft Creator Task', command: 'node ./commands/draft-task.js', cwd: '.' },
+                { id: 'answer-question', title: 'Answer Question', command: 'node ./commands/answer-question.js', cwd: '.' },
+                { id: 'confirm-task', title: 'Confirm Task', command: 'node ./commands/confirm-task.js', cwd: '.' },
+                { id: 'run-step', title: 'Run Step', command: 'node ./commands/run-step.js', cwd: '.' },
+                { id: 'approve-run', title: 'Approve Run', command: 'node ./commands/approve-run.js', cwd: '.' },
+                { id: 'import-approved-action', title: 'Import Approved Action', command: 'node ./commands/import-approved-action.js', cwd: '.' }
+              ],
+              services: [
+                {
+                  id: 'studio',
+                  title: 'Creator Studio Service',
+                  command: 'node ./service/studio-service.js',
+                  cwd: '.',
+                  health: { type: 'http', url: 'http://127.0.0.1:8794/health' },
+                  runtime: {
+                    status: 'running',
+                    pid: 4321,
+                    startedAt: '2026-06-29T10:00:00.000Z',
+                    health: { status: 'healthy', url: 'http://127.0.0.1:8794/health' }
+                  }
+                }
+              ],
+              dashboards: [
+                { id: 'main', title: 'Creator Studio', url: 'http://127.0.0.1:8794' }
+              ]
+            },
+            configSchema: { properties: [] },
+            config: {},
+            storage: { keyCount: 0, byteSize: 2, valid: true },
+            signatureStatus: { label: 'Unsigned local demo' }
+          }
+        ]
+      }))
+    })
+
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Plugins' }).click()
+
+    const pluginRow = page.locator('.plugin-row', { hasText: 'Creator Studio' })
+    await pluginRow.getByLabel('Creator Studio 请求').fill('让这个动作失败并进入高级详情')
+    await pluginRow.getByRole('button', { name: '生成并导入' }).click()
+
+    await expect(page.locator('.status-line')).toContainText('run-demo-action-fail')
+    await expect(page.locator('.status-line')).toContainText('查看任务详情')
+
+    await pluginRow.getByRole('button', { name: '查看任务详情' }).click()
+    await expect(page.locator('.status-line')).toContainText('Dashboard 已打开')
+    await expect(page.locator('.status-line')).toContainText('run-demo-action-fail')
+  })
+
+  test('routes host-owned Creator Studio trigger handoff failures to the advanced details path', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.sessionStorage.setItem('openpet.controlCenter.demoState', JSON.stringify({
+        imageGenerationConfig: {
+          provider: 'openai-compatible',
+          baseUrl: 'https://healthy-models.example.test/v1',
+          model: 'gpt-image-2',
+          timeoutMs: 45000,
+          maxConcurrentJobs: 2,
+          apiKeyRef: 'image-provider-key',
+          hasApiKey: true,
+          apiKeyPreview: 'sk-demo'
+        },
+        plugins: [
+          {
+            id: 'openpet.creator-studio',
+            name: 'Creator Studio',
+            version: '1.0.0',
+            source: 'local',
+            enabled: true,
+            runnable: true,
+            permissions: ['model:image-generate', 'pet-pack:import', 'assets:generate', 'trigger-proposals:write'],
+            commands: [
+              { id: 'draft-task', title: 'Draft Creator Task' },
+              { id: 'answer-question', title: 'Answer Question' },
+              { id: 'confirm-task', title: 'Confirm Task' },
+              { id: 'run-step', title: 'Run Step' },
+              { id: 'approve-run', title: 'Approve Run' },
+              { id: 'import-approved-action', title: 'Import Approved Action' }
+            ],
+            entries: {
+              setup: [],
+              commands: [
+                { id: 'draft-task', title: 'Draft Creator Task', command: 'node ./commands/draft-task.js', cwd: '.' },
+                { id: 'answer-question', title: 'Answer Question', command: 'node ./commands/answer-question.js', cwd: '.' },
+                { id: 'confirm-task', title: 'Confirm Task', command: 'node ./commands/confirm-task.js', cwd: '.' },
+                { id: 'run-step', title: 'Run Step', command: 'node ./commands/run-step.js', cwd: '.' },
+                { id: 'approve-run', title: 'Approve Run', command: 'node ./commands/approve-run.js', cwd: '.' },
+                { id: 'import-approved-action', title: 'Import Approved Action', command: 'node ./commands/import-approved-action.js', cwd: '.' }
+              ],
+              services: [
+                {
+                  id: 'studio',
+                  title: 'Creator Studio Service',
+                  command: 'node ./service/studio-service.js',
+                  cwd: '.',
+                  health: { type: 'http', url: 'http://127.0.0.1:8794/health' },
+                  runtime: {
+                    status: 'running',
+                    pid: 4321,
+                    startedAt: '2026-06-29T10:00:00.000Z',
+                    health: { status: 'healthy', url: 'http://127.0.0.1:8794/health' }
+                  }
+                }
+              ],
+              dashboards: [
+                { id: 'main', title: 'Creator Studio', url: 'http://127.0.0.1:8794' }
+              ]
+            },
+            configSchema: { properties: [] },
+            config: {},
+            storage: { keyCount: 0, byteSize: 2, valid: true },
+            signatureStatus: { label: 'Unsigned local demo' }
+          }
+        ]
+      }))
+    })
+
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Plugins' }).click()
+
+    const pluginRow = page.locator('.plugin-row', { hasText: 'Creator Studio' })
+    await pluginRow.getByLabel('Creator Studio 请求').fill('让这个动作触发交接失败并进入高级详情')
+    await pluginRow.getByRole('button', { name: '生成并导入' }).click()
+
+    await expect(page.locator('.status-line')).toContainText('run-demo-action-trigger-handoff-fail')
+    await expect(page.locator('.status-line')).toContainText('查看任务详情')
+    await expect(pluginRow).toContainText('触发建议')
+    await expect(pluginRow).toContainText('提交失败')
+
+    await pluginRow.getByRole('button', { name: '查看任务详情' }).click()
+    await expect(page.locator('.status-line')).toContainText('Dashboard 已打开')
+    await expect(page.locator('.status-line')).toContainText('run-demo-action-trigger-handoff-fail')
+  })
+
+  test('redacts sensitive Creator Studio action import handoff failures in the Plugins pane with the demo API', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.sessionStorage.setItem('openpet.controlCenter.demoState', JSON.stringify({
+        plugins: [
+          {
+            id: 'openpet.creator-studio',
+            name: 'Creator Studio',
+            version: '1.0.0',
+            source: 'local',
+            enabled: true,
+            runnable: true,
+            permissions: ['pet:say', 'storage'],
+            commands: [
+              { id: 'import-approved-action', title: 'Import Approved Action' }
+            ],
+            entries: {
+              setup: [],
+              commands: [
+                { id: 'import-approved-action', title: 'Import Approved Action', command: 'node ./commands/import-approved-action.js', cwd: '.' }
+              ],
+              services: [],
+              dashboards: []
+            },
+            configSchema: { properties: [] },
+            config: {},
+            storage: { keyCount: 0, byteSize: 2, valid: true },
+            signatureStatus: { label: 'Unsigned local demo' }
+          }
+        ]
+      }))
+    })
+
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Plugins' }).click()
+
+    const pluginRow = page.locator('.plugin-row', { hasText: 'Creator Studio' })
+    await pluginRow.getByLabel('可选命令 Payload JSON').fill('{"runId":"run-demo-action-456","triggerProposalFailure":true}')
+    await pluginRow.getByRole('button', { name: 'Import Approved Action' }).click()
+
+    await expect(page.locator('.status-line')).toContainText('Imported action shy-spin from run run-demo-action-456')
+    await expect(pluginRow).toContainText('触发建议')
+    await expect(pluginRow).toContainText('提交失败')
+    await expect(pluginRow).toContainText('[redacted-token]')
+    await expect(pluginRow).toContainText('[redacted-path]')
+    await expect(pluginRow).toContainText('[redacted-local-url]')
+    await expect(pluginRow).not.toContainText('bridge-secret')
+    await expect(pluginRow).not.toContainText('/Users/mango/private/proposal.json')
+    await expect(pluginRow).not.toContainText('127.0.0.1:8787')
+  })
+
+  test('shows missing Creator Studio trigger handoff records in the Plugins pane with the demo API', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.sessionStorage.setItem('openpet.controlCenter.demoState', JSON.stringify({
+        plugins: [
+          {
+            id: 'openpet.creator-studio',
+            name: 'Creator Studio',
+            version: '1.0.0',
+            source: 'local',
+            enabled: true,
+            runnable: true,
+            permissions: ['pet:say', 'storage'],
+            commands: [
+              { id: 'import-approved-action', title: 'Import Approved Action' }
+            ],
+            entries: {
+              setup: [],
+              commands: [
+                { id: 'import-approved-action', title: 'Import Approved Action', command: 'node ./commands/import-approved-action.js', cwd: '.' }
+              ],
+              services: [],
+              dashboards: []
+            },
+            configSchema: { properties: [] },
+            config: {},
+            storage: { keyCount: 0, byteSize: 2, valid: true },
+            signatureStatus: { label: 'Unsigned local demo' }
+          }
+        ]
+      }))
+    })
+
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Plugins' }).click()
+
+    const pluginRow = page.locator('.plugin-row', { hasText: 'Creator Studio' })
+    await pluginRow.getByLabel('可选命令 Payload JSON').fill('{"runId":"run-demo-action-789","triggerProposalMissingRecord":true}')
+    await pluginRow.getByRole('button', { name: 'Import Approved Action' }).click()
+
+    await expect(page.locator('.status-line')).toContainText('Imported action shy-spin from run run-demo-action-789')
+    await expect(pluginRow).toContainText('最近命令结果')
+    await expect(pluginRow).toContainText('import-approved-action · exit 0')
+    await expect(pluginRow).toContainText('触发建议')
+    await expect(pluginRow).toContainText('未保存交接记录')
+    await expect(pluginRow).toContainText('no trigger proposal handoff record was saved')
+  })
 })

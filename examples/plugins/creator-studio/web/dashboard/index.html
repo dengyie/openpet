@@ -713,6 +713,14 @@
         if (statusMessage) setStatus(statusMessage, 'ok')
       }
 
+      const getRequestedRunId = () => {
+        try {
+          return new URLSearchParams(window.location.search).get('runId') || ''
+        } catch (_) {
+          return ''
+        }
+      }
+
       const frameSrc = (frame) => `${frame.url}${frame.url.includes('?') ? '&' : '?'}v=${encodeURIComponent(state.run?.updatedAt || '')}`
 
       const assetSrc = (url) => `${url}${url.includes('?') ? '&' : '?'}v=${encodeURIComponent(state.run?.updatedAt || '')}`
@@ -1083,6 +1091,8 @@
         const followUp = importGuidance.followUp || {}
         const reviewSummary = importGuidance.reviewSummary || {}
         const usageSummary = generation.usageSummary || {}
+        const smokeCommand = generation.smokeCommand || {}
+        const creatorStudioSmokeCommand = generation.creatorStudioSmokeCommand || {}
         const checklist = Array.isArray(generation.smokeChecklist) ? generation.smokeChecklist : []
         const checklistHtml = checklist.length
           ? `<ul>${checklist.map((entry) => `<li>${escapeHtml(entry)}</li>`).join('')}</ul>`
@@ -1094,6 +1104,18 @@
             ? `<p>Estimated generation cost: <code>${escapeHtml(usageSummary.displayCost || '')}</code></p>`
             : '',
           checklistHtml,
+          smokeCommand.available
+            ? `<p>Repeatable provider smoke: <code>${escapeHtml(smokeCommand.command || '')}</code></p>`
+            : '',
+          smokeCommand.available && smokeCommand.note
+            ? `<p>${escapeHtml(smokeCommand.note)}</p>`
+            : '',
+          creatorStudioSmokeCommand.available
+            ? `<p>Creator Studio provider smoke: <code>${escapeHtml(creatorStudioSmokeCommand.command || '')}</code></p>`
+            : '',
+          creatorStudioSmokeCommand.available && creatorStudioSmokeCommand.note
+            ? `<p>${escapeHtml(creatorStudioSmokeCommand.note || '')}</p>`
+            : '',
           `<p>Import state: ${escapeHtml(importGuidance.status || 'not-ready')} / Command: ${escapeHtml(importGuidance.command || 'n/a')}</p>`,
           `<p>${escapeHtml(importGuidance.summary || 'Approve the run before host-owned import.')}</p>`,
           reviewSummary.nextReviewAction
@@ -1732,6 +1754,11 @@
       document.addEventListener('DOMContentLoaded', async () => {
         try {
           const runs = await refreshRunList()
+          const requestedRunId = getRequestedRunId().trim()
+          if (requestedRunId) {
+            await loadRun(requestedRunId, `Loaded run ${requestedRunId}.`)
+            return
+          }
           if (runs[0]?.runId) await loadRun(runs[0].runId, 'Loaded latest run.')
         } catch (error) {
           setStatus(error.message, 'error')

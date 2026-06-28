@@ -4572,6 +4572,13 @@ test('creator studio service exposes workflow guidance for fixture and imported 
     assert.equal(fixtureDetail.run.workflowGuidance.generation.mode, 'fixture-preview')
     assert.match(fixtureDetail.run.workflowGuidance.generation.summary, /workflow QA/i)
     assert.equal(fixtureDetail.run.workflowGuidance.generation.smokeChecklist.some((entry) => /provider generation/i.test(entry)), true)
+    assert.equal(fixtureDetail.run.workflowGuidance.generation.smokeCommand.available, true)
+    assert.match(fixtureDetail.run.workflowGuidance.generation.smokeCommand.command, /npm run smoke:ai-provider/i)
+    assert.match(fixtureDetail.run.workflowGuidance.generation.smokeCommand.command, /--include-image/i)
+    assert.match(fixtureDetail.run.workflowGuidance.generation.smokeCommand.note, /opt-?in/i)
+    assert.equal(fixtureDetail.run.workflowGuidance.generation.creatorStudioSmokeCommand.available, true)
+    assert.match(fixtureDetail.run.workflowGuidance.generation.creatorStudioSmokeCommand.command, /npm run smoke:creator-studio-provider/i)
+    assert.match(fixtureDetail.run.workflowGuidance.generation.creatorStudioSmokeCommand.command, /--backend provider/i)
     assert.equal(fixtureDetail.run.workflowGuidance.generation.usageSummary.available, false)
     assert.equal(fixtureDetail.run.workflowGuidance.generation.usageSummary.displayCost, '')
 
@@ -4580,6 +4587,13 @@ test('creator studio service exposes workflow guidance for fixture and imported 
     assert.match(importedDetail.run.workflowGuidance.generation.summary, /host-owned image Provider/i)
     assert.equal(importedDetail.run.backend, 'provider')
     assert.equal(importedDetail.run.workflowGuidance.generation.smokeChecklist.some((entry) => /Control Center/i.test(entry)), true)
+    assert.equal(importedDetail.run.workflowGuidance.generation.smokeCommand.available, true)
+    assert.match(importedDetail.run.workflowGuidance.generation.smokeCommand.command, /npm run smoke:ai-provider/i)
+    assert.match(importedDetail.run.workflowGuidance.generation.smokeCommand.command, /--api-key-env OPENPET_AI_PROVIDER_API_KEY/i)
+    assert.match(importedDetail.run.workflowGuidance.generation.smokeCommand.note, /without exposing API keys|without raw API keys/i)
+    assert.equal(importedDetail.run.workflowGuidance.generation.creatorStudioSmokeCommand.available, true)
+    assert.match(importedDetail.run.workflowGuidance.generation.creatorStudioSmokeCommand.command, /npm run smoke:creator-studio-provider/i)
+    assert.match(importedDetail.run.workflowGuidance.generation.creatorStudioSmokeCommand.note, /technical generation chain|visual quality/i)
     assert.equal(importedDetail.run.workflowGuidance.generation.usageSummary.available, true)
     assert.equal(importedDetail.run.workflowGuidance.generation.usageSummary.estimatedCostUsd, 0.012345)
     assert.match(importedDetail.run.workflowGuidance.generation.usageSummary.displayCost, /\$0\.0123/)
@@ -4782,6 +4796,428 @@ test('creator studio service exposes workflow guidance for fixture and imported 
     assert.equal(importedMissingSubmissionDetail.run.reviewCheckpoint.label, 'Review import handoff')
     assert.equal(importedMissingSubmissionDetail.run.reviewCheckpoint.location, 'Control Center -> Plugins')
     assert.match(importedMissingSubmissionDetail.run.reviewCheckpoint.reason, /no trigger proposal handoff record was saved/i)
+  } finally {
+    await new Promise((resolve) => server.close(resolve))
+  }
+})
+
+test('creator studio service preserves legacy imported and reviewable detail without generationTask', async () => {
+  const { createCreatorStudioServer } = require('../../examples/plugins/creator-studio/service/studio-service')
+  const { createRun, readRun, updateRunStatus, writeRun } = require('../../examples/plugins/creator-studio/lib/run-store')
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-service-legacy-review-imported-'))
+  const dashboardPath = path.join(pluginRoot, 'web', 'dashboard', 'index.html')
+
+  const seedLegacyRunWithoutTask = ({ input, patch, now, updatedAt }) => {
+    const run = createRun({ dataDir, input, now })
+    updateRunStatus({
+      dataDir,
+      runId: run.runId,
+      status: patch.status,
+      patch: patch.values,
+      now: () => updatedAt
+    })
+    const persisted = readRun({ dataDir, runId: run.runId })
+    const { generationTask: _generationTask, ...legacyRun } = persisted
+    writeRun({
+      dataDir,
+      run: {
+        ...legacyRun,
+        backend: input.backend,
+        input: {
+          ...persisted.input,
+          backend: input.backend
+        }
+      }
+    })
+    return run
+  }
+
+  const importedActionRun = seedLegacyRunWithoutTask({
+    input: {
+      prompt: 'Imported action legacy run',
+      originalPrompt: 'Imported action legacy run',
+      backend: 'local',
+      generationTask: {
+        mode: 'single-action',
+        targetPet: 'current',
+        styleSource: 'currentPet',
+        actions: [{
+          actionId: 'shy-spin',
+          name: '害羞转圈',
+          motionPrompt: '点击后害羞转圈',
+          loop: false,
+          frameCount: 1,
+          triggerProposal: { type: 'click', binding: 'clickAction' }
+        }]
+      }
+    },
+    patch: {
+      status: 'imported',
+      values: {
+        taskStatus: 'confirmed',
+        currentStep: 'imported',
+        reviewStatus: 'approved',
+        importStatus: 'imported',
+        importedActionId: 'shy-spin',
+        triggerProposalSubmission: {
+          ok: true,
+          proposal: { id: 'proposal:click:legacy-imported-action:test' }
+        },
+        artifacts: {
+          generatedImage: {
+            ok: true,
+            backend: 'provider',
+            model: 'gpt-image-2',
+            generatedAt: '2026-06-28T10:00:00.000Z',
+            outputs: [{
+              dataRelativePath: 'runs/__RUN_ID__/frames/base/0001.png',
+              mimeType: 'image/png',
+              sha256: 'legacy-imported-action-sha'
+            }]
+          },
+          actionFrames: {
+            actionId: 'shy-spin',
+            name: '害羞转圈',
+            framesDir: path.join(dataDir, 'runs', '__RUN_ID__', 'frames', 'actions', 'shy-spin'),
+            qa: path.join(dataDir, 'runs', '__RUN_ID__', 'qa', 'action-frame-validation.json'),
+            contactSheet: path.join(dataDir, 'runs', '__RUN_ID__', 'qa', 'action-frame-contact-sheet.png'),
+            frameCount: 1,
+            frameWidth: 192,
+            frameHeight: 208,
+            triggerProposal: { type: 'click', binding: 'clickAction' }
+          }
+        }
+      }
+    },
+    now: () => '2026-06-28T10:00:00.000Z',
+    updatedAt: '2026-06-28T10:01:00.000Z'
+  })
+
+  const importedActionRunId = importedActionRun.runId
+  {
+    const stored = readRun({ dataDir, runId: importedActionRunId })
+    stored.artifacts.generatedImage.outputs[0].dataRelativePath = `runs/${importedActionRunId}/frames/base/0001.png`
+    stored.artifacts.actionFrames.framesDir = path.join(dataDir, 'runs', importedActionRunId, 'frames', 'actions', 'shy-spin')
+    stored.artifacts.actionFrames.qa = path.join(dataDir, 'runs', importedActionRunId, 'qa', 'action-frame-validation.json')
+    stored.artifacts.actionFrames.contactSheet = path.join(dataDir, 'runs', importedActionRunId, 'qa', 'action-frame-contact-sheet.png')
+    writeRun({ dataDir, run: stored })
+    fs.mkdirSync(path.join(dataDir, 'runs', importedActionRunId, 'frames', 'actions', 'shy-spin'), { recursive: true })
+    fs.mkdirSync(path.join(dataDir, 'runs', importedActionRunId, 'qa'), { recursive: true })
+    await sharp({
+      create: {
+        width: 192,
+        height: 208,
+        channels: 4,
+        background: { r: 210, g: 150, b: 230, alpha: 1 }
+      }
+    }).png().toFile(path.join(dataDir, 'runs', importedActionRunId, 'frames', 'actions', 'shy-spin', '0001.png'))
+    await sharp({
+      create: {
+        width: 192,
+        height: 208,
+        channels: 4,
+        background: { r: 250, g: 238, b: 222, alpha: 1 }
+      }
+    }).png().toFile(path.join(dataDir, 'runs', importedActionRunId, 'qa', 'action-frame-contact-sheet.png'))
+    fs.writeFileSync(
+      path.join(dataDir, 'runs', importedActionRunId, 'qa', 'action-frame-validation.json'),
+      `${JSON.stringify(createActionFrameQa(), null, 2)}\n`
+    )
+  }
+
+  const importedPetRun = seedLegacyRunWithoutTask({
+    input: {
+      petName: 'Legacy Imported Pet Cat',
+      petId: 'legacy-imported-pet-cat',
+      prompt: 'Imported pet legacy run',
+      originalPrompt: 'Imported pet legacy run',
+      backend: 'cloud',
+      generationTask: {
+        mode: 'full-pet',
+        targetPet: 'new',
+        styleSource: 'textOnly',
+        characterBrief: '一只已经导入完成的 legacy 桌宠。',
+        actions: [{
+          actionId: 'idle',
+          name: 'Idle',
+          motionPrompt: 'neutral idle pose',
+          loop: true,
+          frameCount: 12,
+          triggerProposal: { type: 'state', binding: 'idle' }
+        }]
+      }
+    },
+    patch: {
+      status: 'imported',
+      values: {
+        taskStatus: 'confirmed',
+        currentStep: 'imported',
+        reviewStatus: 'approved',
+        importStatus: 'imported',
+        importedPackId: 'legacy-imported-pet-cat',
+        activatedPackId: 'legacy-imported-pet-cat',
+        artifacts: {
+          generatedImage: {
+            ok: true,
+            backend: 'provider',
+            model: 'gpt-image-2',
+            generatedAt: '2026-06-28T10:02:00.000Z',
+            outputs: [{
+              dataRelativePath: 'runs/__RUN_ID__/frames/base/0001.png',
+              mimeType: 'image/png',
+              sha256: 'legacy-imported-pet-sha'
+            }]
+          },
+          outputDir: path.join(dataDir, 'runs', '__RUN_ID__', 'outputs'),
+          petJson: path.join(dataDir, 'runs', '__RUN_ID__', 'outputs', 'pet.json'),
+          spritesheet: path.join(dataDir, 'runs', '__RUN_ID__', 'outputs', 'spritesheet.webp'),
+          sourceImageQa: path.join(dataDir, 'runs', '__RUN_ID__', 'qa', 'source-image-validation.json')
+        }
+      }
+    },
+    now: () => '2026-06-28T10:02:00.000Z',
+    updatedAt: '2026-06-28T10:03:00.000Z'
+  })
+
+  const importedPetRunId = importedPetRun.runId
+  {
+    const stored = readRun({ dataDir, runId: importedPetRunId })
+    stored.artifacts.generatedImage.outputs[0].dataRelativePath = `runs/${importedPetRunId}/frames/base/0001.png`
+    stored.artifacts.outputDir = path.join(dataDir, 'runs', importedPetRunId, 'outputs')
+    stored.artifacts.petJson = path.join(dataDir, 'runs', importedPetRunId, 'outputs', 'pet.json')
+    stored.artifacts.spritesheet = path.join(dataDir, 'runs', importedPetRunId, 'outputs', 'spritesheet.webp')
+    stored.artifacts.sourceImageQa = path.join(dataDir, 'runs', importedPetRunId, 'qa', 'source-image-validation.json')
+    writeRun({ dataDir, run: stored })
+    fs.mkdirSync(path.join(dataDir, 'runs', importedPetRunId, 'qa'), { recursive: true })
+    fs.writeFileSync(path.join(dataDir, 'runs', importedPetRunId, 'qa', 'source-image-validation.json'), `${JSON.stringify({
+      ok: true,
+      sourceRelativePath: `runs/${importedPetRunId}/frames/base/stale-source.png`,
+      width: 1024,
+      height: 1024,
+      visiblePixels: 1000,
+      warnings: []
+    }, null, 2)}\n`)
+  }
+
+  const reviewableActionRun = seedLegacyRunWithoutTask({
+    input: {
+      prompt: 'Reviewable action legacy run',
+      originalPrompt: 'Reviewable action legacy run',
+      backend: 'local',
+      generationTask: {
+        mode: 'single-action',
+        targetPet: 'current',
+        styleSource: 'currentPet',
+        actions: [{
+          actionId: 'reviewable-spin',
+          name: 'Reviewable Spin',
+          motionPrompt: 'wave once and spin',
+          loop: false,
+          frameCount: 1,
+          triggerProposal: { type: 'manual' }
+        }]
+      }
+    },
+    patch: {
+      status: 'ready_for_review',
+      values: {
+        taskStatus: 'confirmed',
+        currentStep: 'review',
+        reviewStatus: 'pending',
+        importStatus: 'not-imported',
+        artifacts: {
+          generatedImage: {
+            ok: true,
+            backend: 'provider',
+            model: 'gpt-image-2',
+            generatedAt: '2026-06-28T10:04:00.000Z',
+            outputs: [{
+              dataRelativePath: 'runs/__RUN_ID__/frames/base/0001.png',
+              mimeType: 'image/png',
+              sha256: 'legacy-reviewable-action-sha'
+            }]
+          },
+          actionFrames: {
+            actionId: 'reviewable-spin',
+            name: 'Reviewable Spin',
+            framesDir: path.join(dataDir, 'runs', '__RUN_ID__', 'frames', 'actions', 'reviewable-spin'),
+            qa: path.join(dataDir, 'runs', '__RUN_ID__', 'qa', 'action-frame-validation.json'),
+            contactSheet: path.join(dataDir, 'runs', '__RUN_ID__', 'qa', 'action-frame-contact-sheet.png'),
+            frameCount: 1,
+            frameWidth: 192,
+            frameHeight: 208,
+            triggerProposal: { type: 'manual' }
+          }
+        }
+      }
+    },
+    now: () => '2026-06-28T10:04:00.000Z',
+    updatedAt: '2026-06-28T10:05:00.000Z'
+  })
+
+  const reviewableActionRunId = reviewableActionRun.runId
+  {
+    const stored = readRun({ dataDir, runId: reviewableActionRunId })
+    stored.artifacts.generatedImage.outputs[0].dataRelativePath = `runs/${reviewableActionRunId}/frames/base/0001.png`
+    stored.artifacts.actionFrames.framesDir = path.join(dataDir, 'runs', reviewableActionRunId, 'frames', 'actions', 'reviewable-spin')
+    stored.artifacts.actionFrames.qa = path.join(dataDir, 'runs', reviewableActionRunId, 'qa', 'action-frame-validation.json')
+    stored.artifacts.actionFrames.contactSheet = path.join(dataDir, 'runs', reviewableActionRunId, 'qa', 'action-frame-contact-sheet.png')
+    writeRun({ dataDir, run: stored })
+    fs.mkdirSync(path.join(dataDir, 'runs', reviewableActionRunId, 'frames', 'actions', 'reviewable-spin'), { recursive: true })
+    fs.mkdirSync(path.join(dataDir, 'runs', reviewableActionRunId, 'qa'), { recursive: true })
+    await sharp({
+      create: {
+        width: 192,
+        height: 208,
+        channels: 4,
+        background: { r: 120, g: 180, b: 240, alpha: 1 }
+      }
+    }).png().toFile(path.join(dataDir, 'runs', reviewableActionRunId, 'frames', 'actions', 'reviewable-spin', '0001.png'))
+    await sharp({
+      create: {
+        width: 192,
+        height: 208,
+        channels: 4,
+        background: { r: 240, g: 240, b: 225, alpha: 1 }
+      }
+    }).png().toFile(path.join(dataDir, 'runs', reviewableActionRunId, 'qa', 'action-frame-contact-sheet.png'))
+    fs.writeFileSync(
+      path.join(dataDir, 'runs', reviewableActionRunId, 'qa', 'action-frame-validation.json'),
+      `${JSON.stringify(createActionFrameQa({ actionId: 'reviewable-spin' }), null, 2)}\n`
+    )
+  }
+
+  const reviewablePetRun = seedLegacyRunWithoutTask({
+    input: {
+      petName: 'Legacy Reviewable Pet Cat',
+      petId: 'legacy-reviewable-pet-cat',
+      prompt: 'Reviewable pet legacy run',
+      originalPrompt: 'Reviewable pet legacy run',
+      backend: 'cloud',
+      generationTask: {
+        mode: 'full-pet',
+        targetPet: 'new',
+        styleSource: 'textOnly',
+        characterBrief: '一只等待审批的 legacy 桌宠。',
+        actions: [{
+          actionId: 'idle',
+          name: 'Idle',
+          motionPrompt: 'neutral idle pose',
+          loop: true,
+          frameCount: 12,
+          triggerProposal: { type: 'state', binding: 'idle' }
+        }]
+      }
+    },
+    patch: {
+      status: 'ready_for_review',
+      values: {
+        taskStatus: 'confirmed',
+        currentStep: 'review',
+        reviewStatus: 'pending',
+        importStatus: 'not-imported',
+        artifacts: {
+          generatedImage: {
+            ok: true,
+            backend: 'provider',
+            model: 'gpt-image-2',
+            generatedAt: '2026-06-28T10:06:00.000Z',
+            outputs: [{
+              dataRelativePath: 'runs/__RUN_ID__/frames/base/0001.png',
+              mimeType: 'image/png',
+              sha256: 'legacy-reviewable-pet-sha'
+            }]
+          },
+          outputDir: path.join(dataDir, 'runs', '__RUN_ID__', 'outputs'),
+          petJson: path.join(dataDir, 'runs', '__RUN_ID__', 'outputs', 'pet.json'),
+          spritesheet: path.join(dataDir, 'runs', '__RUN_ID__', 'outputs', 'spritesheet.webp'),
+          qa: path.join(dataDir, 'runs', '__RUN_ID__', 'qa', 'atlas-validation.json'),
+          sourceImageQa: path.join(dataDir, 'runs', '__RUN_ID__', 'qa', 'source-image-validation.json')
+        }
+      }
+    },
+    now: () => '2026-06-28T10:06:00.000Z',
+    updatedAt: '2026-06-28T10:07:00.000Z'
+  })
+
+  const reviewablePetRunId = reviewablePetRun.runId
+  {
+    const stored = readRun({ dataDir, runId: reviewablePetRunId })
+    stored.artifacts.generatedImage.outputs[0].dataRelativePath = `runs/${reviewablePetRunId}/frames/base/0001.png`
+    stored.artifacts.outputDir = path.join(dataDir, 'runs', reviewablePetRunId, 'outputs')
+    stored.artifacts.petJson = path.join(dataDir, 'runs', reviewablePetRunId, 'outputs', 'pet.json')
+    stored.artifacts.spritesheet = path.join(dataDir, 'runs', reviewablePetRunId, 'outputs', 'spritesheet.webp')
+    stored.artifacts.qa = path.join(dataDir, 'runs', reviewablePetRunId, 'qa', 'atlas-validation.json')
+    stored.artifacts.sourceImageQa = path.join(dataDir, 'runs', reviewablePetRunId, 'qa', 'source-image-validation.json')
+    writeRun({ dataDir, run: stored })
+    fs.mkdirSync(path.join(dataDir, 'runs', reviewablePetRunId, 'qa'), { recursive: true })
+    fs.writeFileSync(path.join(dataDir, 'runs', reviewablePetRunId, 'qa', 'atlas-validation.json'), `${JSON.stringify({
+      ok: true,
+      width: 1536,
+      height: 1872,
+      visiblePixels: 6400,
+      warnings: []
+    }, null, 2)}\n`)
+    fs.writeFileSync(path.join(dataDir, 'runs', reviewablePetRunId, 'qa', 'source-image-validation.json'), `${JSON.stringify({
+      ok: true,
+      sourceRelativePath: `runs/${reviewablePetRunId}/frames/base/0001.png`,
+      width: 1024,
+      height: 1024,
+      visiblePixels: 1000,
+      warnings: []
+    }, null, 2)}\n`)
+  }
+
+  const server = createCreatorStudioServer({ dataDir, dashboardPath })
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const port = server.address().port
+
+  try {
+    const importedActionDetail = await fetch(`http://127.0.0.1:${port}/api/runs/${importedActionRunId}`).then((response) => response.json())
+    const importedPetDetail = await fetch(`http://127.0.0.1:${port}/api/runs/${importedPetRunId}`).then((response) => response.json())
+    const reviewableActionDetail = await fetch(`http://127.0.0.1:${port}/api/runs/${reviewableActionRunId}`).then((response) => response.json())
+    const reviewablePetDetail = await fetch(`http://127.0.0.1:${port}/api/runs/${reviewablePetRunId}`).then((response) => response.json())
+    const serialized = JSON.stringify({ importedActionDetail, importedPetDetail, reviewableActionDetail, reviewablePetDetail })
+
+    assert.equal(importedActionDetail.ok, true)
+    assert.equal(importedActionDetail.run.status, 'imported')
+    assert.equal(importedActionDetail.run.wizardState.phase, 'imported')
+    assert.equal(importedActionDetail.run.wizardState.nextStep.label, 'Review trigger proposal')
+    assert.equal(importedActionDetail.run.actionLane.hostAction.label, 'Review trigger proposal')
+    assert.equal(importedActionDetail.run.actionLane.dashboardAction.available, false)
+    assert.equal(importedActionDetail.run.workflowGuidance.import.followUp.label, 'Review trigger proposal')
+    assert.equal(importedActionDetail.actionReview.actionId, 'shy-spin')
+
+    assert.equal(importedPetDetail.ok, true)
+    assert.equal(importedPetDetail.run.status, 'imported')
+    assert.equal(importedPetDetail.run.wizardState.phase, 'imported')
+    assert.equal(importedPetDetail.run.wizardState.nextStep.label, 'Review imported result')
+    assert.equal(importedPetDetail.run.actionLane.hostAction.label, 'Review imported result')
+    assert.equal(importedPetDetail.run.actionLane.dashboardAction.available, false)
+    assert.equal(importedPetDetail.run.workflowGuidance.import.followUp.label, 'Review imported result')
+    assert.equal(importedPetDetail.fullPetReview.sourceImageMatchesCurrent, true)
+    assert.equal(importedPetDetail.fullPetReview.requiresCurrentSourceMatch, false)
+
+    assert.equal(reviewableActionDetail.ok, true)
+    assert.equal(reviewableActionDetail.run.status, 'ready_for_review')
+    assert.equal(reviewableActionDetail.run.wizardState.phase, 'ready-for-review')
+    assert.equal(reviewableActionDetail.run.wizardState.nextStep.label, 'Approve run')
+    assert.equal(reviewableActionDetail.run.actionLane.dashboardAction.available, true)
+    assert.equal(reviewableActionDetail.run.actionLane.dashboardAction.label, 'Approve run')
+    assert.equal(reviewableActionDetail.run.actionLane.buttonStates.approve.enabled, true)
+    assert.equal(reviewableActionDetail.actionReview.actionId, 'reviewable-spin')
+
+    assert.equal(reviewablePetDetail.ok, true)
+    assert.equal(reviewablePetDetail.run.status, 'ready_for_review')
+    assert.equal(reviewablePetDetail.run.wizardState.phase, 'ready-for-review')
+    assert.equal(reviewablePetDetail.run.wizardState.nextStep.label, 'Approve run')
+    assert.equal(reviewablePetDetail.run.actionLane.dashboardAction.available, true)
+    assert.equal(reviewablePetDetail.run.actionLane.dashboardAction.label, 'Approve run')
+    assert.equal(reviewablePetDetail.run.actionLane.buttonStates.approve.enabled, true)
+    assert.equal(reviewablePetDetail.fullPetReview.petId, 'legacy-reviewable-pet-cat')
+    assert.equal(reviewablePetDetail.fullPetReview.sourceImageMatchesCurrent, true)
+
+    assert.equal(serialized.includes(dataDir), false)
   } finally {
     await new Promise((resolve) => server.close(resolve))
   }

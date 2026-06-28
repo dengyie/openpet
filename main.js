@@ -29,6 +29,7 @@ const { createAiTalkService } = require('./src/main/services/ai-talk-service')
 const { createPetUtteranceLogService } = require('./src/main/services/pet-utterance-log-service')
 const { createImageGenerationModelService } = require('./src/main/services/image-generation-model-service')
 const { createBehaviorOrchestratorService } = require('./src/main/services/behavior-orchestrator-service')
+const { createCreatorStudioDefaultFlowService } = require('./src/main/services/creator-studio-default-flow-service')
 const { createPluginService } = require('./src/main/services/plugin-service')
 const { createPluginInstallService } = require('./src/main/services/plugin-install-service')
 const { syncBundledPlugins } = require('./src/main/services/bundled-plugin-sync-service')
@@ -44,6 +45,8 @@ const { createPetMovementPolicy } = require('./src/main/pet-movement-policy')
 const { configureSingleInstanceLock } = require('./src/main/single-instance')
 const { maybeRunPackagedRuntimeSmoke } = require('./src/main/packaged-runtime-smoke-runner')
 const { maybeRunPackagedPluginCleanupEvidence } = require('./src/main/packaged-plugin-cleanup-evidence-runner')
+const { maybeRunPackagedCreatorStudioEvidence } = require('./src/main/packaged-creator-studio-evidence-runner')
+const { maybeRunPackagedCreatorStudioUiE2e } = require('./src/main/packaged-creator-studio-ui-e2e-runner')
 const { createBasicBehaviorPlugin } = require('./src/main/plugins/official/basic-behavior')
 const packageJson = require('./package.json')
 
@@ -278,6 +281,10 @@ const bootstrapOpenPet = () => {
     },
     getPluginBlockStatus: (candidate) => catalogService?.getPluginBlockStatus(candidate) || { blocked: false, reasons: [] }
   })
+  const creatorStudioDefaultFlowService = createCreatorStudioDefaultFlowService({
+    pluginService,
+    imageGenerationModelService
+  })
   catalogService = createCatalogService({
     settingsService,
     pluginInstallService,
@@ -311,6 +318,7 @@ const bootstrapOpenPet = () => {
     petBubbleChatWindowService,
     imageGenerationModelService,
     behaviorOrchestratorService,
+    creatorStudioDefaultFlowService,
     pluginService,
     pluginInstallService,
     pluginGithubImportService,
@@ -380,6 +388,12 @@ const bootstrapOpenPet = () => {
     petWindow.webContents.send(IPC.SETTINGS_CHANGED, createPetRendererSettings(settings))
     maybeRunPackagedRuntimeSmoke({ app, petWindow, petService, petPackService, petBubbleChatWindowService })
     maybeRunPackagedPluginCleanupEvidence({ app, pluginInstallService, pluginService })
+    maybeRunPackagedCreatorStudioEvidence({ app, pluginService })
+    maybeRunPackagedCreatorStudioUiE2e({
+      app,
+      pluginService,
+      openControlCenter: () => createSettingsWindow(petWindow)
+    })
   })
   loadPetWindow(petWindow)
 
