@@ -42,6 +42,7 @@ Current P0 status: no known startup/build blocker in this TODO pass. The highest
 - Chat provider UX has separate `保存聊天 Provider` and `测试已保存配置` actions. Saving does not require a successful test, and testing uses the active saved config.
 - Image generation settings use a host-owned OpenAI-compatible image Provider contract in Control Center. Legacy `fixture` / `cloud` / `local` vocabulary may still appear in Creator Studio run backends, but secrets and provider calls remain host-owned.
 - Chat and image provider checks now surface discovered `/models` results back to the AI pane as suggested model lists, while preserving safe fallback wording when probing is unavailable.
+- The AI pane now groups chat/image provider settings into clearer model-settings sections, exposes preset-driven endpoint/model drafts, and lets users apply discovered chat/image models back into drafts without auto-saving.
 - Creator Studio dashboard now surfaces sanitized generation usage summaries when host image generation returns safe metadata such as estimated cost.
 - AI Talk core exists: `AiTalkService`, `AiTalkStore`, pet-pack `persona`, local persona override, generated persona draft, pet-pack isolated main conversations, background memory extraction, relevance-ranked memory injection, injected-memory usage tracking, memory profile UI, delete memory, and clear current pet-pack memories.
 - AI Talk segmented bubble playback now preserves visible reply order: the first segment shows immediately, later segments are scheduled by bubble TTL, and the full assistant reply still stays in transcript/history.
@@ -49,6 +50,7 @@ Current P0 status: no known startup/build blocker in this TODO pass. The highest
 - Desktop chat window exists and routes through the same pet chat state/AI Talk flow instead of introducing a separate product brain.
 - Active pet-pack changes now emit explicit refresh signals so the AI pane reloads persona, memory profile, and chat state without requiring a tab switch or window reopen.
 - Creator Studio already has `GenerationTask`, deterministic `conversation-wizard`, task answer/confirm commands, `openpet-prompt-builder`, host model bridge, run persistence, QA artifacts, dashboard display, approved action import paths, dashboard-visible prompt provenance with a sanitized final prompt preview, sanitized generation usage summaries, explicit backend recovery guidance for failed generation runs, dashboard-visible provider smoke guidance for non-fixture host image runs, a dashboard-visible workflow status summary with current stage plus next-step guidance, and full-pet/action import flows that can submit generated trigger proposals into the host inbox.
+- Creator Studio dashboard-first wizard polish is now complete for the current command/service model: workflow summaries expose recommended next actions, pending questions carry real question ids/prompts/options, dashboard question answering no longer hardcodes `trigger`, and failed generation states expose a direct retry affordance while keeping generation/import authority host-owned.
 - Action trigger review exists for the manually selected action path: `click` can update `clickAction`; `manual` and `unbound` are acknowledged; `random`, `state`, and `event` remain pending host-rule work.
 - Trigger proposal inbox now has a host-owned service/API/UI closed loop: proposals can be submitted, persisted, accepted, rejected, preserved through action regeneration, and reviewed from the Actions pane.
 - `PluginService` high-risk subdomains are now split into focused controllers for resolution, config/storage, runtime SDK, creator bridge handlers, asset/path safety, listing/projection, policy/signature gating, dashboard open, and management writes. The remaining `PluginService` code is intentionally kept as orchestration; see `docs/plugin-service-architecture-checkpoint.md`.
@@ -68,7 +70,7 @@ Current state:
 
 P1 work:
 
-- Split dense AI settings into clearer model-settings sections if the current AI pane becomes hard to operate.
+- Split dense AI settings into clearer model-settings sections if the current AI pane becomes hard to operate. Completed in current branch: the AI pane now separates config status, endpoint/model settings, and credential/runtime sections for both chat and image providers, while preserving the existing host-owned save/test semantics.
 - Add provider presets/catalog entries for common OpenAI-compatible chat and image endpoints. Completed in current branch: the AI pane now exposes shared chat and image provider preset catalogs for official OpenAI, local/proxy OpenAI-compatible endpoints, and a generic gateway image template, without auto-saving or overwriting stored API keys.
 - Add optional `/models` discovery where providers support it, with safe fallback wording when probing is unavailable. Completed in current branch: chat and image provider host checks now return discovered model lists when probing succeeds, the AI pane surfaces them as suggested model options, and unavailable probes still use the existing safe fallback wording.
 - Add provider compatibility hints, especially for image models that do or do not support transparent-background payload parameters. Completed in current branch: the AI pane now distinguishes `gpt-image-2` host-default behavior, `dall-e*` transparent-parameter limitations, FLUX/SDXL gateway alpha-cutout caveats, and generic OpenAI-compatible transparent-background requests.
@@ -160,7 +162,7 @@ Current state:
 
 P1 work:
 
-- Turn the existing command-level task flow into a smoother dashboard-first wizard with visible prompt, task preview, pending question, confirmation, generation, QA, and import states. Partially completed in current branch: the dashboard now surfaces a host-owned workflow status summary with current stage, next-step guidance, prompt/question/review/import panels, and mode-aware `single-action` vs `full-pet` task/review/import copy so the same UI can guide both flows without action-only wording.
+- Turn the existing command-level task flow into a smoother dashboard-first wizard with visible prompt, task preview, pending question, confirmation, generation, QA, and import states. Completed in current branch: the dashboard now surfaces host-owned workflow summaries with current stage, next-step guidance, recommended actions, real pending question ids/prompts/options, mode-aware `single-action` vs `full-pet` task/review/import copy, and direct retry affordances for failed generation states.
 - Preserve the current command paths as automation/test entry points while improving user-facing dashboard affordances.
 - Add explicit retry/recover flows for failed cloud/local generation without silently falling back to fixture. Completed in current branch: failed generation runs now expose backend recovery guidance in the dashboard and service detail view, while keeping retry on the existing generation command path instead of silently falling back to fixture.
 - Connect generated trigger proposals directly into the existing host trigger proposal inbox from successful generation/import flows. Completed in current branch: approved single-action and task-driven full-pet imports now submit generated trigger proposals through the existing host inbox bridge, and Codex pet manifests preserve host-owned trigger proposal/rule fields after import.
@@ -245,25 +247,21 @@ P2/P3:
 
 Choose one of these when starting the next development milestone:
 
-1. Trigger Proposal Inbox Closure
-   - User value: Creator Studio and future plugins can submit action trigger proposals into a real host review queue.
-   - Main files: `ActionService`, `ipc.js`, Actions pane, shared contracts, action tests, Control Center smoke.
+1. Trigger Rule Host Closure
+   - User value: reviewed `random` / `state` / `event` trigger proposals can move from pending-host-rule into a real host editor/schema/apply loop.
+   - Main files: `src/main/services/action-service.js`, Actions pane, shared contracts, action tests, Control Center smoke.
 
 2. AI Talk Relevance And Bubble UX
    - User value: pet conversations feel more contextual and more pet-like without changing provider setup.
    - Main files: `AiTalkService`, `AiTalkStore`, AI pane, pet chat renderer, service tests.
 
-3. Creator Studio Dashboard Wizard Polish
-   - User value: users can drive custom action generation from dashboard instead of running individual commands.
-   - Main files: Creator Studio service/dashboard/commands, plugin tests, host bridge tests.
+3. Release Evidence Closure
+   - User value: release wording and evidence state can move from conservative preview to auditable platform claims.
+   - Main files: release scripts, workflow artifacts, `docs/release-evidence/`, release status docs.
 
-4. Model Settings Product Polish
-   - User value: provider setup is clearer for local and hosted image/chat gateways.
-   - Main files: AI pane, `ImageGenerationModelService`, `AiService`, Control Center smoke tests.
-
-5. Release Evidence Closure
-   - User value: release readiness claims can be upgraded only when real evidence exists.
-   - Main files: release scripts/docs. This is mostly Manual-required.
+4. Live Docs Drift Closure
+   - User value: maintainer entry docs stay aligned with the shipped runtime boundaries and recently landed milestones.
+   - Main files: `docs/openpet-current-todo-architecture.md`, `docs/HANDOFF.md`, `docs/development-summary.md`, `docs/project-status-review.md`.
 
 ## Verification Commands For Future Milestones
 
