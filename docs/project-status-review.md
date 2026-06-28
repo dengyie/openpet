@@ -18,6 +18,8 @@ The current OpenPet development gateway now also has archived real Creator Studi
 
 The same gateway also has archived real AI provider smoke evidence under `docs/release-evidence/ai-provider-smoke/2026-06-28T11-08-10Z-openpet-gateway/`. That run proves `/models` exposed `gpt-5.5` and `gpt-image-2` and that `gpt-5.5` completed chat smoke successfully, while image generation remained intentionally opt-in and was skipped. This is evidence of model discovery and chat reachability, not of image output quality or release-ready art generation.
 
+Release wording is also intentionally constrained by archived evidence. Packaged runtime smoke is archived under `docs/release-evidence/packaged-runtime/2026-06-16T14-52-13-074Z-darwin-arm64/` and proves an unsigned macOS packaged runtime launch, transparent rendering, built-in pack switching, and stable-state restoration, but it still carries pending picker-link checks and a blocked invalid-package-feedback check because no reviewed desktop picker smoke report has been linked. Signed release closure is archived under `docs/release-evidence/signed-release-closure/2026-06-16T15-00-00Z/` and explicitly marks official desktop, macOS, and Windows claims as `not-ready`; missing signed macOS evidence, missing desktop picker evidence, and missing signed Windows smoke evidence remain real blockers rather than documentation lag.
+
 ## Current Product Shape
 
 | Area | Current State | Evidence |
@@ -59,8 +61,9 @@ The active product gaps are evidence and ecosystem maturity, not a rewrite of th
 1. Run `npm run create-macos-release-evidence-archive` on the macOS release workflow's uploaded evidence artifact for the official signed run and verify passing codesign, notarization, and Gatekeeper evidence through the release archive / signed closure flow.
 2. Produce signed Windows artifacts and real Windows smoke reports before changing Windows wording.
 3. Fill Windows smoke and native picker smoke evidence from launched or packaged app runs, archive each with its summary and archive manifest, and keep the release archive / signed closure flow pointed at those reviewed archive manifests.
-4. Continue toward a compatible live third-party extension source: Phase 105 archived invitation materials after Phase 104 reported `compatible-source-not-found`, Phase 106 typed those invitation summaries, Phase 102 archived a real public adjacent OpenPets candidate as `incompatible-package-model`, and Phase 103 provides the bridge for a future compatible `plugin.json` package to pass Phase 100 intake and enter Phase 99 community-source evidence.
-5. Continue TypeScript migration into other high-drift main-process adapter boundaries after the plugin submission evidence and packaged runtime/report boundaries.
+4. Treat Apple signing credentials, accepted notarization/Gatekeeper output, real Windows signed artifact execution, and human evidence review as Manual-required even when the supporting archive commands already exist locally.
+5. Continue toward a compatible live third-party extension source: Phase 105 archived invitation materials after Phase 104 reported `compatible-source-not-found`, Phase 106 typed those invitation summaries, Phase 102 archived a real public adjacent OpenPets candidate as `incompatible-package-model`, and Phase 103 provides the bridge for a future compatible `plugin.json` package to pass Phase 100 intake and enter Phase 99 community-source evidence.
+6. Continue TypeScript migration into other high-drift main-process adapter boundaries after the plugin submission evidence and packaged runtime/report boundaries.
 
 ## Documentation Map
 

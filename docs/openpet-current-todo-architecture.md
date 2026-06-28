@@ -264,7 +264,9 @@ Owner boundary: release scripts, evidence docs, GitHub Actions.
 Current state:
 
 - Evidence tooling exists for packaged runtime, picker, Windows smoke, macOS signing/notarization/Gatekeeper, release archive, and plugin cleanup.
-- Official desktop/macOS/Windows readiness claims remain conservative.
+- Packaged runtime smoke evidence is archived under `docs/release-evidence/packaged-runtime/2026-06-16T14-52-13-074Z-darwin-arm64/`; it proves an unsigned macOS packaged runtime launch, transparent rendering, built-in pack switching, and stable-state restoration, but still records `plugin-picker-evidence-linked` and `pet-picker-evidence-linked` as pending and `invalid-package-feedback` as blocked until a reviewed desktop picker smoke report is linked.
+- Signed release closure evidence is archived under `docs/release-evidence/signed-release-closure/2026-06-16T15-00-00Z/`; `officialDesktopRelease`, `macos`, and `windows` all remain `not-ready`, with blockers including missing signed macOS evidence, missing desktop picker evidence, unsigned packaged runtime evidence, and missing signed Windows smoke evidence.
+- Official desktop/macOS/Windows readiness claims remain conservative and must stay aligned with those archived `not-ready` facts until new reviewed evidence replaces them.
 
 P1 work:
 

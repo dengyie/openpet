@@ -106,6 +106,37 @@ test('project-context indexes the archived provider smoke evidence and current s
   )
 })
 
+test('project-context indexes archived release-truth evidence and blockers truthfully', () => {
+  const context = readProjectContext()
+  const facts = context.currentFacts.join('\n')
+
+  assert.match(
+    facts,
+    /docs\/release-evidence\/packaged-runtime\/2026-06-16T14-52-13-074Z-darwin-arm64\//i,
+    'project-context.json should point to the archived packaged runtime evidence path'
+  )
+  assert.match(
+    facts,
+    /unsigned macOS packaged runtime launched[\s\S]*plugin-picker-evidence-linked[\s\S]*pending[\s\S]*invalid-package-feedback[\s\S]*blocked/i,
+    'project-context.json should capture the packaged runtime archive truth and remaining picker blockers'
+  )
+  assert.match(
+    facts,
+    /docs\/release-evidence\/signed-release-closure\/2026-06-16T15-00-00Z\//i,
+    'project-context.json should point to the archived signed release closure path'
+  )
+  assert.match(
+    facts,
+    /releaseReady is false[\s\S]*official desktop[\s\S]*macOS[\s\S]*Windows[\s\S]*not-ready[\s\S]*missing signed macOS[\s\S]*missing desktop picker evidence[\s\S]*missing signed Windows smoke evidence/i,
+    'project-context.json should capture the signed release closure not-ready state and core blockers'
+  )
+  assert.match(
+    facts,
+    /Apple signing\/notarization credentials[\s\S]*real Windows signed artifact execution[\s\S]*human evidence review/i,
+    'project-context.json should keep the manual-required release prerequisites explicit'
+  )
+})
+
 test('live docs keep main-line branch metadata aligned with project-context', () => {
   const context = readProjectContext()
   const developmentSummary = fs.readFileSync(path.join(repoRoot, 'docs/development-summary.md'), 'utf-8')
