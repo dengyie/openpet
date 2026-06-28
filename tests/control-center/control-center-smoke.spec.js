@@ -761,14 +761,22 @@ test.describe('Control Center smoke', () => {
 
     await memorySection.getByRole('button', { name: '删除记忆 demo-memory-global-style' }).click()
     await expect(page.locator('.status-line')).toContainText('长期记忆已删除')
-    await expect(memorySection).not.toContainText('User prefers concise Chinese replies during focused work.')
+    await expect(memorySection.getByRole('button', { name: '删除记忆 demo-memory-global-style' })).toHaveCount(0)
     await expect(memorySection).toContainText('Legacy Cat should greet the user softly before focus sessions.')
+    await expect(memorySection).toContainText('已删除记忆')
+    await expect(memorySection).toContainText('User prefers concise Chinese replies during focused work.')
+
+    await memorySection.getByRole('button', { name: '恢复记忆 demo-memory-global-style' }).click()
+    await expect(page.locator('.status-line')).toContainText('长期记忆已恢复')
+    await expect(memorySection).toContainText('User prefers concise Chinese replies during focused work.')
+    await expect(memorySection).toContainText('暂无已删除记忆')
 
     page.once('dialog', (dialog) => dialog.accept())
     await memorySection.getByRole('button', { name: '清空当前宠物记忆' }).click()
     await expect(page.locator('.status-line')).toContainText('当前宠物关系记忆已清空')
-    await expect(memorySection).not.toContainText('Legacy Cat should greet the user softly before focus sessions.')
+    await expect(memorySection.getByRole('button', { name: '删除记忆 demo-memory-legacy-relationship' })).toHaveCount(0)
     await expect(memorySection).toContainText('暂无当前宠物关系记忆')
+    await expect(memorySection.getByRole('button', { name: '恢复记忆 demo-memory-legacy-relationship' })).toHaveCount(1)
 
     await page.getByRole('button', { name: 'Actions' }).click()
     await page.getByRole('button', { name: '启用' }).filter({ hasText: /^启用$/ }).nth(0).click()

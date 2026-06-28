@@ -482,6 +482,7 @@ const createAiTalkService = ({ aiService, aiTalkStore, petPackService, appLogSer
       petPackDisplayName: normalizeString(manifest.displayName) || petPackId,
       globalMemories: aiTalkStore.listMemories({ petPackId, scope: 'global', limit: 0 }),
       petPackMemories: aiTalkStore.listMemories({ petPackId, scope: 'petPack', limit: 0 }),
+      deletedMemories: aiTalkStore.listMemories({ petPackId, status: 'deleted', limit: 0 }),
       recentJobs: listRecentMemoryJobs(petPackId)
     }
   }
@@ -497,6 +498,22 @@ const createAiTalkService = ({ aiService, aiTalkStore, petPackService, appLogSer
         memoryId: normalizeString(memoryId).slice(0, 160),
         scope: deleted?.scope || '',
         petPackId: deleted?.petPackId || ''
+      }
+    })
+    return getMemoryProfile()
+  }
+
+  const restoreMemory = (memoryId) => {
+    if (typeof aiTalkStore.restoreMemory !== 'function') throw new Error('AI talk memory restore is not available')
+    const restored = aiTalkStore.restoreMemory(memoryId)
+    recordLog({
+      level: restored ? 'info' : 'warn',
+      event: restored ? 'ai-talk.memory.restored' : 'ai-talk.memory.restore-missed',
+      message: restored ? 'AI talk memory restored' : 'AI talk memory restore target was not found',
+      details: {
+        memoryId: normalizeString(memoryId).slice(0, 160),
+        scope: restored?.scope || '',
+        petPackId: restored?.petPackId || ''
       }
     })
     return getMemoryProfile()
@@ -765,6 +782,7 @@ const createAiTalkService = ({ aiService, aiTalkStore, petPackService, appLogSer
     compileMemoryContextPrompt,
     clearPetPackMemories,
     deleteMemory,
+    restoreMemory,
     flushMemoryJobs: () => Promise.allSettled(Array.from(pendingMemoryJobs)),
     exportTraces,
     getConversation,

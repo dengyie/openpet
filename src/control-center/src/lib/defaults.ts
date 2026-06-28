@@ -117,6 +117,7 @@ export const defaultAiMemoryProfile = {
   petPackDisplayName: 'Legacy Cat',
   globalMemories: [],
   petPackMemories: [],
+  deletedMemories: [],
   recentJobs: []
 } satisfies AiMemoryProfileViewState
 
@@ -332,6 +333,7 @@ export const cloneAiMemoryProfile = (profile: Partial<AiMemoryProfileViewState> 
   ...(profile || {}),
   globalMemories: (Array.isArray(profile?.globalMemories) ? profile.globalMemories : []).map(cloneAiMemoryItem),
   petPackMemories: (Array.isArray(profile?.petPackMemories) ? profile.petPackMemories : []).map(cloneAiMemoryItem),
+  deletedMemories: (Array.isArray(profile?.deletedMemories) ? profile.deletedMemories : []).map(cloneAiMemoryItem),
   recentJobs: (Array.isArray(profile?.recentJobs) ? profile.recentJobs : []).map((job) => ({
     id: job?.id || '',
     petPackId: job?.petPackId || '',

@@ -28,6 +28,10 @@ const registerChatAiIpc = (context) => {
     if (!context.aiTalkService?.deleteMemory) throw new Error('AI talk memory deletion is not available')
     return context.aiTalkService.deleteMemory(payload?.memoryId || payload)
   })
+  ipcMainService.handle(IPC.AI_RESTORE_MEMORY, (_event, payload) => {
+    if (!context.aiTalkService?.restoreMemory) throw new Error('AI talk memory restore is not available')
+    return context.aiTalkService.restoreMemory(payload?.memoryId || payload)
+  })
   ipcMainService.handle(IPC.AI_CLEAR_PET_PACK_MEMORIES, () => {
     if (!context.aiTalkService?.clearPetPackMemories) throw new Error('AI talk memory clearing is not available')
     return context.aiTalkService.clearPetPackMemories()

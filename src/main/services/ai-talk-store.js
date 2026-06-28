@@ -662,14 +662,15 @@ const createAiTalkStore = ({ storePath, now = () => new Date().toISOString(), le
     return { applied, filtered }
   }
 
-  const listMemories = ({ petPackId, scope = '', limit = 8 } = {}) => {
+  const listMemories = ({ petPackId, scope = '', status = 'active', limit = 8 } = {}) => {
     const packId = typeof petPackId === 'string' ? petPackId.trim() : ''
     const scopeFilter = MEMORY_SCOPES.has(scope) ? scope : ''
+    const statusFilter = MEMORY_STATUSES.has(status) ? status : 'active'
     const max = Math.max(0, Number(limit) || 0)
     const memories = Object.values(state.memories)
       .map(normalizeExistingMemory)
       .filter((memory) => (
-        memory.status === 'active' &&
+        memory.status === statusFilter &&
         (!scopeFilter || memory.scope === scopeFilter) &&
         (memory.scope === 'global' || (memory.scope === 'petPack' && memory.petPackId === packId))
       ))
@@ -715,6 +716,20 @@ const createAiTalkStore = ({ storePath, now = () => new Date().toISOString(), le
     state.memories[id] = normalizeExistingMemory({
       ...state.memories[id],
       status: 'deleted',
+      updatedAt: now()
+    })
+    persist()
+    return clone(state.memories[id])
+  }
+
+  const restoreMemory = (memoryId) => {
+    const id = typeof memoryId === 'string' ? memoryId.trim() : ''
+    if (!id || !state.memories[id]) return null
+    const existing = normalizeExistingMemory(state.memories[id])
+    if (existing.status !== 'deleted') return clone(existing)
+    state.memories[id] = normalizeExistingMemory({
+      ...existing,
+      status: 'active',
       updatedAt: now()
     })
     persist()
@@ -777,6 +792,7 @@ const createAiTalkStore = ({ storePath, now = () => new Date().toISOString(), le
     createMemoryJob,
     clearPetPackMemories,
     deleteMemory,
+    restoreMemory,
     ensureMainConversation,
     exportTraces,
     finishMemoryJob,

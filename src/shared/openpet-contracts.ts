@@ -158,6 +158,7 @@ export interface AiMemoryProfileViewState {
   petPackDisplayName: string
   globalMemories: AiMemoryItemViewState[]
   petPackMemories: AiMemoryItemViewState[]
+  deletedMemories: AiMemoryItemViewState[]
   recentJobs: AiMemoryJobViewState[]
 }
 
@@ -2477,6 +2478,7 @@ export interface ControlCenterApi {
   saveAiPersonaOverride: (override: AiPersonaOverride) => Promise<AiPersonaProfileViewState>
   getAiMemoryProfile: () => Promise<AiMemoryProfileViewState>
   deleteAiMemory: (memoryId: string) => Promise<AiMemoryProfileViewState>
+  restoreAiMemory: (memoryId: string) => Promise<AiMemoryProfileViewState>
   clearAiPetPackMemories: () => Promise<AiMemoryProfileViewState>
   exportAiTraces: () => Promise<string>
   getImageGenerationConfig: () => Promise<ImageGenerationConfigViewState>

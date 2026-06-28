@@ -162,6 +162,29 @@ test('ai talk store soft deletes a memory and excludes it from active lists', ()
   assert.equal(createAiTalkStore({ storePath }).listMemories({ petPackId: 'mochi-cat' }).length, 0)
 })
 
+test('ai talk store restores a soft-deleted memory back to active lists', () => {
+  const storePath = createTempStorePath()
+  const store = createAiTalkStore({ storePath, now: () => '2026-06-20T00:00:00.000Z' })
+  const result = store.applyMemoryOperations({
+    petPackId: 'mochi-cat',
+    conversationId: 'control-center:mochi-cat:main',
+    messageIds: ['m1'],
+    operations: [
+      { operation: 'create', scope: 'global', text: 'User likes quiet morning planning.', tags: ['preference'], confidence: 0.8, importance: 0.7, reason: 'stable preference' }
+    ]
+  })
+  const memoryId = result.applied[0].id
+
+  store.deleteMemory(memoryId)
+  const restored = store.restoreMemory(memoryId)
+
+  assert.equal(restored.id, memoryId)
+  assert.equal(restored.status, 'active')
+  assert.deepEqual(store.listMemories({ petPackId: 'mochi-cat' }).map((memory) => memory.id), [memoryId])
+  assert.equal(store.listMemories({ petPackId: 'mochi-cat', status: 'deleted' }).length, 0)
+  assert.equal(createAiTalkStore({ storePath }).listMemories({ petPackId: 'mochi-cat' }).length, 1)
+})
+
 test('ai talk store clears only active memories for the requested pet pack', () => {
   const store = createAiTalkStore({ storePath: createTempStorePath(), now: () => '2026-06-20T00:00:00.000Z' })
   store.applyMemoryOperations({

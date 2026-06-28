@@ -294,11 +294,13 @@ const createDemoMemoryProfile = (petPacks: PetPacksViewState): AiMemoryProfileVi
   const activePack = petPacks.packs.find((pack) => pack.id === petPacks.activePackId) || petPacks.packs[0]
   const petPackId = activePack?.id || defaultAiMemoryProfile.petPackId
   const activeMemories = demoState.aiMemories.filter((memory) => memory.status === 'active')
+  const deletedMemories = demoState.aiMemories.filter((memory) => memory.status === 'deleted')
   return cloneAiMemoryProfile({
     petPackId,
     petPackDisplayName: activePack?.displayName || petPackId,
     globalMemories: activeMemories.filter((memory) => memory.scope === 'global'),
     petPackMemories: activeMemories.filter((memory) => memory.scope === 'petPack' && memory.petPackId === petPackId),
+    deletedMemories: deletedMemories.filter((memory) => memory.scope === 'global' || memory.petPackId === petPackId),
     recentJobs: demoState.aiMemoryJobs.filter((job) => job.petPackId === petPackId).slice(0, 5)
   })
 }
@@ -1317,6 +1319,15 @@ const demoApi: ControlCenterApi = {
     demoState.aiMemories = demoState.aiMemories.map((memory) => (
       memory.id === memoryId
         ? createDemoMemory({ ...memory, status: 'deleted', updatedAt: new Date().toISOString() })
+        : memory
+    ))
+    writeDemoState()
+    return createDemoMemoryProfile(demoState.petPacks)
+  },
+  restoreAiMemory: async (memoryId) => {
+    demoState.aiMemories = demoState.aiMemories.map((memory) => (
+      memory.id === memoryId
+        ? createDemoMemory({ ...memory, status: 'active', updatedAt: new Date().toISOString() })
         : memory
     ))
     writeDemoState()

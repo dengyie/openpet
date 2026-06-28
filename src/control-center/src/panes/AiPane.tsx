@@ -132,13 +132,17 @@ const MemoryList = ({
   memories,
   emptyText,
   saving,
-  onDeleteMemory
+  onDeleteMemory,
+  onRestoreMemory,
+  restoreMode = false
 }: {
   title: string
   memories: AiMemoryItemViewState[]
   emptyText: string
   saving: boolean
   onDeleteMemory: (memoryId: string) => void | Promise<void>
+  onRestoreMemory: (memoryId: string) => void | Promise<void>
+  restoreMode?: boolean
 }) => (
   <div className="memory-column">
     <div className="memory-column-header">
@@ -168,12 +172,12 @@ const MemoryList = ({
           </div>
           <button
             type="button"
-            className="danger-text"
-            aria-label={`删除记忆 ${memory.id}`}
-            onClick={() => onDeleteMemory(memory.id)}
+            className={restoreMode ? 'ghost' : 'danger-text'}
+            aria-label={`${restoreMode ? '恢复记忆' : '删除记忆'} ${memory.id}`}
+            onClick={() => (restoreMode ? onRestoreMemory(memory.id) : onDeleteMemory(memory.id))}
             disabled={saving}
           >
-            删除
+            {restoreMode ? '恢复' : '删除'}
           </button>
         </article>
       ))}
@@ -257,6 +261,7 @@ export interface AiPaneProps {
   onClearBehaviorDecisions: () => void | Promise<void>
   onRefreshMemoryProfile: () => void | Promise<void>
   onDeleteMemory: (memoryId: string) => void | Promise<void>
+  onRestoreMemory: (memoryId: string) => void | Promise<void>
   onClearPetPackMemories: () => void | Promise<void>
   onExportAiTraces: () => void | Promise<void>
   onOpenDesktopChat: () => void | Promise<void>
@@ -329,6 +334,7 @@ export function AiPane({
   onClearBehaviorDecisions,
   onRefreshMemoryProfile,
   onDeleteMemory,
+  onRestoreMemory,
   onClearPetPackMemories,
   onExportAiTraces,
   onOpenDesktopChat
@@ -581,6 +587,7 @@ export function AiPane({
               emptyText="暂无全局用户记忆"
               saving={saving}
               onDeleteMemory={onDeleteMemory}
+              onRestoreMemory={onRestoreMemory}
             />
             <MemoryList
               title="当前宠物关系记忆"
@@ -588,6 +595,16 @@ export function AiPane({
               emptyText="暂无当前宠物关系记忆"
               saving={saving}
               onDeleteMemory={onDeleteMemory}
+              onRestoreMemory={onRestoreMemory}
+            />
+            <MemoryList
+              title="已删除记忆"
+              memories={memoryProfile.deletedMemories}
+              emptyText="暂无已删除记忆"
+              saving={saving}
+              onDeleteMemory={onDeleteMemory}
+              onRestoreMemory={onRestoreMemory}
+              restoreMode
             />
           </div>
 

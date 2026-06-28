@@ -72,6 +72,7 @@ const IPC = Object.freeze({
   AI_SAVE_PERSONA_OVERRIDE: 'ai:save-persona-override',
   AI_GET_MEMORY_PROFILE: 'ai:get-memory-profile',
   AI_DELETE_MEMORY: 'ai:delete-memory',
+  AI_RESTORE_MEMORY: 'ai:restore-memory',
   AI_CLEAR_PET_PACK_MEMORIES: 'ai:clear-pet-pack-memories',
   AI_EXPORT_TRACES: 'ai:export-traces',
   IMAGE_GENERATION_GET_CONFIG: 'image-generation:get-config',

@@ -649,6 +649,21 @@ export function useAiPane(activeTab = 'ai') {
     }
   }
 
+  const onRestoreMemory = async (memoryId: string) => {
+    if (!memoryId) return
+    setSaving(true)
+    setStatus('恢复长期记忆中')
+    try {
+      const profile = cloneAiMemoryProfile(await api.restoreAiMemory(memoryId))
+      setMemoryProfile(profile)
+      setStatus('长期记忆已恢复')
+    } catch (error) {
+      setStatus(messageFromError(error, '长期记忆恢复失败'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const onClearPetPackMemories = async () => {
     if (!window.confirm(`清空 ${memoryProfile.petPackDisplayName} 的宠物关系记忆？全局用户记忆不会被清空。`)) return
     setSaving(true)
@@ -785,6 +800,7 @@ export function useAiPane(activeTab = 'ai') {
     onRefreshMemoryProfile,
     onExportAiTraces,
     onDeleteMemory,
+    onRestoreMemory,
     onClearPetPackMemories,
     onSendChat,
     onOpenDesktopChat

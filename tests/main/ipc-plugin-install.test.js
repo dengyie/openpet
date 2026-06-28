@@ -303,6 +303,7 @@ test('ai memory management IPC delegates to ai talk service when available', asy
     petPackDisplayName: 'Legacy Cat',
     globalMemories: [{ id: 'memory-global', scope: 'global', petPackId: '', text: 'User likes focus.', tags: [], confidence: 0.8, importance: 0.7, sourceConversationId: '', sourceMessageIds: [], createdAt: '', updatedAt: '', lastUsedAt: '', lastEvidenceAt: '', useCount: 0, status: 'active', supersedes: '', reason: '' }],
     petPackMemories: [{ id: 'memory-pack', scope: 'petPack', petPackId: 'legacy-cat', text: 'Legacy likes greetings.', tags: [], confidence: 0.7, importance: 0.6, sourceConversationId: '', sourceMessageIds: [], createdAt: '', updatedAt: '', lastUsedAt: '', lastEvidenceAt: '', useCount: 0, status: 'active', supersedes: '', reason: '' }],
+    deletedMemories: [{ id: 'memory-deleted', scope: 'global', petPackId: '', text: 'Archived note.', tags: [], confidence: 0.5, importance: 0.5, sourceConversationId: '', sourceMessageIds: [], createdAt: '', updatedAt: '', lastUsedAt: '', lastEvidenceAt: '', useCount: 0, status: 'deleted', supersedes: '', reason: '' }],
     recentJobs: []
   }
 
@@ -329,6 +330,10 @@ test('ai memory management IPC delegates to ai talk service when available', asy
         calls.push(['deleteMemory', memoryId])
         return { ...profile, globalMemories: [] }
       },
+      restoreMemory: (memoryId) => {
+        calls.push(['restoreMemory', memoryId])
+        return { ...profile, deletedMemories: [], globalMemories: [profile.deletedMemories[0], ...profile.globalMemories] }
+      },
       clearPetPackMemories: () => {
         calls.push(['clearPetPackMemories'])
         return { ...profile, petPackMemories: [] }
@@ -339,15 +344,20 @@ test('ai memory management IPC delegates to ai talk service when available', asy
 
   const loaded = await ipcMain.handlers.get(IPC.AI_GET_MEMORY_PROFILE)()
   const afterDelete = await ipcMain.handlers.get(IPC.AI_DELETE_MEMORY)(null, { memoryId: 'memory-global' })
+  const afterRestore = await ipcMain.handlers.get(IPC.AI_RESTORE_MEMORY)(null, { memoryId: 'memory-deleted' })
   const afterClear = await ipcMain.handlers.get(IPC.AI_CLEAR_PET_PACK_MEMORIES)()
 
   assert.equal(loaded.petPackId, 'legacy-cat')
   assert.equal(loaded.globalMemories[0].text, 'User likes focus.')
+  assert.equal(loaded.deletedMemories[0].text, 'Archived note.')
   assert.deepEqual(afterDelete.globalMemories, [])
+  assert.deepEqual(afterRestore.deletedMemories, [])
+  assert.equal(afterRestore.globalMemories[0].id, 'memory-deleted')
   assert.deepEqual(afterClear.petPackMemories, [])
   assert.deepEqual(calls, [
     ['getMemoryProfile'],
     ['deleteMemory', 'memory-global'],
+    ['restoreMemory', 'memory-deleted'],
     ['clearPetPackMemories']
   ])
 })
