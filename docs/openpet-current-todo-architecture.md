@@ -65,6 +65,7 @@ Current P0 status: no known startup/build blocker in this TODO pass. Creator Stu
 - Creator Studio dashboard service only exposes local task/run/review routes, returns explicit JSON `404` for unknown `/api/*` paths, and cannot invoke command-scoped host bridge routes outside explicit command runs.
 - Creator Studio generation remains host-owned at the provider boundary; plugin-managed provider credentials are unsupported in the current trust model.
 - Plugin list and plugin mutation payloads now normalize renderer-facing plugin view state through the main-process Control Center adapter: config schema fields are limited to UI-supported keys, storage stats are numeric and stable, signature status has explicit defaults, and top-level internal service fields are not forwarded to the renderer.
+- Action frame import failure payloads now normalize `inspectionResult` through the main-process Control Center adapter: canceled/completed shapes are explicit, nested inspection/frame fields are numeric/boolean/string-stable, and private selection/service-only fields are not forwarded to the renderer.
 
 ## P1 Architecture TODOs
 
@@ -311,7 +312,7 @@ Choose one of these when starting the next development milestone:
 1. TypeScript Adapter Boundary Migration
    - User value: high-drift main-process payloads stay safer as Control Center, AI settings, Creator Studio review snapshots, and evidence tooling keep growing.
    - Main files: `src/main/control-center-adapters.js`, `src/shared/openpet-contracts.ts`, `tests/main/control-center-adapters.test.js`, representative contract fixtures.
-   - Scope rule: migrate or type-check one adapter boundary at a time; do not rewrite the main process or change runtime behavior. The plugin view config/storage/signature slice is complete, so choose a different high-drift payload next.
+   - Scope rule: migrate or type-check one adapter boundary at a time; do not rewrite the main process or change runtime behavior. The plugin view config/storage/signature slice and action-frame `inspectionResult` slice are complete, so choose a different high-drift payload next.
 
 2. Release Evidence Closure
    - User value: release readiness claims can be upgraded only when real evidence exists.

@@ -379,6 +379,70 @@ const createPetPackMutationResult = (result, petPacks, animations) => ({
 })
 
 /**
+ * @param {unknown} frame
+ * @returns {import('../shared/openpet-contracts').ActionFrameInfo | null}
+ */
+const createActionFrameInfoView = (frame) => {
+  const input = toRecord(frame)
+  if (typeof input.fileName !== 'string' || !input.fileName) return null
+  return {
+    fileName: input.fileName,
+    width: toNonNegativeInteger(input.width),
+    height: toNonNegativeInteger(input.height),
+    hasAlpha: Boolean(input.hasAlpha)
+  }
+}
+
+/**
+ * @param {import('../shared/openpet-contracts').ActionFrameInfo | null} frame
+ * @returns {frame is import('../shared/openpet-contracts').ActionFrameInfo}
+ */
+const isActionFrameInfoView = (frame) => Boolean(frame)
+
+/**
+ * @param {unknown} inspection
+ * @returns {import('../shared/openpet-contracts').ActionFrameInspection}
+ */
+const createActionFrameInspectionView = (inspection = {}) => {
+  const input = toRecord(inspection)
+  return {
+    valid: Boolean(input.valid),
+    frameCount: toNonNegativeInteger(input.frameCount),
+    maxWidth: toNonNegativeInteger(input.maxWidth),
+    maxHeight: toNonNegativeInteger(input.maxHeight),
+    frames: Array.isArray(input.frames)
+      ? input.frames
+        .map((frame) => createActionFrameInfoView(frame))
+        .filter(isActionFrameInfoView)
+      : [],
+    skippedFiles: Array.isArray(input.skippedFiles) ? input.skippedFiles.filter((item) => typeof item === 'string' && item) : [],
+    errors: Array.isArray(input.errors) ? input.errors.filter((item) => typeof item === 'string' && item) : [],
+    warnings: Array.isArray(input.warnings) ? input.warnings.filter((item) => typeof item === 'string' && item) : []
+  }
+}
+
+/**
+ * @param {unknown} inspectionResult
+ * @returns {import('../shared/openpet-contracts').ActionFrameInspectionResult}
+ */
+const createActionFrameInspectionResultView = (inspectionResult = {}) => {
+  const input = toRecord(inspectionResult)
+  if (Boolean(input.canceled)) {
+    return {
+      canceled: true,
+      ...(typeof input.selectionId === 'string' && input.selectionId ? { selectionId: input.selectionId } : {})
+    }
+  }
+  return {
+    canceled: false,
+    selectionId: typeof input.selectionId === 'string' ? input.selectionId : '',
+    folderName: typeof input.folderName === 'string' ? input.folderName : '',
+    actionId: typeof input.actionId === 'string' ? input.actionId : '',
+    inspection: createActionFrameInspectionView(input.inspection)
+  }
+}
+
+/**
  * @param {Partial<ActionFrameImportResult>} result
  * @param {ActionsConfigViewState | undefined} [animations]
  * @returns {ActionFrameImportResult}
@@ -388,7 +452,7 @@ const createActionFrameImportResult = (result, animations) => ({
   ...(result.canceled !== undefined ? { canceled: Boolean(result.canceled) } : {}),
   ...(result.result?.importedAction !== undefined ? { result: { importedAction: result.result.importedAction } } : {}),
   ...(animations !== undefined ? { animations } : {}),
-  ...(result.inspectionResult !== undefined ? { inspectionResult: result.inspectionResult } : {})
+  ...(result.inspectionResult !== undefined ? { inspectionResult: createActionFrameInspectionResultView(result.inspectionResult) } : {})
 })
 
 /**

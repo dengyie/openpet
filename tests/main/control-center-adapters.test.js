@@ -343,20 +343,25 @@ test('action adapters package import and mutation results without leaking servic
   }
   const importedAction = animations.actions[0]
   const inspectionResult = {
-    canceled: false,
+    canceled: 0,
     selectionId: 'selection-wave',
     folderName: 'wave',
     actionId: 'wave',
     inspection: {
-      valid: false,
-      frameCount: 0,
-      maxWidth: 0,
-      maxHeight: 0,
-      frames: [],
-      skippedFiles: [],
-      errors: ['missing frames'],
-      warnings: []
-    }
+      valid: '',
+      frameCount: '0',
+      maxWidth: '64',
+      maxHeight: '32',
+      frames: [
+        { fileName: '01_no_bg.png', width: '64', height: '32', hasAlpha: 1, rawPath: '/tmp/private.png' },
+        { fileName: '', width: 'bad', height: 'bad', hasAlpha: false }
+      ],
+      skippedFiles: ['Thumbs.db', 42],
+      errors: ['missing frames', null],
+      warnings: ['rename files', false],
+      internal: 'service-only'
+    },
+    privateSelectionPath: '/Users/mango/private'
   }
 
   assert.deepEqual(createActionFrameImportResult({
@@ -372,7 +377,36 @@ test('action adapters package import and mutation results without leaking servic
 
   assert.deepEqual(createActionFrameImportResult({ ok: false, inspectionResult }), {
     ok: false,
-    inspectionResult
+    inspectionResult: {
+      canceled: false,
+      selectionId: 'selection-wave',
+      folderName: 'wave',
+      actionId: 'wave',
+      inspection: {
+        valid: false,
+        frameCount: 0,
+        maxWidth: 64,
+        maxHeight: 32,
+        frames: [
+          { fileName: '01_no_bg.png', width: 64, height: 32, hasAlpha: true }
+        ],
+        skippedFiles: ['Thumbs.db'],
+        errors: ['missing frames'],
+        warnings: ['rename files']
+      }
+    }
+  })
+  assert.deepEqual(createActionFrameImportResult({
+    ok: false,
+    inspectionResult: {
+      canceled: true,
+      selectionId: 42,
+      folderName: 'ignore-me',
+      inspection: { valid: true }
+    }
+  }), {
+    ok: false,
+    inspectionResult: { canceled: true }
   })
   assert.deepEqual(createActionsMutationResult(animations), { animations })
   assert.deepEqual(createActionsMutationResult(animations, {

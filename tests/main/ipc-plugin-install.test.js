@@ -675,13 +675,19 @@ test('action mutation handlers return contract-shaped results and refreshed anim
           folderName: path.basename(selectedSourceDir),
           inspection: {
             valid: actionId !== 'broken',
-            frameCount: actionId === 'broken' ? 0 : 8,
-            maxWidth: 32,
-            maxHeight: 32,
-            frames: [],
-            skippedFiles: [],
-            errors: actionId === 'broken' ? ['missing frames'] : [],
-            warnings: []
+            frameCount: actionId === 'broken' ? '0' : 8,
+            maxWidth: '32',
+            maxHeight: '32',
+            frames: actionId === 'broken'
+              ? [
+                  { fileName: '01_no_bg.png', width: '32', height: '32', hasAlpha: 1, privatePath: '/tmp/private.png' },
+                  { fileName: '', width: 'bad', height: 'bad', hasAlpha: false }
+                ]
+              : [],
+            skippedFiles: actionId === 'broken' ? ['Thumbs.db', 42] : [],
+            errors: actionId === 'broken' ? ['missing frames', null] : [],
+            warnings: actionId === 'broken' ? ['rename files', false] : [],
+            internal: 'service-only'
           }
         }
       },
@@ -824,6 +830,24 @@ test('action mutation handlers return contract-shaped results and refreshed anim
   })
   assert.equal(brokenImportResult.ok, false)
   assert.equal(brokenImportResult.inspectionResult.inspection.valid, false)
+  assert.deepEqual(brokenImportResult.inspectionResult, {
+    canceled: false,
+    selectionId: brokenImportResult.inspectionResult.selectionId,
+    folderName: path.basename(sourceDir),
+    actionId: 'broken',
+    inspection: {
+      valid: false,
+      frameCount: 0,
+      maxWidth: 32,
+      maxHeight: 32,
+      frames: [
+        { fileName: '01_no_bg.png', width: 32, height: 32, hasAlpha: true }
+      ],
+      skippedFiles: ['Thumbs.db'],
+      errors: ['missing frames'],
+      warnings: ['rename files']
+    }
+  })
   assert.deepEqual(saveResult, { animations })
   assert.deepEqual(triggerResult, {
     animations,
