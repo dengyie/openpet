@@ -38,6 +38,7 @@ import type {
   PluginCommandRunResultViewState,
   PluginMaintainerApprovalRecord,
   PluginPackageReviewViewState,
+  PluginViewState,
   PluginRealWorldSubmissionRehearsalSummary,
   PluginRemoteSourceSubmissionRehearsalSummary,
   PluginSubmissionBundleSummary,
@@ -164,6 +165,56 @@ const pluginCommandRunFixture = {
     message: 'Command completed'
   }
 } satisfies PluginCommandRunResultViewState
+
+const pluginViewFixture = {
+  id: 'openpet.fixture.plugin',
+  name: 'Fixture Plugin',
+  version: '1.0.0',
+  profile: 'creator-tools',
+  source: 'local',
+  enabled: true,
+  runnable: true,
+  permissions: ['pet:say'],
+  commands: [{ id: 'run', title: 'Run' }],
+  entries: {
+    setup: [],
+    commands: [{ id: 'run', title: 'Run', command: 'node ./index.js', cwd: '.' }],
+    services: [],
+    dashboards: []
+  },
+  configSchema: {
+    title: 'Fixture Config',
+    description: 'Renderer-safe plugin settings.',
+    properties: [
+      {
+        key: 'tone',
+        title: 'Tone',
+        description: 'Reply tone',
+        type: 'string',
+        enum: ['soft', 'direct'],
+        required: true
+      },
+      {
+        key: 'enabled',
+        type: 'boolean'
+      }
+    ]
+  },
+  config: { tone: 'soft', enabled: true },
+  storage: { keyCount: 2, byteSize: 128, valid: true },
+  signatureStatus: {
+    status: 'unsigned',
+    label: 'Unsigned plugin',
+    signer: '',
+    algorithm: '',
+    verified: false,
+    errors: []
+  },
+  blockStatus: {
+    blocked: false,
+    reasons: []
+  }
+} satisfies PluginViewState
 
 const creatorActionsReadFixture = {
   ok: true,

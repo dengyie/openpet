@@ -536,7 +536,14 @@ const createDemoManualPlugin = (): PluginViewState => ({
   configSchema: { properties: [] },
   config: {},
   storage: { keyCount: 0, byteSize: 2, valid: true },
-  signatureStatus: { label: demoManualPluginReview.signature.label }
+  signatureStatus: {
+    status: demoManualPluginReview.signature.status || '',
+    label: demoManualPluginReview.signature.label,
+    signer: demoManualPluginReview.signature.signer || '',
+    algorithm: demoManualPluginReview.signature.algorithm || '',
+    verified: Boolean(demoManualPluginReview.signature.verified),
+    errors: demoManualPluginReview.signature.errors || []
+  }
 })
 
 const createDemoPluginLog = (pluginId: string, message: string, commandId = '') => ({

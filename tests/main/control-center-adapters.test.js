@@ -164,7 +164,145 @@ test('createPluginMutationResult packages mutation metadata with refreshed plugi
     installMode: 'update',
     disabled: true,
     storageRemoved: false,
-    plugins
+    plugins: [{
+      id: 'openpet.demo',
+      name: 'Demo',
+      version: '1.0.0',
+      source: 'local',
+      enabled: false,
+      runnable: true,
+      permissions: ['pet:say'],
+      commands: [],
+      entries: {
+        setup: [],
+        commands: [],
+        services: [],
+        dashboards: []
+      },
+      configSchema: { properties: [] },
+      config: {},
+      storage: { keyCount: 0, byteSize: 0 },
+      signatureStatus: {
+        status: '',
+        label: 'Unsigned',
+        signer: '',
+        algorithm: '',
+        verified: false,
+        errors: []
+      }
+    }]
+  })
+})
+
+test('createPluginMutationResult normalizes plugin view payloads for Control Center', () => {
+  assert.deepEqual(createPluginMutationResult({ ok: true }, [{
+    id: 'openpet.demo',
+    name: 'Demo',
+    version: '1.0.0',
+    profile: 'creator-tools',
+    source: 'local',
+    enabled: 1,
+    runnable: '',
+    permissions: ['pet:say', 42],
+    commands: [{ id: 'run', title: 'Run' }],
+    entries: {
+      setup: [],
+      commands: [],
+      services: [],
+      dashboards: []
+    },
+    configSchema: {
+      title: 'Demo Config',
+      description: 'Safe renderer fields only.',
+      properties: [
+        {
+          key: 'tone',
+          title: 'Tone',
+          description: 'Voice tone',
+          type: 'string',
+          enum: ['soft', 'direct'],
+          required: 1,
+          secretPath: '/Users/mango/private/key'
+        },
+        {
+          key: 'retries',
+          type: 'integer'
+        },
+        {
+          title: 'missing key'
+        }
+      ],
+      internal: 'ignore-me'
+    },
+    config: { tone: 'soft' },
+    storage: {
+      keyCount: '2',
+      byteSize: '4096',
+      valid: 1,
+      rawPath: '/Users/mango/Library/Application Support/OpenPet/plugins/openpet.demo/storage.json'
+    },
+    signatureStatus: {
+      status: 'hash-verified',
+      label: 'Verified package hash',
+      signer: 'OpenPet Maintainer',
+      algorithm: 'sha256',
+      verified: 1,
+      errors: [''],
+      certificatePath: '/Users/mango/private/cert.pem'
+    },
+    blockStatus: { blocked: false, reasons: [], internal: 'ignore-me' },
+    privateRuntime: { pid: 1234 }
+  }]), {
+    ok: true,
+    plugins: [{
+      id: 'openpet.demo',
+      name: 'Demo',
+      version: '1.0.0',
+      profile: 'creator-tools',
+      source: 'local',
+      enabled: true,
+      runnable: false,
+      permissions: ['pet:say'],
+      commands: [{ id: 'run', title: 'Run' }],
+      entries: {
+        setup: [],
+        commands: [],
+        services: [],
+        dashboards: []
+      },
+      configSchema: {
+        title: 'Demo Config',
+        description: 'Safe renderer fields only.',
+        properties: [
+          {
+            key: 'tone',
+            title: 'Tone',
+            description: 'Voice tone',
+            type: 'string',
+            enum: ['soft', 'direct'],
+            required: true
+          },
+          {
+            key: 'retries'
+          }
+        ]
+      },
+      config: { tone: 'soft' },
+      storage: {
+        keyCount: 2,
+        byteSize: 4096,
+        valid: true
+      },
+      signatureStatus: {
+        status: 'hash-verified',
+        label: 'Verified package hash',
+        signer: 'OpenPet Maintainer',
+        algorithm: 'sha256',
+        verified: true,
+        errors: []
+      },
+      blockStatus: { blocked: false, reasons: [] }
+    }]
   })
 })
 

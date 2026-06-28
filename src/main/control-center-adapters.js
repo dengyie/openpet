@@ -9,6 +9,8 @@
  * @typedef {import('../shared/openpet-contracts').ServiceLogEntry} ServiceLogEntry
  * @typedef {import('../shared/openpet-contracts').ServiceStatusViewState} ServiceStatusViewState
  * @typedef {import('../shared/openpet-contracts').PluginMutationResult} PluginMutationResult
+ * @typedef {import('../shared/openpet-contracts').PluginConfigFieldViewState} PluginConfigFieldViewState
+ * @typedef {import('../shared/openpet-contracts').PluginConfigSchemaViewState} PluginConfigSchemaViewState
  * @typedef {import('../shared/openpet-contracts').PluginViewState} PluginViewState
  * @typedef {import('../shared/openpet-contracts').ActionFrameImportResult} ActionFrameImportResult
  * @typedef {import('../shared/openpet-contracts').ActionsMutationResult} ActionsMutationResult
@@ -28,6 +30,49 @@ const TRIGGER_PROPOSAL_PREVIEW_CODES = new Set(['will_apply', 'no_binding_requir
 const TRIGGER_RULE_TYPES = new Set(['random', 'state', 'event'])
 const TRIGGER_RULE_STATUSES = new Set(['active', 'disabled'])
 const MAX_TRIGGER_RULE_SPEC_TEXT_LENGTH = 240
+const PLUGIN_PROFILES = new Set(['runtime', 'creator-tools', 'hybrid'])
+const PLUGIN_CONFIG_FIELD_TYPES = new Set(['string', 'number', 'boolean'])
+
+/**
+ * @param {unknown} value
+ * @returns {Record<string, any>}
+ */
+const toRecord = (value) => (
+  value && typeof value === 'object' && !Array.isArray(value)
+    ? /** @type {Record<string, any>} */ (value)
+    : {}
+)
+
+/**
+ * @param {unknown} value
+ * @returns {number}
+ */
+const toNonNegativeInteger = (value) => {
+  const numberValue = Number(value)
+  return Number.isFinite(numberValue) ? Math.max(0, Math.round(numberValue)) : 0
+}
+
+/**
+ * @param {unknown} value
+ * @param {number} [depth]
+ * @returns {value is import('../shared/openpet-contracts').JsonValue}
+ */
+const isJsonValue = (value, depth = 0) => {
+  if (value == null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return true
+  if (depth > 4 || typeof value !== 'object') return false
+  if (Array.isArray(value)) return value.every((item) => isJsonValue(item, depth + 1))
+  return Object.values(value).every((item) => isJsonValue(item, depth + 1))
+}
+
+/**
+ * @param {unknown} value
+ * @returns {import('../shared/openpet-contracts').JsonValue[]}
+ */
+const toJsonValueArray = (value) => (
+  Array.isArray(value)
+    ? value.filter(isJsonValue)
+    : []
+)
 
 /**
  * @param {unknown} value
@@ -189,8 +234,126 @@ const createCatalogBlocklistResult = (catalog, blocklist) => ({
 })
 
 /**
+ * @param {unknown} field
+ * @returns {PluginConfigFieldViewState | null}
+ */
+const createPluginConfigFieldView = (field) => {
+  const input = toRecord(field)
+  if (typeof input.key !== 'string' || !input.key) return null
+  return {
+    key: input.key,
+    ...(typeof input.title === 'string' ? { title: input.title } : {}),
+    ...(typeof input.description === 'string' ? { description: input.description } : {}),
+    ...(typeof input.type === 'string' && PLUGIN_CONFIG_FIELD_TYPES.has(input.type)
+      ? { type: /** @type {'string' | 'number' | 'boolean'} */ (input.type) }
+      : {}),
+    ...(Array.isArray(input.enum) ? { enum: toJsonValueArray(input.enum) } : {}),
+    ...(input.required !== undefined ? { required: Boolean(input.required) } : {})
+  }
+}
+
+/**
+ * @param {PluginConfigFieldViewState | null} field
+ * @returns {field is PluginConfigFieldViewState}
+ */
+const isPluginConfigFieldView = (field) => Boolean(field)
+
+/**
+ * @param {unknown} schema
+ * @returns {PluginConfigSchemaViewState}
+ */
+const createPluginConfigSchemaView = (schema = {}) => {
+  const input = toRecord(schema)
+  return {
+    ...(typeof input.title === 'string' ? { title: input.title } : {}),
+    ...(typeof input.description === 'string' ? { description: input.description } : {}),
+    properties: Array.isArray(input.properties)
+      ? input.properties
+        .map((field) => createPluginConfigFieldView(field))
+        .filter(isPluginConfigFieldView)
+      : []
+  }
+}
+
+/**
+ * @param {unknown} storage
+ * @returns {import('../shared/openpet-contracts').PluginStorageViewState}
+ */
+const createPluginStorageView = (storage = {}) => {
+  const input = toRecord(storage)
+  return {
+    keyCount: toNonNegativeInteger(input.keyCount),
+    byteSize: toNonNegativeInteger(input.byteSize),
+    ...(input.valid !== undefined ? { valid: Boolean(input.valid) } : {})
+  }
+}
+
+/**
+ * @param {unknown} signatureStatus
+ * @returns {import('../shared/openpet-contracts').PluginSignatureStatusViewState}
+ */
+const createPluginSignatureStatusView = (signatureStatus = {}) => {
+  const input = toRecord(signatureStatus)
+  const label = typeof input.label === 'string' && input.label ? input.label : 'Signature unknown'
+  return {
+    status: typeof input.status === 'string' ? input.status : '',
+    label,
+    signer: typeof input.signer === 'string' ? input.signer : '',
+    algorithm: typeof input.algorithm === 'string' ? input.algorithm : '',
+    verified: Boolean(input.verified),
+    errors: Array.isArray(input.errors) ? input.errors.filter((error) => typeof error === 'string' && error) : []
+  }
+}
+
+/**
+ * @param {unknown} blockStatus
+ * @returns {import('../shared/openpet-contracts').CatalogReviewState | undefined}
+ */
+const createPluginBlockStatusView = (blockStatus) => {
+  if (!blockStatus || typeof blockStatus !== 'object' || Array.isArray(blockStatus)) return undefined
+  const input = /** @type {Record<string, any>} */ (blockStatus)
+  return {
+    blocked: Boolean(input.blocked),
+    reasons: Array.isArray(input.reasons) ? input.reasons.filter((reason) => typeof reason === 'string') : []
+  }
+}
+
+/**
+ * @param {unknown} plugin
+ * @returns {PluginViewState}
+ */
+const createPluginViewState = (plugin = {}) => {
+  const input = toRecord(plugin)
+  const blockStatus = createPluginBlockStatusView(input.blockStatus)
+  return {
+    id: typeof input.id === 'string' ? input.id : '',
+    name: typeof input.name === 'string' ? input.name : '',
+    version: typeof input.version === 'string' ? input.version : '',
+    ...(typeof input.profile === 'string' && PLUGIN_PROFILES.has(input.profile)
+      ? { profile: /** @type {'runtime' | 'creator-tools' | 'hybrid'} */ (input.profile) }
+      : {}),
+    source: typeof input.source === 'string' ? input.source : '',
+    enabled: Boolean(input.enabled),
+    runnable: Boolean(input.runnable),
+    permissions: Array.isArray(input.permissions) ? input.permissions.filter((permission) => typeof permission === 'string') : [],
+    commands: Array.isArray(input.commands) ? input.commands : [],
+    entries: {
+      setup: Array.isArray(input.entries?.setup) ? input.entries.setup : [],
+      commands: Array.isArray(input.entries?.commands) ? input.entries.commands : [],
+      services: Array.isArray(input.entries?.services) ? input.entries.services : [],
+      dashboards: Array.isArray(input.entries?.dashboards) ? input.entries.dashboards : []
+    },
+    configSchema: createPluginConfigSchemaView(input.configSchema),
+    config: toRecord(input.config),
+    storage: createPluginStorageView(input.storage),
+    signatureStatus: createPluginSignatureStatusView(input.signatureStatus),
+    ...(blockStatus !== undefined ? { blockStatus } : {})
+  }
+}
+
+/**
  * @param {Partial<PluginMutationResult>} result
- * @param {PluginViewState[]} plugins
+ * @param {unknown[]} plugins
  * @returns {PluginMutationResult}
  */
 const createPluginMutationResult = (result, plugins) => ({
@@ -199,7 +362,7 @@ const createPluginMutationResult = (result, plugins) => ({
   ...(result.installMode !== undefined ? { installMode: result.installMode } : {}),
   ...(result.disabled !== undefined ? { disabled: result.disabled } : {}),
   ...(result.storageRemoved !== undefined ? { storageRemoved: result.storageRemoved } : {}),
-  plugins
+  plugins: Array.isArray(plugins) ? plugins.map((plugin) => createPluginViewState(plugin)) : []
 })
 
 /**

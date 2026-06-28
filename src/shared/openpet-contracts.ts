@@ -1296,6 +1296,30 @@ export interface PluginStorageViewState {
   valid?: boolean
 }
 
+export interface PluginConfigFieldViewState {
+  key: string
+  title?: string
+  description?: string
+  type?: 'string' | 'number' | 'boolean'
+  enum?: JsonValue[]
+  required?: boolean
+}
+
+export interface PluginConfigSchemaViewState {
+  title?: string
+  description?: string
+  properties: PluginConfigFieldViewState[]
+}
+
+export interface PluginSignatureStatusViewState {
+  status: string
+  label: string
+  signer: string
+  algorithm: string
+  verified: boolean
+  errors: string[]
+}
+
 export interface PluginViewState {
   id: string
   name: string
@@ -1307,16 +1331,10 @@ export interface PluginViewState {
   permissions: string[]
   commands: PluginCommandViewState[]
   entries: PluginEntriesViewState
-  configSchema: {
-    title?: string
-    description?: string
-    properties: unknown[]
-  }
+  configSchema: PluginConfigSchemaViewState
   config: JsonObject
   storage: PluginStorageViewState
-  signatureStatus: {
-    label: string
-  }
+  signatureStatus: PluginSignatureStatusViewState
   blockStatus?: CatalogReviewState
 }
 

@@ -982,6 +982,33 @@ test('catalog blocklist handlers return catalog plus updated blocklist view resu
 test('plugin mutation handlers return plugin mutation result with refreshed plugin list', async () => {
   const ipcMain = createIpcMainStub()
   const plugins = [{ id: 'focus-timer', enabled: false }]
+  const normalizedPlugins = [{
+    id: 'focus-timer',
+    name: '',
+    version: '',
+    source: '',
+    enabled: false,
+    runnable: false,
+    permissions: [],
+    commands: [],
+    entries: {
+      setup: [],
+      commands: [],
+      services: [],
+      dashboards: []
+    },
+    configSchema: { properties: [] },
+    config: {},
+    storage: { keyCount: 0, byteSize: 0 },
+    signatureStatus: {
+      status: '',
+      label: 'Signature unknown',
+      signer: '',
+      algorithm: '',
+      verified: false,
+      errors: []
+    }
+  }]
   const calls = []
 
   registerIpcHandlers({
@@ -1019,20 +1046,20 @@ test('plugin mutation handlers return plugin mutation result with refreshed plug
     pluginId: 'focus-timer',
     installMode: 'install',
     disabled: true,
-    plugins
+    plugins: normalizedPlugins
   })
   assert.deepEqual(updateResult, {
     ok: true,
     pluginId: 'focus-timer',
     installMode: 'update',
     disabled: true,
-    plugins
+    plugins: normalizedPlugins
   })
   assert.deepEqual(uninstallResult, {
     ok: true,
     pluginId: 'focus-timer',
     storageRemoved: true,
-    plugins
+    plugins: normalizedPlugins
   })
   assert.deepEqual(calls, [
     ['install', 'selection-install'],
@@ -1720,7 +1747,33 @@ test('plugins:inspect-package and plugins:install handle a selected .openpet-plu
   assert.equal(installResult.ok, true)
   assert.equal(installResult.pluginId, 'focus-timer')
   assert.equal(installResult.disabled, true)
-  assert.deepEqual(installResult.plugins, [{ id: 'focus-timer', enabled: false }])
+  assert.deepEqual(installResult.plugins, [{
+    id: 'focus-timer',
+    name: '',
+    version: '',
+    source: '',
+    enabled: false,
+    runnable: false,
+    permissions: [],
+    commands: [],
+    entries: {
+      setup: [],
+      commands: [],
+      services: [],
+      dashboards: []
+    },
+    configSchema: { properties: [] },
+    config: {},
+    storage: { keyCount: 0, byteSize: 0 },
+    signatureStatus: {
+      status: '',
+      label: 'Signature unknown',
+      signer: '',
+      algorithm: '',
+      verified: false,
+      errors: []
+    }
+  }])
   assert.equal(fs.existsSync(path.join(pluginDir, 'focus-timer', 'plugin.json')), true)
   assert.equal(settingsService.get().plugins.enabled['focus-timer'], false)
   assert.equal(settingsService.get().plugins.installed['focus-timer'].signatureStatus, 'hash-verified')
