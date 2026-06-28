@@ -19,7 +19,7 @@ This is not a promise to implement every item in one milestone. It is a map for 
 - P3: longer-term platform direction.
 - Manual-required: needs real provider accounts, signed artifacts, notarization, Windows machines, production credentials, or human review.
 
-Current P0 status: no known startup/build blocker in this TODO pass. The highest-risk current gaps are release evidence closure and remaining trigger-rule host schema work, not the trigger proposal inbox surface itself.
+Current P0 status: no known startup/build blocker in this TODO pass. The highest-risk current gaps are release evidence closure and remaining non-manual product work in AI Talk relevance / bubble UX, not the trigger proposal inbox surface itself.
 
 ## Current Code Architecture
 
@@ -48,6 +48,8 @@ Current P0 status: no known startup/build blocker in this TODO pass. The highest
 - AI Talk segmented bubble playback now preserves visible reply order: the first segment shows immediately, later segments are scheduled by bubble TTL, and the full assistant reply still stays in transcript/history.
 - AI Talk main-conversation reads no longer rewrite or persist unchanged timestamps when the default conversation already exists.
 - AI pane now exposes AI Talk diagnostics that were previously host-only: memory cards show reason and use-count context, recent memory jobs are listed instead of collapsed into one summary line, and users can export redacted AI Talk traces directly from Control Center.
+- Pet Bubble Chat popup now exists as a separate lightweight window above the pet: Pet settings expose the host-owned `petBubbleChat` toggle, all `petService.say()` and event bubbles can flow into the popup, popup send reuses the current `control-center:{petPackId}:main` AI Talk conversation, and popup state stays on the main-process side through dedicated IPC.
+- Non-AI pet speech now records into a dedicated pet utterance log and AI Talk injects recent pet activity as short-term context without polluting transcript history or long-term memory extraction.
 - Desktop chat window exists and routes through the same pet chat state/AI Talk flow instead of introducing a separate product brain.
 - Active pet-pack changes now emit explicit refresh signals so the AI pane reloads persona, memory profile, and chat state without requiring a tab switch or window reopen.
 - Creator Studio already has `GenerationTask`, deterministic `conversation-wizard`, task answer/confirm commands, `openpet-prompt-builder`, host model bridge, run persistence, QA artifacts, dashboard display, approved action import paths, dashboard-visible prompt provenance with a sanitized final prompt preview, sanitized generation usage summaries, explicit backend recovery guidance for failed generation runs, dashboard-visible provider smoke guidance for non-fixture host image runs, a dashboard-visible workflow status summary with current stage plus next-step guidance, and full-pet/action import flows that can submit generated trigger proposals into the host inbox.
