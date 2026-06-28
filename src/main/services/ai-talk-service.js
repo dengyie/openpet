@@ -617,6 +617,33 @@ const createAiTalkService = ({ aiService, aiTalkStore, petPackService, appLogSer
     return { persona, systemPrompt, personaHash: hashText(systemPrompt) }
   }
 
+  const summarizePersonaFields = (persona = {}) => {
+    const normalized = normalizePersonaOverride(persona)
+    const fields = Object.keys(normalized).sort()
+    return {
+      fieldCount: fields.length,
+      fields: fields.join(',')
+    }
+  }
+
+  const buildPersonaLogDetails = ({ petPackId, manifest, packPersona, overridePersona, effectivePersona, personaHash, extras = {} }) => {
+    const packSummary = summarizePersonaFields(packPersona)
+    const overrideSummary = summarizePersonaFields(overridePersona)
+    const effectiveSummary = summarizePersonaFields(effectivePersona)
+    return {
+      petPackId,
+      petPackDisplayName: normalizeString(manifest?.displayName) || petPackId,
+      packPersonaName: normalizeString(packPersona?.name) || FALLBACK_PERSONA.name,
+      effectivePersonaName: normalizeString(effectivePersona?.name) || normalizeString(packPersona?.name) || FALLBACK_PERSONA.name,
+      personaHash: normalizeString(personaHash),
+      packPersonaFieldCount: packSummary.fieldCount,
+      overrideFieldCount: overrideSummary.fieldCount,
+      overrideFields: overrideSummary.fields,
+      effectivePersonaFieldCount: effectiveSummary.fieldCount,
+      ...extras
+    }
+  }
+
   const getPersonaProfile = () => {
     const config = typeof aiService.getConfig === 'function' ? aiService.getConfig() : {}
     const { manifest, petPackId } = resolveActivePack()
@@ -624,8 +651,8 @@ const createAiTalkService = ({ aiService, aiTalkStore, petPackService, appLogSer
     const overridePersona = typeof aiTalkStore.getPersonaOverride === 'function'
       ? aiTalkStore.getPersonaOverride(petPackId)
       : {}
-    const { persona, systemPrompt } = resolvePersona(manifest, petPackId)
-    return {
+    const { persona, systemPrompt, personaHash } = resolvePersona(manifest, petPackId)
+    const profile = {
       petPackId,
       petPackDisplayName: normalizeString(manifest.displayName) || petPackId,
       packPersona,
@@ -634,36 +661,130 @@ const createAiTalkService = ({ aiService, aiTalkStore, petPackService, appLogSer
       compiledPersonaPrompt: compilePersonaPrompt(persona),
       compiledSystemPrompt: compileSystemPrompt({ personaPrompt: systemPrompt, globalPrompt: config.systemPrompt })
     }
+    recordLog({
+      level: 'info',
+      event: 'ai-talk.persona.profile.loaded',
+      message: 'AI talk persona profile loaded',
+      details: buildPersonaLogDetails({
+        petPackId,
+        manifest,
+        packPersona,
+        overridePersona,
+        effectivePersona: persona,
+        personaHash,
+        extras: {
+          hasGlobalSystemPrompt: Boolean(normalizeString(config.systemPrompt))
+        }
+      })
+    })
+    return profile
   }
 
   const savePersonaOverride = (override = {}) => {
-    const { petPackId } = resolveActivePack()
+    const { manifest, petPackId } = resolveActivePack()
     if (typeof aiTalkStore.savePersonaOverride !== 'function') {
       throw new Error('AI talk persona overrides are not available')
     }
-    aiTalkStore.savePersonaOverride(petPackId, override)
+    const savedOverride = aiTalkStore.savePersonaOverride(petPackId, override)
+    const packPersona = mergePersona(manifest.persona, {})
+    const effectivePersona = mergePersona(packPersona, savedOverride)
+    const personaHash = hashText(compilePersonaPrompt(effectivePersona))
+    const event = Object.keys(savedOverride).length
+      ? 'ai-talk.persona.override.saved'
+      : 'ai-talk.persona.override.cleared'
+    recordLog({
+      level: 'info',
+      event,
+      message: Object.keys(savedOverride).length
+        ? 'AI talk persona override saved'
+        : 'AI talk persona override cleared',
+      details: buildPersonaLogDetails({
+        petPackId,
+        manifest,
+        packPersona,
+        overridePersona: savedOverride,
+        effectivePersona,
+        personaHash
+      })
+    })
     return getPersonaProfile()
   }
 
   const generatePersonaDraft = async ({ instruction = '' } = {}) => {
     const profile = getPersonaProfile()
-    const result = await aiService.complete({
-      messages: buildPersonaGenerationMessages({
-        instruction: normalizeString(instruction).slice(0, 2000),
-        profile
-      }),
-      tools: []
+    const instructionText = normalizeString(instruction).slice(0, 2000)
+    recordLog({
+      level: 'info',
+      event: 'ai-talk.persona.draft.started',
+      message: 'AI talk persona draft generation started',
+      details: buildPersonaLogDetails({
+        petPackId: profile.petPackId,
+        manifest: { displayName: profile.petPackDisplayName },
+        packPersona: profile.packPersona,
+        overridePersona: profile.overridePersona,
+        effectivePersona: profile.effectivePersona,
+        personaHash: hashText(profile.compiledPersonaPrompt),
+        extras: {
+          instructionChars: instructionText.length
+        }
+      })
     })
-    const draftPersona = parsePersonaDraft(result.reply)
-    if (!Object.keys(draftPersona).length) {
-      throw new Error('AI provider did not return a valid persona draft')
-    }
-    const effectivePersona = mergePersona(profile.packPersona, draftPersona)
-    return {
-      petPackId: profile.petPackId,
-      petPackDisplayName: profile.petPackDisplayName,
-      draftPersona,
-      compiledPersonaPrompt: compilePersonaPrompt(effectivePersona)
+    try {
+      const result = await aiService.complete({
+        messages: buildPersonaGenerationMessages({
+          instruction: instructionText,
+          profile
+        }),
+        tools: []
+      })
+      const draftPersona = parsePersonaDraft(result.reply)
+      if (!Object.keys(draftPersona).length) {
+        throw new Error('AI provider did not return a valid persona draft')
+      }
+      const effectivePersona = mergePersona(profile.packPersona, draftPersona)
+      const compiledPersonaPrompt = compilePersonaPrompt(effectivePersona)
+      recordLog({
+        level: 'info',
+        event: 'ai-talk.persona.draft.completed',
+        message: 'AI talk persona draft generation completed',
+        details: buildPersonaLogDetails({
+          petPackId: profile.petPackId,
+          manifest: { displayName: profile.petPackDisplayName },
+          packPersona: profile.packPersona,
+          overridePersona: draftPersona,
+          effectivePersona,
+          personaHash: hashText(compiledPersonaPrompt),
+          extras: {
+            instructionChars: instructionText.length
+          }
+        })
+      })
+      return {
+        petPackId: profile.petPackId,
+        petPackDisplayName: profile.petPackDisplayName,
+        draftPersona,
+        compiledPersonaPrompt
+      }
+    } catch (error) {
+      recordLog({
+        level: 'warn',
+        event: 'ai-talk.persona.draft.failed',
+        message: 'AI talk persona draft generation failed',
+        details: buildPersonaLogDetails({
+          petPackId: profile.petPackId,
+          manifest: { displayName: profile.petPackDisplayName },
+          packPersona: profile.packPersona,
+          overridePersona: profile.overridePersona,
+          effectivePersona: profile.effectivePersona,
+          personaHash: hashText(profile.compiledPersonaPrompt),
+          extras: {
+            instructionChars: instructionText.length,
+            errorName: sanitizeDiagnosticText(error?.name || 'Error'),
+            errorMessage: sanitizeDiagnosticText(error?.message)
+          }
+        })
+      })
+      throw error
     }
   }
 
@@ -768,13 +889,26 @@ const createAiTalkService = ({ aiService, aiTalkStore, petPackService, appLogSer
   const getMemoryProfile = () => {
     const { manifest, petPackId } = resolveActivePack()
     if (typeof aiTalkStore.listMemories !== 'function') throw new Error('AI talk memories are not available')
-    return {
+    const profile = {
       petPackId,
       petPackDisplayName: normalizeString(manifest.displayName) || petPackId,
       globalMemories: aiTalkStore.listMemories({ petPackId, scope: 'global', limit: 0 }),
       petPackMemories: aiTalkStore.listMemories({ petPackId, scope: 'petPack', limit: 0 }),
       recentJobs: listRecentMemoryJobs(petPackId)
     }
+    recordLog({
+      level: 'info',
+      event: 'ai-talk.memory.profile.loaded',
+      message: 'AI talk memory profile loaded',
+      details: {
+        petPackId,
+        petPackDisplayName: profile.petPackDisplayName,
+        globalMemoryCount: profile.globalMemories.length,
+        petPackMemoryCount: profile.petPackMemories.length,
+        recentJobCount: profile.recentJobs.length
+      }
+    })
+    return profile
   }
 
   const migrateLegacyConversationIfNeeded = ({ manifest, petPackId, personaHash } = {}) => {

@@ -600,6 +600,7 @@ test('ai talk service merges local persona override from store', async () => {
 
 test('ai talk service exposes current pet persona profile with compiled prompts', async () => {
   const store = createStore()
+  const logs = []
   store.savePersonaOverride('mochi-cat', {
     tone: 'sleepy and affectionate',
     boundaries: ['Stay gentle.', 'Do not invent actions.']
@@ -614,6 +615,7 @@ test('ai talk service exposes current pet persona profile with compiled prompts'
       complete: async () => ({ reply: 'ignored' })
     },
     aiTalkStore: store,
+    appLogService: { record: (entry) => logs.push(entry) },
     petPackService: createPetPackService({
       id: 'mochi-cat',
       displayName: 'Mochi Cat',
@@ -641,17 +643,28 @@ test('ai talk service exposes current pet persona profile with compiled prompts'
   assert.match(profile.compiledPersonaPrompt, /Tone: sleepy and affectionate/)
   assert.match(profile.compiledSystemPrompt, /# Global Instructions/)
   assert.match(profile.compiledSystemPrompt, /Always answer in concise Chinese\./)
+  const personaLog = logs.find((entry) => entry.event === 'ai-talk.persona.profile.loaded')
+  assert.ok(personaLog)
+  assert.equal(personaLog.details.petPackId, 'mochi-cat')
+  assert.equal(personaLog.details.petPackDisplayName, 'Mochi Cat')
+  assert.equal(personaLog.details.effectivePersonaName, 'Mochi')
+  assert.equal(personaLog.details.hasGlobalSystemPrompt, true)
+  assert.equal(personaLog.details.overrideFieldCount, 2)
+  assert.match(personaLog.details.personaHash, /^[a-f0-9]{64}$/)
+  assert.equal(JSON.stringify(personaLog).includes('Always answer in concise Chinese.'), false)
 })
 
 test('ai talk service saves persona override for the active pet pack and returns updated profile', async () => {
   let activePackId = 'legacy-cat'
   const store = createStore()
+  const logs = []
   const service = createAiTalkService({
     aiService: {
       getConfig: () => ({ enabled: true, behavior: { enabled: false, useTools: true } }),
       complete: async () => ({ reply: 'ignored' })
     },
     aiTalkStore: store,
+    appLogService: { record: (entry) => logs.push(entry) },
     petPackService: {
       getActivePetPack: () => ({
         manifest: {
@@ -683,11 +696,47 @@ test('ai talk service saves persona override for the active pet pack and returns
   assert.equal(sproutProfile.petPackId, 'sprout-cat')
   assert.equal(sproutProfile.overridePersona.tone, 'bouncy')
   assert.deepEqual(store.getPersonaOverride('sprout-cat'), { tone: 'bouncy' })
+  const overrideLogs = logs.filter((entry) => entry.event === 'ai-talk.persona.override.saved')
+  assert.equal(overrideLogs.length, 2)
+  assert.equal(overrideLogs[0].details.petPackId, 'legacy-cat')
+  assert.equal(overrideLogs[0].details.overrideFieldCount, 2)
+  assert.equal(overrideLogs[1].details.petPackId, 'sprout-cat')
+  assert.equal(overrideLogs[1].details.overrideFieldCount, 1)
+  assert.equal(JSON.stringify(overrideLogs).includes('compiledPersonaPrompt'), false)
+})
+
+test('ai talk service logs persona override cleared when override becomes empty', () => {
+  const logs = []
+  const store = createStore()
+  store.savePersonaOverride('mochi-cat', { tone: 'sleepy' })
+  const service = createAiTalkService({
+    aiService: {
+      getConfig: () => ({ enabled: true, behavior: { enabled: false, useTools: true } }),
+      complete: async () => ({ reply: 'ignored' })
+    },
+    aiTalkStore: store,
+    appLogService: { record: (entry) => logs.push(entry) },
+    petPackService: createPetPackService({
+      id: 'mochi-cat',
+      displayName: 'Mochi Cat',
+      persona: { name: 'Mochi', identity: 'A tiny desktop cat.' }
+    })
+  })
+
+  const profile = service.savePersonaOverride({})
+
+  assert.deepEqual(store.getPersonaOverride('mochi-cat'), {})
+  assert.deepEqual(profile.overridePersona, {})
+  const clearedLog = logs.find((entry) => entry.event === 'ai-talk.persona.override.cleared')
+  assert.ok(clearedLog)
+  assert.equal(clearedLog.details.petPackId, 'mochi-cat')
+  assert.equal(clearedLog.details.overrideFieldCount, 0)
 })
 
 test('ai talk service generates persona draft without persisting override', async () => {
   const requests = []
   const store = createStore()
+  const logs = []
   const service = createAiTalkService({
     aiService: {
       getConfig: () => ({ enabled: true, behavior: { enabled: false, useTools: true } }),
@@ -699,6 +748,7 @@ test('ai talk service generates persona draft without persisting override', asyn
       }
     },
     aiTalkStore: store,
+    appLogService: { record: (entry) => logs.push(entry) },
     petPackService: createPetPackService({
       id: 'mochi-cat',
       displayName: 'Mochi Cat',
@@ -725,6 +775,39 @@ test('ai talk service generates persona draft without persisting override', asyn
   assert.match(requests[0].messages[0].content, /strict JSON/)
   assert.match(requests[0].messages[1].content, /更适合专注工作/)
   assert.deepEqual(store.getPersonaOverride('mochi-cat'), {})
+  const startedLog = logs.find((entry) => entry.event === 'ai-talk.persona.draft.started')
+  const completedLog = logs.find((entry) => entry.event === 'ai-talk.persona.draft.completed')
+  assert.ok(startedLog)
+  assert.ok(completedLog)
+  assert.equal(startedLog.details.instructionChars, '更适合专注工作'.length)
+  assert.equal(completedLog.details.petPackId, 'mochi-cat')
+  assert.equal(completedLog.details.overrideFieldCount, 3)
+  assert.equal(JSON.stringify(completedLog).includes('strict JSON'), false)
+})
+
+test('ai talk service logs persona draft failure without leaking provider reply', async () => {
+  const logs = []
+  const service = createAiTalkService({
+    aiService: {
+      getConfig: () => ({ enabled: true, behavior: { enabled: false, useTools: true } }),
+      complete: async () => ({ reply: 'not valid persona draft raw provider reply' })
+    },
+    aiTalkStore: createStore(),
+    appLogService: { record: (entry) => logs.push(entry) },
+    petPackService: createPetPackService({ id: 'mochi-cat', displayName: 'Mochi Cat' })
+  })
+
+  await assert.rejects(
+    () => service.generatePersonaDraft({ instruction: '失败测试' }),
+    /valid persona draft/
+  )
+
+  const failedLog = logs.find((entry) => entry.event === 'ai-talk.persona.draft.failed')
+  assert.ok(failedLog)
+  assert.equal(failedLog.details.petPackId, 'mochi-cat')
+  assert.equal(failedLog.details.errorName, 'Error')
+  assert.match(failedLog.details.errorMessage, /valid persona draft/)
+  assert.equal(JSON.stringify(failedLog).includes('raw provider reply'), false)
 })
 
 test('ai talk service preserves existing global system prompt as stable instruction', async () => {
@@ -1057,6 +1140,12 @@ test('ai talk service exposes and manages memory profile without reinjecting del
   assert.equal(JSON.stringify(logs).includes('User likes quiet morning planning'), false)
   assert.match(JSON.stringify(logs), /ai-talk\.memory\.deleted/)
   assert.match(JSON.stringify(logs), /ai-talk\.memory\.pet-pack-cleared/)
+  const memoryProfileLogs = logs.filter((entry) => entry.event === 'ai-talk.memory.profile.loaded')
+  assert.ok(memoryProfileLogs.length >= 3)
+  assert.equal(memoryProfileLogs[0].details.petPackId, 'mochi-cat')
+  assert.equal(memoryProfileLogs[0].details.globalMemoryCount, 1)
+  assert.equal(memoryProfileLogs[0].details.petPackMemoryCount, 1)
+  assert.equal(JSON.stringify(memoryProfileLogs).includes('quiet morning planning'), false)
 })
 
 test('ai talk service accepts fenced json memory extraction replies', async () => {

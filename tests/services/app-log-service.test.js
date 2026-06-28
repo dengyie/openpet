@@ -36,3 +36,41 @@ test('app log service records local jsonl events without leaking absolute file s
   assert.deepEqual(JSON.parse(raw), entry)
   assert.deepEqual(service.read({ limit: 1 }), [entry])
 })
+
+test('app log service redacts sensitive ai log fields and truncates long strings', () => {
+  const logDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-app-logs-'))
+  const service = createAppLogService({
+    logDir,
+    clock: () => new Date('2026-06-29T10:00:00.000Z'),
+    idFactory: () => 'evt-2'
+  })
+
+  const longText = 'x'.repeat(540)
+  const entry = service.record({
+    scope: 'ai-talk',
+    event: 'ai-talk.persona.profile.loaded',
+    message: 'Loaded profile',
+    details: {
+      compiledSystemPrompt: '# hidden prompt',
+      rawProviderReply: '{"secret":true}',
+      apiKey: 'sk-test-123456789012',
+      token: 'Bearer abcdefghijklmnop',
+      summary: longText,
+      providerMessage: 'authorization: Bearer abcdefghijklmnop',
+      safeCount: 3
+    }
+  })
+
+  assert.equal(entry.details.compiledSystemPrompt, undefined)
+  assert.equal(entry.details.rawProviderReply, undefined)
+  assert.equal(entry.details.apiKey, undefined)
+  assert.equal(entry.details.token, undefined)
+  assert.equal(entry.details.safeCount, 3)
+  assert.equal(entry.details.providerMessage, '[redacted]')
+  assert.match(entry.details.summary, /^x{500}\.\.\.\[truncated\]$/)
+
+  const raw = fs.readFileSync(service.logPath, 'utf-8')
+  assert.equal(raw.includes('# hidden prompt'), false)
+  assert.equal(raw.includes('sk-test-123456789012'), false)
+  assert.equal(raw.includes('Bearer abcdefghijklmnop'), false)
+})
