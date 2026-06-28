@@ -356,7 +356,8 @@ test.describe('Control Center smoke', () => {
     const cursorHeader = page.locator('.cursor-selection-header')
     const cursorOptionsRow = page.locator('.cursor-options-row')
     const cursorOptionCards = page.locator('.cursor-option-card')
-    const cursorLibraryPanel = page.locator('.cursor-library-panel')
+    const cursorManagementPanel = page.locator('.cursor-management-panel')
+    const cursorLibraryRows = page.locator('.cursor-library-row')
 
     await expect(cursorHeader).toContainText('指针选择')
     await expect(cursorHeader).toContainText('预览会模拟真实指针落点')
@@ -366,12 +367,34 @@ test.describe('Control Center smoke', () => {
     await expect(cursorOptionCards.first().locator('.cursor-card-preview')).toHaveCSS('min-height', '56px')
     await expect(cursorOptionCards.first().locator('img')).toHaveCSS('width', '44px')
     await expect(page.getByRole('button', { name: '系统默认' })).toHaveCount(0)
-    await expect(cursorLibraryPanel).toHaveCount(0)
+    await expect(cursorManagementPanel).toBeVisible()
+    await expect(cursorManagementPanel).toContainText('我的自定义指针')
+    await expect(cursorManagementPanel).toContainText('还没有上传自定义指针')
 
     await page.getByRole('button', { name: '添加自定义' }).click()
     await expect(cursorOptionCards).toHaveCount(8)
     await expect(page.locator('.cursor-option-card.selected')).toContainText('demo-cursor')
-    await expect(page.getByRole('button', { name: /demo-cursor/ })).toBeVisible()
+    await expect(cursorLibraryRows).toHaveCount(1)
+    await expect(cursorLibraryRows.first()).toContainText('demo-cursor')
+    await expect(cursorLibraryRows.first()).toContainText('32×32')
+    await expect(cursorLibraryRows.first()).toContainText('使用中')
+
+    page.once('dialog', async (dialog) => {
+      await dialog.accept('renamed-cursor')
+    })
+    await cursorLibraryRows.first().getByRole('button', { name: '编辑' }).click()
+    await expect(page.locator('.cursor-option-card.selected')).toContainText('renamed-cursor')
+    await expect(cursorLibraryRows.first()).toContainText('renamed-cursor')
+    await expect(page.locator('.status-line')).toContainText('已更新指针名称：renamed-cursor')
+
+    page.once('dialog', async (dialog) => {
+      await dialog.accept()
+    })
+    await cursorLibraryRows.first().getByRole('button', { name: '删除' }).click()
+    await expect(page.locator('.status-line')).toContainText('已删除当前指针，并切回系统默认')
+    await expect(cursorOptionCards).toHaveCount(7)
+    await expect(cursorLibraryRows).toHaveCount(0)
+    await expect(cursorManagementPanel).toContainText('还没有上传自定义指针')
   })
 
   test('persists grounded and home settings in the demo API session', async ({ page }) => {

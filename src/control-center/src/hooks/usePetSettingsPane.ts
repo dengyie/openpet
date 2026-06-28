@@ -5,6 +5,7 @@ import { messageFromError } from '../lib/errors'
 import { shouldRestoreScalePreview } from '../lib/pet-scale-preview.mjs'
 import {
   SYSTEM_CURSOR_ID,
+  createDefaultRuntimeCursor,
   listCursorOptions,
   normalizeCursorSettingsState,
   normalizeCustomCursorCollection
@@ -166,15 +167,17 @@ export function usePetSettingsPane() {
       setStatus('未找到要删除的自定义指针')
       return
     }
+    const deletingSelectedCursor = settings.selectedCursorId === cursorId
     const nextCustomCursors = normalizeCustomCursorRecords(settings.customCursors.filter((cursor) => cursor.id !== cursorId))
     const nextSettings = applyCursorState(settings, {
-      selectedCursorId: settings.selectedCursorId === cursorId ? SYSTEM_CURSOR_ID : settings.selectedCursorId,
+      selectedCursorId: deletingSelectedCursor ? SYSTEM_CURSOR_ID : settings.selectedCursorId,
+      customCursor: deletingSelectedCursor ? createDefaultRuntimeCursor() : settings.customCursor,
       customCursors: nextCustomCursors
     })
     setSettings(nextSettings)
     await persistSettings(
       nextSettings,
-      settings.selectedCursorId === cursorId ? '已删除当前指针，并切回系统默认' : `已删除指针：${targetCursor.name}`,
+      deletingSelectedCursor ? '已删除当前指针，并切回系统默认' : `已删除指针：${targetCursor.name}`,
       '自定义指针删除失败'
     )
   }
