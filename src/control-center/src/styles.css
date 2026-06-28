@@ -652,8 +652,8 @@ button {
 .cursor-options-row {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: 124px;
-  gap: 12px;
+  grid-auto-columns: 86px;
+  gap: 9px;
   overflow-x: auto;
   padding: 2px 0 8px;
   scrollbar-width: thin;
@@ -662,13 +662,13 @@ button {
 .cursor-option-card {
   position: relative;
   display: grid;
-  gap: 8px;
+  gap: 6px;
   justify-items: center;
-  min-height: 136px;
+  min-height: 94px;
   min-width: 0;
-  padding: 10px 9px 12px;
+  padding: 7px 6px 8px;
   border: 1.5px solid #e8edf5;
-  border-radius: 17px;
+  border-radius: 13px;
   background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
   box-shadow:
     0 8px 22px rgba(34, 49, 84, 0.05),
@@ -703,8 +703,8 @@ button {
   display: grid;
   place-items: center;
   width: 100%;
-  min-height: 78px;
-  border-radius: 13px;
+  min-height: 56px;
+  border-radius: 10px;
   overflow: hidden;
 }
 
@@ -726,16 +726,16 @@ button {
 .cursor-card-preview img {
   position: relative;
   z-index: 1;
-  width: 10px;
-  height: 10px;
+  width: 48px;
+  height: 48px;
   object-fit: contain;
   pointer-events: none;
   filter: drop-shadow(0 2px 3px rgba(53, 67, 97, 0.14));
 }
 
 .cursor-option-card[data-cursor-type='builtin'] .cursor-card-preview img {
-  width: 9px;
-  height: 9px;
+  width: 44px;
+  height: 44px;
 }
 
 .cursor-card-add-icon {
@@ -1944,21 +1944,21 @@ button {
   }
 
   .cursor-options-row {
-    grid-auto-columns: 120px;
-    gap: 10px;
+    grid-auto-columns: 82px;
+    gap: 8px;
   }
 
   .cursor-option-card {
-    min-height: 132px;
-    padding: 10px 8px 12px;
+    min-height: 92px;
+    padding: 7px 6px 8px;
   }
 
   .cursor-card-preview {
-    min-height: 74px;
+    min-height: 54px;
   }
 
   .cursor-card-label {
-    font-size: 13px;
+    font-size: 11px;
   }
 
   .preview-stage {
