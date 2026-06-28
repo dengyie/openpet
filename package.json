@@ -60,6 +60,7 @@
     "update-packaged-plugin-cleanup-evidence-report": "node scripts/update-packaged-plugin-cleanup-evidence-report.js",
     "validate-plugin-cleanup-evidence-report": "node scripts/validate-plugin-cleanup-evidence-report.js",
     "smoke:ai-provider": "node scripts/run-ai-provider-smoke.js",
+    "smoke:creator-studio-provider": "node scripts/run-creator-studio-provider-smoke.js",
     "create-plugin-sandbox-evaluation": "node scripts/create-plugin-sandbox-evaluation.js",
     "create-plugin-submission-report": "node scripts/create-plugin-submission-report.js",
     "create-plugin-submission-pr": "node scripts/create-plugin-submission-pr.js",

@@ -65,6 +65,27 @@ test('live docs mention the AI provider smoke CLI as the current verification en
   )
 })
 
+test('live docs mention the Creator Studio provider smoke CLI as the current host-side verification entrypoint', () => {
+  const todoArchitecture = readText('docs/openpet-current-todo-architecture.md')
+  const developmentSummary = readText('docs/development-summary.md')
+  const handoff = readText('docs/HANDOFF.md')
+  const projectStatusReview = readText('docs/project-status-review.md')
+
+  const smokePattern = /npm run smoke:creator-studio-provider/i
+  for (const [name, content] of [
+    ['openpet-current-todo-architecture.md', todoArchitecture],
+    ['development-summary.md', developmentSummary],
+    ['HANDOFF.md', handoff],
+    ['project-status-review.md', projectStatusReview]
+  ]) {
+    assert.match(
+      content,
+      smokePattern,
+      `${name} should mention the Creator Studio provider smoke CLI`
+    )
+  }
+})
+
 test('live docs describe Creator Studio imported follow-up routing by outcome', () => {
   const todoArchitecture = readText('docs/openpet-current-todo-architecture.md')
   const developmentSummary = readText('docs/development-summary.md')
