@@ -891,6 +891,55 @@ const createActionLane = ({ dataDir, run, buttonStates, importHandoff }) => {
   })
 }
 
+const createReviewCheckpoint = ({ dataDir, run, wizardState, workflowGuidance, actionLane }) => {
+  const reviewSummary = workflowGuidance?.import?.reviewSummary || {}
+  const nextStep = wizardState?.nextStep || {}
+  const dashboardAction = actionLane?.dashboardAction || {}
+  const hostAction = actionLane?.hostAction || {}
+  const requiresHostAction = Boolean(hostAction.required)
+  const availableInDashboard = Boolean(dashboardAction.available)
+  const owner = requiresHostAction
+    ? 'host'
+    : availableInDashboard
+      ? 'dashboard'
+      : 'workflow'
+  const label = requiresHostAction
+    ? hostAction.label
+    : availableInDashboard
+      ? dashboardAction.label
+      : reviewSummary.nextReviewAction || nextStep.label || 'Continue workflow'
+  const location = requiresHostAction
+    ? hostAction.location
+    : availableInDashboard
+      ? 'Creator Studio dashboard'
+      : reviewSummary.reviewLocation || 'Creator Studio'
+  const reason = requiresHostAction
+    ? hostAction.reason
+    : availableInDashboard
+      ? dashboardAction.reason
+      : reviewSummary.summary || nextStep.reason || 'Continue the Creator Studio workflow.'
+
+  return createPublicLogValue({
+    dataDir,
+    value: {
+      owner,
+      label,
+      location,
+      reason,
+      phase: wizardState?.phase || 'draft',
+      reviewStatus: reviewSummary.reviewGateStatus || run.reviewStatus || 'pending',
+      importStatus: workflowGuidance?.import?.status || run.importStatus || 'not-imported',
+      availableInDashboard,
+      requiresHostAction,
+      blocked: Boolean(nextStep.blocked || reviewSummary.blockedReason),
+      readyForApproval: Boolean(reviewSummary.readyForApproval),
+      readyForImport: Boolean(reviewSummary.readyForImport),
+      imported: Boolean(reviewSummary.imported),
+      blockedReason: reviewSummary.blockedReason || ''
+    }
+  })
+}
+
 const createWorkflowGuidance = ({ dataDir, run }) => {
   const backend = normalizeCreatorBackend(run.backend || run.input?.backend, FIXTURE_BACKEND)
   const modelSnapshot = run.modelSnapshot || run.artifacts?.generatedImage?.modelSnapshot || {}
@@ -1069,6 +1118,13 @@ const createPublicRun = ({ dataDir, run }) => {
     buttonStates,
     importHandoff: workflowGuidance.import.handoff
   })
+  const reviewCheckpoint = createReviewCheckpoint({
+    dataDir,
+    run,
+    wizardState,
+    workflowGuidance,
+    actionLane
+  })
   return {
     ...publicRun,
     artifacts: createPublicArtifacts({ dataDir, artifacts: run.artifacts || {} }),
@@ -1076,6 +1132,7 @@ const createPublicRun = ({ dataDir, run }) => {
     recovery: createPublicRecovery({ dataDir, run }),
     wizardState,
     workflowGuidance,
+    reviewCheckpoint,
     actionLane
   }
 }

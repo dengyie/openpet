@@ -2926,6 +2926,7 @@ test('creator studio dashboard asset exists and service script is declared', () 
   assert.match(html, /id="task-preview"/)
   assert.match(html, /id="run-snapshot-panel"/)
   assert.match(html, /id="action-lane-panel"/)
+  assert.match(html, /id="review-checkpoint-panel"/)
   assert.match(html, /id="next-step-panel"/)
   assert.match(html, /id="trigger-panel"/)
   assert.match(html, /id="action-review"/)
@@ -2934,6 +2935,7 @@ test('creator studio dashboard asset exists and service script is declared', () 
   assert.match(html, /id="approve-button"/)
   assert.match(html, /renderImportHandoff/)
   assert.match(html, /renderImportedResultCard/)
+  assert.match(html, /renderReviewCheckpoint/)
   assert.match(html, /handoff\.commandTitle/)
   assert.match(html, /fetch\('\/api\/runs'\)/)
   assert.match(html, /DOMContentLoaded/)
@@ -4596,6 +4598,22 @@ test('creator studio service exposes workflow guidance for fixture and imported 
     assert.equal(importedDetail.run.actionLane.hostAction.required, true)
     assert.equal(importedDetail.run.actionLane.hostAction.label, 'Review trigger proposal')
     assert.equal(importedDetail.run.actionLane.hostAction.location, 'Actions -> Trigger Proposal Inbox')
+    assert.deepEqual(importedDetail.run.reviewCheckpoint, {
+      owner: 'host',
+      label: 'Review trigger proposal',
+      location: 'Actions -> Trigger Proposal Inbox',
+      reason: 'The action import is complete. Review the submitted trigger proposal in Actions -> Trigger Proposal Inbox.',
+      phase: 'imported',
+      reviewStatus: 'complete',
+      importStatus: 'imported',
+      availableInDashboard: false,
+      requiresHostAction: true,
+      blocked: true,
+      readyForApproval: false,
+      readyForImport: false,
+      imported: true,
+      blockedReason: ''
+    })
     assert.equal(importedSerialized.includes('127.0.0.1:7860'), false)
     assert.equal(importedSerialized.includes(dataDir), false)
 
@@ -4637,6 +4655,15 @@ test('creator studio service exposes workflow guidance for fixture and imported 
     assert.match(importedFailedActionDetail.run.actionLane.hostAction.reason, /proposal write failed/i)
     assert.match(importedFailedActionDetail.run.actionLane.hostAction.reason, /\[redacted-path\]/i)
     assert.equal(importedFailedActionDetail.run.actionLane.hostAction.reason.includes('/Users/mango/private/proposal.json'), false)
+    assert.equal(importedFailedActionDetail.run.reviewCheckpoint.owner, 'host')
+    assert.equal(importedFailedActionDetail.run.reviewCheckpoint.label, 'Review import handoff')
+    assert.equal(importedFailedActionDetail.run.reviewCheckpoint.location, 'Control Center -> Plugins')
+    assert.match(importedFailedActionDetail.run.reviewCheckpoint.reason, /proposal write failed/i)
+    assert.match(importedFailedActionDetail.run.reviewCheckpoint.reason, /\[redacted-local-url\]/i)
+    assert.equal(importedFailedActionDetail.run.reviewCheckpoint.reason.includes('127.0.0.1:8787'), false)
+    assert.equal(importedFailedActionDetail.run.reviewCheckpoint.requiresHostAction, true)
+    assert.equal(importedFailedActionDetail.run.reviewCheckpoint.availableInDashboard, false)
+    assert.equal(importedFailedActionDetail.run.reviewCheckpoint.blocked, true)
     assert.equal(importedFailedSerialized.includes(dataDir), false)
 
     assert.equal(importedPetDetail.ok, true)
@@ -4670,6 +4697,11 @@ test('creator studio service exposes workflow guidance for fixture and imported 
     assert.equal(importedPetDetail.run.actionLane.hostAction.required, true)
     assert.equal(importedPetDetail.run.actionLane.hostAction.label, 'Review imported result')
     assert.equal(importedPetDetail.run.actionLane.hostAction.location, 'OpenPet')
+    assert.equal(importedPetDetail.run.reviewCheckpoint.owner, 'host')
+    assert.equal(importedPetDetail.run.reviewCheckpoint.label, 'Review imported result')
+    assert.equal(importedPetDetail.run.reviewCheckpoint.location, 'OpenPet')
+    assert.match(importedPetDetail.run.reviewCheckpoint.reason, /Review the imported result inside OpenPet/i)
+    assert.equal(importedPetDetail.run.reviewCheckpoint.imported, true)
     assert.equal(importedPetSerialized.includes('127.0.0.1:7860'), false)
     assert.equal(importedPetSerialized.includes(dataDir), false)
 
@@ -4684,6 +4716,10 @@ test('creator studio service exposes workflow guidance for fixture and imported 
     assert.match(importedMissingSubmissionDetail.run.workflowGuidance.import.reviewSummary.summary, /no trigger proposal handoff record was saved/i)
     assert.equal(importedMissingSubmissionDetail.run.workflowGuidance.import.resultCard.reviewLocation, 'Control Center -> Plugins')
     assert.match(importedMissingSubmissionDetail.run.workflowGuidance.import.resultCard.entries[1].value, /no trigger proposal handoff record was saved/i)
+    assert.equal(importedMissingSubmissionDetail.run.reviewCheckpoint.owner, 'host')
+    assert.equal(importedMissingSubmissionDetail.run.reviewCheckpoint.label, 'Review import handoff')
+    assert.equal(importedMissingSubmissionDetail.run.reviewCheckpoint.location, 'Control Center -> Plugins')
+    assert.match(importedMissingSubmissionDetail.run.reviewCheckpoint.reason, /no trigger proposal handoff record was saved/i)
   } finally {
     await new Promise((resolve) => server.close(resolve))
   }

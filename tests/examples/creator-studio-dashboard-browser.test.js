@@ -681,6 +681,15 @@ test('creator studio dashboard surfaces blocked single-action qa before approval
     assert.match(actionLaneText, /repair buttons in the frame review panel/i)
     assert.match(actionLaneText, /not directly available from a dashboard button right now/i)
 
+    const checkpointText = await page.locator('#review-checkpoint-panel').textContent()
+    assert.match(checkpointText, /Review and repair frames/i)
+    assert.match(checkpointText, /Owner: workflow/i)
+    assert.match(checkpointText, /Location: Creator Studio/i)
+    assert.match(checkpointText, /Review: blocked \/ Import: review-required/i)
+    assert.match(checkpointText, /Available in dashboard: no/i)
+    assert.match(checkpointText, /Requires host-owned action: no/i)
+    assert.match(checkpointText, /Blocked reason: Repair or regenerate frames before approval/i)
+
     assert.equal(await page.locator('#approve-button').isDisabled(), true)
 
     const handoffText = await page.locator('#import-handoff-panel').textContent()
@@ -738,6 +747,14 @@ test('creator studio dashboard shows imported action review completion details',
     const actionLaneText = await page.locator('#action-lane-panel').textContent()
     assert.match(actionLaneText, /Host-owned action: Review trigger proposal/i)
     assert.match(actionLaneText, /Actions -> Trigger Proposal Inbox/i)
+
+    const checkpointText = await page.locator('#review-checkpoint-panel').textContent()
+    assert.match(checkpointText, /Review trigger proposal/i)
+    assert.match(checkpointText, /Owner: host/i)
+    assert.match(checkpointText, /Location: Actions -> Trigger Proposal Inbox/i)
+    assert.match(checkpointText, /Review: complete \/ Import: imported/i)
+    assert.match(checkpointText, /Requires host-owned action: yes/i)
+    assert.match(checkpointText, /Imported: yes/i)
   } finally {
     await browser.close()
     await new Promise((resolve) => server.close(resolve))
@@ -815,6 +832,14 @@ test('creator studio dashboard shows imported action handoff failure details', a
     assert.equal(actionLaneText.includes('bridge-secret'), false)
     assert.equal(actionLaneText.includes('/Users/mango/private/proposal.json'), false)
     assert.equal(actionLaneText.includes('127.0.0.1:8787'), false)
+
+    const checkpointText = await page.locator('#review-checkpoint-panel').textContent()
+    assert.match(checkpointText, /Review import handoff/i)
+    assert.match(checkpointText, /Owner: host/i)
+    assert.match(checkpointText, /Location: Control Center -> Plugins/i)
+    assert.match(checkpointText, /proposal write failed/i)
+    assert.match(checkpointText, /\[redacted-local-url\]/i)
+    assert.equal(checkpointText.includes('127.0.0.1:8787'), false)
   } finally {
     await browser.close()
     await new Promise((resolve) => server.close(resolve))
@@ -861,6 +886,12 @@ test('creator studio dashboard shows imported full-pet review completion details
     const actionLaneText = await page.locator('#action-lane-panel').textContent()
     assert.match(actionLaneText, /Host-owned action: Review imported result/i)
     assert.match(actionLaneText, /Location: OpenPet/i)
+
+    const checkpointText = await page.locator('#review-checkpoint-panel').textContent()
+    assert.match(checkpointText, /Review imported result/i)
+    assert.match(checkpointText, /Owner: host/i)
+    assert.match(checkpointText, /Location: OpenPet/i)
+    assert.match(checkpointText, /Imported: yes/i)
   } finally {
     await browser.close()
     await new Promise((resolve) => server.close(resolve))
@@ -906,6 +937,11 @@ test('creator studio dashboard shows imported action missing trigger handoff rec
     assert.match(actionLaneText, /Host-owned action: Review import handoff/i)
     assert.match(actionLaneText, /Control Center -> Plugins/i)
     assert.match(actionLaneText, /no trigger proposal handoff record was saved/i)
+
+    const checkpointText = await page.locator('#review-checkpoint-panel').textContent()
+    assert.match(checkpointText, /Review import handoff/i)
+    assert.match(checkpointText, /Control Center -> Plugins/i)
+    assert.match(checkpointText, /no trigger proposal handoff record was saved/i)
   } finally {
     await browser.close()
     await new Promise((resolve) => server.close(resolve))
@@ -1021,6 +1057,11 @@ test('creator studio dashboard surfaces full-pet qa source mismatch before appro
     assert.match(workflowGuidanceText, /Import state: review-required/i)
     assert.match(workflowGuidanceText, /Retry generation on this same run before approval/i)
     assert.doesNotMatch(workflowGuidanceText, /Review the generated pet-pack output and approve the run before host-owned pet import/i)
+    const checkpointText = await page.locator('#review-checkpoint-panel').textContent()
+    assert.match(checkpointText, /Retry generation/i)
+    assert.match(checkpointText, /Owner: dashboard/i)
+    assert.match(checkpointText, /Location: Creator Studio dashboard/i)
+    assert.match(checkpointText, /Available in dashboard: yes/i)
   } finally {
     await browser.close()
     await new Promise((resolve) => server.close(resolve))

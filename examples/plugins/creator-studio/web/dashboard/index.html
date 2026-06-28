@@ -539,6 +539,10 @@
             <section id="action-lane-panel">Draft or load a run to see which action is available in the dashboard and which step must move to OpenPet.</section>
           </section>
           <section>
+            <h2>Review Checkpoint</h2>
+            <section id="review-checkpoint-panel">Draft or load a run to see the current review owner and next review location.</section>
+          </section>
+          <section>
             <h2>Next Step</h2>
             <section id="next-step-panel">Draft a task to see the next recommended action.</section>
           </section>
@@ -1178,6 +1182,31 @@
         ].join('')
       }
 
+      const renderReviewCheckpoint = (run) => {
+        const checkpoint = run?.reviewCheckpoint || {}
+        const blocked = checkpoint.blocked || checkpoint.blockedReason
+        return [
+          `<div class="notice ${blocked ? 'error' : ''}">`,
+          `<strong>${escapeHtml(checkpoint.label || 'Continue workflow')}</strong>`,
+          '<div class="meta-list">',
+          `<span>Owner: ${escapeHtml(checkpoint.owner || 'workflow')}</span>`,
+          `<span>Location: ${escapeHtml(checkpoint.location || 'Creator Studio')}</span>`,
+          `<span>Phase: ${escapeHtml(checkpoint.phase || 'draft')}</span>`,
+          `<span>Review: ${escapeHtml(checkpoint.reviewStatus || 'pending')} / Import: ${escapeHtml(checkpoint.importStatus || 'not-imported')}</span>`,
+          checkpoint.availableInDashboard ? '<span>Available in dashboard: yes</span>' : '<span>Available in dashboard: no</span>',
+          checkpoint.requiresHostAction ? '<span>Requires host-owned action: yes</span>' : '<span>Requires host-owned action: no</span>',
+          checkpoint.readyForApproval ? '<span>Ready for approval: yes</span>' : '',
+          checkpoint.readyForImport ? '<span>Ready for import: yes</span>' : '',
+          checkpoint.imported ? '<span>Imported: yes</span>' : '',
+          '</div>',
+          `<p>${escapeHtml(checkpoint.reason || 'Continue the Creator Studio workflow.')}</p>`,
+          checkpoint.blockedReason
+            ? `<p>Blocked reason: ${escapeHtml(checkpoint.blockedReason)}</p>`
+            : '',
+          '</div>'
+        ].join('')
+      }
+
       const renderImportHandoff = (run, actionFrames = null, actionReview = null, fullPetReview = null) => {
         const importGuidance = run?.workflowGuidance?.import || {}
         const handoff = importGuidance.handoff || {}
@@ -1276,6 +1305,7 @@
           $('run-snapshot-panel').textContent = 'Prompt snapshot and wizard state appear after you draft or load a run.'
           $('wizard-steps-panel').textContent = 'Draft a task to see the workflow rail.'
           $('action-lane-panel').textContent = 'Draft or load a run to see which action is available in the dashboard and which step must move to OpenPet.'
+          $('review-checkpoint-panel').textContent = 'Draft or load a run to see the current review owner and next review location.'
           $('next-step-panel').textContent = 'Draft a task to see the next recommended action.'
           $('task-preview').textContent = 'No task drafted yet.'
           $('task-edit-panel').textContent = 'Draft a task to edit action details before confirmation.'
@@ -1302,6 +1332,7 @@
         $('run-snapshot-panel').innerHTML = renderRunSnapshot(run)
         $('wizard-steps-panel').innerHTML = renderWizardSteps(run)
         $('action-lane-panel').innerHTML = renderActionLane(run)
+        $('review-checkpoint-panel').innerHTML = renderReviewCheckpoint(run)
         $('next-step-panel').innerHTML = renderNextStep(run)
         $('task-edit-panel').innerHTML = renderTaskEditPanel(run)
         if (isFullPetRun(run) && run.generationTask.characterBrief) {
