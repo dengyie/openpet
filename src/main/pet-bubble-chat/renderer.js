@@ -27,7 +27,8 @@ const createFallbackItem = (message = {}) => ({
   role: ['user', 'pet', 'system'].includes(message.role) ? message.role : 'pet',
   text: String(message.text || ''),
   source: message.source || 'Pet',
-  createdAt: message.createdAt || ''
+  createdAt: message.createdAt || '',
+  flowState: message.flowState || ''
 })
 
 const getRenderableItems = (state = {}) => {
@@ -45,7 +46,8 @@ const getRenderableItems = (state = {}) => {
       text: userText,
       source: 'user',
       createdAt: state.lastUserMessage?.createdAt || '',
-      status: state.sending ? 'sending' : 'sent'
+      status: state.sending ? 'sending' : 'sent',
+      flowState: state.sending ? 'sending' : 'sent'
     }
   ]
 }
@@ -91,7 +93,8 @@ const renderBubbleItems = (items = []) => {
     const role = item.role || 'system'
     const kind = item.kind || 'notice'
     const status = item.status || 'sent'
-    node.className = `bubble-item bubble-item--${kind} bubble-item--${role} bubble-item--${status}`
+    const flowState = item.flowState || ''
+    node.className = `bubble-item bubble-item--${kind} bubble-item--${role} bubble-item--${status}${flowState ? ` bubble-item--flow-${flowState}` : ''}`
     node.dataset.itemId = getItemKey(item, index)
 
     const label = document.createElement('span')
@@ -104,6 +107,17 @@ const renderBubbleItems = (items = []) => {
 
     node.appendChild(label)
     node.appendChild(text)
+    if (flowState === 'sending' || flowState === 'queued') {
+      const pending = document.createElement('span')
+      pending.className = 'bubble-item-meta'
+      pending.textContent = '...'
+      node.appendChild(pending)
+    } else if (flowState === 'pending-merge') {
+      const pending = document.createElement('span')
+      pending.className = 'bubble-item-meta'
+      pending.textContent = '待补发'
+      node.appendChild(pending)
+    }
     return node
   })
   if (typeof bubbleItems.replaceChildren === 'function') bubbleItems.replaceChildren(...nodes)
@@ -114,9 +128,13 @@ const renderBubbleItems = (items = []) => {
 }
 
 const renderState = (state = {}) => {
+  const nextAwaitingReply = Object.prototype.hasOwnProperty.call(state, 'awaitingReply')
+    ? Boolean(state.awaitingReply)
+    : (state.sending === false ? false : currentState.awaitingReply)
   currentState = {
     ...currentState,
     ...state,
+    awaitingReply: nextAwaitingReply,
     message: state.message === null ? null : (state.message || currentState.message || null)
   }
   const items = getRenderableItems(currentState)
@@ -139,15 +157,18 @@ const renderState = (state = {}) => {
   sourceLabel.textContent = getSourceLabel(items.at(-1) || currentState.message || {})
   pinButton.setAttribute('aria-pressed', currentState.pinned ? 'true' : 'false')
   pinButton.textContent = currentState.pinned ? '已定格' : '定格'
-  lastUserMessage.hidden = true
-  lastUserMessage.textContent = ''
+  const composerHint = currentState.error
+    ? '宠物刚才没接住，再试一次'
+    : (currentState.awaitingReply ? '宠物正在回复…' : '')
+  lastUserMessage.hidden = !composerHint
+  lastUserMessage.textContent = composerHint
   errorMessage.hidden = !currentState.error
   errorMessage.textContent = currentState.error || ''
-  inputForm.classList.toggle('expanded', expanded || Boolean(miniInput.value.trim()) || currentState.sending)
-  miniInput.disabled = Boolean(currentState.sending)
-  sendButton.disabled = Boolean(currentState.sending) || !miniInput.value.trim()
-  sendButton.textContent = currentState.sending ? '发送中' : '发送'
-  shell.hidden = !items.length && !currentState.error && !currentState.sending
+  inputForm.classList.toggle('expanded', expanded || Boolean(miniInput.value.trim()) || currentState.awaitingReply)
+  miniInput.disabled = false
+  sendButton.disabled = !miniInput.value.trim()
+  sendButton.textContent = currentState.awaitingReply ? '继续发送' : '发送'
+  shell.hidden = !items.length && !currentState.error && !currentState.sending && !currentState.awaitingReply
   if (!holdScroll) scrollToLatest()
   updateUnseenButton()
 }
@@ -274,10 +295,16 @@ miniInput.addEventListener('keydown', (event) => {
 inputForm.addEventListener('submit', async (event) => {
   event.preventDefault()
   const message = miniInput.value.trim()
-  if (!message || currentState.sending) return
+  if (!message) return
   miniInput.value = ''
   expanded = true
-  renderState({ ...currentState, sending: true, error: '', lastUserMessage: { text: message, createdAt: new Date().toISOString() } })
+  renderState({
+    ...currentState,
+    sending: true,
+    awaitingReply: true,
+    error: '',
+    lastUserMessage: { text: message, createdAt: new Date().toISOString() }
+  })
   setHitTestMode(true, 'renderer-send-started')
   try {
     const result = await window.petBubbleChatAPI.sendMessage({ message })

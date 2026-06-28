@@ -13,9 +13,12 @@ const WORK_AREA_MARGIN = 8
 const MIN_TTL_MS = 6000
 const MAX_TTL_MS = 30000
 const MANUAL_OPEN_PROMPT = '想聊点什么？'
-const MAX_DIALOGUE_ITEMS = 6
+const MAX_DIALOGUE_ITEMS = 8
 const MAX_NOTICE_ITEMS = 3
 const MAX_NOTICE_BUFFER_ITEMS = 20
+const DEFAULT_HISTORY_TTL_MS = 8000
+const MIN_HISTORY_TTL_MS = 6000
+const MAX_HISTORY_TTL_MS = 30000
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max)
 
@@ -203,6 +206,37 @@ const getCurrentDialogueItems = (items = []) => (
     .slice(-MAX_DIALOGUE_ITEMS)
 )
 
+const createPendingUserItemId = () => `pending-user:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 10)}`
+
+const normalizePendingUserMessage = (payload = {}) => {
+  const text = String(payload.text || '').trim().replace(/\s+/g, ' ')
+  if (!text) return null
+  return {
+    id: typeof payload.id === 'string' && payload.id ? payload.id : createPendingUserItemId(),
+    text: text.slice(0, 1000),
+    createdAt: typeof payload.createdAt === 'string' && payload.createdAt ? payload.createdAt : new Date().toISOString(),
+    requestId: typeof payload.requestId === 'string' ? payload.requestId.slice(0, 120) : '',
+    status: ['queued', 'sending', 'pending-merge'].includes(payload.status) ? payload.status : 'queued'
+  }
+}
+
+const createPendingBubbleItem = (pendingMessage = {}) => ({
+  id: pendingMessage.id,
+  kind: 'dialogue',
+  role: 'user',
+  text: pendingMessage.text,
+  source: 'user',
+  sourceSurface: 'bubble-chat',
+  createdAt: pendingMessage.createdAt,
+  conversationId: '',
+  messageId: '',
+  requestId: pendingMessage.requestId || '',
+  status: pendingMessage.status === 'pending-merge'
+    ? 'failed'
+    : (pendingMessage.status === 'sending' ? 'sending' : 'sent'),
+  flowState: pendingMessage.status
+})
+
 const buildBubbleChatItems = ({ conversationMessages = [], noticeItems = [] } = {}) => {
   const dialogueItems = createDialogueItemsFromMessages(conversationMessages)
   const notices = (Array.isArray(noticeItems) ? noticeItems : [])
@@ -230,8 +264,11 @@ const createPetBubbleChatWindowManager = ({
   if (!settingsService) throw new Error('settingsService is required')
   let bubbleWindow = null
   let hideTimer = null
+  let historyTimer = null
   let allowClose = false
   let appliedHitTestInteractive = null
+  let lastConversationMessages = []
+  const dialogueVisibility = new Map()
   let state = {
     visible: false,
     hasWindow: false,
@@ -240,10 +277,12 @@ const createPetBubbleChatWindowManager = ({
     message: null,
     items: [],
     noticeItems: [],
+    pendingUserMessages: [],
     unseenCount: 0,
     hitTestInteractive: false,
     lastUserMessage: null,
     sending: false,
+    awaitingReply: false,
     error: '',
     placement: '',
     bounds: null
@@ -277,6 +316,11 @@ const createPetBubbleChatWindowManager = ({
     hideTimer = null
   }
 
+  const clearHistoryTimer = () => {
+    if (historyTimer) clearTimeout(historyTimer)
+    historyTimer = null
+  }
+
   const sendStateChanged = () => {
     if (!bubbleWindow || bubbleWindow.isDestroyed?.()) return
     bubbleWindow.webContents?.send?.(IPC.PET_BUBBLE_CHAT_STATE_CHANGED, getState())
@@ -294,6 +338,7 @@ const createPetBubbleChatWindowManager = ({
 
   const hide = ({ source = 'pet-bubble-chat' } = {}) => {
     clearHideTimer()
+    clearHistoryTimer()
     if (bubbleWindow && !bubbleWindow.isDestroyed?.()) bubbleWindow.hide?.()
     patchState({ visible: false, interacting: false, hitTestInteractive: false })
     applyHitTestMode(false)
@@ -308,7 +353,63 @@ const createPetBubbleChatWindowManager = ({
 
   const shouldHoldVisible = () => {
     const settings = getSettings()
-    return state.pinned || state.interacting || settings.autoHide === false
+    return state.pinned || state.interacting || state.awaitingReply || settings.autoHide === false
+  }
+
+  const getDialogueVisibilityKey = (item = {}) => item.messageId || item.id || `${item.role}:${item.createdAt}:${item.text}`
+
+  const markDialogueVisibility = (items = []) => {
+    const now = Date.now()
+    for (const item of items) {
+      if (item.kind !== 'dialogue' || !item.text) continue
+      const key = getDialogueVisibilityKey(item)
+      const existing = dialogueVisibility.get(key)
+      if (existing) continue
+      const ttlMs = clamp(
+        Number(item.ttlMs) || calculateBubbleTtlMs({ text: item.text, source: item.source }),
+        MIN_HISTORY_TTL_MS,
+        MAX_HISTORY_TTL_MS
+      )
+      dialogueVisibility.set(key, {
+        visibleUntil: now + ttlMs,
+        hidden: false
+      })
+    }
+  }
+
+  const pruneDialogueVisibility = (items = []) => {
+    const now = Date.now()
+    if (shouldHoldVisible()) return
+    for (const item of items) {
+      if (item.kind !== 'dialogue' || !item.text) continue
+      const key = getDialogueVisibilityKey(item)
+      const existing = dialogueVisibility.get(key)
+      if (!existing || existing.hidden) continue
+      if (existing.visibleUntil <= now) {
+        dialogueVisibility.set(key, { ...existing, hidden: true })
+      }
+    }
+  }
+
+  const scheduleHistoryPrune = () => {
+    clearHistoryTimer()
+    if (shouldHoldVisible()) return
+    const candidates = Array.from(dialogueVisibility.values())
+      .filter((entry) => entry && !entry.hidden && Number.isFinite(entry.visibleUntil))
+      .map((entry) => entry.visibleUntil)
+      .sort((a, b) => a - b)
+    if (!candidates.length) return
+    const delay = Math.max(100, candidates[0] - Date.now())
+    historyTimer = setTimeout(() => {
+      rebuildItems({
+        conversationMessages: lastConversationMessages,
+        noticeItems: state.noticeItems,
+        reason: 'history-expired'
+      })
+      if (!state.items.length && !state.pendingUserMessages.length && !state.error && !state.awaitingReply && !state.interacting && !state.pinned) {
+        hide({ source: 'history-expired' })
+      }
+    }, delay)
   }
 
   const scheduleAutoHide = () => {
@@ -450,12 +551,31 @@ const createPetBubbleChatWindowManager = ({
   }
 
   const rebuildItems = ({ conversationMessages = [], noticeItems = state.noticeItems, reason = 'manual' } = {}) => {
+    lastConversationMessages = Array.isArray(conversationMessages) ? [...conversationMessages] : []
     const normalizedNotices = (Array.isArray(noticeItems) ? noticeItems : [])
       .map((item) => normalizeBubbleChatItem({ ...item, kind: 'notice', role: item.role || 'system' }))
       .filter(Boolean)
       .slice(-MAX_NOTICE_BUFFER_ITEMS)
-    const items = buildBubbleChatItems({ conversationMessages, noticeItems: normalizedNotices })
+    const dialogueItems = createDialogueItemsFromMessages(lastConversationMessages)
+    markDialogueVisibility(dialogueItems)
+    pruneDialogueVisibility(dialogueItems)
+    const visibleDialogueItems = dialogueItems
+      .filter((item) => {
+        const visibility = dialogueVisibility.get(getDialogueVisibilityKey(item))
+        return !visibility?.hidden
+      })
+      .slice(-MAX_DIALOGUE_ITEMS)
+    const pendingItems = state.pendingUserMessages
+      .map((item) => normalizePendingUserMessage(item))
+      .filter(Boolean)
+      .map((item) => createPendingBubbleItem(item))
+    const items = sortBubbleItems([
+      ...visibleDialogueItems,
+      ...pendingItems,
+      ...normalizedNotices.slice(-MAX_NOTICE_ITEMS)
+    ])
     patchState({ items, noticeItems: normalizedNotices, message: getLatestBubbleItem(items, state.message) })
+    scheduleHistoryPrune()
     recordLog({
       level: 'debug',
       event: 'pet-bubble-chat.items.updated',
@@ -562,6 +682,7 @@ const createPetBubbleChatWindowManager = ({
       details: { source }
     })
     scheduleAutoHide()
+    scheduleHistoryPrune()
     return getState()
   }
 
@@ -574,6 +695,7 @@ const createPetBubbleChatWindowManager = ({
       details: { source, interacting: Boolean(interacting) }
     })
     scheduleAutoHide()
+    scheduleHistoryPrune()
     return getState()
   }
 
@@ -599,12 +721,122 @@ const createPetBubbleChatWindowManager = ({
       : state.lastUserMessage
     patchState({
       sending: Boolean(sending),
+      awaitingReply: Boolean(sending) || state.pendingUserMessages.some((item) => item.status === 'queued' || item.status === 'sending'),
       lastUserMessage: normalizedUserMessage?.text ? normalizedUserMessage : null,
       error: String(error || '').slice(0, 240),
       interacting: Boolean(sending) || Boolean(error) || state.interacting
     })
     scheduleAutoHide()
+    scheduleHistoryPrune()
     return getState()
+  }
+
+  const queueOutgoingMessage = ({ text, requestId = '' } = {}) => {
+    const pending = normalizePendingUserMessage({
+      text,
+      requestId,
+      status: state.sending ? 'queued' : 'sending'
+    })
+    if (!pending) return { state: getState(), shouldStartRequest: false, batchMessages: [] }
+    const pendingUserMessages = [...state.pendingUserMessages, pending]
+    patchState({
+      pendingUserMessages,
+      awaitingReply: true,
+      error: '',
+      lastUserMessage: { text: pending.text, createdAt: pending.createdAt }
+    })
+    rebuildItems({
+      conversationMessages: lastConversationMessages,
+      noticeItems: state.noticeItems,
+      reason: state.sending ? 'queue-outgoing-while-sending' : 'queue-outgoing'
+    })
+    if (state.sending) {
+      return { state: getState(), shouldStartRequest: false, batchMessages: [] }
+    }
+    const nextPendingUserMessages = pendingUserMessages.map((item) => (
+      item.status === 'pending-merge' || item.id === pending.id
+        ? { ...item, status: 'sending', requestId }
+        : item
+    ))
+    patchState({
+      pendingUserMessages: nextPendingUserMessages,
+      sending: true,
+      awaitingReply: true
+    })
+    rebuildItems({
+      conversationMessages: lastConversationMessages,
+      noticeItems: state.noticeItems,
+      reason: 'request-started'
+    })
+    return {
+      state: getState(),
+      shouldStartRequest: true,
+      batchMessages: nextPendingUserMessages
+        .filter((item) => item.requestId === requestId && item.status === 'sending')
+        .map((item) => item.text)
+    }
+  }
+
+  const completeRequest = ({ requestId = '', conversationMessages = [] } = {}) => {
+    const remainingPending = state.pendingUserMessages.filter((item) => item.requestId !== requestId)
+    patchState({
+      pendingUserMessages: remainingPending,
+      sending: false,
+      awaitingReply: remainingPending.length > 0,
+      error: ''
+    })
+    const nextState = rebuildItems({
+      conversationMessages,
+      noticeItems: state.noticeItems,
+      reason: 'request-completed'
+    })
+    return nextState
+  }
+
+  const failRequest = ({ requestId = '', error = '' } = {}) => {
+    const nextPending = state.pendingUserMessages.map((item) => ({
+      ...item,
+      status: item.requestId === requestId || item.status === 'queued' || item.status === 'sending'
+        ? 'pending-merge'
+        : item.status,
+      requestId: item.requestId === requestId ? '' : item.requestId
+    }))
+    patchState({
+      pendingUserMessages: nextPending,
+      sending: false,
+      awaitingReply: nextPending.length > 0,
+      error: String(error || '').slice(0, 240)
+    })
+    return rebuildItems({
+      conversationMessages: lastConversationMessages,
+      noticeItems: state.noticeItems,
+      reason: 'request-failed'
+    })
+  }
+
+  const startQueuedRequest = (requestId = '') => {
+    if (state.sending) return []
+    const queued = state.pendingUserMessages.filter((item) => item.status === 'queued' || item.status === 'pending-merge')
+    if (!queued.length) return []
+    const nextPendingUserMessages = state.pendingUserMessages.map((item) => (
+      item.status === 'queued' || item.status === 'pending-merge'
+        ? { ...item, status: 'sending', requestId }
+        : item
+    ))
+    patchState({
+      pendingUserMessages: nextPendingUserMessages,
+      sending: true,
+      awaitingReply: true,
+      error: ''
+    })
+    rebuildItems({
+      conversationMessages: lastConversationMessages,
+      noticeItems: state.noticeItems,
+      reason: 'queued-request-started'
+    })
+    return nextPendingUserMessages
+      .filter((item) => item.requestId === requestId && item.status === 'sending')
+      .map((item) => item.text)
   }
 
   const getState = () => ({
@@ -626,6 +858,10 @@ const createPetBubbleChatWindowManager = ({
     setHitTestMode,
     setPinned,
     setSendingState,
+    queueOutgoingMessage,
+    completeRequest,
+    failRequest,
+    startQueuedRequest,
     appendNoticeOrDialogue,
     refreshItems,
     rebuildItems,

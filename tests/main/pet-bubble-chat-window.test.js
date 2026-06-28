@@ -131,6 +131,8 @@ test('createDialogueItemsFromMessages keeps only the latest lightweight dialogue
   ])
 
   assert.deepEqual(dialogueItems.map((item) => item.text), [
+    '第1句',
+    '第2句',
     '第3句',
     '第4句',
     '第5句',
@@ -421,7 +423,7 @@ test('pet bubble chat manager keeps only the latest dialogue slice while preserv
 
   assert.deepEqual(
     state.items.filter((item) => item.kind === 'dialogue').map((item) => item.text),
-    ['第3句', '第4句', '第5句', '第6句', '第7句', '第8句']
+    ['第1句', '第2句', '第3句', '第4句', '第5句', '第6句', '第7句', '第8句']
   )
   assert.deepEqual(
     state.items.filter((item) => item.kind === 'notice').map((item) => item.text),
@@ -640,4 +642,64 @@ test('pet bubble chat manager stays visible during sending and after a recoverab
     global.setTimeout = originalSetTimeout
     global.clearTimeout = originalClearTimeout
   }
+})
+
+test('pet bubble chat manager supports queued follow-ups and pending-merge recovery', () => {
+  const { FakeBrowserWindow } = createFakeBrowserWindow()
+  const { createPetBubbleChatWindowManager } = loadModuleWithElectron({
+    BrowserWindow: FakeBrowserWindow,
+    app: { on: () => {} },
+    screen: {
+      getDisplayMatching: () => ({ workArea: { x: 0, y: 0, width: 900, height: 700 } })
+    }
+  })
+  const manager = createPetBubbleChatWindowManager({
+    BrowserWindow: FakeBrowserWindow,
+    screen: { getDisplayMatching: () => ({ workArea: { x: 0, y: 0, width: 900, height: 700 } }) },
+    settingsService: { get: () => ({ petBubbleChat: { enabled: true, autoPopup: true, autoHide: true } }) },
+    getPetWindow: () => ({
+      isDestroyed: () => false,
+      getBounds: () => ({ x: 300, y: 300, width: 120, height: 120 })
+    })
+  })
+
+  const first = manager.queueOutgoingMessage({ text: '第一句', requestId: 'req-1' })
+  const second = manager.queueOutgoingMessage({ text: '第二句', requestId: 'req-2' })
+
+  assert.equal(first.shouldStartRequest, true)
+  assert.deepEqual(first.batchMessages, ['第一句'])
+  assert.equal(second.shouldStartRequest, false)
+  assert.equal(manager.getState().pendingUserMessages.length, 2)
+  assert.deepEqual(manager.getState().items.filter((item) => item.role === 'user').map((item) => [item.text, item.flowState]), [
+    ['第一句', 'sending'],
+    ['第二句', 'queued']
+  ])
+
+  manager.failRequest({ requestId: 'req-1', error: 'Temporary provider failure' })
+
+  assert.deepEqual(manager.getState().items.filter((item) => item.role === 'user').map((item) => [item.text, item.flowState]), [
+    ['第一句', 'pending-merge'],
+    ['第二句', 'pending-merge']
+  ])
+  assert.equal(manager.getState().error, 'Temporary provider failure')
+
+  const retryBatch = manager.startQueuedRequest('req-3')
+  assert.deepEqual(retryBatch, ['第一句', '第二句'])
+
+  const completed = manager.completeRequest({
+    requestId: 'req-3',
+    conversationMessages: [
+      { id: 'u1', role: 'user', content: '第一句', createdAt: '2026-06-24T00:00:00.000Z' },
+      { id: 'u2', role: 'user', content: '第二句', createdAt: '2026-06-24T00:00:01.000Z' },
+      { id: 'a1', role: 'assistant', content: '一起回复', createdAt: '2026-06-24T00:00:02.000Z' }
+    ]
+  })
+
+  assert.equal(completed.pendingUserMessages.length, 0)
+  assert.equal(completed.awaitingReply, false)
+  assert.deepEqual(completed.items.filter((item) => item.kind === 'dialogue').map((item) => item.text), [
+    '第一句',
+    '第二句',
+    '一起回复'
+  ])
 })

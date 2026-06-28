@@ -188,6 +188,16 @@ button[aria-pressed="true"] {
   opacity: 0.72;
 }
 
+.bubble-item--flow-queued,
+.bubble-item--flow-sending {
+  opacity: 0.84;
+}
+
+.bubble-item--flow-pending-merge {
+  border-style: dashed;
+  background: rgba(255, 247, 232, 0.78);
+}
+
 .bubble-item-source {
   font-size: 10px;
   font-weight: 800;
@@ -203,6 +213,14 @@ button[aria-pressed="true"] {
   line-height: 1.36;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.bubble-item-meta {
+  margin-top: 2px;
+  color: rgba(79, 47, 26, 0.52);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .bubble-item--notice .bubble-item-text {
@@ -238,6 +256,11 @@ button[aria-pressed="true"] {
   overflow: hidden;
   transition: max-height 160ms ease, opacity 160ms ease;
   opacity: 0.72;
+  padding: 8px 9px;
+  border: 1px solid rgba(74, 45, 24, 0.08);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.52);
+  box-shadow: 0 5px 16px rgba(72, 38, 12, 0.06);
 }
 
 .mini-input-form.expanded,

@@ -633,16 +633,77 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     })
     try {
       assertPetChatReady()
-      petBubbleChatWindowService?.setSendingState?.({
-        sending: true,
-        lastUserMessage: { text: message }
-      })
-      const result = await runAiChatRequest({ message, entrypoint: 'control-center', requestId }, { source: 'bubble-chat' })
-      petBubbleChatWindowService?.setSendingState?.({
-        sending: false,
-        lastUserMessage: { text: message },
-        error: ''
-      })
+      if (aiTalkService?.appendUserMessages) {
+        aiTalkService.appendUserMessages({
+          messages: [message],
+          entrypoint: 'control-center'
+        })
+      }
+      const queued = petBubbleChatWindowService?.queueOutgoingMessage?.({ text: message, requestId })
+      if (!queued) {
+        petBubbleChatWindowService?.setSendingState?.({
+          sending: true,
+          lastUserMessage: { text: message }
+        })
+      }
+      if (queued && queued.shouldStartRequest === false) {
+        recordAppLog({
+          scope: 'pet-bubble-chat',
+          level: 'info',
+          actor: 'system',
+          event: 'pet-bubble-chat.message.queued',
+          message: 'Pet bubble chat message queued behind an active reply',
+          details: {
+            requestId,
+            elapsedMs: Date.now() - startedAt
+          }
+        })
+        return {
+          conversationId: '',
+          reply: '',
+          bubbleSegments: [],
+          queued: true,
+          state: queued.state || petBubbleChatWindowService?.getState?.()
+        }
+      }
+      const batchMessages = Array.isArray(queued?.batchMessages) && queued.batchMessages.length
+        ? queued.batchMessages
+        : [message]
+      const runBubbleBatch = async (batchRequestId, messagesForBatch) => {
+        const batchResult = await runAiChatRequest({
+          message: messagesForBatch.at(-1) || '',
+          messageBatch: messagesForBatch,
+          entrypoint: 'control-center',
+          requestId: batchRequestId,
+          skipUserAppend: Boolean(aiTalkService?.appendUserMessages)
+        }, { source: 'bubble-chat' })
+        petBubbleChatWindowService?.completeRequest?.({
+          requestId: batchRequestId,
+          conversationMessages: Array.isArray(batchResult.messages) ? batchResult.messages : []
+        })
+        const nextRequestId = createBubbleRequestId()
+        const queuedMessages = petBubbleChatWindowService?.startQueuedRequest?.(nextRequestId) || []
+        if (queuedMessages.length) {
+          void runBubbleBatch(nextRequestId, queuedMessages).catch((error) => {
+            const safeMessage = error?.providerStatus
+              ? 'AI provider returned an error response'
+              : sanitizeDiagnosticText(error?.message)
+            petBubbleChatWindowService?.failRequest?.({
+              requestId: nextRequestId,
+              error: safeMessage || 'Pet bubble chat message failed'
+            })
+          })
+        }
+        return batchResult
+      }
+      const result = await runBubbleBatch(requestId, batchMessages)
+      if (!queued) {
+        petBubbleChatWindowService?.setSendingState?.({
+          sending: false,
+          lastUserMessage: { text: message },
+          error: ''
+        })
+      }
       const state = refreshBubbleChatItems({ reason: 'bubble-chat-send' }) || petBubbleChatWindowService?.getState?.()
       recordAppLog({
         scope: 'pet-bubble-chat',
@@ -665,11 +726,18 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
       const safeMessage = error?.providerStatus
         ? 'AI provider returned an error response'
         : sanitizeDiagnosticText(error?.message)
-      petBubbleChatWindowService?.setSendingState?.({
-        sending: false,
-        lastUserMessage: message ? { text: message } : null,
-        error: safeMessage || 'Pet bubble chat message failed'
-      })
+      if (petBubbleChatWindowService?.failRequest) {
+        petBubbleChatWindowService.failRequest({
+          requestId,
+          error: safeMessage || 'Pet bubble chat message failed'
+        })
+      } else {
+        petBubbleChatWindowService?.setSendingState?.({
+          sending: false,
+          lastUserMessage: message ? { text: message } : null,
+          error: safeMessage || 'Pet bubble chat message failed'
+        })
+      }
       recordAppLog({
         scope: 'pet-bubble-chat',
         level: 'error',

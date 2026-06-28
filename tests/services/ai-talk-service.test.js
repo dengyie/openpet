@@ -275,6 +275,77 @@ test('ai talk service serializes concurrent messages for the same main conversat
   ])
 })
 
+test('ai talk service can send a merged user batch while preserving separate transcript messages', async () => {
+  const requests = []
+  const store = createStore()
+  const service = createAiTalkService({
+    aiService: {
+      getConfig: () => ({ enabled: true, behavior: { enabled: false, useTools: true } }),
+      complete: async (request) => {
+        requests.push(request)
+        return { reply: '我一起接住了。' }
+      }
+    },
+    aiTalkStore: store,
+    petPackService: createPetPackService({ id: 'legacy-cat' })
+  })
+
+  const result = await service.chat({
+    messageBatch: ['第一句', '第二句'],
+    requestId: 'chat-batch-1'
+  })
+
+  assert.equal(result.reply, '我一起接住了。')
+  assert.deepEqual(requests[0].messages.map((message) => message.content), [
+    requests[0].messages[0].content,
+    '第一句',
+    '第二句'
+  ])
+  assert.deepEqual(store.getMessages('control-center:legacy-cat', 'main').map((message) => message.content), [
+    '第一句',
+    '第二句',
+    '我一起接住了。'
+  ])
+})
+
+test('ai talk service can persist queued user messages before provider completion and skip duplicate appends', async () => {
+  const requests = []
+  const store = createStore()
+  const service = createAiTalkService({
+    aiService: {
+      getConfig: () => ({ enabled: true, behavior: { enabled: false, useTools: true } }),
+      complete: async (request) => {
+        requests.push(request)
+        return { reply: '排队回复。' }
+      }
+    },
+    aiTalkStore: store,
+    petPackService: createPetPackService({ id: 'legacy-cat' })
+  })
+
+  const appended = service.appendUserMessages({
+    messages: ['先发一句', '再补一句'],
+    entrypoint: 'control-center'
+  })
+  const result = await service.chat({
+    messageBatch: ['先发一句', '再补一句'],
+    entrypoint: 'control-center',
+    skipUserAppend: true
+  })
+
+  assert.equal(appended.conversationId, 'control-center:legacy-cat:main')
+  assert.deepEqual(requests[0].messages.map((message) => message.content), [
+    requests[0].messages[0].content,
+    '先发一句',
+    '再补一句'
+  ])
+  assert.deepEqual(result.messages.map((message) => message.content), [
+    '先发一句',
+    '再补一句',
+    '排队回复。'
+  ])
+})
+
 test('ai talk service provides current pet action candidates to behavior tool request', async () => {
   const requests = []
   const service = createAiTalkService({
