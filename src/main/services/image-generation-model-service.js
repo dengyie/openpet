@@ -543,6 +543,120 @@ const createImageGenerationModelService = ({
     }
   }
 
+  const discoverModels = async () => {
+    const config = getStoredConfig()
+    const requestId = idFactory()
+    const startedMs = nowMs()
+    const baseUrl = assertProviderBaseUrl(config.baseUrl)
+    recordLog({
+      level: 'info',
+      event: 'imageGeneration.models.started',
+      message: 'Image Provider model discovery started',
+      details: {
+        requestId,
+        provider: config.provider,
+        model: config.model,
+        baseUrlHost: getUrlHost(baseUrl)
+      }
+    })
+
+    const completeDiscovery = (result, extraDetails = {}) => {
+      recordLog({
+        level: result.ok ? 'info' : 'error',
+        event: result.ok ? 'imageGeneration.models.completed' : 'imageGeneration.models.failed',
+        message: result.ok ? 'Image Provider model discovery completed' : 'Image Provider model discovery failed',
+        details: {
+          requestId,
+          provider: config.provider,
+          model: config.model,
+          baseUrlHost: getUrlHost(baseUrl),
+          durationMs: nowMs() - startedMs,
+          errorCode: result.ok ? '' : result.code,
+          modelCount: Array.isArray(result.models) ? result.models.length : 0,
+          ...extraDetails
+        }
+      })
+      return result
+    }
+
+    try {
+      const apiKey = secretService.getSecretValue(config.apiKeyRef)
+      const baseResult = {
+        provider: config.provider,
+        baseUrl,
+        model: config.model,
+        hasApiKey: Boolean(apiKey)
+      }
+      if (!apiKey) {
+        return completeDiscovery({
+          ok: false,
+          ...baseResult,
+          models: [],
+          code: 'missing_api_key',
+          message: 'Image generation API key is missing'
+        })
+      }
+      const response = await fetchImpl(`${baseUrl}/models`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${apiKey}`
+        }
+      })
+      const status = response?.status || 'error'
+      const body = response?.json ? await response.json().catch(() => ({})) : {}
+      if (!response?.ok) {
+        if (isOptionalModelsProbeStatus(status)) {
+          return completeDiscovery(
+            {
+              ok: true,
+              ...baseResult,
+              models: [],
+              code: 'provider_reachable_models_unavailable',
+              message: 'Image Provider is reachable, but the optional /models probe is unavailable'
+            },
+            { status, modelsProbe: 'unavailable' }
+          )
+        }
+        return completeDiscovery(
+          {
+            ok: false,
+            ...baseResult,
+            models: [],
+            code: 'provider_unhealthy',
+            message: `Image Provider responded with HTTP ${status}`
+          },
+          { status, modelsProbe: 'failed', providerMessage: extractProviderBusinessError(body) }
+        )
+      }
+      return completeDiscovery(
+        {
+          ok: true,
+          ...baseResult,
+          models: extractDiscoveredModels(body),
+          code: 'ok',
+          message: 'Image Provider model discovery succeeded'
+        },
+        { status, modelsProbe: 'ok' }
+      )
+    } catch (error) {
+      recordLog({
+        level: 'error',
+        event: 'imageGeneration.models.failed',
+        message: 'Image Provider model discovery failed',
+        details: {
+          requestId,
+          provider: config.provider,
+          model: config.model,
+          baseUrlHost: getUrlHost(baseUrl),
+          durationMs: nowMs() - startedMs,
+          errorCode: 'model_discovery_error',
+          errorMessage: String(error?.message || error).slice(0, 240)
+        }
+      })
+      throw error
+    }
+  }
+
   const generateProviderImage = async ({ config, prompt, targetDir, relativeDir, constraints, requestId }) => {
     const apiKey = secretService.getSecretValue(config.apiKeyRef)
     if (!apiKey) throw new Error('Image generation API key is missing')
@@ -795,6 +909,7 @@ const createImageGenerationModelService = ({
     saveCloudApiKey: saveProviderApiKey,
     clearCloudApiKey: clearProviderApiKey,
     checkHealth,
+    discoverModels,
     generateImage
   }
 }

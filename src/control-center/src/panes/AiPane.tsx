@@ -13,6 +13,7 @@ import type {
   AiTalkTraceSummaryViewState,
   ChatMessage,
   ImageGenerationConfigViewState,
+  ProviderModelDiscoveryResult,
   PetChatStateViewState
 } from '../../../shared/openpet-contracts'
 import { Toggle } from '../components/Toggle'
@@ -476,13 +477,19 @@ export interface AiPaneProps {
   activeProviderSummary: string
   providerConfigValidationError: string
   connectionTestResult: AiConnectionTestResult | null
+  chatModelDiscovery: ProviderModelDiscoveryResult | null
+  chatModelDiscoveryStatus: string
   imageProviderValidationError: string
   imageHealthResult: ImageGenerationHealthCheckResult | null
+  imageModelDiscovery: ProviderModelDiscoveryResult | null
+  imageModelDiscoveryStatus: string
+  imageTransparencyCompatibilityHint: string
   onChange: (partial: Partial<AiConfigViewState>) => void
   onChangeImageGeneration: (partial: Partial<ImageGenerationConfigViewState>) => void
   onSave: () => void | Promise<void>
   onSaveApiKey: () => void | Promise<void>
   onTest: () => void | Promise<void>
+  onDiscoverAiModels: () => void | Promise<void>
   onSaveImageGeneration: () => void | Promise<void>
   onSavePersonaOverride: () => void | Promise<void>
   onResetPersonaOverride: () => void | Promise<void>
@@ -492,6 +499,7 @@ export interface AiPaneProps {
   onSaveImageGenerationApiKey: () => void | Promise<void>
   onClearImageGenerationApiKey: () => void | Promise<void>
   onCheckImageGenerationHealth: () => void | Promise<void>
+  onDiscoverImageGenerationModels: () => void | Promise<void>
   onSendChat: () => void | Promise<void>
   saving: boolean
   status: string
@@ -556,13 +564,19 @@ export function AiPane({
   activeProviderSummary,
   providerConfigValidationError,
   connectionTestResult,
+  chatModelDiscovery,
+  chatModelDiscoveryStatus,
   imageProviderValidationError,
   imageHealthResult,
+  imageModelDiscovery,
+  imageModelDiscoveryStatus,
+  imageTransparencyCompatibilityHint,
   onChange,
   onChangeImageGeneration,
   onSave,
   onSaveApiKey,
   onTest,
+  onDiscoverAiModels,
   onSaveImageGeneration,
   onSavePersonaOverride,
   onResetPersonaOverride,
@@ -572,6 +586,7 @@ export function AiPane({
   onSaveImageGenerationApiKey,
   onClearImageGenerationApiKey,
   onCheckImageGenerationHealth,
+  onDiscoverImageGenerationModels,
   onSendChat,
   saving,
   status,
@@ -709,9 +724,32 @@ export function AiPane({
             </select>
           </label>
 
+          <div className="field-row tall">
+            <div>
+              <div className="field-label">聊天 Provider 预设</div>
+              <div className="field-note">预设只填充 Base URL / Model，不读取也不覆盖 API Key。</div>
+            </div>
+            <div className="provider-preset-grid">
+              {chatProviderPresets.map((preset) => (
+                <button
+                  type="button"
+                  key={preset.id}
+                  className="provider-preset-card"
+                  onClick={() => applyChatProviderPreset(preset)}
+                  disabled={saving}
+                >
+                  <strong>{preset.title}</strong>
+                  <span>{preset.description}</span>
+                  <code>{preset.baseUrl}</code>
+                </button>
+              ))}
+            </div>
+          </div>
+
           <label className="field-row">
             <span className="field-label">Base URL</span>
             <input
+              aria-label="聊天 Base URL"
               className="text-input"
               value={config.baseUrl}
               onChange={(event) => onChange({ baseUrl: event.target.value })}
@@ -721,6 +759,7 @@ export function AiPane({
           <label className="field-row">
             <span className="field-label">Model</span>
             <input
+              aria-label="聊天 Model"
               className="text-input"
               value={config.model}
               onChange={(event) => onChange({ model: event.target.value })}
@@ -756,6 +795,7 @@ export function AiPane({
             </div>
             <div className="inline-action">
               <input
+                aria-label="聊天 API Key"
                 className="text-input"
                 type="password"
                 value={apiKeyDraft}
@@ -790,6 +830,17 @@ export function AiPane({
           </div>
         </div>
 
+        {(chatModelDiscoveryStatus || chatModelDiscovery) ? (
+          <div className="readonly-row" data-testid="ai-chat-model-discovery">
+            <strong>聊天模型探测</strong>
+            <span>
+              {[chatModelDiscoveryStatus, chatModelDiscovery?.models?.length ? `models: ${chatModelDiscovery.models.join(', ')}` : '']
+                .filter(Boolean)
+                .join(' · ')}
+            </span>
+          </div>
+        ) : null}
+
         {(connectionStatus || connectionTestResult) ? (
           <div
             className={`provider-feedback ${connectionTestResult ? (connectionTestResult.ok ? 'ok' : 'error') : ''}`}
@@ -821,6 +872,9 @@ export function AiPane({
         </div>
 
         <div className="section-actions provider-actions-bottom">
+          <button type="button" className="ghost" onClick={onDiscoverAiModels} disabled={saving}>
+            刷新聊天模型
+          </button>
           <button type="button" className="ghost" onClick={onTest} disabled={saving}>
             测试已保存配置
           </button>
@@ -832,6 +886,9 @@ export function AiPane({
 
       <CollapsibleAiSection title="图片 Provider" note="Creator Studio 生成图片使用的 OpenAI-compatible Provider" defaultOpen>
         <div className="section-actions">
+          <button type="button" className="ghost" onClick={onDiscoverImageGenerationModels} disabled={saving}>
+            刷新图片模型
+          </button>
           <button type="button" className="ghost" onClick={onCheckImageGenerationHealth} disabled={saving}>
             检查图片健康
           </button>
@@ -912,6 +969,22 @@ export function AiPane({
             <span>{imageModelCompatibility.summary}</span>
           </div>
 
+          {(imageModelDiscoveryStatus || imageModelDiscovery) ? (
+            <div className="readonly-row" data-testid="ai-image-model-discovery">
+              <strong>图片模型探测</strong>
+              <span>
+                {[imageModelDiscoveryStatus, imageModelDiscovery?.models?.length ? `models: ${imageModelDiscovery.models.join(', ')}` : '']
+                  .filter(Boolean)
+                  .join(' · ')}
+              </span>
+            </div>
+          ) : null}
+
+          <div className="readonly-row" data-testid="ai-image-compatibility-hint">
+            <strong>透明背景兼容性</strong>
+            <span>{imageTransparencyCompatibilityHint}</span>
+          </div>
+
           <label className="field-row">
             <span className="field-label">图片 Base URL</span>
             <input
@@ -974,6 +1047,7 @@ export function AiPane({
             </div>
             <div className="inline-action">
               <input
+                aria-label="图片 API Key"
                 className="text-input"
                 type="password"
                 value={imageApiKeyDraft}

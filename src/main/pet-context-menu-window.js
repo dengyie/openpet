@@ -134,11 +134,12 @@ const closeMenuWindow = (menuWindow) => {
   menuWindow.close()
 }
 
-const createMenuSession = ({ BrowserWindow, hostWindow, onSelect }) => {
+const createMenuSession = ({ BrowserWindow, hostWindow, onSelect, onSubmenuOpen = null }) => {
   const session = {
     BrowserWindow,
     hostWindow,
     onSelect,
+    onSubmenuOpen,
     rootMenuWindow: null,
     submenuWindow: null,
     suppressBlurWindow: null,
@@ -234,12 +235,29 @@ const openMenuWindow = ({
             height: Math.max(parentMenuBounds.y + parentMenuBounds.height, submenuSize.height) + 64
           }
         }
+        const petBounds = getWindowBounds(parentWindow)
         const submenuPlacement = choosePetContextSubmenuPoint({
           parentMenuBounds,
           workArea,
           submenuSize,
+          petBounds,
           anchorOffsetTop: getMenuItemOffsetTop(items, Number(rawIndex)),
           anchorHeight: MENU_ROW_HEIGHT
+        })
+        session.onSubmenuOpen?.({
+          label: item.label || '',
+          placement: submenuPlacement.placement,
+          parentMenuBounds,
+          petBounds,
+          workArea,
+          submenuBounds: {
+            x: submenuPlacement.screenPoint.x,
+            y: submenuPlacement.screenPoint.y,
+            width: submenuSize.width,
+            height: submenuSize.height
+          },
+          rightCandidate: submenuPlacement.rightCandidate,
+          leftCandidate: submenuPlacement.leftCandidate
         })
         openMenuWindow({
           BrowserWindow,
@@ -285,9 +303,10 @@ const showPetContextMenuWindow = ({
   items,
   point,
   size,
-  onSelect
+  onSelect,
+  onSubmenuOpen = null
 }) => {
-  const session = createMenuSession({ BrowserWindow, hostWindow: parentWindow, onSelect })
+  const session = createMenuSession({ BrowserWindow, hostWindow: parentWindow, onSelect, onSubmenuOpen })
   return openMenuWindow({
     BrowserWindow,
     session,

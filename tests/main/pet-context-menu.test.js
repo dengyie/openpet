@@ -130,7 +130,7 @@ test('choosePetContextSubmenuPoint opens to the right of the parent menu row whe
   })
 
   assert.equal(placement.placement, 'right')
-  assert.deepEqual(placement.screenPoint, { x: 504, y: 120 })
+  assert.deepEqual(placement.screenPoint, { x: 492, y: 120 })
 })
 
 test('choosePetContextSubmenuPoint flips to the left when the right side would overflow', () => {
@@ -143,5 +143,50 @@ test('choosePetContextSubmenuPoint flips to the left when the right side would o
   })
 
   assert.equal(placement.placement, 'left')
-  assert.deepEqual(placement.screenPoint, { x: 600, y: 150 })
+  assert.deepEqual(placement.screenPoint, { x: 612, y: 150 })
+})
+
+test('choosePetContextSubmenuPoint prefers the side that avoids covering the pet', () => {
+  const placement = choosePetContextSubmenuPoint({
+    parentMenuBounds: { x: 420, y: 220, width: 132, height: 176 },
+    workArea: { x: 0, y: 0, width: 900, height: 520 },
+    submenuSize: { width: 148, height: 200 },
+    petBounds: { x: 560, y: 120, width: 140, height: 330 },
+    anchorOffsetTop: 36,
+    anchorHeight: 30
+  })
+
+  assert.equal(placement.placement, 'left')
+  assert.deepEqual(placement.screenPoint, { x: 272, y: 250 })
+})
+
+test('choosePetContextSubmenuPoint stays anchored to the parent row when only a distant detour would avoid the pet', () => {
+  const placement = choosePetContextSubmenuPoint({
+    parentMenuBounds: { x: 60, y: 260, width: 132, height: 176 },
+    workArea: { x: 0, y: 0, width: 900, height: 900 },
+    submenuSize: { width: 148, height: 146 },
+    petBounds: { x: 244, y: 260, width: 150, height: 150 },
+    anchorOffsetTop: 36,
+    anchorHeight: 30
+  })
+
+  assert.equal(placement.placement, 'right')
+  assert.deepEqual(placement.screenPoint, { x: 192, y: 290 })
+})
+
+test('choosePetContextSubmenuPoint stays inside a narrow shifted work area', () => {
+  const placement = choosePetContextSubmenuPoint({
+    parentMenuBounds: { x: 1460, y: 140, width: 132, height: 176 },
+    workArea: { x: 1440, y: 33, width: 220, height: 260 },
+    submenuSize: { width: 148, height: 146 },
+    petBounds: { x: 1540, y: 120, width: 90, height: 120 },
+    anchorOffsetTop: 36,
+    anchorHeight: 30
+  })
+
+  assert.equal(placement.placement, 'left')
+  assert.deepEqual(placement.screenPoint, { x: 1448, y: 139 })
+  assert.equal(placement.rightCandidate.fitsHorizontally, false)
+  assert.equal(placement.leftCandidate.fitsHorizontally, false)
+  assert.equal(placement.leftCandidate.overlapArea <= placement.rightCandidate.overlapArea, true)
 })

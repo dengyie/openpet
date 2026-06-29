@@ -230,6 +230,43 @@ const registerPetRuntimeIpc = ({
       items: template,
       point: placement.screenPoint,
       size: menuSize,
+      onSubmenuOpen: (details = {}) => {
+        recordAppLog({
+          scope: 'pet-menu',
+          level: 'info',
+          actor: 'user',
+          event: 'pet.menu.submenu.popup',
+          message: 'Pet context submenu popup requested',
+          details: {
+            label: String(details.label || ''),
+            placement: String(details.placement || ''),
+            parentMenuX: Number(details.parentMenuBounds?.x || 0),
+            parentMenuY: Number(details.parentMenuBounds?.y || 0),
+            parentMenuWidth: Number(details.parentMenuBounds?.width || 0),
+            parentMenuHeight: Number(details.parentMenuBounds?.height || 0),
+            petX: Number(details.petBounds?.x || 0),
+            petY: Number(details.petBounds?.y || 0),
+            petWidth: Number(details.petBounds?.width || 0),
+            petHeight: Number(details.petBounds?.height || 0),
+            workAreaX: Number(details.workArea?.x || 0),
+            workAreaY: Number(details.workArea?.y || 0),
+            workAreaWidth: Number(details.workArea?.width || 0),
+            workAreaHeight: Number(details.workArea?.height || 0),
+            submenuX: Number(details.submenuBounds?.x || 0),
+            submenuY: Number(details.submenuBounds?.y || 0),
+            submenuWidth: Number(details.submenuBounds?.width || 0),
+            submenuHeight: Number(details.submenuBounds?.height || 0),
+            rightFits: Boolean(details.rightCandidate?.fitsHorizontally),
+            rightX: Number(details.rightCandidate?.screenPoint?.x || 0),
+            rightY: Number(details.rightCandidate?.screenPoint?.y || 0),
+            rightOverlapArea: Number(details.rightCandidate?.overlapArea || 0),
+            leftFits: Boolean(details.leftCandidate?.fitsHorizontally),
+            leftX: Number(details.leftCandidate?.screenPoint?.x || 0),
+            leftY: Number(details.leftCandidate?.screenPoint?.y || 0),
+            leftOverlapArea: Number(details.leftCandidate?.overlapArea || 0)
+          }
+        })
+      },
       onSelect: (item) => item?.onSelect?.()
     })
     return placement

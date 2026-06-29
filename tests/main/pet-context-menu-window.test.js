@@ -179,3 +179,143 @@ test('pet context menu window closes both root and submenu after selecting a sub
   assert.equal(parentWindow.contextMenuWindow, null)
   assert.equal(parentWindow.contextMenuSession, null)
 })
+
+test('pet context menu window closes the full menu session when the submenu blurs', () => {
+  FakeMenuWindow.instances = []
+  const parentWindow = new EventEmitter()
+  const menuWindow = showPetContextMenuWindow({
+    BrowserWindow: FakeMenuWindow,
+    parentWindow,
+    items: [{
+      type: 'submenu',
+      label: '动作',
+      submenu: [{ type: 'action', label: '散步', onSelect: () => {} }]
+    }],
+    point: { x: 20, y: 30 },
+    size: { width: 112, height: 116 },
+    onSelect: () => {}
+  })
+
+  menuWindow.webContents.emit('will-navigate', {
+    preventDefault: () => {}
+  }, 'openpet-menu://select/0')
+  const submenuWindow = parentWindow.contextMenuSession?.submenuWindow
+
+  submenuWindow.emit('blur')
+
+  assert.equal(menuWindow.isDestroyed(), true)
+  assert.equal(submenuWindow.isDestroyed(), true)
+  assert.equal(parentWindow.contextMenuWindow, null)
+  assert.equal(parentWindow.contextMenuSession, null)
+})
+
+test('pet context menu window closes the full menu session on escape navigation', () => {
+  FakeMenuWindow.instances = []
+  const parentWindow = new EventEmitter()
+  const menuWindow = showPetContextMenuWindow({
+    BrowserWindow: FakeMenuWindow,
+    parentWindow,
+    items: [{
+      type: 'submenu',
+      label: '动作',
+      submenu: [{ type: 'action', label: '散步', onSelect: () => {} }]
+    }],
+    point: { x: 20, y: 30 },
+    size: { width: 112, height: 116 },
+    onSelect: () => {}
+  })
+
+  menuWindow.webContents.emit('will-navigate', {
+    preventDefault: () => {}
+  }, 'openpet-menu://select/0')
+  const submenuWindow = parentWindow.contextMenuSession?.submenuWindow
+
+  submenuWindow.webContents.emit('will-navigate', {
+    preventDefault: () => {}
+  }, 'openpet-menu://close')
+
+  assert.equal(menuWindow.isDestroyed(), true)
+  assert.equal(submenuWindow.isDestroyed(), true)
+  assert.equal(parentWindow.contextMenuWindow, null)
+  assert.equal(parentWindow.contextMenuSession, null)
+})
+
+test('pet context menu window reuses a single submenu window when the parent submenu item is clicked repeatedly', () => {
+  FakeMenuWindow.instances = []
+  const parentWindow = new EventEmitter()
+  const menuWindow = showPetContextMenuWindow({
+    BrowserWindow: FakeMenuWindow,
+    parentWindow,
+    items: [{
+      type: 'submenu',
+      label: '动作',
+      submenu: [{ type: 'action', label: '散步', onSelect: () => {} }]
+    }],
+    point: { x: 20, y: 30 },
+    size: { width: 112, height: 116 },
+    onSelect: () => {}
+  })
+
+  menuWindow.webContents.emit('will-navigate', {
+    preventDefault: () => {}
+  }, 'openpet-menu://select/0')
+  const firstSubmenuWindow = parentWindow.contextMenuSession?.submenuWindow
+
+  menuWindow.webContents.emit('will-navigate', {
+    preventDefault: () => {}
+  }, 'openpet-menu://select/0')
+  const secondSubmenuWindow = parentWindow.contextMenuSession?.submenuWindow
+
+  assert.ok(firstSubmenuWindow)
+  assert.ok(secondSubmenuWindow)
+  assert.notEqual(firstSubmenuWindow, secondSubmenuWindow)
+  assert.equal(firstSubmenuWindow.isDestroyed(), true)
+  assert.equal(secondSubmenuWindow.isDestroyed(), false)
+  assert.equal(FakeMenuWindow.instances.filter((window) => !window.isDestroyed()).length, 2)
+})
+
+test('pet context menu window reports submenu placement diagnostics when a submenu opens', () => {
+  FakeMenuWindow.instances = []
+  const parentWindow = new EventEmitter()
+  parentWindow.getBounds = () => ({ x: 260, y: 30, width: 80, height: 80 })
+  const submenuOpens = []
+  const menuWindow = showPetContextMenuWindow({
+    BrowserWindow: FakeMenuWindow,
+    parentWindow,
+    items: [{
+      type: 'submenu',
+      label: '动作',
+      submenu: [{ type: 'action', label: '散步', onSelect: () => {} }]
+    }],
+    point: { x: 20, y: 30 },
+    size: { width: 112, height: 116 },
+    onSelect: () => {},
+    onSubmenuOpen: (payload) => submenuOpens.push(payload)
+  })
+
+  menuWindow.webContents.emit('will-navigate', {
+    preventDefault: () => {}
+  }, 'openpet-menu://select/0')
+
+  assert.equal(submenuOpens.length, 1)
+  assert.deepEqual(submenuOpens[0], {
+    label: '动作',
+    placement: 'right',
+    parentMenuBounds: { x: 20, y: 30, width: 112, height: 116 },
+    petBounds: { x: 260, y: 30, width: 80, height: 80 },
+    workArea: { x: 0, y: 0, width: 308, height: 210 },
+    submenuBounds: { x: 132, y: 30, width: 112, height: 56 },
+    rightCandidate: {
+      placement: 'right',
+      screenPoint: { x: 132, y: 30 },
+      overlapArea: 0,
+      fitsHorizontally: true
+    },
+    leftCandidate: {
+      placement: 'left',
+      screenPoint: { x: 8, y: 30 },
+      overlapArea: 0,
+      fitsHorizontally: false
+    }
+  })
+})

@@ -993,3 +993,77 @@ test('ai service testConnection logs provider failures without leaking secrets o
   assert.equal(serializedLogs.includes('token=secret'), false)
   assert.match(serializedLogs, /ai\.settings\.connection-test\.failed/)
 })
+
+test('ai service discovers available models through the optional /models probe', async () => {
+  const requests = []
+  const service = createAiService({
+    settingsService: createSettingsService({
+      ai: {
+        enabled: true,
+        provider: 'openai-compatible',
+        baseUrl: 'https://models.example.test/v1',
+        model: 'gpt-4o-mini',
+        apiKeyRef: 'ai.default',
+        systemPrompt: ''
+      }
+    }),
+    secretService: {
+      getSecretValue: () => 'sk-test',
+      setSecret: () => {}
+    },
+    fetchImpl: async (url, options) => {
+      requests.push({ url, options })
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          data: [
+            { id: 'gpt-4o-mini' },
+            { id: 'gpt-4.1-mini' },
+            { id: 'gpt-4o-mini' },
+            { id: '' },
+            {}
+          ]
+        })
+      }
+    }
+  })
+
+  const result = await service.discoverModels()
+
+  assert.equal(result.ok, true)
+  assert.equal(result.code, 'ok')
+  assert.deepEqual(result.models, ['gpt-4.1-mini', 'gpt-4o-mini'])
+  assert.equal(requests[0].url, 'https://models.example.test/v1/models')
+  assert.equal(requests[0].options.method, 'GET')
+})
+
+test('ai service treats missing /models support as a safe discovery fallback', async () => {
+  const service = createAiService({
+    settingsService: createSettingsService({
+      ai: {
+        enabled: true,
+        provider: 'openai-compatible',
+        baseUrl: 'https://models-unavailable.example.test/v1',
+        model: 'gpt-4o-mini',
+        apiKeyRef: 'ai.default',
+        systemPrompt: ''
+      }
+    }),
+    secretService: {
+      getSecretValue: () => 'sk-test',
+      setSecret: () => {}
+    },
+    fetchImpl: async () => ({
+      ok: false,
+      status: 404,
+      json: async () => ({ error: { message: 'not found' } })
+    })
+  })
+
+  const result = await service.discoverModels()
+
+  assert.equal(result.ok, true)
+  assert.equal(result.code, 'provider_reachable_models_unavailable')
+  assert.deepEqual(result.models, [])
+})

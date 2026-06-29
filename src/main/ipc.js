@@ -1201,7 +1201,6 @@ const registerIpcHandlers = ({ getPetWindow, petService, petPackService, aiServi
     }
     return mutationResult
   })
-
   ipcMainService.handle(IPC.ABOUT_GET_INFO, () => createAboutInfoView(aboutService.getInfo()))
 
   ipcMainService.handle(IPC.ABOUT_CHECK_UPDATES, async () => createUpdateCheckView(await aboutService.checkForUpdates()))

@@ -1955,6 +1955,45 @@ const demoApi: ControlCenterApi = {
       currentModelDiscovered: availableModels.includes(demoState.aiConfig.model)
     }
   },
+  discoverAiModels: async () => {
+    if (!demoState.aiConfig.hasApiKey) {
+      return {
+        ok: false,
+        provider: demoState.aiConfig.provider,
+        baseUrl: demoState.aiConfig.baseUrl,
+        model: demoState.aiConfig.model,
+        hasApiKey: false,
+        models: [],
+        code: 'missing_api_key',
+        message: 'AI API key is not configured'
+      }
+    }
+    if (/models-unavailable/i.test(demoState.aiConfig.baseUrl)) {
+      return {
+        ok: true,
+        provider: demoState.aiConfig.provider,
+        baseUrl: demoState.aiConfig.baseUrl,
+        model: demoState.aiConfig.model,
+        hasApiKey: true,
+        models: [],
+        code: 'provider_reachable_models_unavailable',
+        message: 'AI provider is reachable, but the optional /models probe is unavailable'
+      }
+    }
+    const models = /127\.0\.0\.1:11434|ollama|qwen/i.test(demoState.aiConfig.baseUrl)
+      ? ['llama3.1:8b-instruct', 'qwen2.5:7b-instruct']
+      : ['gpt-4.1-mini', 'gpt-4o-mini']
+    return {
+      ok: true,
+      provider: demoState.aiConfig.provider,
+      baseUrl: demoState.aiConfig.baseUrl,
+      model: demoState.aiConfig.model,
+      hasApiKey: true,
+      models,
+      code: 'ok',
+      message: 'AI provider model discovery succeeded'
+    }
+  },
   getAiPersonaProfile: async () => createDemoPersonaProfile(demoState.petPacks, demoState.aiConfig, demoState.aiPersonaOverrides),
   generateAiPersonaDraft: async ({ instruction } = {}) => {
     const profile = createDemoPersonaProfile(demoState.petPacks, demoState.aiConfig, demoState.aiPersonaOverrides)
@@ -2080,6 +2119,47 @@ const demoApi: ControlCenterApi = {
       usage: /healthy-models/i.test(demoState.imageGenerationConfig.baseUrl)
         ? { estimatedCostUsd: 0 }
         : undefined
+    }
+  },
+  discoverImageGenerationModels: async () => {
+    if (!demoState.imageGenerationConfig.hasApiKey) {
+      return {
+        ok: false,
+        provider: demoState.imageGenerationConfig.provider,
+        baseUrl: demoState.imageGenerationConfig.baseUrl,
+        model: demoState.imageGenerationConfig.model,
+        hasApiKey: false,
+        models: [],
+        code: 'missing_api_key',
+        message: 'Image generation API key is missing'
+      }
+    }
+    if (
+      /models-unavailable|image\.example\.test/i.test(demoState.imageGenerationConfig.baseUrl)
+    ) {
+      return {
+        ok: true,
+        provider: demoState.imageGenerationConfig.provider,
+        baseUrl: demoState.imageGenerationConfig.baseUrl,
+        model: demoState.imageGenerationConfig.model,
+        hasApiKey: true,
+        models: [],
+        code: 'provider_reachable_models_unavailable',
+        message: 'Image Provider is reachable, but the optional /models probe is unavailable'
+      }
+    }
+    const models = /127\.0\.0\.1|localhost|local/i.test(demoState.imageGenerationConfig.baseUrl)
+      ? ['flux-schnell', 'gpt-image-2']
+      : ['gpt-image-2']
+    return {
+      ok: true,
+      provider: demoState.imageGenerationConfig.provider,
+      baseUrl: demoState.imageGenerationConfig.baseUrl,
+      model: demoState.imageGenerationConfig.model,
+      hasApiKey: true,
+      models,
+      code: 'ok',
+      message: 'Image Provider model discovery succeeded'
     }
   },
   getAiConversation: async () => cloneChatMessages(demoState.petChatMessages),

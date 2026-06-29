@@ -463,3 +463,98 @@ test('pet quit records the user intent before quitting the app', () => {
     details: { source: 'pet-renderer' }
   })
 })
+
+test('pet context menu records submenu placement diagnostics when the menu window reports them', async () => {
+  const ipcMain = createIpcMainStub()
+  const logs = []
+  const petWindow = {
+    isDestroyed: () => false,
+    getBounds: () => ({ x: 720, y: 300, width: 150, height: 150 }),
+    webContents: { send: () => {} }
+  }
+  let menuWindowRequest = null
+  const browserWindowService = {
+    fromWebContents: () => petWindow
+  }
+  const { registerIpcHandlers } = loadIpcWithElectron({
+    ipcMain,
+    BrowserWindow: browserWindowService,
+    app: { quit: () => {} },
+    dialog: {},
+    Menu: {},
+    screen: {
+      getDisplayMatching: () => ({ workArea: { x: 0, y: 0, width: 900, height: 700 } })
+    }
+  })
+
+  registerIpcHandlers({
+    ...createRequiredServices(),
+    getPetWindow: () => petWindow,
+    ipcMainService: ipcMain,
+    appLogService: { record: (entry) => logs.push(entry) },
+    showContextMenuWindow: (request) => {
+      menuWindowRequest = request
+    }
+  })
+
+  await ipcMain.handlers.get(IPC.PET_SHOW_CONTEXT_MENU)({
+    sender: petWindow.webContents
+  }, { x: 70, y: 80 })
+
+  menuWindowRequest.onSubmenuOpen({
+    label: '动作',
+    placement: 'left',
+    parentMenuBounds: { x: 568, y: 68, width: 112, height: 176 },
+    petBounds: { x: 720, y: 300, width: 150, height: 150 },
+    workArea: { x: 0, y: 0, width: 900, height: 700 },
+    submenuBounds: { x: 456, y: 74, width: 112, height: 56 },
+    rightCandidate: {
+      placement: 'right',
+      screenPoint: { x: 680, y: 74 },
+      overlapArea: 1800,
+      fitsHorizontally: true
+    },
+    leftCandidate: {
+      placement: 'left',
+      screenPoint: { x: 456, y: 74 },
+      overlapArea: 0,
+      fitsHorizontally: true
+    }
+  })
+
+  assert.deepEqual(logs.at(-1), {
+    scope: 'pet-menu',
+    level: 'info',
+    actor: 'user',
+    event: 'pet.menu.submenu.popup',
+    message: 'Pet context submenu popup requested',
+    details: {
+      label: '动作',
+      placement: 'left',
+      parentMenuX: 568,
+      parentMenuY: 68,
+      parentMenuWidth: 112,
+      parentMenuHeight: 176,
+      petX: 720,
+      petY: 300,
+      petWidth: 150,
+      petHeight: 150,
+      workAreaX: 0,
+      workAreaY: 0,
+      workAreaWidth: 900,
+      workAreaHeight: 700,
+      submenuX: 456,
+      submenuY: 74,
+      submenuWidth: 112,
+      submenuHeight: 56,
+      rightFits: true,
+      rightX: 680,
+      rightY: 74,
+      rightOverlapArea: 1800,
+      leftFits: true,
+      leftX: 456,
+      leftY: 74,
+      leftOverlapArea: 0
+    }
+  })
+})

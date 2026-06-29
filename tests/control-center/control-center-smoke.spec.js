@@ -186,6 +186,29 @@ test.describe('Control Center smoke', () => {
     await expect(summary).toContainText('reply chars')
   })
 
+  test('supports provider presets, model discovery, and image compatibility hints in the AI pane', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: 'AI' }).click()
+
+    const chatSection = await expandAiSection(page, '聊天 Provider')
+    await chatSection.getByLabel('聊天 API Key').fill('sk-demo-chat')
+    await chatSection.getByRole('button', { name: '保存密钥' }).click()
+    await chatSection.getByRole('button', { name: '本地/代理 OpenAI-compatible' }).click()
+    await expect(chatSection.getByLabel('聊天 Base URL')).toHaveValue('http://127.0.0.1:11434/v1')
+    await expect(chatSection.getByLabel('聊天 Model')).toHaveValue('qwen2.5:7b-instruct')
+    await chatSection.getByRole('button', { name: '保存聊天 Provider' }).click()
+    await chatSection.getByRole('button', { name: '刷新聊天模型' }).click()
+    await expect(chatSection.getByTestId('ai-chat-model-discovery')).toContainText('qwen2.5:7b-instruct')
+
+    const imageSection = await expandAiSection(page, '图片 Provider')
+    await imageSection.getByLabel('图片 API Key').fill('sk-demo-image')
+    await imageSection.getByRole('button', { name: '保存图片密钥' }).click()
+    await imageSection.getByRole('button', { name: '刷新图片模型' }).click()
+    await expect(imageSection.getByTestId('ai-image-model-discovery')).toContainText('gpt-image-2')
+    await expect(imageSection.getByTestId('ai-image-compatibility-hint')).toContainText('gpt-image-2')
+    await expect(imageSection.getByTestId('ai-image-compatibility-hint')).toContainText('transparent')
+  })
+
   test('applies an action trigger proposal through the demo API', async ({ page }) => {
     await page.goto('/')
     await page.getByRole('button', { name: 'Actions' }).click()

@@ -1088,6 +1088,9 @@ test('creator studio run-step command uses host bridge for provider generation w
     assert.deepEqual(run.artifacts.generatedImage.modelSnapshot, run.modelSnapshot)
     assert.equal(run.artifacts.generatedImage.promptBuilder.version, 1)
     assert.equal(run.artifacts.generatedImage.promptBuilder.mode, 'single-action')
+    assert.equal(run.artifacts.generatedImage.promptBuilder.promptPreview.truncated, false)
+    assert.match(run.artifacts.generatedImage.promptBuilder.promptPreview.text, /OpenPet desktop pet sprite asset/)
+    assert.match(run.artifacts.generatedImage.promptBuilder.promptPreview.text, /Action name: 原地打滚/)
     assert.deepEqual(run.artifacts.generatedImage.promptBuilder.warnings, [])
     assert.deepEqual(requests.map((entry) => entry.url), ['/creator/model-settings', '/creator/model-image-generate'])
   } finally {
@@ -2929,6 +2932,8 @@ test('creator studio dashboard asset exists and service script is declared', () 
   assert.match(html, /id="review-checkpoint-panel"/)
   assert.match(html, /id="next-step-panel"/)
   assert.match(html, /id="trigger-panel"/)
+  assert.match(html, /Workflow/)
+  assert.match(html, /Import Readiness/)
   assert.match(html, /id="action-review"/)
   assert.match(html, /id="run-select"/)
   assert.match(html, /id="reload-runs-button"/)
@@ -4088,7 +4093,7 @@ test('creator studio service exposes sanitized host prompt provenance for dashbo
     assert.equal(serializedDetail.includes('sk-test-secret'), false)
     assert.equal(serializedDetail.includes('/Users/mango/private/ref.png'), false)
     assert.equal(serializedDetail.includes('127.0.0.1:8317'), false)
-    assert.equal(serializedDetail.includes('127.0.0.1:7860'), false)
+    assert.equal(serializedDetail.includes('http://127.0.0.1:7860/v1'), false)
     assert.equal(serializedDetail.includes('bridge-token'), false)
     assert.equal(serializedDetail.includes(dataDir), false)
     assert.equal(bridgeRequests.at(-1).payload.prompt.includes('sk-test-secret'), false)
@@ -4130,6 +4135,102 @@ test('creator studio service returns full-pet review with generation response', 
     assert.equal(generated.fullPetReview.reviewGate.ready, true)
     assert.match(generated.fullPetReview.outputDir, /^runs\//)
     assert.equal(JSON.stringify(generated).includes(dataDir), false)
+  } finally {
+    await new Promise((resolve) => server.close(resolve))
+  }
+})
+
+test('creator studio service exposes safe prompt provenance and failed-run recovery hints for dashboard clients', async () => {
+  const { createCreatorStudioServer } = require('../../examples/plugins/creator-studio/service/studio-service')
+  const { createRun, updateRunStatus } = require('../../examples/plugins/creator-studio/lib/run-store')
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-service-provenance-'))
+  const dashboardPath = path.join(pluginRoot, 'web', 'dashboard', 'index.html')
+  const run = createRun({
+    dataDir,
+    input: {
+      petName: 'Failure Cat',
+      prompt: 'Visible in developer mode',
+      originalPrompt: 'Visible in developer mode',
+      backend: 'local',
+      generationTask: {
+        mode: 'single-action',
+        targetPet: 'current',
+        styleSource: 'currentPet',
+        actions: [{
+          actionId: 'retry-roll',
+          name: '重试打滚',
+          motionPrompt: '失败后重试打滚',
+          frameCount: 12,
+          triggerProposal: { type: 'click', binding: 'clickAction' }
+        }]
+      }
+    },
+    now: () => '2026-06-29T00:00:00.000Z'
+  })
+  updateRunStatus({
+    dataDir,
+    runId: run.runId,
+    status: 'failed',
+    patch: {
+      currentStep: 'generate',
+      backendStatus: {
+        backend: 'local',
+        state: 'failed',
+        message: 'Local provider timed out after 120000ms',
+        updatedAt: '2026-06-29T00:00:30.000Z'
+      },
+      artifacts: {
+        generatedImage: {
+          ok: false,
+          backend: 'local',
+          model: 'local-custom-sprite-v2',
+          generatedAt: '2026-06-29T00:00:30.000Z',
+          modelSnapshot: {
+            backend: 'local',
+            provider: 'openai-compatible',
+            model: 'local-custom-sprite-v2',
+            baseUrlHost: '127.0.0.1:7860'
+          },
+          promptBuilder: {
+            version: 1,
+            mode: 'single-action',
+            actionId: 'retry-roll',
+            sections: ['Intent', 'Action Requirements'],
+            warnings: [],
+            promptPreview: '## Intent\n- OpenPet desktop pet sprite asset.\n\n## Action Requirements\n- Action name: 重试打滚'
+          }
+        }
+      },
+      error: 'Local provider timed out after 120000ms'
+    },
+    now: () => '2026-06-29T00:00:30.000Z'
+  })
+  const server = createCreatorStudioServer({ dataDir, dashboardPath })
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const port = server.address().port
+
+  try {
+    const detail = await fetch(`http://127.0.0.1:${port}/api/runs/${run.runId}`).then((response) => response.json())
+    const detailDev = await fetch(`http://127.0.0.1:${port}/api/runs/${run.runId}?developer=1`).then((response) => response.json())
+
+    assert.equal(detail.ok, true)
+    assert.equal(detail.run.dashboard.recovery.canRetryGeneration, true)
+    assert.equal(detail.run.dashboard.recovery.retryLabel, 'Retry generation')
+    assert.equal(detail.run.dashboard.recovery.message, 'Local provider timed out after 120000ms')
+    assert.deepEqual(detail.run.dashboard.promptProvenance, {
+      backend: 'local',
+      provider: 'openai-compatible',
+      model: 'local-custom-sprite-v2',
+      baseUrlHost: '127.0.0.1:7860',
+      mode: 'single-action',
+      actionId: 'retry-roll',
+      sections: ['Intent', 'Action Requirements'],
+      warnings: []
+    })
+    assert.equal(detail.run.dashboard.promptProvenance.promptPreview, undefined)
+    assert.equal(detailDev.run.dashboard.promptProvenance.promptPreview.includes('OpenPet desktop pet sprite asset'), true)
+    assert.equal(detailDev.run.dashboard.promptProvenance.promptPreview.includes('Action name: 重试打滚'), true)
+    assert.equal(JSON.stringify(detailDev).includes(dataDir), false)
   } finally {
     await new Promise((resolve) => server.close(resolve))
   }
@@ -4662,7 +4763,7 @@ test('creator studio service exposes workflow guidance for fixture and imported 
       imported: true,
       blockedReason: ''
     })
-    assert.equal(importedSerialized.includes('127.0.0.1:7860'), false)
+    assert.equal(importedSerialized.includes('http://127.0.0.1:7860/v1'), false)
     assert.equal(importedSerialized.includes(dataDir), false)
 
     assert.equal(importedFailedActionDetail.ok, true)
@@ -4776,7 +4877,7 @@ test('creator studio service exposes workflow guidance for fixture and imported 
       visiblePixels: 1000,
       warnings: []
     })
-    assert.equal(importedPetSerialized.includes('127.0.0.1:7860'), false)
+    assert.equal(importedPetSerialized.includes('http://127.0.0.1:7860/v1'), false)
     assert.equal(importedPetSerialized.includes(dataDir), false)
     assert.equal(importedPetSerialized.includes('stale-source.png'), false)
 
@@ -5674,6 +5775,134 @@ test('creator studio service exposes retry recovery for legacy failed runs witho
     assert.equal(fullPetDetail.run.backend, 'provider')
     assert.equal(fullPetDetail.fullPetReview, null)
     assert.equal(JSON.stringify({ actionDetail, fullPetDetail }).includes(dataDir), false)
+  } finally {
+    await new Promise((resolve) => server.close(resolve))
+  }
+})
+
+test('creator studio service exposes workflow summary and import readiness for dashboard clients', async () => {
+  const { createCreatorStudioServer } = require('../../examples/plugins/creator-studio/service/studio-service')
+  const { createRun, updateRunStatus } = require('../../examples/plugins/creator-studio/lib/run-store')
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-studio-service-workflow-'))
+  const dashboardPath = path.join(pluginRoot, 'web', 'dashboard', 'index.html')
+
+  const needsInputRun = createRun({
+    dataDir,
+    input: {
+      petName: 'Question Cat',
+      prompt: '新增一个自定义动作：原地打滚，动作要循环。',
+      originalPrompt: '新增一个自定义动作：原地打滚，动作要循环。',
+      backend: 'fixture',
+      generationTask: {
+        mode: 'single-action',
+        targetPet: 'current',
+        styleSource: 'currentPet',
+        actions: [{
+          actionId: 'question-roll',
+          name: '问题打滚',
+          motionPrompt: '等待触发方式确认',
+          frameCount: 12,
+          triggerProposal: { type: 'unbound' }
+        }],
+        questions: [{
+          id: 'trigger',
+          question: 'How should this custom action be triggered?',
+          options: ['manual', 'click', 'random', 'state', 'event', 'unbound']
+        }]
+      }
+    },
+    now: () => '2026-06-29T01:00:00.000Z'
+  })
+  updateRunStatus({
+    dataDir,
+    runId: needsInputRun.runId,
+    status: 'draft',
+    patch: {
+      taskStatus: 'needs_input',
+      currentStep: 'task_questions'
+    },
+    now: () => '2026-06-29T01:00:10.000Z'
+  })
+
+  const approvedActionRun = createRun({
+    dataDir,
+    input: {
+      petName: 'Approved Cat',
+      prompt: '点击后打滚',
+      originalPrompt: '点击后打滚',
+      backend: 'local',
+      generationTask: {
+        mode: 'single-action',
+        targetPet: 'current',
+        styleSource: 'currentPet',
+        actions: [{
+          actionId: 'approved-roll',
+          name: '批准打滚',
+          motionPrompt: '已经批准，等待导入',
+          frameCount: 12,
+          triggerProposal: { type: 'click', binding: 'clickAction' }
+        }]
+      }
+    },
+    now: () => '2026-06-29T01:01:00.000Z'
+  })
+  updateRunStatus({
+    dataDir,
+    runId: approvedActionRun.runId,
+    status: 'approved',
+    patch: {
+      taskStatus: 'confirmed',
+      currentStep: 'approved',
+      reviewStatus: 'approved',
+      importStatus: 'not-imported',
+      artifacts: {
+        actionFrames: {
+          actionId: 'approved-roll',
+          name: '批准打滚',
+          framesDir: path.join(dataDir, 'runs', approvedActionRun.runId, 'frames', 'actions', 'approved-roll'),
+          qa: path.join(dataDir, 'runs', approvedActionRun.runId, 'qa', 'action-frame-validation.json'),
+          frameCount: 12,
+          frameWidth: 192,
+          frameHeight: 208,
+          triggerProposal: { type: 'click', binding: 'clickAction' }
+        }
+      }
+    },
+    now: () => '2026-06-29T01:01:30.000Z'
+  })
+
+  const server = createCreatorStudioServer({ dataDir, dashboardPath })
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const port = server.address().port
+
+  try {
+    const draftDetail = await fetch(`http://127.0.0.1:${port}/api/runs/${needsInputRun.runId}`).then((response) => response.json())
+    const approvedDetail = await fetch(`http://127.0.0.1:${port}/api/runs/${approvedActionRun.runId}`).then((response) => response.json())
+
+    assert.equal(draftDetail.ok, true)
+    assert.deepEqual(draftDetail.run.dashboard.workflow, {
+      phase: 'needs_input',
+      headline: 'Waiting for follow-up answer',
+      nextActionLabel: 'Answer follow-up'
+    })
+    assert.deepEqual(draftDetail.run.dashboard.importReadiness, {
+      ready: false,
+      commandId: '',
+      message: 'Answer pending questions and complete generation before import.'
+    })
+
+    assert.equal(approvedDetail.ok, true)
+    assert.deepEqual(approvedDetail.run.dashboard.workflow, {
+      phase: 'approved',
+      headline: 'Approved and waiting for import',
+      nextActionLabel: 'Import Approved Action'
+    })
+    assert.deepEqual(approvedDetail.run.dashboard.importReadiness, {
+      ready: true,
+      commandId: 'import-approved-action',
+      message: 'Use Control Center → Plugins → Import Approved Action to hand frames to the host.'
+    })
+    assert.equal(JSON.stringify(approvedDetail).includes(dataDir), false)
   } finally {
     await new Promise((resolve) => server.close(resolve))
   }

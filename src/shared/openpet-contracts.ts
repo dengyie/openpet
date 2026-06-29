@@ -2259,6 +2259,17 @@ export interface AiConnectionTestResult {
   currentModelDiscovered?: boolean
 }
 
+export interface ProviderModelDiscoveryResult {
+  ok: boolean
+  provider: string
+  baseUrl: string
+  model: string
+  hasApiKey: boolean
+  models: string[]
+  code: string
+  message: string
+}
+
 export interface ImageGenerationConfigViewState {
   provider: string
   baseUrl: string
@@ -2787,6 +2798,7 @@ export interface ControlCenterApi {
   saveAiConfig: (config: Partial<AiConfigViewState>) => Promise<AiConfigViewState>
   saveAiApiKey: (apiKey: string) => Promise<AiSaveApiKeyResult>
   testAiConnection: () => Promise<AiConnectionTestResult>
+  discoverAiModels: () => Promise<ProviderModelDiscoveryResult>
   getAiPersonaProfile: () => Promise<AiPersonaProfileViewState>
   generateAiPersonaDraft: (request?: AiPersonaGenerateRequest) => Promise<AiPersonaDraftViewState>
   saveAiPersonaOverride: (override: AiPersonaOverride) => Promise<AiPersonaProfileViewState>
@@ -2800,6 +2812,7 @@ export interface ControlCenterApi {
   saveImageGenerationApiKey: (apiKey: string) => Promise<ImageGenerationSaveApiKeyResult>
   clearImageGenerationApiKey: () => Promise<ImageGenerationSaveApiKeyResult>
   checkImageGenerationHealth: (payload?: ImageGenerationHealthCheckRequest) => Promise<ImageGenerationHealthCheckResult>
+  discoverImageGenerationModels: () => Promise<ProviderModelDiscoveryResult>
   getAiConversation: (conversationId: string) => Promise<ChatMessage[]>
   chat: (payload: AiChatRequest) => Promise<AiChatResponse>
   exportAiTalkTraceDiagnostics: (filters?: AiTalkTraceDiagnosticsFilters) => Promise<string>

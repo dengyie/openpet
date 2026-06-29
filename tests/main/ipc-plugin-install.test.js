@@ -98,6 +98,7 @@ const createRequiredServices = ({ pluginInstallService, pluginService, dialogSer
     saveConfig: (config) => config,
     saveApiKey: () => ({ ok: true }),
     testConnection: () => ({ ok: true }),
+    discoverModels: () => ({ ok: true, models: [] }),
     getConversation: () => [],
     chat: () => ({ reply: 'ok' })
   },
@@ -602,6 +603,47 @@ test('ai provider settings IPC delegates config save key save and connection tes
   ])
 })
 
+test('ai provider settings IPC delegates model discovery', async () => {
+  const ipcMain = createIpcMainStub()
+  const calls = []
+  const services = createRequiredServices({})
+
+  registerIpcHandlers({
+    ...services,
+    aiService: {
+      ...services.aiService,
+      discoverModels: () => {
+        calls.push(['discoverModels'])
+        return {
+          ok: true,
+          provider: 'openai-compatible',
+          baseUrl: 'https://ai.example.test/v1',
+          model: 'saved-model',
+          hasApiKey: true,
+          models: ['gpt-4.1-mini', 'gpt-4o-mini'],
+          code: 'ok',
+          message: 'AI provider model discovery succeeded'
+        }
+      }
+    },
+    ipcMainService: ipcMain
+  })
+
+  const result = await ipcMain.handlers.get(IPC.AI_DISCOVER_MODELS)()
+
+  assert.deepEqual(result, {
+    ok: true,
+    provider: 'openai-compatible',
+    baseUrl: 'https://ai.example.test/v1',
+    model: 'saved-model',
+    hasApiKey: true,
+    models: ['gpt-4.1-mini', 'gpt-4o-mini'],
+    code: 'ok',
+    message: 'AI provider model discovery succeeded'
+  })
+  assert.deepEqual(calls, [['discoverModels']])
+})
+
 test('service:get-status returns Control Center service status shape', async () => {
   const ipcMain = createIpcMainStub()
 
@@ -794,6 +836,19 @@ test('image generation handlers delegate to the model service', async () => {
           usage: { estimatedCostUsd: '0.02', internal: 'ignore-me' },
           secretValue: 'sk-hidden'
         }
+      },
+      discoverModels: (payload) => {
+        calls.push(['discoverModels', payload])
+        return {
+          ok: true,
+          provider: 'openai-compatible',
+          baseUrl: 'https://images.example.test/v1',
+          model: 'gpt-image-2',
+          hasApiKey: true,
+          models: ['gpt-image-2'],
+          code: 'ok',
+          message: 'Image Provider model discovery succeeded'
+        }
       }
     },
     ipcMainService: ipcMain
@@ -804,6 +859,7 @@ test('image generation handlers delegate to the model service', async () => {
   const savedApiKey = await ipcMain.handlers.get(IPC.IMAGE_GENERATION_SAVE_API_KEY)(null, 'sk-demo-1234')
   const clearedApiKey = await ipcMain.handlers.get(IPC.IMAGE_GENERATION_CLEAR_API_KEY)()
   const health = await ipcMain.handlers.get(IPC.IMAGE_GENERATION_CHECK_HEALTH)(null, { backend: 'cloud' })
+  const discovered = await ipcMain.handlers.get(IPC.IMAGE_GENERATION_DISCOVER_MODELS)(null, {})
 
   assert.deepEqual(config, {
     provider: 'openai-compatible',
@@ -851,12 +907,23 @@ test('image generation handlers delegate to the model service', async () => {
     currentModelDiscovered: true,
     usage: { estimatedCostUsd: 0.02 }
   })
+  assert.deepEqual(discovered, {
+    ok: true,
+    provider: 'openai-compatible',
+    baseUrl: 'https://images.example.test/v1',
+    model: 'gpt-image-2',
+    hasApiKey: true,
+    models: ['gpt-image-2'],
+    code: 'ok',
+    message: 'Image Provider model discovery succeeded'
+  })
   assert.deepEqual(calls, [
     ['getConfig'],
     ['saveConfig', { defaultBackend: 'local' }],
     ['saveCloudApiKey', 'sk-demo-1234'],
     ['clearCloudApiKey'],
-    ['checkHealth', { backend: 'cloud' }]
+    ['checkHealth', { backend: 'cloud' }],
+    ['discoverModels', {}]
   ])
 })
 

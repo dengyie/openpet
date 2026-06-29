@@ -39,6 +39,7 @@ import type {
   ChatMessage,
   ImageGenerationHealthCheckResult,
   ImageGenerationConfigViewState,
+  ProviderModelDiscoveryResult,
   PetChatStateViewState
 } from '../../../shared/openpet-contracts'
 import type { AiPaneProps } from '../panes/AiPane'
@@ -236,6 +237,28 @@ const formatImageGenerationHealthStatus = (result: ImageGenerationHealthCheckRes
   return `${label} 健康检查失败：${message}`
 }
 
+const formatModelDiscoveryStatus = (label: string, result: ProviderModelDiscoveryResult) => {
+  if (result.ok) {
+    if (result.code === 'provider_reachable_models_unavailable') {
+      return `${label} 可达，但模型列表探测不可用；请手动填写模型名。`
+    }
+    if (result.models.length) {
+      return `${label} 已发现 ${result.models.length} 个模型。`
+    }
+    return `${label} 探测完成，但 provider 没有返回可用模型。`
+  }
+  return `${label} 模型探测失败：${result.message || result.code || 'unknown error'}`
+}
+
+const getImageTransparencyCompatibilityHint = (model: string) => {
+  const normalizedModel = String(model || '').trim()
+  if (!normalizedModel) return '请输入图片模型后再确认透明背景兼容策略。'
+  if (normalizedModel === 'gpt-image-2') {
+    return 'gpt-image-2 走兼容模式：OpenPet host 不额外传 background 参数，transparent/white 背景能力取决于 provider 自身实现。'
+  }
+  return `${normalizedModel} 会由 OpenPet host 显式传 background=transparent 或 white，并请求 b64_json 输出。`
+}
+
 export function useAiPane(activeTab = 'ai') {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -257,6 +280,10 @@ export function useAiPane(activeTab = 'ai') {
   const [imageHealthStatus, setImageHealthStatus] = useState('')
   const [imageHealthResult, setImageHealthResult] = useState<ImageGenerationHealthCheckResult | null>(null)
   const [chatStatus, setChatStatus] = useState('')
+  const [chatModelDiscovery, setChatModelDiscovery] = useState<ProviderModelDiscoveryResult | null>(null)
+  const [chatModelDiscoveryStatus, setChatModelDiscoveryStatus] = useState('')
+  const [imageModelDiscovery, setImageModelDiscovery] = useState<ProviderModelDiscoveryResult | null>(null)
+  const [imageModelDiscoveryStatus, setImageModelDiscoveryStatus] = useState('')
   const [chatDraft, setChatDraft] = useState('')
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [petChatState, setPetChatState] = useState<PetChatStateViewState>(defaultPetChatState)
@@ -668,6 +695,44 @@ export function useAiPane(activeTab = 'ai') {
     }
   }
 
+  const onDiscoverAiModels = async () => {
+    if (hasUnsavedConfigChanges || hasUnsavedApiKeyDraft) {
+      setChatModelDiscoveryStatus('当前聊天 Provider 配置有未保存修改；请先保存聊天配置和密钥后再刷新模型。')
+      return
+    }
+    setSaving(true)
+    setChatModelDiscoveryStatus('聊天模型探测中')
+    try {
+      const result = await api.discoverAiModels()
+      setChatModelDiscovery(result)
+      setChatModelDiscoveryStatus(formatModelDiscoveryStatus('聊天 Provider', result))
+    } catch (error) {
+      setChatModelDiscovery(null)
+      setChatModelDiscoveryStatus(messageFromError(error, '聊天模型探测失败'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const onDiscoverImageGenerationModels = async () => {
+    if (hasUnsavedImageGenerationChanges || imageApiKeyDraft.trim()) {
+      setImageModelDiscoveryStatus('当前图片 Provider 配置有未保存修改；请先保存图片配置和密钥后再刷新模型。')
+      return
+    }
+    setSaving(true)
+    setImageModelDiscoveryStatus('图片模型探测中')
+    try {
+      const result = await api.discoverImageGenerationModels()
+      setImageModelDiscovery(result)
+      setImageModelDiscoveryStatus(formatModelDiscoveryStatus('图片 Provider', result))
+    } catch (error) {
+      setImageModelDiscovery(null)
+      setImageModelDiscoveryStatus(messageFromError(error, '图片模型探测失败'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const onTest = async () => {
     setSaving(true)
     setConnectionStatus('测试中')
@@ -896,7 +961,12 @@ export function useAiPane(activeTab = 'ai') {
     activeProviderSummary: formatActiveProviderSummary(activeConfig),
     providerConfigValidationError: validateProviderConfig(config),
     connectionTestResult,
+    chatModelDiscovery,
+    chatModelDiscoveryStatus,
     imageProviderValidationError: validateImageProviderConfig(imageGenerationConfig),
+    imageModelDiscovery,
+    imageModelDiscoveryStatus,
+    imageTransparencyCompatibilityHint: getImageTransparencyCompatibilityHint(imageGenerationConfig.model),
     saving,
     status,
     connectionStatus,
@@ -951,6 +1021,8 @@ export function useAiPane(activeTab = 'ai') {
     onSaveImageGenerationApiKey,
     onClearImageGenerationApiKey,
     onCheckImageGenerationHealth,
+    onDiscoverAiModels,
+    onDiscoverImageGenerationModels,
     onTest,
     onDryRunBehavior,
     onReplayBehaviorDecision,

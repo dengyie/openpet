@@ -20,6 +20,7 @@ const registerAiIpc = ({
   ipcMainService.handle(IPC.AI_SAVE_CONFIG, (_event, config) => createAiConfigView(aiService.saveConfig(config)))
   ipcMainService.handle(IPC.AI_SAVE_API_KEY, (_event, apiKey) => aiService.saveApiKey(apiKey))
   ipcMainService.handle(IPC.AI_TEST_CONNECTION, () => aiService.testConnection())
+  ipcMainService.handle(IPC.AI_DISCOVER_MODELS, () => aiService.discoverModels())
 
   ipcMainService.handle(IPC.AI_GET_PERSONA_PROFILE, async () => {
     if (!aiTalkService?.getPersonaProfile) throw new Error('AI talk persona profile is not available')
@@ -67,6 +68,9 @@ const registerAiIpc = ({
   ipcMainService.handle(IPC.IMAGE_GENERATION_CLEAR_API_KEY, () => createImageGenerationApiKeyResult(imageGenerationModelService.clearCloudApiKey()))
   ipcMainService.handle(IPC.IMAGE_GENERATION_CHECK_HEALTH, async (_event, payload) => (
     createImageGenerationHealthCheckResult(await imageGenerationModelService.checkHealth(payload || {}))
+  ))
+  ipcMainService.handle(IPC.IMAGE_GENERATION_DISCOVER_MODELS, (_event, payload) => (
+    imageGenerationModelService.discoverModels(payload || {})
   ))
 
   ipcMainService.handle(IPC.AI_GET_CONVERSATION, (_event, payload) => {

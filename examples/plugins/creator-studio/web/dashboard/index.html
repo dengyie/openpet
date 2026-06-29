@@ -575,6 +575,18 @@
             <section id="workflow-guidance-panel">Use fixture for workflow QA first. Before provider smoke, go to Control Center -> AI -> Test saved image Provider.</section>
           </section>
           <section>
+            <h2>Workflow</h2>
+            <section id="workflow-panel">No workflow summary yet.</section>
+          </section>
+          <section>
+            <h2>Import Readiness</h2>
+            <section id="import-readiness-panel">No import readiness yet.</section>
+          </section>
+          <section>
+            <h2>Import Readiness</h2>
+            <section id="import-readiness-panel">No import readiness yet.</section>
+          </section>
+          <section>
             <h2>Import Handoff</h2>
             <section id="import-handoff-panel">Generate and approve a run to unlock host-owned import.</section>
           </section>
@@ -612,6 +624,7 @@
     <script>
       const state = { run: null, actionReview: null, fullPetReview: null, runs: [], playbackTimer: null, playbackSession: 0, generationInFlight: false }
       const $ = (id) => document.getElementById(id)
+      const developerMode = new URLSearchParams(window.location.search).get('developer') === '1'
       const isFullPetRun = (run) => run?.generationTask?.mode === 'full-pet'
       const defaultGenerateLabel = (run = state.run) => (isFullPetRun(run) ? 'Generate pet pack' : 'Generate action')
       const normalizeDashboardBackend = (value) => {
@@ -630,8 +643,8 @@
           clearTimeout(state.playbackTimer)
           state.playbackTimer = null
         }
-        state.playbackSession += 1
-      }
+          state.playbackSession += 1
+        }
 
       const setStatus = (message, kind = '') => {
         $('status-line').textContent = message
@@ -1056,6 +1069,25 @@
       }
 
       const renderPromptProvenance = (run) => {
+        const dashboardPrompt = run?.dashboard?.promptProvenance || null
+        if (dashboardPrompt) {
+          return [
+            '<div class="notice">',
+            '<strong>Host model prompt-builder provenance</strong>',
+            '<div class="meta-list">',
+            `<span>Backend: ${escapeHtml(dashboardPrompt.backend || 'provider')}</span>`,
+            `<span>Provider: ${escapeHtml(dashboardPrompt.provider || 'unknown')}${dashboardPrompt.baseUrlHost ? ` / ${escapeHtml(dashboardPrompt.baseUrlHost)}` : ''}</span>`,
+            `<span>Model: ${escapeHtml(dashboardPrompt.model || 'unknown-model')}</span>`,
+            `<span>Mode: ${escapeHtml(dashboardPrompt.mode || 'unknown')} / Action: ${escapeHtml(dashboardPrompt.actionId || 'n/a')}</span>`,
+            `<span>Sections: ${escapeHtml((dashboardPrompt.sections || []).join(', ') || 'none')}</span>`,
+            `<span>Warnings: ${escapeHtml((dashboardPrompt.warnings || []).join(', ') || 'none')}</span>`,
+            '</div>',
+            developerMode && dashboardPrompt.promptPreview
+              ? `<pre class="prompt-preview">${escapeHtml(dashboardPrompt.promptPreview)}</pre>`
+              : '',
+            '</div>'
+          ].join('')
+        }
         const developerPrompt = run?.developerPrompt || {}
         if (!developerPrompt.available) {
           return `<p>${escapeHtml(developerPrompt.message || 'Host prompt preview appears after provider generation.')}</p>`
@@ -1430,6 +1462,11 @@
           $('recovery-panel').innerHTML = renderRecoveryPanel(run)
           $('workflow-guidance-panel').innerHTML = renderWorkflowGuidance(run)
           $('prompt-provenance-panel').innerHTML = renderPromptProvenance(run)
+          $('workflow-panel').textContent = run.dashboard?.workflow?.headline || 'No workflow summary yet.'
+          $('import-readiness-panel').textContent = run.dashboard?.importReadiness?.message || 'No import readiness yet.'
+          $('run-logs').textContent = Array.isArray(run.logs) && run.logs.length
+            ? run.logs.map((entry) => `${entry.event || 'event'}: ${entry.message || ''}`).join('\n')
+            : 'No logs yet.'
           if (actionFrames) {
             $('qa-panel').textContent = `Frame QA written: ${actionFrames.qa || 'action-frame-validation.json'}`
             $('playback-panel').innerHTML = renderPlaybackPanel(actionReview)
@@ -1461,6 +1498,8 @@
         const action = run.generationTask.actions[0]
         const question = run.generationTask.questions[0]
         syncDraftControlsFromRun(run)
+        const workflow = run.dashboard?.workflow || null
+        const importReadiness = run.dashboard?.importReadiness || null
         $('run-snapshot-panel').innerHTML = renderRunSnapshot(run)
         $('wizard-steps-panel').innerHTML = renderWizardSteps(run)
         $('action-lane-panel').innerHTML = renderActionLane(run)
@@ -1497,6 +1536,26 @@
             `<p>${escapeHtml(action.motionPrompt)}</p>`
           ].join('')
           $('trigger-panel').innerHTML = `<strong>${escapeHtml(action.triggerProposal.type)}</strong><p>${escapeHtml(action.triggerProposal.notes || 'No notes.')}</p>`
+        }
+        if (workflow) {
+          $('workflow-panel').innerHTML = [
+            `<strong>${escapeHtml(workflow.headline || 'Workflow summary')}</strong>`,
+            `<p>Phase: ${escapeHtml(workflow.phase || 'unknown')}</p>`,
+            `<p>Next action: ${escapeHtml(workflow.nextActionLabel || 'None')}</p>`
+          ].join('')
+        } else {
+          $('workflow-panel').textContent = 'No workflow summary yet.'
+        }
+        if (importReadiness) {
+          $('import-readiness-panel').innerHTML = [
+            `<strong>${importReadiness.ready ? 'Ready for import' : 'Not ready for import'}</strong>`,
+            `<p>${escapeHtml(importReadiness.message || 'No import guidance yet.')}</p>`,
+            importReadiness.commandId
+              ? `<p>Command: <code>${escapeHtml(importReadiness.commandId)}</code></p>`
+              : ''
+          ].join('')
+        } else {
+          $('import-readiness-panel').textContent = 'No import readiness yet.'
         }
         if (question) {
           $('question-panel').innerHTML = question.options.map((option) => (

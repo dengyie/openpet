@@ -1202,7 +1202,172 @@ const createPublicArtifacts = ({ dataDir, artifacts = {} }) => {
   return publicArtifacts
 }
 
-const createPublicRun = ({ dataDir, run }) => {
+const isDeveloperMode = (url) => String(url?.searchParams?.get('developer') || '').trim() === '1'
+
+const createPromptProvenance = ({ run, developerMode = false }) => {
+  const generatedImage = run?.artifacts?.generatedImage
+  const promptBuilder = generatedImage?.promptBuilder
+  const snapshot = generatedImage?.modelSnapshot || run?.modelSnapshot || {}
+  if (!promptBuilder && !snapshot?.model && !generatedImage?.model) return null
+  const promptPreview = promptBuilder?.promptPreview
+  const promptPreviewText = typeof promptPreview === 'string'
+    ? promptPreview
+    : String(promptPreview?.text || '')
+  const promptProvenance = {
+    backend: String(snapshot.backend || generatedImage?.backend || run?.backend || run?.input?.backend || ''),
+    provider: String(snapshot.provider || ''),
+    model: String(snapshot.model || generatedImage?.model || ''),
+    baseUrlHost: String(snapshot.baseUrlHost || ''),
+    mode: String(promptBuilder?.mode || ''),
+    actionId: String(promptBuilder?.actionId || ''),
+    sections: Array.isArray(promptBuilder?.sections) ? promptBuilder.sections.map((section) => String(section || '')).filter(Boolean) : [],
+    warnings: Array.isArray(promptBuilder?.warnings) ? promptBuilder.warnings.map((warning) => String(warning || '')).filter(Boolean) : []
+  }
+  if (developerMode && promptPreviewText) {
+    promptProvenance.promptPreview = promptPreviewText.slice(0, 6000)
+  }
+  return promptProvenance
+}
+
+const createWorkflowState = ({ run }) => {
+  const status = String(run?.status || '')
+  const taskStatus = String(run?.taskStatus || '')
+  const importStatus = String(run?.importStatus || '')
+  const hasActionFrames = Boolean(run?.artifacts?.actionFrames)
+
+  if (taskStatus === 'needs_input') {
+    return {
+      phase: 'needs_input',
+      headline: 'Waiting for follow-up answer',
+      nextActionLabel: 'Answer follow-up'
+    }
+  }
+
+  if (importStatus === 'imported' || status === 'imported') {
+    return {
+      phase: 'imported',
+      headline: 'Imported into OpenPet',
+      nextActionLabel: 'Review imported action'
+    }
+  }
+
+  if (status === 'approved') {
+    return {
+      phase: 'approved',
+      headline: hasActionFrames ? 'Approved and waiting for import' : 'Approved and waiting for pet import',
+      nextActionLabel: hasActionFrames ? 'Import Approved Action' : 'Import Approved Pet'
+    }
+  }
+
+  if (status === 'ready_for_review') {
+    return {
+      phase: 'review',
+      headline: 'Review generated output',
+      nextActionLabel: 'Approve run'
+    }
+  }
+
+  if (status === 'failed') {
+    return {
+      phase: 'failed',
+      headline: 'Generation failed',
+      nextActionLabel: 'Retry generation'
+    }
+  }
+
+  if (taskStatus === 'confirmed') {
+    return {
+      phase: 'confirmed',
+      headline: 'Confirmed and ready to generate',
+      nextActionLabel: 'Generate action'
+    }
+  }
+
+  if (taskStatus === 'ready_for_confirmation') {
+    return {
+      phase: 'ready_for_confirmation',
+      headline: 'Draft task is ready for confirmation',
+      nextActionLabel: 'Confirm task'
+    }
+  }
+
+  return {
+    phase: status || taskStatus || 'draft',
+    headline: 'Draft task in progress',
+    nextActionLabel: 'Draft task'
+  }
+}
+
+const createImportReadiness = ({ run }) => {
+  const status = String(run?.status || '')
+  const taskStatus = String(run?.taskStatus || '')
+  const importStatus = String(run?.importStatus || '')
+  const hasActionFrames = Boolean(run?.artifacts?.actionFrames)
+
+  if (importStatus === 'imported' || status === 'imported') {
+    return {
+      ready: false,
+      commandId: '',
+      message: 'This run has already been imported into OpenPet.'
+    }
+  }
+
+  if (status === 'approved' && hasActionFrames) {
+    return {
+      ready: true,
+      commandId: 'import-approved-action',
+      message: 'Use Control Center → Plugins → Import Approved Action to hand frames to the host.'
+    }
+  }
+
+  if (status === 'approved') {
+    return {
+      ready: true,
+      commandId: 'import-approved-pet',
+      message: 'Use Control Center → Plugins → Import Approved Pet to hand the approved pet pack to the host.'
+    }
+  }
+
+  if (taskStatus === 'needs_input') {
+    return {
+      ready: false,
+      commandId: '',
+      message: 'Answer pending questions and complete generation before import.'
+    }
+  }
+
+  if (status === 'ready_for_review') {
+    return {
+      ready: false,
+      commandId: '',
+      message: 'Review generated output and approve the run before import.'
+    }
+  }
+
+  return {
+    ready: false,
+    commandId: '',
+    message: 'Complete generation and approval before import.'
+  }
+}
+
+const createDashboardState = ({ run, developerMode = false }) => {
+  const promptProvenance = createPromptProvenance({ run, developerMode })
+  const recoveryMessage = String(run?.backendStatus?.message || run?.error || '').trim()
+  const canRetryGeneration = String(run?.status || '') === 'failed'
+  return {
+    workflow: createWorkflowState({ run }),
+    importReadiness: createImportReadiness({ run }),
+    recovery: {
+      canRetryGeneration,
+      retryLabel: canRetryGeneration ? 'Retry generation' : 'Generate action',
+      message: recoveryMessage
+    },
+    ...(promptProvenance ? { promptProvenance } : {})
+  }
+}
+
+const createPublicRun = ({ dataDir, run, developerMode = false }) => {
   const publicRun = createPublicLogValue({ dataDir, value: run })
   const normalizedBackend = normalizeCreatorBackend(run.backend || run.input?.backend, FIXTURE_BACKEND)
   const wizardState = createWizardState({ dataDir, run })
@@ -1253,6 +1418,7 @@ const createPublicRun = ({ dataDir, run }) => {
     artifacts: createPublicArtifacts({ dataDir, artifacts: run.artifacts || {} }),
     developerPrompt: createDeveloperPrompt({ dataDir, run }),
     recovery: createPublicRecovery({ dataDir, run }),
+    dashboard: createDashboardState({ run, developerMode }),
     wizardState,
     workflowGuidance,
     reviewCheckpoint,
@@ -1665,7 +1831,10 @@ const createCreatorStudioServer = ({ dataDir, dashboardPath }) => http.createSer
     if (await handlePost({ request, response, dataDir, url })) return
   }
   if (url.pathname === '/api/runs') {
-    sendJson(response, 200, { ok: true, runs: listRuns({ dataDir }).map((run) => createPublicRun({ dataDir, run })) })
+    sendJson(response, 200, {
+      ok: true,
+      runs: listRuns({ dataDir }).map((run) => createPublicRun({ dataDir, run, developerMode: isDeveloperMode(url) }))
+    })
     return
   }
 
@@ -1684,7 +1853,7 @@ const createCreatorStudioServer = ({ dataDir, dashboardPath }) => http.createSer
       const run = readRun({ dataDir, runId })
       sendJson(response, 200, {
         ok: true,
-        run: createPublicRun({ dataDir, run }),
+        run: createPublicRun({ dataDir, run, developerMode: isDeveloperMode(url) }),
         actionReview: createActionReview({ dataDir, run }),
         fullPetReview: createFullPetReview({ dataDir, run })
       })

@@ -279,6 +279,42 @@ test('image generation model service returns discovered models when the optional
   assert.equal(result.currentModelDiscovered, true)
 })
 
+test('image generation model service discovers available models through the optional /models probe', async () => {
+  const requests = []
+  const service = createImageGenerationModelService({
+    settingsService: createSettingsService(providerSettings({
+      baseUrl: 'https://images-models.example.test/v1',
+      model: 'gpt-image-2'
+    })),
+    secretService: createSecretService({
+      'secret:model.image.openai.apiKey': { value: 'sk-test-image', label: 'Image API Key' }
+    }),
+    fetchImpl: async (url, options) => {
+      requests.push({ url, options })
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          data: [
+            { id: 'gpt-image-2' },
+            { id: 'openpet-image-test' },
+            { id: 'gpt-image-2' },
+            {}
+          ]
+        })
+      }
+    }
+  })
+
+  const result = await service.discoverModels()
+
+  assert.equal(result.ok, true)
+  assert.equal(result.code, 'ok')
+  assert.deepEqual(result.models, ['gpt-image-2', 'openpet-image-test'])
+  assert.equal(requests[0].url, 'https://images-models.example.test/v1/models')
+  assert.equal(requests[0].options.method, 'GET')
+})
+
 test('image generation model service maps legacy local settings into the unified provider view', () => {
   const service = createImageGenerationModelService({
     settingsService: createSettingsService({

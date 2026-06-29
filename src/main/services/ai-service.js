@@ -265,6 +265,17 @@ const createProviderError = ({ message, status, code }) => {
   return error
 }
 
+const isOptionalModelsProbeStatus = (status) => [404, 405, 501].includes(Number(status))
+
+const extractDiscoveredModelIds = (body) => {
+  const entries = Array.isArray(body?.data) ? body.data : []
+  return Array.from(new Set(
+    entries
+      .map((entry) => (typeof entry?.id === 'string' ? entry.id.trim() : ''))
+      .filter(Boolean)
+  )).sort()
+}
+
 const classifyConnectionError = (error) => {
   if (error?.message === 'AI API key is not configured') {
     return { code: 'missing_api_key', message: 'AI API key is not configured' }
@@ -688,7 +699,125 @@ const createAiService = ({
     }
   }
 
-  return { getConfig, saveConfig, saveApiKey, getConversation, clearConversation, chat, complete, testConnection }
+  const discoverModels = async () => {
+    const config = getRawConfig()
+    const apiKey = secretService.getSecretValue(config.apiKeyRef)
+    const startedAt = Date.now()
+    const baseResult = {
+      provider: config.provider,
+      baseUrl: sanitizeBaseUrlForDisplay(config.baseUrl),
+      model: config.model,
+      hasApiKey: Boolean(apiKey)
+    }
+    recordLog({
+      scope: 'ai-settings',
+      level: 'info',
+      event: 'ai.settings.model-discovery.started',
+      message: 'AI provider model discovery started',
+      details: baseResult
+    })
+    let response
+    try {
+      if (!apiKey) {
+        return {
+          ok: false,
+          ...baseResult,
+          models: [],
+          code: 'missing_api_key',
+          message: 'AI API key is not configured'
+        }
+      }
+      if (config.provider !== 'openai-compatible') {
+        return {
+          ok: false,
+          ...baseResult,
+          models: [],
+          code: 'unsupported_provider',
+          message: 'Unsupported AI provider'
+        }
+      }
+      if (typeof fetchImpl !== 'function') {
+        return {
+          ok: false,
+          ...baseResult,
+          models: [],
+          code: 'fetch_unavailable',
+          message: 'Fetch is not available'
+        }
+      }
+
+      const timeout = createTimeoutController(requestTimeoutMs)
+      try {
+        response = await fetchImpl(`${config.baseUrl}/models`, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+          },
+          signal: timeout.signal
+        })
+      } catch (error) {
+        if (error?.name === 'AbortError') {
+          const timeoutError = new Error('AI provider request timed out')
+          timeoutError.name = 'AbortError'
+          throw timeoutError
+        }
+        throw error
+      } finally {
+        timeout.clear()
+      }
+
+      const body = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        if (isOptionalModelsProbeStatus(response.status)) {
+          return {
+            ok: true,
+            ...baseResult,
+            models: [],
+            code: 'provider_reachable_models_unavailable',
+            message: 'AI provider is reachable, but the optional /models probe is unavailable'
+          }
+        }
+        throw createProviderError({
+          message: body?.error?.message || `AI provider request failed with status ${response.status}`,
+          status: response.status,
+          code: body?.error?.code
+        })
+      }
+
+      const discoveredModels = extractDiscoveredModelIds(body)
+      return {
+        ok: true,
+        ...baseResult,
+        models: discoveredModels,
+        code: 'ok',
+        message: 'AI provider model discovery succeeded'
+      }
+    } catch (error) {
+      const classified = classifyConnectionError(error)
+      return {
+        ok: false,
+        ...baseResult,
+        models: [],
+        code: classified.code,
+        message: classified.message
+      }
+    } finally {
+      recordLog({
+        scope: 'ai-settings',
+        level: 'info',
+        event: 'ai.settings.model-discovery.completed',
+        message: 'AI provider model discovery completed',
+        details: {
+          ...baseResult,
+          elapsedMs: Date.now() - startedAt,
+          status: response?.status || 0
+        }
+      })
+    }
+  }
+
+  return { getConfig, saveConfig, saveApiKey, getConversation, clearConversation, chat, complete, testConnection, discoverModels }
 }
 
 module.exports = {
