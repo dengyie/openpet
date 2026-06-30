@@ -24,24 +24,28 @@ test('plugin runtime safety redacts command log text consistently', () => {
   assert.match(message, /\[redacted-secret\]/)
 })
 
-test('plugin runtime safety only redacts command result output fields', () => {
+test('plugin runtime safety redacts output fields and sensitive result values', () => {
   assert.deepEqual(
     sanitizePluginCommandResultValue({
       ok: true,
       token: 'visible-non-output-value',
+      apiKey: 'plain-provider-key',
       stdout: 'token=bridge-secret /tmp/openpet-plugin',
       nested: {
         stderr: 'http://localhost:9000/logs',
-        value: '/Users/mango/private/value.txt'
+        value: '/Users/mango/private/value.txt',
+        credentials: ['first-secret', 'second-secret']
       }
     }),
     {
       ok: true,
-      token: 'visible-non-output-value',
+      token: '[redacted-secret]',
+      apiKey: '[redacted-secret]',
       stdout: '[redacted-token]=[redacted-secret] [redacted-path]',
       nested: {
         stderr: '[redacted-local-url]',
-        value: '/Users/mango/private/value.txt'
+        value: '[redacted-path]',
+        credentials: ['[redacted-secret]', '[redacted-secret]']
       }
     }
   )

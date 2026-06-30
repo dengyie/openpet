@@ -12,13 +12,19 @@ const sanitizePluginCommandText = (value = '') => {
   return sanitized.trim()
 }
 
+const isPluginCommandOutputKey = (key = '') => /^(error|stderr|stdout)$/i.test(String(key || ''))
+
+const isSensitivePluginResultKey = (key = '') => (
+  /(?:api[_-]?key|authorization|credential|password|secret|token)/i.test(String(key || ''))
+)
+
 const sanitizePluginCommandResultValue = (value, key = '') => {
   if (typeof value === 'string') {
-    return /^(error|stderr|stdout)$/i.test(String(key || ''))
-      ? sanitizePluginCommandText(value)
-      : value
+    if (isSensitivePluginResultKey(key)) return value ? '[redacted-secret]' : value
+    const sanitized = sanitizePluginCommandText(value)
+    return isPluginCommandOutputKey(key) || sanitized !== value.trim() ? sanitized : value
   }
-  if (Array.isArray(value)) return value.map((entry) => sanitizePluginCommandResultValue(entry))
+  if (Array.isArray(value)) return value.map((entry) => sanitizePluginCommandResultValue(entry, key))
   if (!value || typeof value !== 'object') return value
   return Object.fromEntries(Object.entries(value).map(([entryKey, entryValue]) => [
     entryKey,

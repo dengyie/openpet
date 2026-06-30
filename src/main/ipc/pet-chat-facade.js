@@ -1,42 +1,14 @@
 const { IPC } = require('../../shared/ipc-channels')
-
-const MAX_PET_CHAT_MESSAGES = 100
-
-const sanitizeDiagnosticText = (value) => String(value || '')
-  .replace(/\bsk-[A-Za-z0-9_-]{8,}\b/g, '[redacted-secret]')
-  .slice(0, 240)
-
-const normalizeMessageText = (value) => String(value || '').trim().replace(/\s+/g, ' ')
-
-const createEmptyPetBubble = () => ({
-  text: '',
-  source: '',
-  ttlMs: 0,
-  updatedAt: ''
-})
-
-const normalizePetBubble = (payload = {}) => {
-  const text = normalizeMessageText(payload?.text)
-  if (!text) return null
-  return {
-    text,
-    source: sanitizeDiagnosticText(payload?.source || ''),
-    ttlMs: Number.isFinite(Number(payload?.ttlMs)) ? Number(payload.ttlMs) : 0,
-    updatedAt: new Date().toISOString()
-  }
-}
-
-const sanitizeChatMessages = (messages = []) => (
-  (Array.isArray(messages) ? messages : [])
-    .filter((message) => ['user', 'assistant'].includes(message?.role) && typeof message?.content === 'string')
-    .slice(-MAX_PET_CHAT_MESSAGES)
-    .map((message) => ({
-      id: typeof message.id === 'string' ? message.id : '',
-      role: message.role,
-      content: message.content,
-      createdAt: typeof message.createdAt === 'string' ? message.createdAt : ''
-    }))
-)
+const { createPetBubbleChatCoordinator } = require('./pet-bubble-chat-coordinator')
+const { createPetUtteranceRecorder } = require('./pet-utterance-recorder')
+const {
+  createEmptyPetBubble,
+  createPetChatStateController,
+  normalizeMessageText,
+  normalizePetBubble,
+  sanitizeChatMessages,
+  sanitizeDiagnosticText
+} = require('./pet-chat-state')
 
 const createPetChatFacade = ({
   getPetWindow,
@@ -60,112 +32,30 @@ const createPetChatFacade = ({
     }
   }
 
-  const getActivePetPackId = () => {
-    try {
-      const manifest = petPackService?.getActivePetPack?.()?.manifest || {}
-      return normalizeMessageText(manifest.id) || 'legacy-cat'
-    } catch (_) {
-      return 'legacy-cat'
-    }
-  }
-
-  const getConversationMessages = (reason) => {
-    try {
-      return (aiTalkService || aiService)?.getConversation?.('') || []
-    } catch (error) {
-      safeRecordAppLog({
-        scope: 'pet-bubble-chat',
-        level: 'warn',
-        actor: 'system',
-        event: 'pet-bubble-chat.items.refresh-failed',
-        message: 'Pet bubble chat items refresh failed',
-        details: {
-          reason,
-          errorName: sanitizeDiagnosticText(error?.name || 'Error'),
-          errorMessage: sanitizeDiagnosticText(error?.message)
-        }
-      })
-      return []
-    }
-  }
-
-  const recordPetUtterance = (payload = {}) => {
-    if (!petUtteranceLogService?.record) return null
-    try {
-      return petUtteranceLogService.record({
-        petPackId: getActivePetPackId(),
-        text: payload.text || payload.message || '',
-        source: payload.source || '',
-        ttlMs: payload.ttlMs
-      })
-    } catch (error) {
-      safeRecordAppLog({
-        scope: 'pet-utterance',
-        level: 'error',
-        actor: 'system',
-        event: 'pet-utterance.record.failed',
-        message: 'Pet utterance recording failed',
-        details: {
-          errorName: sanitizeDiagnosticText(error?.name || 'Error'),
-          errorMessage: sanitizeDiagnosticText(error?.message)
-        }
-      })
-      return null
-    }
-  }
-
-  const getState = () => {
-    const windowState = petChatWindowService?.getState?.() || {}
-    const bubbleChatState = petBubbleChatWindowService?.getState?.() || { visible: false, hasWindow: false }
-    const config = aiService?.getConfig?.() || {}
-    let profile = {}
-    let messages = []
-    let conversationId = ''
-    try {
-      profile = aiTalkService?.getPersonaProfile?.() || {}
-    } catch (_) {
-      profile = {}
-    }
-    try {
-      messages = (aiTalkService || aiService)?.getConversation?.('') || []
-    } catch (_) {
-      messages = []
-    }
-    if (profile?.petPackId) {
-      conversationId = `control-center:${profile.petPackId}:main`
-    }
-    const enabled = Boolean(config.enabled)
-    const hasApiKey = Boolean(config.hasApiKey)
-    const ready = enabled && hasApiKey
-    return {
-      available: Boolean(petChatWindowService),
-      ...windowState,
-      conversationId,
-      petPack: {
-        id: profile.petPackId || '',
-        displayName: profile.petPackDisplayName || profile.petPackId || ''
-      },
-      ai: {
-        enabled,
-        hasApiKey,
-        ready,
-        provider: config.provider || '',
-        baseUrl: config.baseUrl || '',
-        model: config.model || '',
-        reason: ready
-          ? ''
-          : (enabled ? '请先在 Control Center 保存 AI API Key' : '请先在 Control Center 启用 AI Provider')
-      },
-      bubble: lastPetBubble,
-      bubbleChat: {
-        visible: Boolean(bubbleChatState.visible),
-        hasWindow: Boolean(bubbleChatState.hasWindow),
-        pinned: Boolean(bubbleChatState.pinned),
-        placement: typeof bubbleChatState.placement === 'string' ? bubbleChatState.placement : ''
-      },
-      messages: sanitizeChatMessages(messages)
-    }
-  }
+  const getLastBubble = () => lastPetBubble
+  const stateController = createPetChatStateController({
+    petPackService,
+    aiService,
+    aiTalkService,
+    petChatWindowService,
+    petBubbleChatWindowService,
+    getLastBubble,
+    recordAppLog
+  })
+  const getActivePetPackId = stateController.getActivePetPackId
+  const getState = stateController.getState
+  const { recordPetUtterance } = createPetUtteranceRecorder({
+    petUtteranceLogService,
+    getActivePetPackId,
+    recordAppLog
+  })
+  const bubbleChatCoordinator = createPetBubbleChatCoordinator({
+    petBubbleChatWindowService,
+    getActivePetPackId,
+    getConversationMessages: stateController.getConversationMessages,
+    recordAppLog
+  })
+  const refreshBubbleChatItems = bubbleChatCoordinator.refreshBubbleChatItems
 
   const notifyStateChanged = (state = getState()) => {
     petChatWindowService?.sendStateChanged?.(state)
@@ -182,31 +72,6 @@ const createPetChatFacade = ({
       }
     })
     settingsWindow?.webContents?.send?.(IPC.PET_PACKS_ACTIVE_CHANGED, { activePackId: normalizedActivePackId })
-  }
-
-  const refreshBubbleChatItems = ({ reason = 'refresh' } = {}) => {
-    const conversationMessages = getConversationMessages(reason)
-    try {
-      if (petBubbleChatWindowService?.rebuildItems) {
-        return petBubbleChatWindowService.rebuildItems({ conversationMessages, noticeItems: [], reason })
-      }
-      if (!petBubbleChatWindowService?.refreshItems) return petBubbleChatWindowService?.getState?.() || null
-      return petBubbleChatWindowService.refreshItems({ conversationMessages, reason })
-    } catch (error) {
-      safeRecordAppLog({
-        scope: 'pet-bubble-chat',
-        level: 'warn',
-        actor: 'system',
-        event: 'pet-bubble-chat.items.refresh-failed',
-        message: 'Pet bubble chat items refresh failed',
-        details: {
-          reason,
-          errorName: sanitizeDiagnosticText(error?.name || 'Error'),
-          errorMessage: sanitizeDiagnosticText(error?.message)
-        }
-      })
-      return petBubbleChatWindowService?.getState?.() || null
-    }
   }
 
   const refreshPetPackScopedChatState = ({ reason = 'pet-pack-changed' } = {}) => {
@@ -247,8 +112,6 @@ const createPetChatFacade = ({
     if (notify) notifyStateChanged()
     return lastPetBubble
   }
-
-  const getLastBubble = () => lastPetBubble
 
   const attachState = (response = {}, bubble = lastPetBubble) => {
     const state = getState()
@@ -295,69 +158,28 @@ const createPetChatFacade = ({
     refreshBubbleChatItems({ reason: 'pet-event' })
   }
 
-  const getBubbleChatState = () => petBubbleChatWindowService?.getState?.() || { visible: false, hasWindow: false }
-
-  const openBubbleChat = () => petBubbleChatWindowService?.open?.({ source: 'pet-renderer', focus: true }) || { visible: false, hasWindow: false }
-
-  const showLocalBubbleChatMessage = (payload = {}) => {
-    const text = normalizeMessageText(payload?.text)
-    if (!text) return getBubbleChatState()
-    const state = petBubbleChatWindowService?.showMessage?.({
-      text,
-      ttlMs: payload?.ttlMs,
-      source: normalizeMessageText(payload?.source) || 'pet-renderer',
-      petPackId: getActivePetPackId()
-    }) || { visible: false, hasWindow: false }
-    return refreshBubbleChatItems({ reason: 'local-show-message' }) || state
-  }
-
-  const hideBubbleChat = () => {
-    petBubbleChatWindowService?.hide?.({ source: 'pet-bubble-chat-renderer' })
-  }
-
-  const setBubbleChatPinned = (payload) => (
-    petBubbleChatWindowService?.setPinned?.(Boolean(payload?.pinned), { source: 'pet-bubble-chat-renderer' }) ||
-    { visible: false, hasWindow: false }
-  )
-
-  const setBubbleChatInteracting = (payload) => (
-    petBubbleChatWindowService?.setInteracting?.(Boolean(payload?.interacting), { source: 'pet-bubble-chat-renderer' }) ||
-    { visible: false, hasWindow: false }
-  )
-
-  const setBubbleChatHitTestMode = (payload = {}) => (
-    petBubbleChatWindowService?.setHitTestMode?.({
-      interactive: Boolean(payload?.interactive),
-      source: normalizeMessageText(payload?.source) || 'pet-bubble-chat-renderer'
-    }) || { visible: false, hasWindow: false }
-  )
-
-  const syncBubbleChatToPetWindow = () => {
-    petBubbleChatWindowService?.syncToPetWindow?.()
-  }
-
   return {
     attachState,
     broadcastActivePetPackChanged,
     captureBubble,
     getActivePetPackId,
-    getBubbleChatState,
+    getBubbleChatState: bubbleChatCoordinator.getBubbleChatState,
     getLastBubble,
     getState,
     handlePetEvent,
     handlePetSay,
-    hideBubbleChat,
+    hideBubbleChat: bubbleChatCoordinator.hideBubbleChat,
     notifyActivePetPackChanged,
     notifyStateChanged,
-    openBubbleChat,
+    openBubbleChat: bubbleChatCoordinator.openBubbleChat,
     recordPetUtterance,
     refreshBubbleChatItems,
     refreshPetPackScopedChatState,
-    setBubbleChatHitTestMode,
-    setBubbleChatInteracting,
-    setBubbleChatPinned,
-    showLocalBubbleChatMessage,
-    syncBubbleChatToPetWindow
+    setBubbleChatHitTestMode: bubbleChatCoordinator.setBubbleChatHitTestMode,
+    setBubbleChatInteracting: bubbleChatCoordinator.setBubbleChatInteracting,
+    setBubbleChatPinned: bubbleChatCoordinator.setBubbleChatPinned,
+    showLocalBubbleChatMessage: bubbleChatCoordinator.showLocalBubbleChatMessage,
+    syncBubbleChatToPetWindow: bubbleChatCoordinator.syncBubbleChatToPetWindow
   }
 }
 
