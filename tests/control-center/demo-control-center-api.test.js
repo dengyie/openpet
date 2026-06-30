@@ -52,6 +52,17 @@ test.before(async () => {
   ;({ demoControlCenterAPI } = await import('../../src/control-center/src/api/demo-control-center-api.ts'))
 })
 
+test('control center API entrypoint lazy-loads demo fallback without installing it globally', async () => {
+  delete global.window.controlCenterAPI
+  const { controlCenterAPI } = await import('../../src/control-center/src/api/control-center-api.ts')
+
+  assert.equal(global.window.controlCenterAPI, undefined)
+
+  const settings = await controlCenterAPI.getSettings()
+  assert.equal(typeof settings.scale, 'number')
+  assert.equal(global.window.controlCenterAPI, undefined)
+})
+
 test('demo API saves and returns settings from session-backed state', async () => {
   const previousSettings = await demoControlCenterAPI.getSettings()
 
