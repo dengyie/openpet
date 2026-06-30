@@ -1,0 +1,48 @@
+const test = require('node:test')
+const assert = require('node:assert/strict')
+
+const {
+  sanitizePluginCommandResultValue,
+  sanitizePluginCommandText
+} = require('../../src/main/services/plugin-runtime-safety')
+
+test('plugin runtime safety redacts command log text consistently', () => {
+  const message = sanitizePluginCommandText([
+    'token=bridge-secret',
+    'http://127.0.0.1:8787/plugins/bridge/run-1',
+    '/Users/mango/private/proposal.json',
+    'sk-testSecret_123'
+  ].join(' '))
+
+  assert.equal(message.includes('bridge-secret'), false)
+  assert.equal(message.includes('127.0.0.1:8787'), false)
+  assert.equal(message.includes('/Users/mango/private/proposal.json'), false)
+  assert.equal(message.includes('sk-testSecret_123'), false)
+  assert.match(message, /\[redacted-token\]=\[redacted-secret\]/)
+  assert.match(message, /\[redacted-local-url\]/)
+  assert.match(message, /\[redacted-path\]/)
+  assert.match(message, /\[redacted-secret\]/)
+})
+
+test('plugin runtime safety only redacts command result output fields', () => {
+  assert.deepEqual(
+    sanitizePluginCommandResultValue({
+      ok: true,
+      token: 'visible-non-output-value',
+      stdout: 'token=bridge-secret /tmp/openpet-plugin',
+      nested: {
+        stderr: 'http://localhost:9000/logs',
+        value: '/Users/mango/private/value.txt'
+      }
+    }),
+    {
+      ok: true,
+      token: 'visible-non-output-value',
+      stdout: '[redacted-token]=[redacted-secret] [redacted-path]',
+      nested: {
+        stderr: '[redacted-local-url]',
+        value: '/Users/mango/private/value.txt'
+      }
+    }
+  )
+})

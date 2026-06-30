@@ -100,6 +100,32 @@ test('plugin command runner resolves successful child output and cleans runtimes
   assert.deepEqual(harness.unrefCalls, ['unref'])
 })
 
+test('plugin command runner sanitizes command output before returning or logging', async () => {
+  const harness = createHarness()
+  const resultPromise = runPluginCommandEntryProcess(harness.options)
+  await flushAsyncSetup()
+
+  harness.child.stdout.write('token=bridge-secret http://127.0.0.1:8317/plugins/bridge/run-1 /Users/mango/private/out.txt\n')
+  harness.child.stderr.write('sk-testSecret_123 /tmp/openpet-plugin/error.log')
+  harness.child.emit('exit', 0, null)
+
+  const result = await resultPromise
+  const stdoutLog = harness.logs.find((entry) => entry.message.startsWith('Command stdout:'))
+  const stderrLog = harness.logs.find((entry) => entry.message.startsWith('Command stderr:'))
+
+  assert.equal(result.stdout.includes('bridge-secret'), false)
+  assert.equal(result.stdout.includes('127.0.0.1:8317'), false)
+  assert.equal(result.stdout.includes('/Users/mango/private/out.txt'), false)
+  assert.match(result.stdout, /\[redacted-token\]=\[redacted-secret\]/)
+  assert.match(result.stdout, /\[redacted-local-url\]/)
+  assert.match(result.stdout, /\[redacted-path\]/)
+  assert.equal(result.stderr.includes('sk-testSecret_123'), false)
+  assert.match(result.stderr, /\[redacted-secret\]/)
+  assert.match(result.stderr, /\[redacted-path\]/)
+  assert.equal(stdoutLog.message.includes('bridge-secret'), false)
+  assert.equal(stderrLog.message.includes('sk-testSecret_123'), false)
+})
+
 test('plugin command runner rejects child process errors and cleans waiters', async () => {
   const harness = createHarness()
   const resultPromise = runPluginCommandEntryProcess(harness.options)
