@@ -2899,6 +2899,54 @@ test('plugin service rejects declaration command cwd symlinks escaping the plugi
   assert.deepEqual(spawned, [])
 })
 
+test('plugin service rejects declaration command cwd paths resolving outside the plugin directory', async () => {
+  const root = createDeclarationOnlyPluginDir({ commandCwd: 'safe-command-link' })
+  const outsidePath = path.join(root, 'outside-command-resolved')
+  fs.mkdirSync(outsidePath)
+  fs.symlinkSync(outsidePath, path.join(root, 'weather-declaration', 'safe-command-link'))
+  const spawned = []
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [root],
+    spawnCommandProcess: (...args) => {
+      spawned.push(args)
+      return createFakeServiceProcess()
+    }
+  })
+
+  await assert.rejects(
+    () => service.runCommand('weather-declaration', 'announce'),
+    /Plugin command cwd must stay inside the plugin directory/
+  )
+  assert.deepEqual(spawned, [])
+})
+
+test('plugin service rejects declaration command cwd paths that do not exist', async () => {
+  const spawned = []
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir({ commandCwd: 'missing-command-dir' })],
+    spawnCommandProcess: (...args) => {
+      spawned.push(args)
+      return createFakeServiceProcess()
+    }
+  })
+
+  await assert.rejects(
+    () => service.runCommand('weather-declaration', 'announce'),
+    /Plugin command cwd does not exist/
+  )
+  assert.deepEqual(spawned, [])
+})
+
 test('plugin service rejects declaration command runs for disabled plugins', async () => {
   const spawned = []
   const service = createPluginService({
