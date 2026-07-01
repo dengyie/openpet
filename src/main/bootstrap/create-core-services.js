@@ -1,5 +1,6 @@
 const fs = require('fs')
 const path = require('path')
+const { safeStorage } = require('electron')
 
 const createCoreServices = ({
   app,
@@ -55,7 +56,7 @@ const createCoreServices = ({
       return config
     }
   })
-  const secretService = createSecretService()
+  const secretService = createSecretService({ safeStorage })
   const appLogService = createAppLogService({
     logDir: path.join(app.getPath('userData'), 'logs')
   })

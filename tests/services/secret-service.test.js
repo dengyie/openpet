@@ -44,3 +44,56 @@ test('secret service can delete stored secrets', () => {
   assert.equal(service.getSecretValue('model.image.openai.apiKey'), '')
   assert.deepEqual(service.listSecretRefs(), [])
 })
+
+const createFakeSafeStorage = () => {
+  const key = 'openpet-test-key'
+  return {
+    isEncryptionAvailable: () => true,
+    encryptString: (value) => {
+      const b = Buffer.from(value, 'utf-8')
+      for (let i = 0; i < b.length; i += 1) b[i] = b[i] ^ key.charCodeAt(i % key.length)
+      return b
+    },
+    decryptString: (buf) => {
+      const b = Buffer.from(buf)
+      for (let i = 0; i < b.length; i += 1) b[i] = b[i] ^ key.charCodeAt(i % key.length)
+      return b.toString('utf-8')
+    }
+  }
+}
+
+test('secret service encrypts secrets at rest when safeStorage is available', () => {
+  const storePath = createTempStore()
+  const safeStorage = createFakeSafeStorage()
+  const service = createSecretService({ storePath, safeStorage })
+
+  service.setSecret({ id: 'sk', value: 'super-secret-key', label: 'Provider key' })
+
+  const onDisk = JSON.parse(fs.readFileSync(storePath, 'utf-8'))
+  assert.equal(onDisk.secrets.sk.encrypted, true)
+  assert.notEqual(onDisk.secrets.sk.value, 'super-secret-key')
+  assert.ok(!onDisk.secrets.sk.value.includes('super-secret'))
+
+  const reloaded = createSecretService({ storePath, safeStorage })
+  assert.equal(reloaded.getSecretValue('sk'), 'super-secret-key')
+})
+
+test('secret service migrates legacy plaintext entries on read', () => {
+  const storePath = createTempStore()
+  fs.writeFileSync(storePath, JSON.stringify({
+    secrets: {
+      legacy: { label: 'Old', value: 'plaintext-key', updatedAt: '2026-01-01T00:00:00.000Z' }
+    }
+  }, null, 2))
+
+  const safeStorage = createFakeSafeStorage()
+  const service = createSecretService({ storePath, safeStorage })
+
+  assert.equal(service.getSecretValue('legacy'), 'plaintext-key')
+
+  // Re-setting migrates it to encrypted form at rest.
+  service.setSecret({ id: 'legacy', value: 'plaintext-key', label: 'Old' })
+  const onDisk = JSON.parse(fs.readFileSync(storePath, 'utf-8'))
+  assert.equal(onDisk.secrets.legacy.encrypted, true)
+  assert.notEqual(onDisk.secrets.legacy.value, 'plaintext-key')
+})

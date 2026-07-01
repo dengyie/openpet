@@ -108,6 +108,33 @@ const bringWindowToFront = (win, app = electron.app) => {
   app?.focus?.({ steal: true })
 }
 
+// Lock a window to its bundled local content. Renderer XSS or a stray link must
+// not be able to navigate the window to remote content — that would hand the
+// attacker the preload bridge (plugin management, local HTTP token, secrets UI).
+// Only file:// (bundled app) and data: (build-missing fallback) are allowed;
+// every other navigation or window.open is blocked. External links must go
+// through shell.openExternal in the main process, never in-window.
+const applyNavigationLock = (win) => {
+  const contents = win?.webContents
+  if (!contents || typeof contents.on !== 'function') return win
+  const isAllowedTarget = (rawUrl) => {
+    try {
+      const { protocol } = new URL(rawUrl)
+      return protocol === 'file:' || protocol === 'data:'
+    } catch (_) {
+      return false
+    }
+  }
+  contents.on('will-navigate', (event, url) => {
+    if (!isAllowedTarget(url)) event.preventDefault()
+  })
+  if (typeof contents.setWindowOpenHandler === 'function') {
+    contents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  }
+  contents.on('will-attach-webview', (event) => event.preventDefault())
+  return win
+}
+
 const createWindow = ({ load = true, BrowserWindow = electron.BrowserWindow, screen = electron.screen } = {}) => {
   const petWindow = new BrowserWindow({
     width: BASE_WIDTH,
@@ -132,6 +159,7 @@ const createWindow = ({ load = true, BrowserWindow = electron.BrowserWindow, scr
     workArea.y + workArea.height - BASE_HEIGHT - 40
   )
   petWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+  applyNavigationLock(petWindow)
   if (load) loadPetWindow(petWindow)
 
   return petWindow
@@ -178,6 +206,7 @@ const createSettingsWindow = (petWindow, { BrowserWindow = electron.BrowserWindo
     maxSettingsY
   )
   settingsWindow.setPosition(Math.round(settingsX), Math.round(settingsY))
+  applyNavigationLock(settingsWindow)
   settingsWindow.loadFile(path.join(projectRoot, 'dist', 'control-center', 'index.html')).catch((error) => {
     settingsWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(`<!doctype html><title>OpenPet Control Center</title><body style="font-family: system-ui; padding: 24px;"><h1>Control Center build missing</h1><p>${error.message}</p></body>`)}`)
   })
@@ -186,4 +215,4 @@ const createSettingsWindow = (petWindow, { BrowserWindow = electron.BrowserWindo
   return settingsWindow
 }
 
-module.exports = { BASE_WIDTH, BASE_HEIGHT, PET_BASE_SCALE, applyPetViewport, applyWindowScale, createWindow, createSettingsWindow, loadPetWindow }
+module.exports = { BASE_WIDTH, BASE_HEIGHT, PET_BASE_SCALE, applyPetViewport, applyWindowScale, applyNavigationLock, createWindow, createSettingsWindow, loadPetWindow }
