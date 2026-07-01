@@ -1555,6 +1555,106 @@ export interface CreatorStudioDefaultFlowResult extends OkResponse {
   lastCommandResult: PluginCommandRunResultViewState | null
 }
 
+export type CreatorReferenceTargetType = 'editable-action-host' | 'pet-pack'
+
+export interface CreatorReferenceViewState {
+  targetType: CreatorReferenceTargetType
+  targetId: string
+  assetPath: string
+  assetUrl: string
+  fileName: string
+  width: number
+  height: number
+  contentHash: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreatorEditableTargetViewState {
+  targetType: CreatorReferenceTargetType
+  targetId: string
+  displayName: string
+  defaultAction: string
+  clickAction: string
+  actionCount: number
+}
+
+export interface CreatorProviderStateViewState {
+  ready: boolean
+  code: string
+  message: string
+  provider: string
+  model: string
+}
+
+export interface CreatorDashboardAvailabilityViewState {
+  available: boolean
+  pluginId: string
+  dashboardId: string
+  serviceStatus: string
+  reason: string
+}
+
+export type CreatorWorkflowState =
+  | 'missing-input'
+  | 'provider-not-ready'
+  | 'generating'
+  | 'review-required'
+  | 'import-failed'
+  | 'completed'
+
+export interface CreatorLastRunViewState {
+  state: CreatorWorkflowState
+  mode: string
+  runId: string
+  commandId: string
+  message: string
+  importedActionId: string
+  importedPackId: string
+  activatedPackId: string
+}
+
+export interface CreatorImportedActionViewState {
+  actionId: string
+  label: string
+}
+
+export interface CreatorStateViewState extends OkResponse {
+  provider: CreatorProviderStateViewState
+  editableTarget: CreatorEditableTargetViewState
+  editableReference: CreatorReferenceViewState | null
+  lastRun: CreatorLastRunViewState | null
+  dashboard: CreatorDashboardAvailabilityViewState
+}
+
+export interface CreatorBindReferenceResult extends OkResponse {
+  replaced: boolean
+  reference: CreatorReferenceViewState
+}
+
+export interface CreatorGenerateNewCharacterRequest {
+  characterName: string
+  stylePrompt?: string
+  referenceImagePath: string
+}
+
+export interface CreatorGenerateExistingActionRequest {
+  actionName: string
+  motionPrompt: string
+  referenceImagePath?: string
+}
+
+export interface CreatorWorkflowResult extends OkResponse {
+  state: CreatorWorkflowState
+  code: string
+  message: string
+  run: CreatorLastRunViewState | null
+  reference?: CreatorReferenceViewState | null
+  activePet?: PetPackSummary | null
+  importedAction?: CreatorImportedActionViewState | null
+  clickAction?: string
+}
+
 export interface PluginDashboardOpenOptions {
   query?: Record<string, string>
 }
@@ -2833,6 +2933,11 @@ export interface ControlCenterApi {
   setPluginNativeExecutionApproved: (pluginId: string, approved: boolean) => Promise<Partial<PluginViewState>>
   savePluginConfig: (pluginId: string, config: JsonObject) => Promise<Partial<PluginViewState>>
   savePluginServiceHealthPolicy: (pluginId: string, serviceId: string, policy: PluginServiceHealthPolicyViewState) => Promise<PluginViewState>
+  getCreatorState: () => Promise<CreatorStateViewState>
+  bindCreatorReference: (payload: { targetType: CreatorReferenceTargetType; targetId: string; sourcePath: string }) => Promise<CreatorBindReferenceResult>
+  generateCreatorNewCharacter: (payload: CreatorGenerateNewCharacterRequest) => Promise<CreatorWorkflowResult>
+  generateCreatorExistingAction: (payload: CreatorGenerateExistingActionRequest) => Promise<CreatorWorkflowResult>
+  getCreatorLastRun: () => Promise<{ ok: boolean; run: CreatorLastRunViewState | null }>
   runCreatorStudioDefaultFlow: (prompt: string) => Promise<CreatorStudioDefaultFlowResult>
   runPluginCommand: (pluginId: string, commandId: string, payload?: JsonObject) => Promise<PluginCommandRunResultViewState>
   runPluginSetup: (pluginId: string, setupId: string) => Promise<PluginSetupRunResultViewState>

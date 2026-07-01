@@ -676,6 +676,8 @@ const createPluginService = ({ settingsService, petService, actionService, actio
     return listPlugins().find((candidate) => candidate.id === pluginId)
   }
 
+  const getPluginDefinition = (pluginId) => getPlugins().find((candidate) => candidate.manifest.id === pluginId) || null
+
   const createRuntimeView = (runtime, serviceEntry = {}) => buildPluginRuntimeView(
     runtime,
     serviceEntry,
@@ -1649,7 +1651,32 @@ const createPluginService = ({ settingsService, petService, actionService, actio
     return { ok: true }
   }
 
-  return { listPlugins, setEnabled, setNativeExecutionApproved, saveConfig, saveServiceHealthPolicy, clearStorage, runCommand, runSetup, openDashboard, startService, stopService, checkServiceHealth, stopAllServices, getLogs, exportLogs: exportLogEntries, clearLogs }
+  const getPluginCreatorDataDir = (pluginId) => {
+    const plugin = getPluginDefinition(pluginId)
+    if (!plugin) throw new Error(`Plugin not found: ${pluginId}`)
+    return ensurePluginCreatorDirs(plugin.manifest).dataDir
+  }
+
+  return {
+    listPlugins,
+    setEnabled,
+    saveConfig,
+    saveServiceHealthPolicy,
+    clearStorage,
+    runCommand,
+    runSetup,
+    openDashboard,
+    startService,
+    stopService,
+    checkServiceHealth,
+    stopAllServices,
+    getLogs,
+    exportLogs: exportLogEntries,
+    clearLogs,
+    setNativeExecutionApproved,
+    getPluginDefinition,
+    getPluginCreatorDataDir
+  }
 }
 
 module.exports = { createPluginService, readLocalPluginManifests }

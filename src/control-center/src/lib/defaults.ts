@@ -11,6 +11,8 @@ import type {
   CatalogState,
   ChatMessage,
   ControlCenterSettings,
+  CreatorLastRunViewState,
+  CreatorStateViewState,
   CustomCursorSettings,
   ImageGenerationConfigViewState,
   PetChatStateViewState,
@@ -247,6 +249,45 @@ export const defaultPetPacks = {
   activePackId: 'legacy-cat',
   packs: []
 } satisfies PetPacksViewState
+
+export const defaultCreatorLastRun = {
+  state: 'completed',
+  mode: '',
+  runId: '',
+  commandId: '',
+  message: '',
+  importedActionId: '',
+  importedPackId: '',
+  activatedPackId: ''
+} satisfies CreatorLastRunViewState
+
+export const defaultCreatorState = {
+  ok: true,
+  provider: {
+    ready: false,
+    code: '',
+    message: '',
+    provider: '',
+    model: ''
+  },
+  editableTarget: {
+    targetType: 'editable-action-host',
+    targetId: 'legacy-editable-host',
+    displayName: 'Current Editable Character',
+    defaultAction: '',
+    clickAction: '',
+    actionCount: 0
+  },
+  editableReference: null,
+  lastRun: null,
+  dashboard: {
+    available: false,
+    pluginId: 'openpet.creator-studio',
+    dashboardId: 'main',
+    serviceStatus: 'stopped',
+    reason: ''
+  }
+} satisfies CreatorStateViewState
 
 export const defaultCatalog = {
   schemaVersion: 1,
@@ -501,6 +542,38 @@ export const clonePetPacks = (petPacks: Partial<PetPacksViewState> | null | unde
   ...defaultPetPacks,
   ...(petPacks || {}),
   packs: Array.isArray(petPacks?.packs) ? petPacks.packs : []
+})
+
+export const cloneCreatorLastRun = (
+  run: Partial<CreatorLastRunViewState> | null | undefined
+): CreatorLastRunViewState => ({
+  ...defaultCreatorLastRun,
+  ...(run || {})
+})
+
+export const cloneCreatorState = (
+  state: Partial<CreatorStateViewState> | null | undefined
+): CreatorStateViewState => ({
+  ...defaultCreatorState,
+  ...(state || {}),
+  provider: {
+    ...defaultCreatorState.provider,
+    ...(state?.provider || {})
+  },
+  editableTarget: {
+    ...defaultCreatorState.editableTarget,
+    ...(state?.editableTarget || {})
+  },
+  editableReference: state?.editableReference
+    ? {
+        ...state.editableReference
+      }
+    : null,
+  lastRun: state?.lastRun ? cloneCreatorLastRun(state.lastRun) : null,
+  dashboard: {
+    ...defaultCreatorState.dashboard,
+    ...(state?.dashboard || {})
+  }
 })
 
 export const cloneBlocklist = (blocklist: Partial<BlocklistState> | null | undefined): BlocklistState => ({

@@ -52,6 +52,7 @@ const createOpenPetRuntime = ({
       appLogService,
       behaviorOrchestratorService,
       cursorAssetService,
+      creatorReferenceService,
       imageGenerationModelService,
       localHttpService,
       petMovementPolicy,
@@ -130,6 +131,13 @@ const createOpenPetRuntime = ({
     pluginService,
     imageGenerationModelService
   })
+  const creatorWorkflowService = factories.createCreatorWorkflowService({
+    pluginService,
+    imageGenerationModelService,
+    actionService,
+    creatorReferenceService,
+    appLogService
+  })
 
   runPostPluginStartupSideEffects({
     petService,
@@ -151,6 +159,7 @@ const createOpenPetRuntime = ({
     behaviorOrchestratorService,
     triggerRuleRuntimeService,
     creatorStudioDefaultFlowService,
+    creatorWorkflowService,
     pluginService,
     pluginInstallService: pluginServices.pluginInstallService,
     pluginGithubImportService: pluginServices.pluginGithubImportService,

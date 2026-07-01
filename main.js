@@ -30,8 +30,10 @@ const { createAiTalkService } = require('./src/main/services/ai-talk-service')
 const { createPetUtteranceLogService } = require('./src/main/services/pet-utterance-log-service')
 const { createImageGenerationModelService } = require('./src/main/services/image-generation-model-service')
 const { createTriggerRuleRuntimeService } = require('./src/main/services/trigger-rule-runtime-service')
+const { createCreatorReferenceService } = require('./src/main/services/creator-reference-service')
 const { createBehaviorOrchestratorService } = require('./src/main/services/behavior-orchestrator-service')
 const { createCreatorStudioDefaultFlowService } = require('./src/main/services/creator-studio-default-flow-service')
+const { createCreatorWorkflowService } = require('./src/main/services/creator-workflow-service')
 const { createPluginService } = require('./src/main/services/plugin-service')
 const { createPluginInstallService } = require('./src/main/services/plugin-install-service')
 const { syncBundledPlugins } = require('./src/main/services/bundled-plugin-sync-service')
@@ -111,8 +113,10 @@ const bootstrapOpenPet = () => {
       createPetUtteranceLogService,
       createImageGenerationModelService,
       createTriggerRuleRuntimeService,
+      createCreatorReferenceService,
       createBehaviorOrchestratorService,
       createCreatorStudioDefaultFlowService,
+      createCreatorWorkflowService,
       createPluginService,
       createPluginInstallService,
       syncBundledPlugins,
