@@ -62,9 +62,44 @@ Required language:
 - Remote marketplace distribution expands beyond curated local review.
 - Electron utilityProcess integration can be validated in packaged macOS and Windows builds.
 
+## Open Gaps (Milestone M1 backlog, documented 2026-07-01)
+
+### entries OS-level process sandbox
+
+**Severity:** P1 (Manual-required for production)
+
+**Problem:** Plugin `entries.commands`, `entries.services`, and `entries.setup` spawn host OS processes with the full user UID. The current deny-by-default native execution gate (`assertNativeExecutionAllowed` in `plugin-service.js`) requires explicit approval via `setNativeExecutionApproved` before any spawn, and the Control Center now exposes a toggle so users can grant or revoke approval per-plugin. However, once approved, the spawned process runs without OS-level sandboxing (no macOS seatbelt `sandbox-exec`, no Linux `bwrap`/`namespace` isolation). A compromised or malicious entries plugin that has been approved can execute arbitrary code as the user.
+
+**Current mitigation:** Deny-by-default gate + explicit per-plugin approval + revoke stops running processes. The VM sandbox for `main.js` plugins does not apply to entries processes.
+
+**Remaining gap:** OS-level process isolation wrapping `child_process.spawn` calls so approved entries processes inherit a restrictive sandbox profile rather than the full user session. This is Manual-required because macOS seatbelt profiles and Linux bwrap/Namespace setup depend on platform-specific testing, notarization compatibility, and packaged-app validation that cannot be verified without real devices and signing environments.
+
+**Target files (for future implementation):**
+- `src/main/services/plugin-service.js` (spawn call sites: `runCommand`, `runSetup`, `startService`)
+- New: `src/main/services/plugin-process-sandbox.js` (platform-specific sandbox profile builder)
+
+**Notes:** The `sandbox-exec` deny-by-default profile and `bwrap` namespace isolation are well-documented patterns. The implementation path is narrow (wrap spawn options), but validation requires packaged macOS + Linux runs against real seatbelt/Gatekeeper and bwrap environments. Ed25519 signature verification (see below) complements this by giving users a trust signal before granting native execution approval.
+
+### Plugin package cryptographic signature verification
+
+**Severity:** P1 (Manual-required for production)
+
+**Problem:** The current integrity check computes a SHA-256 hash of the installed plugin directory and stores it. The Control Center displays "File integrity checked (not a trusted source)" to honestly communicate that hash consistency does not prove authorship. Without a cryptographic signature bound to a known public key, hash integrity alone cannot distinguish a legitimate update from a replacement by a different author.
+
+**Current mitigation:** Integrity hash stored on install, compared on load. UI label is intentionally non-trusting. Native execution gate remains deny-by-default regardless of integrity check result.
+
+**Remaining gap:** Ed25519 signature verification of plugin packages. The implementation path requires: (1) a `plugin-signature` manifest field carrying an Ed25519 signature and the signer's public key identifier, (2) a built-in trusted-public-key registry (maintainer keys), (3) signature verification during `inspectPluginPackage`, and (4) a trust-level label upgrade in the Control Center (from "not a trusted source" to "verified author: <key-id>"). This is Manual-required because building a trusted key registry, handling key rotation, and testing against real signed packages require external account/key infrastructure that cannot be simulated in unit tests.
+
+**Target files (for future implementation):**
+- `src/main/services/plugin-service.js` (inspectPluginPackage, loadPlugin)
+- `src/main/services/plugin-install-service.js` (install paths)
+- `src/main/plugins/manifest.js` (signature manifest field)
+- New: `src/main/services/plugin-signature-service.js` (Ed25519 verify)
+
 ## Next Actions
 
-- Generate and commit docs/plugin-sandbox-evaluation.md from this evaluation.
 - Keep the current runner for v1.1 unless a new plugin capability changes the threat model.
 - Add packaged-app smoke coverage if the runner implementation moves to utilityProcess.
 - Review sandbox wording whenever README, plugin docs, or submission tooling changes.
+- Before any production release with third-party entries plugins, resolve the two Open Gaps above: OS-level process sandboxing and Ed25519 signature verification. Both are Manual-required because real signing keys, notarization, and device-level sandbox validation are external to this codebase.
+

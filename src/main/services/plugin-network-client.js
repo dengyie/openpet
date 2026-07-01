@@ -45,6 +45,12 @@ const defaultResolveAddress = async (hostname) => {
   }
 }
 
+// Known limit (TOCTOU window): we resolve the hostname and check the IPs here,
+// but the actual fetch in plugin-service.js re-resolves via the system resolver.
+// A rebinding DNS server can answer this check with a public IP and answer the
+// fetch with a private IP moments later. Pinning the fetched IP is not possible
+// with Node's fetch API (no connect-time IP override). This narrows but does not
+// fully close DNS-rebinding SSRF; see docs/code-quality-remediation-plan.md Task 6.
 const assertResolvedAddressesSafe = async (hostname, resolveAddress = defaultResolveAddress) => {
   const addresses = await resolveAddress(hostname)
   const resolved = Array.isArray(addresses) ? addresses : [addresses]

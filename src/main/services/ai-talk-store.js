@@ -311,6 +311,14 @@ const createAiTalkStore = ({ storePath, now = () => new Date().toISOString() } =
   if (!storePath) throw new Error('storePath is required')
   let state = loadState({ storePath, now })
 
+  // Sync-write contract: persist() writes the full state to disk synchronously
+  // and returns a deep clone of that persisted state. Many call sites depend on
+  // the synchronous return — they mutate state, call persist(), and use the
+  // returned snapshot (or rely on the next read seeing the on-disk state). A
+  // fully async write would break this contract: callers would need to await
+  // every persist() and re-derive the returned snapshot, and concurrent mutators
+  // could observe stale state between mutation and flush. See
+  // docs/code-quality-remediation-plan.md Task 7 for the refactor trade-off.
   const persist = () => {
     writeJsonAtomic(storePath, state)
     return clone(state)

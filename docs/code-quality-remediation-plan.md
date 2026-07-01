@@ -1,7 +1,7 @@
 # Code Quality Remediation Plan
 
-> Last updated: 2026-06-11
-> Source: production code quality review before the next development phase
+> Last updated: 2026-07-01
+> Source: production code quality review before the next development phase (Milestone M1 follow-up)
 
 ## Goal
 
@@ -215,6 +215,69 @@ Reviewed after implementation:
 - Invalid pet pack manifests fail fast in the main process.
 - Renderer never receives invalid animation dimensions or timing from a normalized manifest.
 - Legacy generated assets still load successfully.
+
+---
+
+## Task 6: Document SSRF DNS-Rebinding TOCTOU Window
+
+**Severity:** P2 (documented limitation, not a code change)
+
+**Problem:** `src/main/services/plugin-network-client.js` `assertResolvedAddressesSafe` resolves the hostname and rejects any resolved IP in private/loopback/link-local/multicast/reserved ranges before `plugin-service.js` issues the fetch. This blocks the common DNS-rebinding SSRF vector. However, there is a TOCTOU (time-of-check-to-time-of-use) window: the safety check resolves the hostname once, but the subsequent `fetch` call performs its own DNS resolution. A rebinding DNS server can answer the check with a public IP and answer the fetch with a private IP (e.g. `127.0.0.1`, `169.254.169.254`) moments later, bypassing the check.
+
+**Why this is documented, not fixed:** Node's `fetch` API does not support pinning a connect-time IP address (no connect-time socket override). Closing the window fully requires either a custom HTTP agent that connects to the verified IP with the original `Host` header and TLS SNI, or an upstream proxy that re-resolves and enforces the same allowlist. Both are non-trivial and expand the network path's surface area; the current check already narrows the attack to active rebinding servers on allowlisted hosts, which is a meaningful reduction.
+
+**Target files:**
+
+- `src/main/services/plugin-network-client.js` (TOCTOU comment added at `assertResolvedAddressesSafe`)
+- `docs/code-quality-remediation-plan.md` (this task)
+
+**Documented mitigation in place:**
+
+- HTTPS-only, manifest host allowlist, GET/POST only, header/body/response size limits.
+- Post-resolve private-IP rejection for every resolved address.
+- This TOCTOU window is an accepted residual risk for v1.1.
+
+**Re-evaluation triggers:**
+
+- A custom connect-time HTTP agent becomes feasible without a new runtime dependency.
+- Plugin network access expands to non-allowlisted or wildcard hosts.
+- A rebinding SSRF proof-of-concept is demonstrated against an allowlisted host.
+
+**Acceptance criteria:**
+
+- The TOCTOU window is explicitly documented in code (comment at `assertResolvedAddressesSafe`) and in this plan.
+- The current mitigation is not overstated as a complete SSRF defense.
+
+---
+
+## Task 7: Evaluate ai-talk-store Async Write Refactor
+
+**Severity:** P2 (standalone refactor, documented trade-off)
+
+**Problem:** `src/main/services/ai-talk-store.js` `persist()` writes the full store state to disk synchronously via `writeJsonAtomic` (temp-file + `renameSync`) and returns a deep clone of the persisted state. Every state mutation calls `persist()` synchronously, which blocks the main-process event loop on disk I/O for each write. Under heavy AI-talk memory operations (batch memory jobs, multi-message conversation updates), this can cause brief main-process stalls.
+
+**Why this was downgraded from P1 and documented, not fixed:** Making the write fully asynchronous breaks the existing sync-write contract. `persist()` returns a deep clone of the on-disk state, and call sites rely on that synchronous return value (they mutate state, call `persist()`, and use the returned snapshot or rely on the next read seeing flushed state). Converting to async would require: (1) every `persist()` call site to `await`, (2) re-deriving the returned snapshot since the flush is no longer synchronous, and (3) handling concurrent mutators that could observe stale state between mutation and flush. This is a cross-cutting refactor with contract risk, so it is recorded as a standalone item rather than bundled into an unrelated phase.
+
+**Target files:**
+
+- `src/main/services/ai-talk-store.js` (`persist`, `writeJsonAtomic`, all `persist()` call sites)
+- Call sites that depend on the synchronous return value of `persist()`
+
+**Documented trade-off:**
+
+- Current: synchronous write + synchronous deep-clone return. Brief main-process stalls under heavy memory operations, but callers always see flushed state.
+- Proposed async: non-blocking writes, but callers must `await` and re-derive snapshots; concurrent mutators need ordering guarantees (e.g. a write queue) to avoid lost updates.
+
+**Re-evaluation triggers:**
+
+- Measured main-process stalls from synchronous store writes exceed an agreed threshold (e.g. >50ms p99 under memory operations).
+- A write-queue abstraction lands that preserves the sync-return contract at call sites while flushing asynchronously underneath.
+
+**Acceptance criteria (when implemented):**
+
+- No call site relies on `persist()` returning the flushed state synchronously.
+- Concurrent memory mutations do not produce lost updates or stale reads.
+- Existing AI-talk regression tests pass without contract-specific mocking.
 
 ---
 
