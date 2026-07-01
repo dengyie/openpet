@@ -14,6 +14,14 @@ const createSettingsService = ({ eventBus, loadSettings, saveSettings, syncSideE
     return get()
   }
 
+  // Atomic read-modify-write: the updater receives the current settings
+  // snapshot at save-time (not at a prior get() call), eliminating the
+  // stale-snapshot race when concurrent async callers write different fields.
+  const update = (updater) => {
+    const nextSettings = updater({ ...currentSettings })
+    return save(nextSettings)
+  }
+
   const preview = (partialSettings) => {
     const nextSettings = { ...currentSettings, ...partialSettings }
     eventBus?.emit(SETTINGS_PREVIEW, { ...nextSettings })
@@ -25,7 +33,7 @@ const createSettingsService = ({ eventBus, loadSettings, saveSettings, syncSideE
     return get()
   }
 
-  return { get, save, preview, reload }
+  return { get, save, update, preview, reload }
 }
 
 module.exports = { SETTINGS_CHANGED, SETTINGS_PREVIEW, createSettingsService }

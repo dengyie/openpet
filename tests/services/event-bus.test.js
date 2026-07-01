@@ -17,3 +17,25 @@ test('event bus publishes payloads to subscribers and supports unsubscribe', () 
 
   assert.deepEqual(received, [{ scale: 1.2 }])
 })
+
+test('event bus isolates a failing listener so subsequent listeners still run', () => {
+  const bus = createEventBus()
+  const received = []
+  const originalError = console.error
+  console.error = () => {} // suppress the expected diagnostic from the failing listener
+
+  bus.on('settings:changed', () => {
+    throw new Error('listener blew up')
+  })
+  bus.on('settings:changed', (payload) => {
+    received.push(payload)
+  })
+
+  try {
+    bus.emit('settings:changed', { scale: 1.6 })
+  } finally {
+    console.error = originalError
+  }
+
+  assert.deepEqual(received, [{ scale: 1.6 }])
+})

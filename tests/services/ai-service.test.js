@@ -21,6 +21,10 @@ const createSettingsService = (initialSettings = {}) => {
     save: (settings) => {
       current = settings
       return current
+    },
+    update: (updater) => {
+      current = updater(current)
+      return current
     }
   }
 }

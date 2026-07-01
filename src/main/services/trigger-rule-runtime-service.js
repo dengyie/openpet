@@ -6,10 +6,31 @@ const clone = (value) => JSON.parse(JSON.stringify(value))
 
 const getSafeRules = (actionService) => {
   const config = actionService?.getConfig?.() || {}
+  const rawRules = Array.isArray(config.triggerRules) ? config.triggerRules : []
+  // Flatten ruleSpec into top-level fields the runtime reads. The action-service
+  // persists intervalMs inside ruleSpec.schedule.intervalMs and bindings inside
+  // ruleSpec.state.predicate / ruleSpec.event.name, but this runtime reads
+  // rule.intervalMs / rule.binding directly. Normalizing here at the boundary
+  // keeps both sides honest without changing the persisted schema.
+  const triggerRules = rawRules.map((rule) => {
+    if (!rule || typeof rule !== 'object') return rule
+    const spec = rule.ruleSpec && typeof rule.ruleSpec === 'object' ? rule.ruleSpec : {}
+    const normalized = { ...rule }
+    if (spec.schedule && typeof spec.schedule === 'object' && spec.schedule.intervalMs != null && rule.intervalMs == null) {
+      normalized.intervalMs = spec.schedule.intervalMs
+    }
+    if (spec.state && typeof spec.state === 'object' && spec.state.predicate != null && rule.binding == null) {
+      normalized.binding = spec.state.predicate
+    }
+    if (spec.event && typeof spec.event === 'object' && spec.event.name != null && rule.binding == null) {
+      normalized.binding = spec.event.name
+    }
+    return normalized
+  })
   return {
     actions: Array.isArray(config.actions) ? config.actions : [],
     defaultAction: typeof config.defaultAction === 'string' ? config.defaultAction : '',
-    triggerRules: Array.isArray(config.triggerRules) ? config.triggerRules : []
+    triggerRules
   }
 }
 

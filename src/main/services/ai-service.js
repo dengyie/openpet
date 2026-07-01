@@ -418,13 +418,17 @@ const createAiService = ({
   const getStoredConversations = () => normalizeConversationStore(settingsService.get().ai?.conversations, historyLimit)
 
   const persistConversations = (conversations) => {
-    const settings = settingsService.get()
-    const currentAi = isPlainObject(settings.ai) ? settings.ai : {}
-    settingsService.save({
-      ...settings,
-      ai: {
-        ...normalizeConfig(currentAi),
-        conversations
+    // Atomic update: read the freshest settings at write-time so a concurrent
+    // writer to a different ai.* field (e.g. behavior decisions) is not clobbered
+    // by a stale snapshot captured before an await.
+    settingsService.update((settings) => {
+      const currentAi = isPlainObject(settings.ai) ? settings.ai : {}
+      return {
+        ...settings,
+        ai: {
+          ...normalizeConfig(currentAi),
+          conversations
+        }
       }
     })
   }

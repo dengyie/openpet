@@ -44,3 +44,26 @@ test('settings service previews partial settings without persisting', () => {
   assert.deepEqual(saved, [])
   assert.deepEqual(previews, [{ scale: 1.5, walkSpeed: 2 }])
 })
+
+test('settings service update applies an atomic read-modify-write', () => {
+  const bus = createEventBus()
+  const service = createSettingsService({
+    eventBus: bus,
+    loadSettings: () => ({ ai: { conversations: [], behavior: { enabled: false } } }),
+    saveSettings: (settings) => settings
+  })
+
+  // Simulate two concurrent writers touching different fields: update reads
+  // the freshest settings at write-time, so neither field clobbers the other.
+  service.update((settings) => ({
+    ...settings,
+    ai: { ...settings.ai, conversations: ['c1'] }
+  }))
+  const result = service.update((settings) => ({
+    ...settings,
+    ai: { ...settings.ai, behavior: { ...settings.ai.behavior, enabled: true } }
+  }))
+
+  assert.deepEqual(result.ai, { conversations: ['c1'], behavior: { enabled: true } })
+})
+

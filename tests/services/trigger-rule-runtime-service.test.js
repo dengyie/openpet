@@ -266,3 +266,57 @@ test('trigger rule runtime records disabled and invalid rules as non-executed di
     ]
   )
 })
+
+test('runtime flattens ruleSpec fields from action-service persisted rules', () => {
+  // Integration: action-service persists intervalMs inside ruleSpec.schedule
+  // and bindings inside ruleSpec.state.predicate / ruleSpec.event.name. The
+  // runtime must flatten these into top-level intervalMs/binding so trigger
+  // evaluation works on the real persisted shape — not just hand-crafted
+  // test fixtures with top-level fields.
+  const harness = createHarness({
+    triggerRules: [
+      {
+        id: 'rule:random:spec:1',
+        type: 'random',
+        actionId: 'wave',
+        enabled: true,
+        ruleSpec: { schemaVersion: 1, type: 'random', schedule: { mode: 'interval', intervalMs: 5000 } }
+      },
+      {
+        id: 'rule:event:spec:1',
+        type: 'event',
+        actionId: 'idle',
+        enabled: true,
+        ruleSpec: { schemaVersion: 1, type: 'event', event: { name: 'pet:greet', source: 'host' } }
+      },
+      {
+        id: 'rule:state:spec:1',
+        type: 'state',
+        actionId: 'sleep',
+        enabled: true,
+        ruleSpec: { schemaVersion: 1, type: 'state', state: { predicate: 'wave', source: 'host' } }
+      }
+    ]
+  })
+
+  harness.service.start()
+
+  // Random rule: intervalMs must be read from ruleSpec.schedule.intervalMs
+  assert.equal(harness.getHeartbeatInterval(), 5000)
+
+  // Event rule: binding must be read from ruleSpec.event.name
+  harness.emitEvent({ type: 'pet:greet', source: 'plugin:test' })
+  assert.equal(harness.playCalls.length, 1)
+  assert.equal(harness.playCalls[0].actionId, 'idle')
+
+  // State rule: binding must be read from ruleSpec.state.predicate.
+  // Emitting an action with actionId 'wave' sets currentState to 'wave',
+  // which matches the state rule's predicate 'wave' → fires 'sleep'.
+  harness.playCalls.length = 0
+  harness.emitAction({ actionId: 'wave', source: 'user' })
+  assert.equal(harness.playCalls.length, 1)
+  assert.equal(harness.playCalls[0].actionId, 'sleep')
+  const lastDecision = harness.service.getDiagnostics().decisions.slice(-1)[0]
+  assert.equal(lastDecision.ruleId, 'rule:state:spec:1')
+  assert.equal(lastDecision.outcome, 'matched')
+})

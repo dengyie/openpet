@@ -11,7 +11,11 @@ const createEventBus = () => {
     const eventListeners = listeners.get(eventName)
     if (!eventListeners) return
     for (const listener of [...eventListeners]) {
-      listener(payload)
+      try {
+        listener(payload)
+      } catch (error) {
+        console.error(`EventBus listener error on "${eventName}":`, error)
+      }
     }
   }
 

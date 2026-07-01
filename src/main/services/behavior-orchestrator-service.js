@@ -214,15 +214,19 @@ const createBehaviorOrchestratorService = ({ settingsService }) => {
   const getConfig = () => normalizeBehaviorConfig(settingsService.get().ai?.behavior)
 
   const saveConfig = (partialConfig = {}) => {
-    const settings = settingsService.get()
-    const currentAi = isPlainObject(settings.ai) ? settings.ai : {}
-    const currentBehavior = normalizeBehaviorConfig(currentAi.behavior)
-    const nextBehavior = normalizeBehaviorConfig({ ...currentBehavior, ...partialConfig })
-    settingsService.save({
-      ...settings,
-      ai: {
-        ...currentAi,
-        behavior: nextBehavior
+    // Atomic read-modify-write so a concurrent writer to settings.ai (e.g.
+    // ai-service.persistConversations) cannot clobber the behavior field with
+    // a stale snapshot, and vice versa.
+    settingsService.update((settings) => {
+      const currentAi = isPlainObject(settings.ai) ? settings.ai : {}
+      const currentBehavior = normalizeBehaviorConfig(currentAi.behavior)
+      const nextBehavior = normalizeBehaviorConfig({ ...currentBehavior, ...partialConfig })
+      return {
+        ...settings,
+        ai: {
+          ...currentAi,
+          behavior: nextBehavior
+        }
       }
     })
     return getConfig()
