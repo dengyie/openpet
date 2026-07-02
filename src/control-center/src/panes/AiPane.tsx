@@ -1169,399 +1169,399 @@ export function AiPane({
       </CollapsibleAiSection>
 
       <CollapsibleAiSection title="Pet Persona Override" note="按当前宠物包覆盖 AI 人格">
-              <div className="section">
-              <div className="field-row">
-                <div>
-                  <div className="field-label">Pet Persona Override</div>
-                  <div className="field-note">当前激活宠物包：{personaProfile.petPackDisplayName} · {personaProfile.petPackId}</div>
-                </div>
-                <div className="inline-action">
-                  <button type="button" className="ghost" onClick={onResetPersonaOverride} disabled={saving}>
-                    清空 override
-                  </button>
-                  <button type="button" className="primary" onClick={onSavePersonaOverride} disabled={saving}>
-                    保存人格 override
-                  </button>
-                </div>
+        <div className="section">
+          <div className="field-row">
+            <div>
+              <div className="field-label">Pet Persona Override</div>
+              <div className="field-note">当前激活宠物包：{personaProfile.petPackDisplayName} · {personaProfile.petPackId}</div>
+            </div>
+            <div className="inline-action">
+              <button type="button" className="ghost" onClick={onResetPersonaOverride} disabled={saving}>
+                清空 override
+              </button>
+              <button type="button" className="primary" onClick={onSavePersonaOverride} disabled={saving}>
+                保存人格 override
+              </button>
+            </div>
+          </div>
+
+          <label className="field-row">
+            <span className="field-label">Name</span>
+            <input
+              className="text-input"
+              value={personaDraft.name}
+              placeholder={personaProfile.packPersona.name}
+              onChange={(event) => onChangePersonaDraft({ name: event.target.value })}
+            />
+          </label>
+
+          <label className="field-row">
+            <span className="field-label">Identity</span>
+            <input
+              className="text-input"
+              value={personaDraft.identity}
+              placeholder={personaProfile.packPersona.identity}
+              onChange={(event) => onChangePersonaDraft({ identity: event.target.value })}
+            />
+          </label>
+
+          <label className="field-row">
+            <span className="field-label">Tone</span>
+            <input
+              className="text-input"
+              value={personaDraft.tone}
+              placeholder={personaProfile.packPersona.tone}
+              onChange={(event) => onChangePersonaDraft({ tone: event.target.value })}
+            />
+          </label>
+
+          <label className="field-row">
+            <span className="field-label">Speaking Style</span>
+            <input
+              className="text-input"
+              value={personaDraft.speakingStyle}
+              placeholder={personaProfile.packPersona.speakingStyle}
+              onChange={(event) => onChangePersonaDraft({ speakingStyle: event.target.value })}
+            />
+          </label>
+
+          <label className="field-row">
+            <span className="field-label">Relationship</span>
+            <input
+              className="text-input"
+              value={personaDraft.relationshipToUser}
+              placeholder={personaProfile.packPersona.relationshipToUser}
+              onChange={(event) => onChangePersonaDraft({ relationshipToUser: event.target.value })}
+            />
+          </label>
+
+          <label className="field-row">
+            <span className="field-label">Action Style</span>
+            <input
+              className="text-input"
+              value={personaDraft.actionStyle}
+              placeholder={personaProfile.packPersona.actionStyle}
+              onChange={(event) => onChangePersonaDraft({ actionStyle: event.target.value })}
+            />
+          </label>
+
+          <label className="field-row tall">
+            <span className="field-label">Core Traits</span>
+            <textarea
+              className="text-input textarea"
+              value={personaDraft.coreTraitsText}
+              placeholder={personaProfile.packPersona.coreTraits.join('\n')}
+              onChange={(event) => onChangePersonaDraft({ coreTraitsText: event.target.value })}
+            />
+          </label>
+
+          <label className="field-row tall">
+            <span className="field-label">Boundaries</span>
+            <textarea
+              className="text-input textarea"
+              value={personaDraft.boundariesText}
+              placeholder={personaProfile.packPersona.boundaries.join('\n')}
+              onChange={(event) => onChangePersonaDraft({ boundariesText: event.target.value })}
+            />
+          </label>
+
+          <div className="readonly-row">
+            <strong>Compiled Persona Prompt</strong>
+            <pre className="json-preview">{personaProfile.compiledPersonaPrompt || '暂无编译结果'}</pre>
+          </div>
+
+          <div className="readonly-row">
+            <strong>Compiled System Prompt</strong>
+            <pre className="json-preview">{personaProfile.compiledSystemPrompt || '暂无编译结果'}</pre>
+          </div>
+
+          <label className="field-row tall">
+            <span className="field-label">生成说明</span>
+            <textarea
+              className="text-input textarea"
+              value={personaGenerationInstruction}
+              placeholder="例如：更活泼一点，但保持简短、可靠、适合工作陪伴"
+              onChange={(event) => setPersonaGenerationInstruction(event.target.value)}
+            />
+          </label>
+
+          <div className="field-row">
+            <div>
+              <div className="field-label">人格生成草稿</div>
+              <div className="field-note">生成后先预览，确认后才写入本地 override</div>
+            </div>
+            <button type="button" className="ghost" onClick={onGeneratePersonaDraft} disabled={saving}>
+              生成人格草稿
+            </button>
+          </div>
+
+          {generatedPersonaDraft ? (
+            <div className="readonly-row">
+              <strong>Generated Persona Draft</strong>
+              <pre className="json-preview">{generatedPersonaDraft.compiledPersonaPrompt}</pre>
+              <div className="inline-action">
+                <button type="button" className="primary" onClick={onApplyGeneratedPersonaDraft} disabled={saving}>
+                  应用草稿
+                </button>
+                <button type="button" className="ghost" onClick={onDismissGeneratedPersonaDraft} disabled={saving}>
+                  放弃草稿
+                </button>
               </div>
+            </div>
+          ) : null}
+        </div>
+      </CollapsibleAiSection>
 
-              <label className="field-row">
-                <span className="field-label">Name</span>
+      {status ? <div className="status-line" data-testid="ai-status-line">{status}</div> : null}
+
+      <CollapsibleAiSection title="Behavior" note="AI 回复到宠物动作的编排与诊断">
+        <div className="section">
+          {behaviorStatus ? (
+            <div className="provider-feedback" data-testid="ai-behavior-status" aria-live="polite">
+              <strong>Behavior 状态</strong>
+              <span>{behaviorStatus}</span>
+            </div>
+          ) : null}
+          <div className="field-row">
+            <div>
+              <div className="field-label">Behavior</div>
+              <div className="field-note">AI 行为编排</div>
+            </div>
+            <Toggle ariaLabel="Enable AI behavior" checked={behavior.enabled} onChange={(enabled) => onChangeBehavior({ enabled })} />
+          </div>
+
+          <div className="field-row">
+            <div>
+              <div className="field-label">Provider tools</div>
+              <div className="field-note">openpet_behavior tool_call</div>
+            </div>
+            <Toggle ariaLabel="Enable provider tools" checked={behavior.useTools} onChange={(useTools) => onChangeBehavior({ useTools })} />
+          </div>
+
+          <label className="field-row">
+            <span className="field-label">Cooldown</span>
+            <input
+              className="text-input"
+              type="number"
+              min="0"
+              value={behavior.cooldownMs}
+              onChange={(event) => onChangeBehavior({ cooldownMs: Number(event.target.value) })}
+            />
+          </label>
+
+          <label className="field-row tall">
+            <span className="field-label">Rules JSON</span>
+            <textarea
+              className="text-input textarea behavior-rules"
+              value={behaviorRulesText}
+              onChange={(event) => setBehaviorRulesText(event.target.value)}
+            />
+          </label>
+
+          <div className="field-row tall">
+            <div className="field-label">Dry run</div>
+            <div className="behavior-dry-run">
+              <div className="inline-action">
                 <input
                   className="text-input"
-                  value={personaDraft.name}
-                  placeholder={personaProfile.packPersona.name}
-                  onChange={(event) => onChangePersonaDraft({ name: event.target.value })}
+                  value={dryRunText}
+                  placeholder="输入一段 AI 回复"
+                  onChange={(event) => setDryRunText(event.target.value)}
                 />
-              </label>
-
-              <label className="field-row">
-                <span className="field-label">Identity</span>
-                <input
-                  className="text-input"
-                  value={personaDraft.identity}
-                  placeholder={personaProfile.packPersona.identity}
-                  onChange={(event) => onChangePersonaDraft({ identity: event.target.value })}
-                />
-              </label>
-
-              <label className="field-row">
-                <span className="field-label">Tone</span>
-                <input
-                  className="text-input"
-                  value={personaDraft.tone}
-                  placeholder={personaProfile.packPersona.tone}
-                  onChange={(event) => onChangePersonaDraft({ tone: event.target.value })}
-                />
-              </label>
-
-              <label className="field-row">
-                <span className="field-label">Speaking Style</span>
-                <input
-                  className="text-input"
-                  value={personaDraft.speakingStyle}
-                  placeholder={personaProfile.packPersona.speakingStyle}
-                  onChange={(event) => onChangePersonaDraft({ speakingStyle: event.target.value })}
-                />
-              </label>
-
-              <label className="field-row">
-                <span className="field-label">Relationship</span>
-                <input
-                  className="text-input"
-                  value={personaDraft.relationshipToUser}
-                  placeholder={personaProfile.packPersona.relationshipToUser}
-                  onChange={(event) => onChangePersonaDraft({ relationshipToUser: event.target.value })}
-                />
-              </label>
-
-              <label className="field-row">
-                <span className="field-label">Action Style</span>
-                <input
-                  className="text-input"
-                  value={personaDraft.actionStyle}
-                  placeholder={personaProfile.packPersona.actionStyle}
-                  onChange={(event) => onChangePersonaDraft({ actionStyle: event.target.value })}
-                />
-              </label>
-
-              <label className="field-row tall">
-                <span className="field-label">Core Traits</span>
-                <textarea
-                  className="text-input textarea"
-                  value={personaDraft.coreTraitsText}
-                  placeholder={personaProfile.packPersona.coreTraits.join('\n')}
-                  onChange={(event) => onChangePersonaDraft({ coreTraitsText: event.target.value })}
-                />
-              </label>
-
-              <label className="field-row tall">
-                <span className="field-label">Boundaries</span>
-                <textarea
-                  className="text-input textarea"
-                  value={personaDraft.boundariesText}
-                  placeholder={personaProfile.packPersona.boundaries.join('\n')}
-                  onChange={(event) => onChangePersonaDraft({ boundariesText: event.target.value })}
-                />
-              </label>
-
-              <div className="readonly-row">
-                <strong>Compiled Persona Prompt</strong>
-                <pre className="json-preview">{personaProfile.compiledPersonaPrompt || '暂无编译结果'}</pre>
+                <button type="button" className="ghost" onClick={onDryRunBehavior} disabled={!dryRunText.trim()}>
+                  测试
+                </button>
+                <button type="button" className="primary" onClick={onSaveBehavior} disabled={saving}>
+                  保存 Behavior
+                </button>
               </div>
-
-              <div className="readonly-row">
-                <strong>Compiled System Prompt</strong>
-                <pre className="json-preview">{personaProfile.compiledSystemPrompt || '暂无编译结果'}</pre>
-              </div>
-
-              <label className="field-row tall">
-                <span className="field-label">生成说明</span>
-                <textarea
-                  className="text-input textarea"
-                  value={personaGenerationInstruction}
-                  placeholder="例如：更活泼一点，但保持简短、可靠、适合工作陪伴"
-                  onChange={(event) => setPersonaGenerationInstruction(event.target.value)}
-                />
-              </label>
-
-              <div className="field-row">
-                <div>
-                  <div className="field-label">人格生成草稿</div>
-                  <div className="field-note">生成后先预览，确认后才写入本地 override</div>
+              {dryRunResult ? (
+                <div className="behavior-result">
+                  <strong>{dryRunResult.matched ? 'Matched' : 'No match'}</strong>
+                  <span>{dryRunResult.reason}</span>
+                  {dryRunResult.actionId ? <span>{dryRunResult.actionId}</span> : null}
+                  {dryRunResult.ruleId ? <span>{dryRunResult.ruleId}</span> : null}
                 </div>
-                <button type="button" className="ghost" onClick={onGeneratePersonaDraft} disabled={saving}>
-                  生成人格草稿
+              ) : null}
+            </div>
+          </div>
+
+          <div className="field-row tall">
+            <div>
+              <div className="field-label">Decisions</div>
+              <div className="field-note">{decisions.length} 条</div>
+            </div>
+            <div className="behavior-diagnostics">
+              <div className="inline-action">
+                <input
+                  className="text-input"
+                  value={replayDraft}
+                  placeholder="Decision ID"
+                  onChange={(event) => setReplayDraft(event.target.value)}
+                />
+                <button type="button" className="ghost" onClick={onReplayBehaviorDecision} disabled={!replayDraft.trim()}>
+                  Replay
+                </button>
+                <button type="button" className="ghost" onClick={onExportBehaviorDiagnostics} disabled={decisions.length === 0}>
+                  导出
+                </button>
+                <button type="button" className="danger-text" onClick={onClearBehaviorDecisions} disabled={decisions.length === 0}>
+                  清空
                 </button>
               </div>
 
-              {generatedPersonaDraft ? (
-                <div className="readonly-row">
-                  <strong>Generated Persona Draft</strong>
-                  <pre className="json-preview">{generatedPersonaDraft.compiledPersonaPrompt}</pre>
-                  <div className="inline-action">
-                    <button type="button" className="primary" onClick={onApplyGeneratedPersonaDraft} disabled={saving}>
-                      应用草稿
-                    </button>
-                    <button type="button" className="ghost" onClick={onDismissGeneratedPersonaDraft} disabled={saving}>
-                      放弃草稿
-                    </button>
-                  </div>
+              {replayResult ? (
+                <div className="behavior-result">
+                  <strong>{replayResult.matched ? 'Replay matched' : 'Replay no match'}</strong>
+                  <span>{replayResult.reason}</span>
+                  {replayResult.actionId ? <span>{replayResult.actionId}</span> : null}
                 </div>
               ) : null}
-              </div>
-            </CollapsibleAiSection>
 
-            {status ? <div className="status-line" data-testid="ai-status-line">{status}</div> : null}
-
-            <CollapsibleAiSection title="Behavior" note="AI 回复到宠物动作的编排与诊断">
-              <div className="section">
-              {behaviorStatus ? (
-                <div className="provider-feedback" data-testid="ai-behavior-status" aria-live="polite">
-                  <strong>Behavior 状态</strong>
-                  <span>{behaviorStatus}</span>
-                </div>
-              ) : null}
-              <div className="field-row">
-                <div>
-                  <div className="field-label">Behavior</div>
-                  <div className="field-note">AI 行为编排</div>
-                </div>
-                <Toggle ariaLabel="Enable AI behavior" checked={behavior.enabled} onChange={(enabled) => onChangeBehavior({ enabled })} />
-              </div>
-
-              <div className="field-row">
-                <div>
-                  <div className="field-label">Provider tools</div>
-                  <div className="field-note">openpet_behavior tool_call</div>
-                </div>
-                <Toggle ariaLabel="Enable provider tools" checked={behavior.useTools} onChange={(useTools) => onChangeBehavior({ useTools })} />
-              </div>
-
-              <label className="field-row">
-                <span className="field-label">Cooldown</span>
-                <input
-                  className="text-input"
-                  type="number"
-                  min="0"
-                  value={behavior.cooldownMs}
-                  onChange={(event) => onChangeBehavior({ cooldownMs: Number(event.target.value) })}
-                />
-              </label>
-
-              <label className="field-row tall">
-                <span className="field-label">Rules JSON</span>
-                <textarea
-                  className="text-input textarea behavior-rules"
-                  value={behaviorRulesText}
-                  onChange={(event) => setBehaviorRulesText(event.target.value)}
-                />
-              </label>
-
-              <div className="field-row tall">
-                <div className="field-label">Dry run</div>
-                <div className="behavior-dry-run">
-                  <div className="inline-action">
-                    <input
-                      className="text-input"
-                      value={dryRunText}
-                      placeholder="输入一段 AI 回复"
-                      onChange={(event) => setDryRunText(event.target.value)}
-                    />
-                    <button type="button" className="ghost" onClick={onDryRunBehavior} disabled={!dryRunText.trim()}>
-                      测试
-                    </button>
-                    <button type="button" className="primary" onClick={onSaveBehavior} disabled={saving}>
-                      保存 Behavior
-                    </button>
-                  </div>
-                  {dryRunResult ? (
-                    <div className="behavior-result">
-                      <strong>{dryRunResult.matched ? 'Matched' : 'No match'}</strong>
-                      <span>{dryRunResult.reason}</span>
-                      {dryRunResult.actionId ? <span>{dryRunResult.actionId}</span> : null}
-                      {dryRunResult.ruleId ? <span>{dryRunResult.ruleId}</span> : null}
+              <div className="behavior-decision-list">
+                {decisions.length === 0 ? (
+                  <div className="empty-chat">暂无决策记录</div>
+                ) : decisions.slice(0, 8).map((decision) => (
+                  <div className="behavior-decision-row" key={decision.id}>
+                    <div>
+                      <strong>#{decision.id} {decision.matched ? 'matched' : 'blocked'}</strong>
+                      <span>{decision.reason || decision.blockedReason || 'no reason'}</span>
+                      {decision.inputSummary ? <span>{decision.inputSummary}</span> : null}
                     </div>
-                  ) : null}
-                </div>
-              </div>
-
-              <div className="field-row tall">
-                <div>
-                  <div className="field-label">Decisions</div>
-                  <div className="field-note">{decisions.length} 条</div>
-                </div>
-                <div className="behavior-diagnostics">
-                  <div className="inline-action">
-                    <input
-                      className="text-input"
-                      value={replayDraft}
-                      placeholder="Decision ID"
-                      onChange={(event) => setReplayDraft(event.target.value)}
-                    />
-                    <button type="button" className="ghost" onClick={onReplayBehaviorDecision} disabled={!replayDraft.trim()}>
-                      Replay
-                    </button>
-                    <button type="button" className="ghost" onClick={onExportBehaviorDiagnostics} disabled={decisions.length === 0}>
-                      导出
-                    </button>
-                    <button type="button" className="danger-text" onClick={onClearBehaviorDecisions} disabled={decisions.length === 0}>
-                      清空
-                    </button>
-                  </div>
-
-                  {replayResult ? (
-                    <div className="behavior-result">
-                      <strong>{replayResult.matched ? 'Replay matched' : 'Replay no match'}</strong>
-                      <span>{replayResult.reason}</span>
-                      {replayResult.actionId ? <span>{replayResult.actionId}</span> : null}
+                    <div className="behavior-decision-meta">
+                      {decision.ruleId ? <span>{decision.ruleId}</span> : null}
+                      {decision.actionId ? <span>{decision.actionId}</span> : null}
+                      {decision.displayMode ? <span>display: {decision.displayMode}</span> : null}
+                      {decision.providerReason ? <span>provider: {decision.providerReason}</span> : null}
+                      {decision.cooldown ? <span>cooldown</span> : null}
+                      {decision.fallback ? <span>fallback</span> : null}
                     </div>
-                  ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </CollapsibleAiSection>
 
-                  <div className="behavior-decision-list">
-                    {decisions.length === 0 ? (
-                      <div className="empty-chat">暂无决策记录</div>
-                    ) : decisions.slice(0, 8).map((decision) => (
-                      <div className="behavior-decision-row" key={decision.id}>
-                        <div>
-                          <strong>#{decision.id} {decision.matched ? 'matched' : 'blocked'}</strong>
-                          <span>{decision.reason || decision.blockedReason || 'no reason'}</span>
-                          {decision.inputSummary ? <span>{decision.inputSummary}</span> : null}
-                        </div>
-                        <div className="behavior-decision-meta">
-                          {decision.ruleId ? <span>{decision.ruleId}</span> : null}
-                          {decision.actionId ? <span>{decision.actionId}</span> : null}
-                          {decision.displayMode ? <span>display: {decision.displayMode}</span> : null}
-                          {decision.providerReason ? <span>provider: {decision.providerReason}</span> : null}
-                          {decision.cooldown ? <span>cooldown</span> : null}
-                          {decision.fallback ? <span>fallback</span> : null}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+      <CollapsibleAiSection title="聊天" note="默认在这里和宠物对话；需要长历史时可打开扩展聊天面板">
+        <div className="chat-panel">
+          {chatStatus ? (
+            <div className="provider-feedback" data-testid="ai-chat-status" aria-live="polite">
+              <strong>聊天状态</strong>
+              <span>{chatStatus}</span>
+            </div>
+          ) : null}
+          <div className="chat-meta-bar">
+            <div>
+              <strong>{petChatState.petPack.displayName || '当前宠物'}</strong>
+              <span>
+                {petChatState.ai.ready
+                  ? `${petChatState.ai.provider} · ${petChatState.ai.model}`
+                  : (petChatState.ai.reason || '请先配置 AI Provider')}
+              </span>
+            </div>
+            <div className="inline-action">
+              <button type="button" className="ghost" onClick={onOpenBubbleChat}>
+                打开默认气泡聊天
+              </button>
+              <button type="button" className="ghost" onClick={onOpenDesktopChat}>
+                打开扩展聊天面板
+              </button>
+            </div>
+          </div>
+          {petChatState.bubble.text ? (
+            <div className="chat-bubble-preview" data-testid="ai-chat-bubble-preview">
+              <strong>宠物当前气泡</strong>
+              <span>{petChatState.bubble.text}</span>
+            </div>
+          ) : null}
+          <div className="section" data-testid="ai-trace-summary">
+            <div className="readonly-row">
+              <strong>当前 Trace</strong>
+              {traceSummary ? (
+                <span>
+                  {traceSummary.conversation.petPackDisplayName || traceSummary.conversation.petPackId || 'Unknown pet'}
+                  {' · '}
+                  {traceSummary.conversation.conversationId || 'no-conversation'}
+                </span>
+              ) : <span>暂无 AI Talk trace</span>}
+            </div>
+            <div className="readonly-row">
+              <strong>Provider</strong>
+              <span>
+                {traceSummary
+                  ? `${traceSummary.provider.provider || 'unknown'} · ${traceSummary.provider.baseUrl || 'n/a'} · ${traceSummary.provider.model || 'n/a'}`
+                  : 'n/a'}
+              </span>
+            </div>
+            <div className="readonly-row">
+              <strong>请求摘要</strong>
+              <span>
+                {traceSummary
+                  ? `消息数 ${traceSummary.request.messagesCount} · history ${traceSummary.request.historyCount} · tools ${traceSummary.request.toolsCount} · recent pet activity ${traceSummary.request.recentPetActivityCount}`
+                  : '暂无请求摘要'}
+              </span>
+            </div>
+            <div className="readonly-row">
+              <strong>记忆摘要</strong>
+              <span>
+                {traceSummary
+                  ? `injected ${traceSummary.memory.injectedCount} (${traceScopeLabel(traceSummary.memory.injectedScopes)}) · used ${traceSummary.memory.usedCount} (${traceScopeLabel(traceSummary.memory.usedScopes)})`
+                  : '暂无记忆注入'}
+              </span>
+            </div>
+            <div className="readonly-row">
+              <strong>行为摘要</strong>
+              <span>
+                {traceSummary
+                  ? `intent ${traceSummary.behavior.providerIntent?.intent || 'none'} · final ${traceSummary.behavior.finalDecision?.actionId || 'none'} · display ${traceSummary.result.displayMode || 'auto'}`
+                  : '暂无行为结果'}
+              </span>
+            </div>
+            <div className="readonly-row">
+              <strong>结果摘要</strong>
+              <span>
+                {traceSummary
+                  ? `reply chars ${traceSummary.result.replyChars} · persisted ${traceSummary.result.persistedMessageCount} · bubble segments ${traceSummary.result.bubbleSegmentCount}`
+                  : '暂无结果摘要'}
+              </span>
+            </div>
+          </div>
+          <div className="readonly-row" data-testid="ai-bubble-chat-state">
+            <strong>默认气泡聊天</strong>
+            <span>{petChatState.bubbleChat.visible ? '当前已显示' : '当前未显示'}</span>
+          </div>
+          <div className="chat-transcript" aria-live="polite">
+            {chatMessages.length === 0 ? (
+              <div className="empty-chat">暂无对话</div>
+            ) : chatMessages.map((message, index) => (
+              <div className={`chat-message ${message.role}`} key={`${message.role}-${index}`}>
+                <strong>{message.role === 'user' ? 'You' : 'Pet'}</strong>
+                <span>{message.content}</span>
               </div>
-              </div>
-            </CollapsibleAiSection>
-
-            <CollapsibleAiSection title="聊天" note="默认在这里和宠物对话；需要长历史时可打开扩展聊天面板">
-              <div className="chat-panel">
-                {chatStatus ? (
-                  <div className="provider-feedback" data-testid="ai-chat-status" aria-live="polite">
-                    <strong>聊天状态</strong>
-                    <span>{chatStatus}</span>
-                  </div>
-                ) : null}
-                <div className="chat-meta-bar">
-                  <div>
-                    <strong>{petChatState.petPack.displayName || '当前宠物'}</strong>
-                    <span>
-                      {petChatState.ai.ready
-                        ? `${petChatState.ai.provider} · ${petChatState.ai.model}`
-                        : (petChatState.ai.reason || '请先配置 AI Provider')}
-                    </span>
-                  </div>
-                  <div className="inline-action">
-                    <button type="button" className="ghost" onClick={onOpenBubbleChat}>
-                      打开默认气泡聊天
-                    </button>
-                    <button type="button" className="ghost" onClick={onOpenDesktopChat}>
-                      打开扩展聊天面板
-                    </button>
-                  </div>
-                </div>
-                {petChatState.bubble.text ? (
-                  <div className="chat-bubble-preview" data-testid="ai-chat-bubble-preview">
-                    <strong>宠物当前气泡</strong>
-                    <span>{petChatState.bubble.text}</span>
-                  </div>
-                ) : null}
-                <div className="section" data-testid="ai-trace-summary">
-                  <div className="readonly-row">
-                    <strong>当前 Trace</strong>
-                    {traceSummary ? (
-                      <span>
-                        {traceSummary.conversation.petPackDisplayName || traceSummary.conversation.petPackId || 'Unknown pet'}
-                        {' · '}
-                        {traceSummary.conversation.conversationId || 'no-conversation'}
-                      </span>
-                    ) : <span>暂无 AI Talk trace</span>}
-                  </div>
-                  <div className="readonly-row">
-                    <strong>Provider</strong>
-                    <span>
-                      {traceSummary
-                        ? `${traceSummary.provider.provider || 'unknown'} · ${traceSummary.provider.baseUrl || 'n/a'} · ${traceSummary.provider.model || 'n/a'}`
-                        : 'n/a'}
-                    </span>
-                  </div>
-                  <div className="readonly-row">
-                    <strong>请求摘要</strong>
-                    <span>
-                      {traceSummary
-                        ? `消息数 ${traceSummary.request.messagesCount} · history ${traceSummary.request.historyCount} · tools ${traceSummary.request.toolsCount} · recent pet activity ${traceSummary.request.recentPetActivityCount}`
-                        : '暂无请求摘要'}
-                    </span>
-                  </div>
-                  <div className="readonly-row">
-                    <strong>记忆摘要</strong>
-                    <span>
-                      {traceSummary
-                        ? `injected ${traceSummary.memory.injectedCount} (${traceScopeLabel(traceSummary.memory.injectedScopes)}) · used ${traceSummary.memory.usedCount} (${traceScopeLabel(traceSummary.memory.usedScopes)})`
-                        : '暂无记忆注入'}
-                    </span>
-                  </div>
-                  <div className="readonly-row">
-                    <strong>行为摘要</strong>
-                    <span>
-                      {traceSummary
-                        ? `intent ${traceSummary.behavior.providerIntent?.intent || 'none'} · final ${traceSummary.behavior.finalDecision?.actionId || 'none'} · display ${traceSummary.result.displayMode || 'auto'}`
-                        : '暂无行为结果'}
-                    </span>
-                  </div>
-                  <div className="readonly-row">
-                    <strong>结果摘要</strong>
-                    <span>
-                      {traceSummary
-                        ? `reply chars ${traceSummary.result.replyChars} · persisted ${traceSummary.result.persistedMessageCount} · bubble segments ${traceSummary.result.bubbleSegmentCount}`
-                        : '暂无结果摘要'}
-                    </span>
-                  </div>
-                </div>
-                <div className="readonly-row" data-testid="ai-bubble-chat-state">
-                  <strong>默认气泡聊天</strong>
-                  <span>{petChatState.bubbleChat.visible ? '当前已显示' : '当前未显示'}</span>
-                </div>
-                <div className="chat-transcript" aria-live="polite">
-                  {chatMessages.length === 0 ? (
-                    <div className="empty-chat">暂无对话</div>
-                  ) : chatMessages.map((message, index) => (
-                    <div className={`chat-message ${message.role}`} key={`${message.role}-${index}`}>
-                      <strong>{message.role === 'user' ? 'You' : 'Pet'}</strong>
-                      <span>{message.content}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="chat-input-row">
-                  <textarea
-                    className="text-input textarea chat-composer"
-                    value={chatDraft}
-                    placeholder="说点什么"
-                    onChange={(event) => setChatDraft(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' && !event.shiftKey) {
-                        event.preventDefault()
-                        onSendChat()
-                      }
-                    }}
-                    disabled={!petChatState.ai.ready || chatting}
-                  />
-                  <button type="button" className="primary" onClick={onSendChat} disabled={!chatDraft.trim() || chatting || !petChatState.ai.ready}>
-                    {chatting ? '发送中' : '发送'}
-                  </button>
-                </div>
-              </div>
-            </CollapsibleAiSection>
-          </section>
-        )
-      }
+            ))}
+          </div>
+          <div className="chat-input-row">
+            <textarea
+              className="text-input textarea chat-composer"
+              value={chatDraft}
+              placeholder="说点什么"
+              onChange={(event) => setChatDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault()
+                  onSendChat()
+                }
+              }}
+              disabled={!petChatState.ai.ready || chatting}
+            />
+            <button type="button" className="primary" onClick={onSendChat} disabled={!chatDraft.trim() || chatting || !petChatState.ai.ready}>
+              {chatting ? '发送中' : '发送'}
+            </button>
+          </div>
+        </div>
+      </CollapsibleAiSection>
+    </section>
+  )
+}
