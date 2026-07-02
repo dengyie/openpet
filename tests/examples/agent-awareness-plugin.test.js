@@ -7,6 +7,7 @@ const { spawnSync } = require('node:child_process')
 
 const { normalizePluginManifest } = require('../../src/main/plugins/manifest')
 const { normalizeCodexEvent } = require('../../examples/plugins/agent-awareness/service/adapters/codex')
+const { createCodexRolloutPoller, listRolloutFiles, readRolloutEvents } = require('../../examples/plugins/agent-awareness/service/adapters/codex-rollout-poller')
 const { createSessionStore } = require('../../examples/plugins/agent-awareness/service/session-store')
 const { createAgentStateMapper } = require('../../examples/plugins/agent-awareness/service/state-mapper')
 const { createAgentAwarenessServer } = require('../../examples/plugins/agent-awareness/service/agent-awareness-service')
@@ -180,6 +181,207 @@ test('agent awareness service HTTP ingestion requires the generated local token'
 
   assert.equal(unauthorized.status, 401)
   assert.equal(authorized.status, 200)
+})
+
+test('codex rollout poller converts local JSONL metadata without prompt or tool input fields', async () => {
+  const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-codex-rollout-'))
+  const sessionsDir = path.join(codexHome, 'sessions')
+  fs.mkdirSync(sessionsDir, { recursive: true })
+  const rolloutPath = path.join(sessionsDir, 'rollout-2026-07-02T00-00-00-019f0000-0000-7000-8000-000000000000.jsonl')
+  fs.writeFileSync(rolloutPath, [
+    JSON.stringify({
+      timestamp: '2026-07-02T00:00:00.000Z',
+      type: 'session_meta',
+      payload: {
+        id: 'codex-session-1',
+        cwd: '/Users/mango/private/OpenPet',
+        timestamp: '2026-07-02T00:00:00.000Z'
+      }
+    }),
+    JSON.stringify({
+      timestamp: '2026-07-02T00:00:01.000Z',
+      type: 'event_msg',
+      payload: {
+        type: 'user_message',
+        message: 'do not capture this prompt'
+      }
+    }),
+    JSON.stringify({
+      timestamp: '2026-07-02T00:00:02.000Z',
+      type: 'response_item',
+      payload: {
+        type: 'function_call',
+        arguments: '{"command":"echo sk-test123"}'
+      }
+    }),
+    JSON.stringify({
+      timestamp: '2026-07-02T00:00:03.000Z',
+      type: 'event_msg',
+      payload: { type: 'task_started', turn_id: 'turn-1' }
+    }),
+    JSON.stringify({
+      timestamp: '2026-07-02T00:00:04.000Z',
+      type: 'event_msg',
+      payload: { type: 'task_complete', turn_id: 'turn-1' }
+    })
+  ].join('\n'))
+
+  const events = readRolloutEvents({ filePath: rolloutPath })
+  const emitted = []
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-codex-rollout-store-'))
+  const server = createAgentAwarenessServer({
+    dataDir,
+    bridgeClient: {
+      event: async () => {},
+      say: async () => {}
+    },
+    autoStartRolloutPoller: false,
+    now: () => '2026-07-02T00:00:05.000Z'
+  })
+  const poller = createCodexRolloutPoller({
+    codexHome,
+    onEvent: async (event) => {
+      emitted.push(event)
+      await server.handleEvent(event)
+    },
+    now: () => new Date('2026-07-02T00:00:05.000Z').getTime()
+  })
+  await poller.scanOnce()
+  const [stored] = createSessionStore({ dataDir }).listSessions()
+
+  assert.deepEqual(events.map((event) => event.type), ['session.started', 'turn.started', 'turn.completed'])
+  assert.equal(JSON.stringify(events).includes('do not capture this prompt'), false)
+  assert.equal(JSON.stringify(events).includes('sk-test123'), false)
+  assert.equal(stored.cwdName, 'OpenPet')
+  assert.equal(JSON.stringify(stored).includes('/Users/mango/private/OpenPet'), false)
+  assert.equal(emitted.length, 3)
+  assert.equal(emitted[2].status, 'completed')
+})
+
+test('codex rollout poller discovers nested session rollout files', () => {
+  const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-codex-nested-'))
+  const nestedDir = path.join(codexHome, 'sessions', '2026', '07', '02')
+  fs.mkdirSync(nestedDir, { recursive: true })
+  const rolloutPath = path.join(nestedDir, 'rollout-2026-07-02T00-00-00-019f0000-0000-7000-8000-000000000001.jsonl')
+  fs.writeFileSync(rolloutPath, JSON.stringify({ type: 'session_meta', payload: { id: 'nested-session' } }))
+
+  const files = listRolloutFiles({ codexHome })
+
+  assert.deepEqual(files.map((file) => file.filePath), [rolloutPath])
+})
+
+test('codex rollout poller reads recent events from long rollout files', () => {
+  const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-codex-long-rollout-'))
+  const sessionsDir = path.join(codexHome, 'sessions')
+  fs.mkdirSync(sessionsDir, { recursive: true })
+  const rolloutPath = path.join(sessionsDir, 'rollout-2026-07-02T00-00-00-019f0000-0000-7000-8000-000000000002.jsonl')
+  const filler = Array.from({ length: 450 }, (_, index) => JSON.stringify({
+    timestamp: `2026-07-02T00:00:${String(index % 60).padStart(2, '0')}.000Z`,
+    type: 'event_msg',
+    payload: {
+      type: 'user_message',
+      message: `ignored prompt ${index}`
+    }
+  }))
+  fs.writeFileSync(rolloutPath, [
+    JSON.stringify({
+      timestamp: '2026-07-02T00:00:00.000Z',
+      type: 'session_meta',
+      payload: {
+        id: 'long-session',
+        cwd: '/tmp/OpenPet'
+      }
+    }),
+    ...filler,
+    JSON.stringify({
+      timestamp: '2026-07-02T00:10:00.000Z',
+      type: 'event_msg',
+      payload: { type: 'task_complete' }
+    })
+  ].join('\n'))
+
+  const events = readRolloutEvents({ filePath: rolloutPath, maxLines: 20 })
+
+  assert.deepEqual(events.map((event) => event.type), ['session.started', 'turn.completed'])
+  assert.equal(events[1].sessionId, 'long-session')
+  assert.equal(JSON.stringify(events).includes('ignored prompt'), false)
+})
+
+test('agent awareness service starts and stops the zero-config Codex rollout poller', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-agent-awareness-poller-'))
+  const calls = []
+  const bridgeCalls = []
+  const service = createAgentAwarenessServer({
+    dataDir,
+    bridgeClient: {
+      event: async (payload) => bridgeCalls.push(['event', payload]),
+      say: async (payload) => bridgeCalls.push(['say', payload])
+    },
+    createRolloutPoller: ({ onEvent }) => ({
+      getStatus: () => ({ enabled: true, lastScanAt: '2026-07-02T00:00:00.000Z' }),
+      start: () => {
+        calls.push('start')
+        onEvent({
+          adapter: 'codex',
+          sessionId: 'codex-local',
+          type: 'turn.started',
+          status: 'thinking',
+          message: 'Codex started a turn.',
+          cwd: '/tmp/OpenPet',
+          timestamp: '2026-07-02T00:00:00.000Z'
+        }, { initial: true })
+      },
+      stop: () => calls.push('stop')
+    })
+  })
+
+  await service.start(0)
+  const response = await fetch(`http://127.0.0.1:${service.server.address().port}/health`)
+  const body = await response.json()
+  await service.close()
+
+  assert.deepEqual(calls, ['start', 'stop'])
+  assert.deepEqual(bridgeCalls, [])
+  assert.equal(body.codexPoller.enabled, true)
+  assert.equal(createSessionStore({ dataDir }).listSessions()[0].sessionId, 'codex-local')
+})
+
+test('agent awareness service notifies pet for incremental rollout events after initial scan', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-agent-awareness-poller-incremental-'))
+  const bridgeCalls = []
+  let emit
+  const service = createAgentAwarenessServer({
+    dataDir,
+    bridgeClient: {
+      event: async (payload) => bridgeCalls.push(['event', payload]),
+      say: async (payload) => bridgeCalls.push(['say', payload])
+    },
+    createRolloutPoller: ({ onEvent }) => {
+      emit = onEvent
+      return {
+        getStatus: () => ({ enabled: true }),
+        start: () => {},
+        stop: () => {}
+      }
+    }
+  })
+
+  await service.start(0)
+  await emit({
+    adapter: 'codex',
+    sessionId: 'codex-local',
+    type: 'turn.completed',
+    status: 'completed',
+    message: 'Codex completed a turn.',
+    cwd: '/tmp/OpenPet',
+    timestamp: '2026-07-02T00:00:00.000Z'
+  }, { initial: false })
+  await service.close()
+
+  assert.deepEqual(bridgeCalls, [
+    ['event', { type: 'agent:completed', message: 'Codex completed a turn.', ttlMs: 8000 }],
+    ['say', { text: 'Codex completed a turn.', ttlMs: 6000 }]
+  ])
 })
 
 test('codex hook commands generate manual instructions without external writes', () => {

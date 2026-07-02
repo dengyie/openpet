@@ -3,6 +3,7 @@ const fs = require('fs')
 const path = require('path')
 const crypto = require('crypto')
 const { normalizeCodexEvent } = require('./adapters/codex')
+const { createCodexRolloutPoller } = require('./adapters/codex-rollout-poller')
 const { createServiceBridgeClient } = require('./bridge-client')
 const { createSessionStore } = require('./session-store')
 const { createAgentStateMapper } = require('./state-mapper')
@@ -77,24 +78,39 @@ const createAgentAwarenessServer = ({
   bridgeClient = createServiceBridgeClient(),
   store = createSessionStore({ dataDir }),
   mapper = createAgentStateMapper(),
+  rolloutPoller = null,
+  autoStartRolloutPoller = process.env.OPENPET_AGENT_AWARENESS_CODEX_POLL !== '0',
+  createRolloutPoller = createCodexRolloutPoller,
   createServer = http.createServer,
   now = () => new Date().toISOString()
 } = {}) => {
-  const handleEvent = async (payload) => {
+  const handleEvent = async (payload, { notifyPet = true } = {}) => {
     const event = normalizeCodexEvent(payload, { now })
     const previousSession = store.listSessions().find((session) => session.sessionId === event.sessionId)
     const update = mapper.mapEvent({ event, previousSession })
     const session = store.upsertEvent(event)
-    await bridgeClient.event(update.petEvent)
-    if (update.speech) await bridgeClient.say(update.speech)
+    if (notifyPet) {
+      await bridgeClient.event(update.petEvent)
+      if (update.speech) await bridgeClient.say(update.speech)
+    }
     return { event, session }
   }
+
+  const poller = rolloutPoller || (autoStartRolloutPoller
+    ? createRolloutPoller({
+        onEvent: (event, metadata = {}) => handleEvent(event, { notifyPet: !metadata.initial })
+      })
+    : null)
 
   const handleRequest = async (request, response) => {
     try {
       const url = new URL(request.url, 'http://127.0.0.1')
       if (request.method === 'GET' && url.pathname === '/health') {
-        sendJson(response, 200, { ok: true, service: 'agent-awareness' })
+        sendJson(response, 200, {
+          ok: true,
+          service: 'agent-awareness',
+          codexPoller: poller?.getStatus?.() || { enabled: false }
+        })
         return
       }
       if (request.method === 'GET' && url.pathname === '/api/sessions') {
@@ -131,15 +147,20 @@ const createAgentAwarenessServer = ({
   const server = createServer(handleRequest)
   return {
     handleEvent,
+    poller,
     server,
     start: (port = DEFAULT_PORT, host = '127.0.0.1') => new Promise((resolve, reject) => {
       server.once('error', reject)
       server.listen(port, host, () => {
         server.off?.('error', reject)
+        poller?.start?.()
         resolve(server.address())
       })
     }),
-    close: () => new Promise((resolve) => server.close(() => resolve()))
+    close: () => {
+      poller?.stop?.()
+      return new Promise((resolve) => server.close(() => resolve()))
+    }
   }
 }
 

@@ -204,6 +204,23 @@ minimum interval passes.
 
 ## Codex Setup Strategy
 
+Default behavior is zero-config local awareness. The Agent Awareness service
+polls local Codex rollout JSONL metadata from:
+
+```text
+~/.codex/sessions
+~/.codex/archived_sessions
+```
+
+This path does not require Codex hook trust. It intentionally ignores
+`user_message`, `response_item`, function-call arguments, command output,
+terminal transcripts, and full stored session content. It only derives bounded
+status events such as `session.started`, `turn.started`, `turn.completed`, and
+`failed`, which are then normalized through the same adapter boundary as HTTP
+hook events.
+
+The hook path remains an enhanced real-time mode:
+
 `npm run configure-agent-awareness:codex` provides the local one-command Codex
 setup path. It:
 
