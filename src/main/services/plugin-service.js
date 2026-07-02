@@ -176,6 +176,7 @@ const createPluginService = ({ settingsService, petService, actionService, actio
   if (!petService) throw new Error('petService is required')
   const commandBridgeRuntimes = new Map()
   const serviceBridgeRuntimes = new Map()
+  const pendingServiceStarts = new Set()
   const runtimeStopSupport = createPluginRuntimeStopSupport({
     killProcess: killServiceProcess,
     signalProcessTree: signalServiceProcessTree
@@ -352,11 +353,64 @@ const createPluginService = ({ settingsService, petService, actionService, actio
     }
   }
 
-  const createPluginBridgeHandlers = (plugin, commandId, bridgeRunId = '', bridgeState = { importedActionIds: new Set() }) => ({
+  const createPluginPetBridgeHandlers = (plugin, commandId) => ({
     context: async () => {
       appendLog({ pluginId: plugin.manifest.id, commandId, level: 'info', message: 'Bridge context requested' })
       return { ok: true, context: createPluginBridgeContext() }
     },
+    petSay: async (payload = {}) => {
+      assertPermission(plugin.manifest, 'pet:say')
+      appendLog({ pluginId: plugin.manifest.id, commandId, level: 'info', message: 'Bridge pet.say invoked' })
+      return {
+        ok: true,
+        result: petService.say({
+          text: payload.text,
+          ttlMs: payload.ttlMs,
+          source: `plugin:${plugin.manifest.id}:bridge`,
+          sourceSurface: 'plugin-bridge'
+        })
+      }
+    },
+    petAction: async (payload = {}) => {
+      assertPermission(plugin.manifest, 'pet:action')
+      const actionId = String(payload.actionId || '')
+      appendLog({
+        pluginId: plugin.manifest.id,
+        commandId,
+        level: 'info',
+        message: `Bridge pet.action invoked: ${actionId}`.slice(0, 240)
+      })
+      return {
+        ok: true,
+        result: petService.playAction({
+          actionId,
+          source: `plugin:${plugin.manifest.id}:bridge`
+        })
+      }
+    },
+    petEvent: async (payload = {}) => {
+      assertPermission(plugin.manifest, 'pet:event')
+      const eventType = String(payload.type || '')
+      appendLog({
+        pluginId: plugin.manifest.id,
+        commandId,
+        level: 'info',
+        message: `Bridge pet.event invoked: ${eventType}`.slice(0, 240)
+      })
+      return {
+        ok: true,
+        result: petService.setEvent({
+          type: payload.type,
+          message: payload.message,
+          ttlMs: payload.ttlMs,
+          source: `plugin:${plugin.manifest.id}:bridge`
+        })
+      }
+    }
+  })
+
+  const createPluginBridgeHandlers = (plugin, commandId, bridgeRunId = '', bridgeState = { importedActionIds: new Set() }) => ({
+    ...createPluginPetBridgeHandlers(plugin, commandId),
     creatorActionsRead: async () => {
       assertPermission(plugin.manifest, 'actions:read')
       appendLog({ pluginId: plugin.manifest.id, commandId, level: 'info', message: 'Bridge creator.actions read invoked' })
@@ -531,66 +585,11 @@ const createPluginService = ({ settingsService, petService, actionService, actio
           }
         })
       }
-    },
-    petSay: async (payload = {}) => {
-      assertPermission(plugin.manifest, 'pet:say')
-      appendLog({ pluginId: plugin.manifest.id, commandId, level: 'info', message: 'Bridge pet.say invoked' })
-      return {
-        ok: true,
-        result: petService.say({
-          text: payload.text,
-          ttlMs: payload.ttlMs,
-          source: `plugin:${plugin.manifest.id}:bridge`,
-          sourceSurface: 'plugin-bridge'
-        })
-      }
-    },
-    petAction: async (payload = {}) => {
-      assertPermission(plugin.manifest, 'pet:action')
-      const actionId = String(payload.actionId || '')
-      appendLog({
-        pluginId: plugin.manifest.id,
-        commandId,
-        level: 'info',
-        message: `Bridge pet.action invoked: ${actionId}`.slice(0, 240)
-      })
-      return {
-        ok: true,
-        result: petService.playAction({
-          actionId,
-          source: `plugin:${plugin.manifest.id}:bridge`
-        })
-      }
-    },
-    petEvent: async (payload = {}) => {
-      assertPermission(plugin.manifest, 'pet:event')
-      const eventType = String(payload.type || '')
-      appendLog({
-        pluginId: plugin.manifest.id,
-        commandId,
-        level: 'info',
-        message: `Bridge pet.event invoked: ${eventType}`.slice(0, 240)
-      })
-      return {
-        ok: true,
-        result: petService.setEvent({
-          type: payload.type,
-          message: payload.message,
-          ttlMs: payload.ttlMs,
-          source: `plugin:${plugin.manifest.id}:bridge`
-        })
-      }
     }
   })
 
   const createPluginServiceBridgeHandlers = (plugin, serviceId, bridgeRunId = '') => {
-    const handlers = createPluginBridgeHandlers(plugin, `service:${serviceId}`, bridgeRunId)
-    return {
-      context: handlers.context,
-      petSay: handlers.petSay,
-      petAction: handlers.petAction,
-      petEvent: handlers.petEvent
-    }
+    return createPluginPetBridgeHandlers(plugin, `service:${serviceId}`)
   }
 
   const commandBridgeServer = createPluginCommandBridgeServer({
@@ -1478,6 +1477,7 @@ const createPluginService = ({ settingsService, petService, actionService, actio
 
   const startService = (pluginId, serviceId) => {
     const commandId = `service:${serviceId || ''}`
+    const serviceStartKey = createPluginServiceKey(pluginId, serviceId)
     let plugin
     let serviceEntry
     let declaration
@@ -1491,6 +1491,7 @@ const createPluginService = ({ settingsService, petService, actionService, actio
       serviceEntry = getServiceEntry(plugin, serviceId)
       existingRuntime = getPluginServiceRuntime(pluginId, serviceId)
       if (ACTIVE_SERVICE_STATUSES.has(existingRuntime?.status)) throw new Error('Plugin service is already running')
+      if (pendingServiceStarts.has(serviceStartKey)) throw new Error('Plugin service is already running')
       declaration = resolveServiceRuntimeDeclaration(serviceEntry)
       ;({ file, args } = parsePluginProcessCommand(declaration.command))
       cwd = resolveServiceCwd(plugin.manifest, declaration.cwd)
@@ -1499,9 +1500,16 @@ const createPluginService = ({ settingsService, petService, actionService, actio
       throw error
     }
 
+    pendingServiceStarts.add(serviceStartKey)
     return (async () => {
       try {
         await serviceBridgeServer.ensureStarted()
+        assertPluginAllowed(plugin.manifest)
+        assertNativeExecutionAllowed(plugin.manifest)
+        if (!getEnabledMap()[pluginId]) throw new Error('Plugin is disabled')
+        if (ACTIVE_SERVICE_STATUSES.has(getPluginServiceRuntime(pluginId, serviceId)?.status)) {
+          throw new Error('Plugin service is already running')
+        }
         const bridgeRunId = createPluginBridgeRunId()
         const bridgeToken = createPluginBridgeToken()
         const bridgeRuntimeKey = createPluginBridgeKey(pluginId, serviceId, bridgeRunId)
@@ -1554,6 +1562,7 @@ const createPluginService = ({ settingsService, petService, actionService, actio
           runId: bridgeRunId,
           token: bridgeToken,
           status: 'running',
+          logCommandId: commandId,
           handlers: createPluginServiceBridgeHandlers(plugin, serviceId, bridgeRunId)
         })
 
@@ -1623,6 +1632,8 @@ const createPluginService = ({ settingsService, petService, actionService, actio
       } catch (error) {
         appendLog({ pluginId, commandId, level: 'error', message: sanitizePluginCommandText(error?.message || 'Service start failed') })
         throw error
+      } finally {
+        pendingServiceStarts.delete(serviceStartKey)
       }
     })()
   }

@@ -4023,6 +4023,59 @@ test('plugin service bridge expires when the service process exits', async () =>
   assert.deepEqual(expired.body, { ok: false, error: 'Bridge token expired' })
 })
 
+test('plugin service rejects concurrent starts before the service runtime is registered', async () => {
+  const spawned = []
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'weather-declaration': true } }
+    }),
+    petService: { say: async () => {} },
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir()],
+    spawnServiceProcess: (file, args, options) => {
+      spawned.push({ file, args, options })
+      return createSlowStoppingServiceProcess()
+    }
+  })
+
+  const firstStart = service.startService('weather-declaration', 'companion')
+  assert.throws(
+    () => service.startService('weather-declaration', 'companion'),
+    /Plugin service is already running/
+  )
+  await firstStart
+
+  assert.equal(spawned.length, 1)
+})
+
+test('plugin service bridge unauthorized logs keep service runtime identity', async () => {
+  const spawned = []
+  const settingsService = createSettingsService({
+    plugins: { enabled: { 'weather-declaration': true } }
+  })
+  const service = createPluginService({
+    settingsService,
+    petService: createBridgeAwarePetService(),
+    officialPlugins: [],
+    pluginDirs: [createDeclarationOnlyPluginDir({ permissions: ['pet:say'] })],
+    spawnServiceProcess: (file, args, options) => {
+      spawned.push({ file, args, options })
+      return createSlowStoppingServiceProcess()
+    }
+  })
+
+  await service.startService('weather-declaration', 'companion')
+  const response = await requestBridge(`${spawned[0].options.env.OPENPET_SERVICE_BRIDGE_URL}/pet/say`, {
+    token: 'wrong-token',
+    method: 'POST',
+    body: { text: 'blocked' }
+  })
+
+  assert.equal(response.status, 401)
+  assert.equal(settingsService.get().plugins.logs[0].commandId, 'service:companion')
+  assert.equal(settingsService.get().plugins.logs[0].message, 'Bridge request rejected: unauthorized token')
+})
+
 test('plugin service stops service process groups before falling back to child kill', async () => {
   const child = createSlowStoppingServiceProcess({ pid: 4321 })
   const killedProcesses = []

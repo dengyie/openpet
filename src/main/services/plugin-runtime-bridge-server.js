@@ -94,7 +94,12 @@ const createPluginRuntimeBridgeServer = ({
 
       const token = extractBearerToken(request.headers.authorization)
       if (!safeTokenEquals(token, runtime.token)) {
-        appendLog({ pluginId, commandId: runtimeId, level: 'error', message: 'Bridge request rejected: unauthorized token' })
+        appendLog({
+          pluginId,
+          commandId: runtime.logCommandId || runtimeId,
+          level: 'error',
+          message: 'Bridge request rejected: unauthorized token'
+        })
         sendJson(response, 401, { ok: false, error: 'Unauthorized' })
         return
       }
