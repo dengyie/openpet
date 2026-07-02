@@ -3,6 +3,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
+const { spawnSync } = require('node:child_process')
 
 const { normalizePluginManifest } = require('../../src/main/plugins/manifest')
 const { normalizeCodexEvent } = require('../../examples/plugins/agent-awareness/service/adapters/codex')
@@ -12,6 +13,21 @@ const { createAgentAwarenessServer } = require('../../examples/plugins/agent-awa
 const { INGEST_TOKEN_FILE, writeCodexHookPlan, writeCodexHookRemovalPlan } = require('../../examples/plugins/agent-awareness/commands/codex-hook-plan')
 
 const pluginRoot = path.resolve(__dirname, '../../examples/plugins/agent-awareness')
+
+const runAgentAwarenessCommand = (commandFile, context = {}, env = {}) => {
+  const result = spawnSync(process.execPath, [path.join(pluginRoot, 'commands', commandFile)], {
+    cwd: pluginRoot,
+    input: JSON.stringify(context),
+    encoding: 'utf-8',
+    env: {
+      ...process.env,
+      ...env
+    }
+  })
+  assert.equal(result.stderr, '')
+  assert.equal(result.status, 0)
+  return JSON.parse(result.stdout)
+}
 
 test('agent awareness manifest declares bounded service and command entries', () => {
   const manifest = normalizePluginManifest(
@@ -177,4 +193,20 @@ test('codex hook commands generate manual instructions without external writes',
   assert.equal(fs.existsSync(removalPlan.removalPath), true)
   assert.match(fs.readFileSync(installPlan.instructionsPath, 'utf-8'), /Authorization: Bearer/i)
   assert.match(fs.readFileSync(installPlan.instructionsPath, 'utf-8'), /does not modify Codex configuration automatically/i)
+})
+
+test('agent awareness doctor reports unhealthy when setup exists but service is not running', () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-agent-awareness-doctor-'))
+  writeCodexHookPlan({ paths: { dataDir }, port: 65530 })
+
+  const result = runAgentAwarenessCommand('doctor.js', { paths: { dataDir }, port: 65530 }, {
+    OPENPET_DATA_DIR: dataDir,
+    OPENPET_BRIDGE_URL: 'http://127.0.0.1:1/bridge',
+    OPENPET_BRIDGE_TOKEN: 'bridge-token'
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.healthy, false)
+  assert.equal(result.checks.find((check) => check.id === 'ingest-token').ok, true)
+  assert.equal(result.checks.find((check) => check.id === 'service-health').ok, false)
 })

@@ -3929,6 +3929,44 @@ test('plugin service starts and stops enabled declaration service entries', asyn
   assert.equal(settingsService.get().plugins.logs[0].message, 'Service stopped')
 })
 
+test('plugin service registers service bridge runtime before spawning child process', async () => {
+  const child = createSlowStoppingServiceProcess()
+  const originalMapSet = Map.prototype.set
+  let serviceBridgeRegistered = false
+  Map.prototype.set = function patchedMapSet (key, value) {
+    if (
+      value &&
+      value.pluginId === 'weather-declaration' &&
+      value.serviceId === 'companion' &&
+      value.token &&
+      value.handlers
+    ) {
+      serviceBridgeRegistered = true
+    }
+    return originalMapSet.call(this, key, value)
+  }
+  try {
+    const service = createPluginService({
+      settingsService: createSettingsService({
+        plugins: { enabled: { 'weather-declaration': true } }
+      }),
+      petService: { say: async () => {} },
+      officialPlugins: [],
+      pluginDirs: [createDeclarationOnlyPluginDir()],
+      spawnServiceProcess: () => {
+        assert.equal(serviceBridgeRegistered, true)
+        return child
+      }
+    })
+
+    await service.startService('weather-declaration', 'companion')
+    service.stopService('weather-declaration', 'companion')
+    child.emit('exit', 0, 'SIGTERM')
+  } finally {
+    Map.prototype.set = originalMapSet
+  }
+})
+
 test('plugin service bridge exposes service-scoped pet routes and expires when stopped', async () => {
   const spawned = []
   const child = createSlowStoppingServiceProcess()

@@ -1502,6 +1502,7 @@ const createPluginService = ({ settingsService, petService, actionService, actio
 
     pendingServiceStarts.add(serviceStartKey)
     return (async () => {
+      let bridgeRuntimeKey = ''
       try {
         await serviceBridgeServer.ensureStarted()
         assertPluginAllowed(plugin.manifest)
@@ -1512,11 +1513,21 @@ const createPluginService = ({ settingsService, petService, actionService, actio
         }
         const bridgeRunId = createPluginBridgeRunId()
         const bridgeToken = createPluginBridgeToken()
-        const bridgeRuntimeKey = createPluginBridgeKey(pluginId, serviceId, bridgeRunId)
+        bridgeRuntimeKey = createPluginBridgeKey(pluginId, serviceId, bridgeRunId)
         const bridgeBaseUrl = serviceBridgeServer.createBridgeBaseUrl({
           pluginId,
           runtimeId: serviceId,
           runId: bridgeRunId
+        })
+        const bridgeHandlers = createPluginServiceBridgeHandlers(plugin, serviceId, bridgeRunId)
+        serviceBridgeRuntimes.set(bridgeRuntimeKey, {
+          pluginId,
+          serviceId,
+          runId: bridgeRunId,
+          token: bridgeToken,
+          status: 'running',
+          logCommandId: commandId,
+          handlers: bridgeHandlers
         })
         const serviceDirs = ensurePluginCreatorDirs(plugin.manifest)
         const child = spawnServiceProcess(file, args, {
@@ -1555,15 +1566,6 @@ const createPluginService = ({ settingsService, petService, actionService, actio
           bridgeRuntimeKey,
           stopGracePeriodMs: Number.isFinite(Number(serviceStopGracePeriodMs)) ? Math.max(0, Number(serviceStopGracePeriodMs)) : PLUGIN_SERVICE_STOP_GRACE_PERIOD_MS,
           health: existingRuntime?.health || createServiceHealthView({}, serviceEntry)
-        })
-        serviceBridgeRuntimes.set(bridgeRuntimeKey, {
-          pluginId,
-          serviceId,
-          runId: bridgeRunId,
-          token: bridgeToken,
-          status: 'running',
-          logCommandId: commandId,
-          handlers: createPluginServiceBridgeHandlers(plugin, serviceId, bridgeRunId)
         })
 
         child.stdout?.on?.('data', (chunk) => {
@@ -1630,6 +1632,9 @@ const createPluginService = ({ settingsService, petService, actionService, actio
           runtime: createRuntimeView(runtime, serviceEntry)
         }
       } catch (error) {
+        if (typeof bridgeRuntimeKey === 'string' && bridgeRuntimeKey) {
+          serviceBridgeRuntimes.delete(bridgeRuntimeKey)
+        }
         appendLog({ pluginId, commandId, level: 'error', message: sanitizePluginCommandText(error?.message || 'Service start failed') })
         throw error
       } finally {
