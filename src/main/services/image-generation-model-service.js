@@ -906,8 +906,6 @@ const createImageGenerationModelService = ({
     saveConfig,
     saveProviderApiKey,
     clearProviderApiKey,
-    saveCloudApiKey: saveProviderApiKey,
-    clearCloudApiKey: clearProviderApiKey,
     checkHealth,
     discoverModels,
     generateImage

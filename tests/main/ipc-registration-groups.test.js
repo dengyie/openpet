@@ -184,8 +184,8 @@ test('registerAiIpc wires AI config, behavior, and chat-adjacent handlers', asyn
     imageGenerationModelService: {
       getConfig: () => ({ provider: 'cloud' }),
       saveConfig: (config) => config,
-      saveCloudApiKey: () => ({ ok: true }),
-      clearCloudApiKey: () => ({ ok: true }),
+      saveProviderApiKey: () => ({ ok: true }),
+      clearProviderApiKey: () => ({ ok: true }),
       checkHealth: async () => ({ ok: true })
     },
     behaviorOrchestratorService: {
