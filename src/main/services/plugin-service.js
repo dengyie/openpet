@@ -16,6 +16,7 @@ const {
   createPluginBridgeToken,
   createPluginCommandBridgeServer
 } = require('./plugin-command-bridge-server')
+const { createPluginRuntimeBridgeServer, PLUGIN_BRIDGE_HOST } = require('./plugin-runtime-bridge-server')
 const { runPluginCommandEntryProcess } = require('./plugin-command-runner')
 const {
   createPluginEntryCwdResolver,
@@ -67,6 +68,15 @@ const ACTIVE_COMMAND_STATUSES = ACTIVE_PLUGIN_RUNTIME_STATUSES
 
 const LOOPBACK_HEALTH_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]'])
 const defaultServiceProcessTree = createServiceProcessTree()
+const SERVICE_BRIDGE_ROUTE_PATTERN = /^\/plugins\/bridge\/([^/]+)\/([^/]+)\/([^/]+)(\/context|\/pet\/say|\/pet\/action|\/pet\/event)$/
+const SERVICE_BRIDGE_READ_ONLY_ROUTES = new Map([
+  ['/context', 'context']
+])
+const SERVICE_BRIDGE_JSON_ROUTES = new Map([
+  ['/pet/say', 'petSay'],
+  ['/pet/action', 'petAction'],
+  ['/pet/event', 'petEvent']
+])
 
 const getDirectoryByteSize = (folderPath) => {
   let totalBytes = 0
@@ -165,6 +175,7 @@ const createPluginService = ({ settingsService, petService, actionService, actio
   if (!settingsService) throw new Error('settingsService is required')
   if (!petService) throw new Error('petService is required')
   const commandBridgeRuntimes = new Map()
+  const serviceBridgeRuntimes = new Map()
   const runtimeStopSupport = createPluginRuntimeStopSupport({
     killProcess: killServiceProcess,
     signalProcessTree: signalServiceProcessTree
@@ -572,9 +583,27 @@ const createPluginService = ({ settingsService, petService, actionService, actio
     }
   })
 
+  const createPluginServiceBridgeHandlers = (plugin, serviceId, bridgeRunId = '') => {
+    const handlers = createPluginBridgeHandlers(plugin, `service:${serviceId}`, bridgeRunId)
+    return {
+      context: handlers.context,
+      petSay: handlers.petSay,
+      petAction: handlers.petAction,
+      petEvent: handlers.petEvent
+    }
+  }
+
   const commandBridgeServer = createPluginCommandBridgeServer({
     appendLog,
     commandBridgeRuntimes
+  })
+  const serviceBridgeServer = createPluginRuntimeBridgeServer({
+    appendLog,
+    bridgeRuntimes: serviceBridgeRuntimes,
+    host: PLUGIN_BRIDGE_HOST,
+    jsonRoutes: SERVICE_BRIDGE_JSON_ROUTES,
+    readOnlyRoutes: SERVICE_BRIDGE_READ_ONLY_ROUTES,
+    routePattern: SERVICE_BRIDGE_ROUTE_PATTERN
   })
 
   const getPlugins = () => [
@@ -809,6 +838,19 @@ const createPluginService = ({ settingsService, petService, actionService, actio
 
   const getPluginSetupRuntime = (pluginId, setupId) => setupRuntimes.get(createPluginServiceKey(pluginId, setupId))
 
+  const expireServiceBridgeRuntime = (runtime) => {
+    if (!runtime?.bridgeRuntimeKey) return
+    serviceBridgeRuntimes.delete(runtime.bridgeRuntimeKey)
+    runtime.bridgeRuntimeKey = ''
+    serviceBridgeServer.unrefWhenIdle()
+  }
+
+  const expirePluginServiceBridgeRuntimes = (pluginId) => {
+    for (const runtime of serviceRuntimeRegistry.listRuntimes()) {
+      if (runtime?.pluginId === pluginId) expireServiceBridgeRuntime(runtime)
+    }
+  }
+
   const setServiceRuntime = (pluginId, serviceId, runtime) => {
     return serviceRuntimeRegistry.setRuntime(runtime)
   }
@@ -929,6 +971,7 @@ const createPluginService = ({ settingsService, petService, actionService, actio
   }
 
   const stopPluginServices = (pluginId, options = {}) => {
+    expirePluginServiceBridgeRuntimes(pluginId)
     serviceRuntimeRegistry.stopPlugin(pluginId, options)
   }
 
@@ -1435,110 +1478,153 @@ const createPluginService = ({ settingsService, petService, actionService, actio
 
   const startService = (pluginId, serviceId) => {
     const commandId = `service:${serviceId || ''}`
+    let plugin
+    let serviceEntry
+    let declaration
+    let file
+    let args
+    let cwd
+    let existingRuntime
     try {
-      const plugin = findPluginForService(pluginId)
+      plugin = findPluginForService(pluginId)
       assertNativeExecutionAllowed(plugin.manifest)
-      const serviceEntry = getServiceEntry(plugin, serviceId)
-      const existingRuntime = getPluginServiceRuntime(pluginId, serviceId)
+      serviceEntry = getServiceEntry(plugin, serviceId)
+      existingRuntime = getPluginServiceRuntime(pluginId, serviceId)
       if (ACTIVE_SERVICE_STATUSES.has(existingRuntime?.status)) throw new Error('Plugin service is already running')
-      const declaration = resolveServiceRuntimeDeclaration(serviceEntry)
-      const { file, args } = parsePluginProcessCommand(declaration.command)
-      const cwd = resolveServiceCwd(plugin.manifest, declaration.cwd)
-      const child = spawnServiceProcess(file, args, {
-        cwd,
-        detached: true,
-        env: createPluginProcessEnv(),
-        shell: false,
-        stdio: ['ignore', 'pipe', 'pipe'],
-        windowsHide: true
-      })
-      const runtime = setServiceRuntime(pluginId, serviceId, {
-        pluginId,
-        serviceId,
-        status: 'running',
-        pid: Number(child.pid) || 0,
-        startedAt: new Date().toISOString(),
-        stoppedAt: '',
-        command: declaration.command,
-        cwd,
-        exitCode: null,
-        signal: '',
-        error: '',
-        child,
-        stopTimer: null,
-        stopCompleted: null,
-        resolveStopCompleted: null,
-        healthTimer: null,
-        healthChecking: false,
-        stopGracePeriodMs: Number.isFinite(Number(serviceStopGracePeriodMs)) ? Math.max(0, Number(serviceStopGracePeriodMs)) : PLUGIN_SERVICE_STOP_GRACE_PERIOD_MS,
-        health: existingRuntime?.health || createServiceHealthView({}, serviceEntry)
-      })
-
-      child.stdout?.on?.('data', (chunk) => {
-        const message = sanitizePluginCommandText(chunk)
-        if (message) appendLog({ pluginId, commandId, level: 'info', message: `Service stdout: ${message}`.slice(0, 500) })
-      })
-      child.stderr?.on?.('data', (chunk) => {
-        const message = sanitizePluginCommandText(chunk)
-        if (message) appendLog({ pluginId, commandId, level: 'error', message: `Service stderr: ${message}`.slice(0, 500) })
-      })
-      child.on?.('error', (error) => {
-        clearServiceHealthSchedule(runtime)
-        runtime.status = 'failed'
-        runtime.error = sanitizePluginCommandText(error?.message || 'Plugin service failed')
-        runtime.stoppedAt = new Date().toISOString()
-        resolveStopWaiter(runtime)
-        appendLog({ pluginId, commandId, level: 'error', message: runtime.error })
-      })
-      child.on?.('exit', (code, signal) => {
-        clearServiceStopTimer(runtime)
-        clearServiceHealthSchedule(runtime)
-        const stoppedByRequest = runtime.status === 'stopping'
-        let forcedStop = false
-        if (runtime.status === 'stopping') {
-          forcedStop = /force kill/i.test(String(runtime.error || ''))
-          runtime.status = forcedStop
-            ? 'failed'
-            : (Number.isFinite(Number(code)) && Number(code) !== 0 && !signal ? 'failed' : 'stopped')
-        } else if (runtime.status === 'running') {
-          runtime.status = code === 0 && !signal ? 'exited' : 'failed'
-        }
-        runtime.exitCode = Number.isFinite(Number(code)) ? Number(code) : null
-        runtime.signal = signal || ''
-        runtime.child = null
-        runtime.stoppedAt = runtime.stoppedAt || new Date().toISOString()
-        resolveStopWaiter(runtime)
-        if (stoppedByRequest) {
-          appendLog({
-            pluginId,
-            commandId,
-            level: runtime.status === 'failed' ? 'error' : 'info',
-            message: runtime.status === 'stopped'
-              ? 'Service stopped'
-              : (forcedStop ? 'Service exited after force stop' : 'Service exited')
-          })
-        } else {
-          appendLog({
-            pluginId,
-            commandId,
-            level: runtime.status === 'failed' ? 'error' : 'info',
-            message: 'Service exited'
-          })
-        }
-      })
-
-      appendLog({ pluginId, commandId, level: 'info', message: 'Service started' })
-      scheduleServiceHealthCheck(pluginId, serviceId, runtime, serviceEntry)
-      return {
-        ok: true,
-        pluginId,
-        serviceId,
-        runtime: createRuntimeView(runtime, serviceEntry)
-      }
+      declaration = resolveServiceRuntimeDeclaration(serviceEntry)
+      ;({ file, args } = parsePluginProcessCommand(declaration.command))
+      cwd = resolveServiceCwd(plugin.manifest, declaration.cwd)
     } catch (error) {
       appendLog({ pluginId, commandId, level: 'error', message: sanitizePluginCommandText(error?.message || 'Service start failed') })
       throw error
     }
+
+    return (async () => {
+      try {
+        await serviceBridgeServer.ensureStarted()
+        const bridgeRunId = createPluginBridgeRunId()
+        const bridgeToken = createPluginBridgeToken()
+        const bridgeRuntimeKey = createPluginBridgeKey(pluginId, serviceId, bridgeRunId)
+        const bridgeBaseUrl = serviceBridgeServer.createBridgeBaseUrl({
+          pluginId,
+          runtimeId: serviceId,
+          runId: bridgeRunId
+        })
+        const serviceDirs = ensurePluginCreatorDirs(plugin.manifest)
+        const child = spawnServiceProcess(file, args, {
+          cwd,
+          detached: true,
+          env: {
+            ...createPluginProcessEnv(),
+            OPENPET_DATA_DIR: serviceDirs.dataDir,
+            OPENPET_CACHE_DIR: serviceDirs.cacheDir,
+            OPENPET_LOG_DIR: serviceDirs.logDir,
+            OPENPET_SERVICE_BRIDGE_URL: bridgeBaseUrl,
+            OPENPET_SERVICE_BRIDGE_TOKEN: bridgeToken
+          },
+          shell: false,
+          stdio: ['ignore', 'pipe', 'pipe'],
+          windowsHide: true
+        })
+        const runtime = setServiceRuntime(pluginId, serviceId, {
+          pluginId,
+          serviceId,
+          status: 'running',
+          pid: Number(child.pid) || 0,
+          startedAt: new Date().toISOString(),
+          stoppedAt: '',
+          command: declaration.command,
+          cwd,
+          exitCode: null,
+          signal: '',
+          error: '',
+          child,
+          stopTimer: null,
+          stopCompleted: null,
+          resolveStopCompleted: null,
+          healthTimer: null,
+          healthChecking: false,
+          bridgeRuntimeKey,
+          stopGracePeriodMs: Number.isFinite(Number(serviceStopGracePeriodMs)) ? Math.max(0, Number(serviceStopGracePeriodMs)) : PLUGIN_SERVICE_STOP_GRACE_PERIOD_MS,
+          health: existingRuntime?.health || createServiceHealthView({}, serviceEntry)
+        })
+        serviceBridgeRuntimes.set(bridgeRuntimeKey, {
+          pluginId,
+          serviceId,
+          runId: bridgeRunId,
+          token: bridgeToken,
+          status: 'running',
+          handlers: createPluginServiceBridgeHandlers(plugin, serviceId, bridgeRunId)
+        })
+
+        child.stdout?.on?.('data', (chunk) => {
+          const message = sanitizePluginCommandText(chunk)
+          if (message) appendLog({ pluginId, commandId, level: 'info', message: `Service stdout: ${message}`.slice(0, 500) })
+        })
+        child.stderr?.on?.('data', (chunk) => {
+          const message = sanitizePluginCommandText(chunk)
+          if (message) appendLog({ pluginId, commandId, level: 'error', message: `Service stderr: ${message}`.slice(0, 500) })
+        })
+        child.on?.('error', (error) => {
+          expireServiceBridgeRuntime(runtime)
+          clearServiceHealthSchedule(runtime)
+          runtime.status = 'failed'
+          runtime.error = sanitizePluginCommandText(error?.message || 'Plugin service failed')
+          runtime.stoppedAt = new Date().toISOString()
+          resolveStopWaiter(runtime)
+          appendLog({ pluginId, commandId, level: 'error', message: runtime.error })
+        })
+        child.on?.('exit', (code, signal) => {
+          expireServiceBridgeRuntime(runtime)
+          clearServiceStopTimer(runtime)
+          clearServiceHealthSchedule(runtime)
+          const stoppedByRequest = runtime.status === 'stopping'
+          let forcedStop = false
+          if (runtime.status === 'stopping') {
+            forcedStop = /force kill/i.test(String(runtime.error || ''))
+            runtime.status = forcedStop
+              ? 'failed'
+              : (Number.isFinite(Number(code)) && Number(code) !== 0 && !signal ? 'failed' : 'stopped')
+          } else if (runtime.status === 'running') {
+            runtime.status = code === 0 && !signal ? 'exited' : 'failed'
+          }
+          runtime.exitCode = Number.isFinite(Number(code)) ? Number(code) : null
+          runtime.signal = signal || ''
+          runtime.child = null
+          runtime.stoppedAt = runtime.stoppedAt || new Date().toISOString()
+          resolveStopWaiter(runtime)
+          if (stoppedByRequest) {
+            appendLog({
+              pluginId,
+              commandId,
+              level: runtime.status === 'failed' ? 'error' : 'info',
+              message: runtime.status === 'stopped'
+                ? 'Service stopped'
+                : (forcedStop ? 'Service exited after force stop' : 'Service exited')
+            })
+          } else {
+            appendLog({
+              pluginId,
+              commandId,
+              level: runtime.status === 'failed' ? 'error' : 'info',
+              message: 'Service exited'
+            })
+          }
+        })
+
+        appendLog({ pluginId, commandId, level: 'info', message: 'Service started' })
+        scheduleServiceHealthCheck(pluginId, serviceId, runtime, serviceEntry)
+        return {
+          ok: true,
+          pluginId,
+          serviceId,
+          runtime: createRuntimeView(runtime, serviceEntry)
+        }
+      } catch (error) {
+        appendLog({ pluginId, commandId, level: 'error', message: sanitizePluginCommandText(error?.message || 'Service start failed') })
+        throw error
+      }
+    })()
   }
 
   const stopService = (pluginId, serviceId) => {
@@ -1547,6 +1633,7 @@ const createPluginService = ({ settingsService, petService, actionService, actio
     const serviceEntry = getServiceEntry(plugin, serviceId)
     const runtime = getPluginServiceRuntime(pluginId, serviceId)
     if (!runtime || runtime.status !== 'running') throw new Error('Plugin service is not running')
+    expireServiceBridgeRuntime(runtime)
     stopPluginServiceRuntime(pluginId, serviceId, runtime)
     return {
       ok: true,
@@ -1654,6 +1741,7 @@ const createPluginService = ({ settingsService, petService, actionService, actio
       .filter(Boolean)
 
     for (const runtime of serviceRuntimeRegistry.listRuntimes()) {
+      expireServiceBridgeRuntime(runtime)
       stopPluginServiceRuntime(runtime.pluginId, runtime.serviceId, runtime, { log: false })
     }
     for (const runtime of setupRuntimeRegistry.listRuntimes()) {
@@ -1663,7 +1751,9 @@ const createPluginService = ({ settingsService, petService, actionService, actio
       stopPluginCommandRuntime(runtime.pluginId, runtime.commandId, runtime, { log: false })
     }
     commandBridgeRuntimes.clear()
+    serviceBridgeRuntimes.clear()
     commandBridgeServer.close()
+    serviceBridgeServer.close()
 
     const serviceWaiters = serviceRuntimeRegistry.listRuntimes()
       .filter((runtime) => runtime?.status === 'stopping' && runtime.stopCompleted instanceof Promise)
