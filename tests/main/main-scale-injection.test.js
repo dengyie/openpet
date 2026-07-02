@@ -268,7 +268,10 @@ test('main forwards IPC-provided scale values to the window scaler', async () =>
     assert.equal(registeredIpcDependencies.creatorStudioDefaultFlowService.id, 'creator-studio-default-flow-service')
     assert.equal(createdCreatorStudioDefaultFlowDependencies.pluginService.stopAllServices != null, true)
     assert.equal(bundledPluginSyncDependencies.pluginDir, path.join(__dirname, '..', '.tmp-main-scale-injection', 'plugins'))
-    assert.deepEqual(bundledPluginSyncDependencies.bundledPluginDirs, [path.resolve(__dirname, '../../examples/plugins/creator-studio')])
+    assert.deepEqual(bundledPluginSyncDependencies.bundledPluginDirs, [
+      path.resolve(__dirname, '../../examples/plugins/creator-studio'),
+      path.resolve(__dirname, '../../examples/plugins/agent-awareness')
+    ])
     assert.deepEqual(appLogs.map((entry) => entry.event), [
       'app.ready',
       'plugins.bundled.synced',

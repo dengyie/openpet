@@ -97,6 +97,7 @@
       "assets/pet-packs/**/*",
       "catalog/**/*",
       "examples/plugins/creator-studio/**/*",
+      "examples/plugins/agent-awareness/**/*",
       "dist/control-center/**/*",
       "src/main/**/*",
       "src/shared/**/*",
