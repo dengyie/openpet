@@ -3,16 +3,23 @@ const test = require('node:test')
 
 const {
   BUILTIN_CURSORS,
+  CUSTOM_CURSOR_MAX_SIZE_PERCENT,
   CUSTOM_CURSOR_MAX_BYTES,
+  CUSTOM_CURSOR_MIN_SIZE_PERCENT,
+  CUSTOM_CURSOR_SIZE_STEP_PERCENT,
   LEGACY_CUSTOM_CURSOR_ID,
   SYSTEM_CURSOR_ID,
   listCursorOptions,
   normalizeCursorSettingsState,
+  resizeCustomCursorRecord,
   resolveSelectedCursor
 } = require('../../src/shared/cursor-library')
 
 test('cursor library exposes the built-in picker catalog', () => {
   assert.equal(CUSTOM_CURSOR_MAX_BYTES, 500 * 1024)
+  assert.equal(CUSTOM_CURSOR_MIN_SIZE_PERCENT, 50)
+  assert.equal(CUSTOM_CURSOR_MAX_SIZE_PERCENT, 200)
+  assert.equal(CUSTOM_CURSOR_SIZE_STEP_PERCENT, 5)
   assert.equal(BUILTIN_CURSORS.length, 6)
   assert.deepEqual(
     BUILTIN_CURSORS.map((cursor) => cursor.name),
@@ -118,7 +125,7 @@ test('resolveSelectedCursor returns a disabled runtime cursor for system default
   assert.match(builtin.assetUrl, /^data:image\/svg\+xml/)
 })
 
-test('resolveSelectedCursor centers custom cursor hotspots for runtime overlay alignment', () => {
+test('resolveSelectedCursor preserves explicit custom cursor hotspots for runtime overlay alignment', () => {
   const runtime = resolveSelectedCursor({
     selectedCursorId: 'cursor-large',
     customCursors: [{
@@ -141,6 +148,63 @@ test('resolveSelectedCursor centers custom cursor hotspots for runtime overlay a
     assetPath: '/tmp/large.png',
     assetUrl: 'file:///tmp/large.png',
     fileName: 'large.png',
+    width: 64,
+    height: 40,
+    hotspotX: 9,
+    hotspotY: 11
+  })
+})
+
+test('resizeCustomCursorRecord scales a custom cursor from its stored 100 percent baseline', () => {
+  const resized = resizeCustomCursorRecord({
+    id: 'cursor-demo',
+    type: 'custom',
+    name: 'Demo Cursor',
+    assetPath: '/tmp/demo.png',
+    assetUrl: 'file:///tmp/demo.png',
+    fileName: 'demo.png',
+    width: 32,
+    height: 32,
+    byteSize: 2048,
+    hotspotX: 16,
+    hotspotY: 16,
+    createdAt: '2026-06-20T00:00:00.000Z'
+  }, 150)
+
+  assert.equal(resized.sizePercent, 150)
+  assert.equal(resized.width, 48)
+  assert.equal(resized.height, 48)
+  assert.equal(resized.baseWidth, 32)
+  assert.equal(resized.baseHeight, 32)
+  assert.equal(resized.baseHotspotX, 16)
+  assert.equal(resized.baseHotspotY, 16)
+  assert.equal(resized.hotspotX, 24)
+  assert.equal(resized.hotspotY, 24)
+})
+
+test('resolveSelectedCursor recenters invalid custom cursor hotspots when metadata is out of bounds', () => {
+  const runtime = resolveSelectedCursor({
+    selectedCursorId: 'cursor-invalid-hotspot',
+    customCursors: [{
+      id: 'cursor-invalid-hotspot',
+      name: 'Invalid Hotspot Cursor',
+      assetPath: '/tmp/invalid.png',
+      assetUrl: 'file:///tmp/invalid.png',
+      fileName: 'invalid.png',
+      width: 64,
+      height: 40,
+      byteSize: 1200,
+      hotspotX: 640,
+      hotspotY: 400,
+      createdAt: '2026-06-20T00:00:00.000Z'
+    }]
+  })
+
+  assert.deepEqual(runtime, {
+    enabled: true,
+    assetPath: '/tmp/invalid.png',
+    assetUrl: 'file:///tmp/invalid.png',
+    fileName: 'invalid.png',
     width: 64,
     height: 40,
     hotspotX: 32,

@@ -52,6 +52,11 @@ export interface CursorOption {
   hotspotX: number
   hotspotY: number
   createdAt: string
+  sizePercent?: number
+  baseWidth?: number
+  baseHeight?: number
+  baseHotspotX?: number
+  baseHotspotY?: number
 }
 
 export interface CustomCursorRecord extends CursorOption {

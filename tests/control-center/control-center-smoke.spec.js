@@ -536,8 +536,7 @@ test.describe('Control Center smoke', () => {
     const cursorHeader = page.locator('.cursor-selection-header')
     const cursorOptionsRow = page.locator('.cursor-options-row')
     const cursorOptionCards = page.locator('.cursor-option-card')
-    const cursorManagementPanel = page.locator('.cursor-management-panel')
-    const cursorLibraryRows = page.locator('.cursor-library-row')
+    const cursorSizePanel = page.locator('.cursor-size-panel')
 
     await expect(cursorHeader).toContainText('指针选择')
     await expect(cursorHeader).toContainText('预览会模拟真实指针落点')
@@ -547,34 +546,28 @@ test.describe('Control Center smoke', () => {
     await expect(cursorOptionCards.first().locator('.cursor-card-preview')).toHaveCSS('min-height', '43px')
     await expect(cursorOptionCards.first().locator('img')).toHaveCSS('width', '50px')
     await expect(page.getByRole('button', { name: '系统默认' })).toHaveCount(0)
-    await expect(cursorManagementPanel).toBeVisible()
-    await expect(cursorManagementPanel).toContainText('我的自定义指针')
-    await expect(cursorManagementPanel).toContainText('还没有上传自定义指针')
+    await expect(cursorSizePanel).toBeVisible()
+    await expect(cursorSizePanel).toContainText('自定义指针大小')
+    await expect(cursorSizePanel).toContainText('先在上方选择一个自定义指针')
 
     await page.getByRole('button', { name: '添加自定义' }).click()
     await expect(cursorOptionCards).toHaveCount(8)
     await expect(page.locator('.cursor-option-card.selected')).toContainText('demo-cursor')
-    await expect(cursorLibraryRows).toHaveCount(1)
-    await expect(cursorLibraryRows.first()).toContainText('demo-cursor')
-    await expect(cursorLibraryRows.first()).toContainText('32×32')
-    await expect(cursorLibraryRows.first()).toContainText('使用中')
+    await expect(cursorSizePanel).toContainText('demo-cursor')
+    await expect(cursorSizePanel).toContainText('100%')
+    await expect(cursorSizePanel).toContainText('32×32')
 
-    page.once('dialog', async (dialog) => {
-      await dialog.accept('renamed-cursor')
+    const sizeSlider = page.getByRole('slider', { name: '自定义指针大小' })
+    await sizeSlider.evaluate((input) => {
+      const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set
+      valueSetter.call(input, '150')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      input.dispatchEvent(new Event('change', { bubbles: true }))
+      input.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
     })
-    await cursorLibraryRows.first().getByRole('button', { name: '编辑' }).click()
-    await expect(page.locator('.cursor-option-card.selected')).toContainText('renamed-cursor')
-    await expect(cursorLibraryRows.first()).toContainText('renamed-cursor')
-    await expect(page.locator('.status-line')).toContainText('已更新指针名称：renamed-cursor')
-
-    page.once('dialog', async (dialog) => {
-      await dialog.accept()
-    })
-    await cursorLibraryRows.first().getByRole('button', { name: '删除' }).click()
-    await expect(page.locator('.status-line')).toContainText('已删除当前指针，并切回系统默认')
-    await expect(cursorOptionCards).toHaveCount(7)
-    await expect(cursorLibraryRows).toHaveCount(0)
-    await expect(cursorManagementPanel).toContainText('还没有上传自定义指针')
+    await expect(cursorSizePanel).toContainText('150%')
+    await expect(cursorSizePanel).toContainText('48×48')
+    await expect(page.locator('.status-line')).toContainText('已将 demo-cursor 调整为 150%')
   })
 
   test('persists grounded and home settings in the demo API session', async ({ page }) => {

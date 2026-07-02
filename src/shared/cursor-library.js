@@ -1,6 +1,9 @@
 const CUSTOM_CURSOR_MAX_BYTES = 500 * 1024
 const SYSTEM_CURSOR_ID = 'system'
 const LEGACY_CUSTOM_CURSOR_ID = 'legacy-custom-cursor'
+const CUSTOM_CURSOR_MIN_SIZE_PERCENT = 50
+const CUSTOM_CURSOR_MAX_SIZE_PERCENT = 200
+const CUSTOM_CURSOR_SIZE_STEP_PERCENT = 5
 
 const svgDataUrl = (svg) => `data:image/svg+xml;utf8,${encodeURIComponent(svg.trim())}`
 
@@ -128,6 +131,12 @@ const normalizeNumber = (value, fallback = 0) => {
   return Number.isFinite(number) ? number : fallback
 }
 
+const clampCursorSizePercent = (value) => {
+  const normalized = normalizeNumber(value, 100)
+  const stepped = Math.round(normalized / CUSTOM_CURSOR_SIZE_STEP_PERCENT) * CUSTOM_CURSOR_SIZE_STEP_PERCENT
+  return Math.min(CUSTOM_CURSOR_MAX_SIZE_PERCENT, Math.max(CUSTOM_CURSOR_MIN_SIZE_PERCENT, stepped))
+}
+
 const createCenteredHotspot = (width, height, fallbackX = 0, fallbackY = 0) => {
   const normalizedWidth = normalizeNumber(width, 0)
   const normalizedHeight = normalizeNumber(height, 0)
@@ -141,6 +150,25 @@ const createCenteredHotspot = (width, height, fallbackX = 0, fallbackY = 0) => {
     hotspotX: Math.max(0, Math.floor(normalizedWidth / 2)),
     hotspotY: Math.max(0, Math.floor(normalizedHeight / 2))
   }
+}
+
+const normalizeCursorHotspot = (width, height, hotspotX, hotspotY) => {
+  const normalizedHotspotX = normalizeNumber(hotspotX, NaN)
+  const normalizedHotspotY = normalizeNumber(hotspotY, NaN)
+  if (
+    Number.isFinite(normalizedHotspotX) &&
+    Number.isFinite(normalizedHotspotY) &&
+    normalizedHotspotX >= 0 &&
+    normalizedHotspotY >= 0 &&
+    normalizedHotspotX <= width &&
+    normalizedHotspotY <= height
+  ) {
+    return {
+      hotspotX: Math.round(normalizedHotspotX),
+      hotspotY: Math.round(normalizedHotspotY)
+    }
+  }
+  return createCenteredHotspot(width, height)
 }
 
 const normalizeRuntimeCursor = (cursor) => {
@@ -171,7 +199,15 @@ const normalizeCustomCursorRecord = (cursor) => {
     : stripFileExtension(fileName) || '未命名指针'
   const width = Math.max(0, normalizeNumber(cursor.width, 0))
   const height = Math.max(0, normalizeNumber(cursor.height, 0))
-  const hotspot = createCenteredHotspot(width, height, cursor.hotspotX, cursor.hotspotY)
+  const hotspot = normalizeCursorHotspot(width, height, cursor.hotspotX, cursor.hotspotY)
+  const baseWidth = Math.max(0, normalizeNumber(cursor.baseWidth, width))
+  const baseHeight = Math.max(0, normalizeNumber(cursor.baseHeight, height))
+  const baseHotspotX = Math.max(0, normalizeNumber(cursor.baseHotspotX, hotspot.hotspotX))
+  const baseHotspotY = Math.max(0, normalizeNumber(cursor.baseHotspotY, hotspot.hotspotY))
+  const derivedSizePercent = baseWidth > 0
+    ? Math.round((width / baseWidth) * 100)
+    : 100
+  const sizePercent = clampCursorSizePercent(cursor.sizePercent ?? derivedSizePercent)
   return {
     id,
     type: 'custom',
@@ -184,7 +220,12 @@ const normalizeCustomCursorRecord = (cursor) => {
     byteSize: Math.max(0, normalizeNumber(cursor.byteSize, 0)),
     hotspotX: hotspot.hotspotX,
     hotspotY: hotspot.hotspotY,
-    createdAt: typeof cursor.createdAt === 'string' && cursor.createdAt ? cursor.createdAt : new Date(0).toISOString()
+    createdAt: typeof cursor.createdAt === 'string' && cursor.createdAt ? cursor.createdAt : new Date(0).toISOString(),
+    sizePercent,
+    baseWidth,
+    baseHeight,
+    baseHotspotX,
+    baseHotspotY
   }
 }
 
@@ -283,9 +324,36 @@ const listCursorOptions = (customCursors = []) => ([
   ...normalizeCustomCursorCollection(customCursors)
 ])
 
+const resizeCustomCursorRecord = (cursor, sizePercent) => {
+  const normalized = normalizeCustomCursorRecord(cursor)
+  if (!normalized) return null
+  const nextSizePercent = clampCursorSizePercent(sizePercent)
+  const scale = nextSizePercent / 100
+  const baseWidth = Math.max(0, normalizeNumber(normalized.baseWidth, normalized.width))
+  const baseHeight = Math.max(0, normalizeNumber(normalized.baseHeight, normalized.height))
+  const baseHotspotX = Math.max(0, normalizeNumber(normalized.baseHotspotX, normalized.hotspotX))
+  const baseHotspotY = Math.max(0, normalizeNumber(normalized.baseHotspotY, normalized.hotspotY))
+
+  return normalizeCustomCursorRecord({
+    ...normalized,
+    width: baseWidth > 0 ? Math.max(1, Math.round(baseWidth * scale)) : normalized.width,
+    height: baseHeight > 0 ? Math.max(1, Math.round(baseHeight * scale)) : normalized.height,
+    hotspotX: Math.round(baseHotspotX * scale),
+    hotspotY: Math.round(baseHotspotY * scale),
+    sizePercent: nextSizePercent,
+    baseWidth,
+    baseHeight,
+    baseHotspotX,
+    baseHotspotY
+  })
+}
+
 module.exports = {
   BUILTIN_CURSORS,
   CUSTOM_CURSOR_MAX_BYTES,
+  CUSTOM_CURSOR_MIN_SIZE_PERCENT,
+  CUSTOM_CURSOR_MAX_SIZE_PERCENT,
+  CUSTOM_CURSOR_SIZE_STEP_PERCENT,
   LEGACY_CUSTOM_CURSOR_ID,
   SYSTEM_CURSOR_ID,
   createDefaultRuntimeCursor,
@@ -295,6 +363,7 @@ module.exports = {
   normalizeCustomCursorCollection,
   normalizeCustomCursorRecord,
   normalizeRuntimeCursor,
+  resizeCustomCursorRecord,
   resolveSelectedCursor,
   stripFileExtension
 }

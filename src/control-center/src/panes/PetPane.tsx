@@ -1,5 +1,11 @@
+import { useEffect, useState } from 'react'
 import type { ControlCenterSettings, CursorOption, CustomCursorRecord } from '../../../shared/openpet-contracts'
-import { SYSTEM_CURSOR_ID } from '../../../shared/cursor-library.ts'
+import {
+  CUSTOM_CURSOR_MAX_SIZE_PERCENT,
+  CUSTOM_CURSOR_MIN_SIZE_PERCENT,
+  CUSTOM_CURSOR_SIZE_STEP_PERCENT,
+  SYSTEM_CURSOR_ID
+} from '../../../shared/cursor-library.ts'
 import { SegmentedControl } from '../components/SegmentedControl'
 import { Toggle } from '../components/Toggle'
 import { bubbleDurationOptions, homeRadiusOptions, menuPositionOptions, speedOptions, walkDurationOptions } from '../constants'
@@ -13,8 +19,7 @@ export interface PetPaneProps {
   onChange: (partial: Partial<ControlCenterSettings>, previewScale?: boolean) => void
   onSelectCursor: (cursorId: string) => void | Promise<void>
   onImportCursor: () => void | Promise<void>
-  onRenameCursor: (cursorId: string, nextName: string) => void | Promise<void>
-  onDeleteCursor: (cursorId: string) => void | Promise<void>
+  onResizeCursor: (cursorId: string, sizePercent: number) => void | Promise<void>
   onSave: () => void | Promise<void>
   onReset: () => void
 }
@@ -35,29 +40,10 @@ function PlusIcon() {
   )
 }
 
-function InfoIcon() {
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden="true">
-      <circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" strokeWidth="1.6" />
-      <path d="M10 8v5M10 5.5h.01" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  )
-}
-
 const formatCursorSize = (cursor: Pick<CustomCursorRecord, 'width' | 'height'>) => {
   const width = Math.round(Number(cursor.width) || 0)
   const height = Math.round(Number(cursor.height) || 0)
   return width > 0 && height > 0 ? `${width}×${height}` : '尺寸未知'
-}
-
-const formatCursorDate = (value: string) => {
-  const timestamp = Date.parse(value)
-  if (!Number.isFinite(timestamp)) return '时间未知'
-  return new Intl.DateTimeFormat('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  }).format(new Date(timestamp))
 }
 
 export function PetPane({
@@ -67,8 +53,7 @@ export function PetPane({
   onChange,
   onSelectCursor,
   onImportCursor,
-  onRenameCursor,
-  onDeleteCursor,
+  onResizeCursor,
   onSave,
   onReset,
   cursorOptions,
@@ -77,6 +62,14 @@ export function PetPane({
   const scalePercent = Math.round(settings.scale * 100)
   const visibleCursorOptions = cursorOptions.filter((option) => option.id !== SYSTEM_CURSOR_ID)
   const customCursors = settings.customCursors
+  const selectedCustomCursor = customCursors.find((cursor) => cursor.id === settings.selectedCursorId) || null
+  const selectedCustomCursorSizePercent = Math.round(Number(selectedCustomCursor?.sizePercent) || 100)
+  const [pendingCursorSizePercent, setPendingCursorSizePercent] = useState(selectedCustomCursorSizePercent)
+
+  useEffect(() => {
+    setPendingCursorSizePercent(selectedCustomCursorSizePercent)
+  }, [selectedCustomCursor?.id, selectedCustomCursorSizePercent])
+
   const updateHomeEnabled = (enabled: boolean) => onChange({
     grounded: enabled ? true : settings.grounded,
     home: { ...settings.home, enabled }
@@ -85,14 +78,11 @@ export function PetPane({
     grounded: true,
     home: { ...settings.home, enabled: true, radius }
   })
-  const promptRenameCursor = (cursor: CustomCursorRecord) => {
-    const nextName = window.prompt('修改自定义指针名称', cursor.name)
-    if (nextName == null) return
-    onRenameCursor(cursor.id, nextName)
-  }
-  const confirmDeleteCursor = (cursor: CustomCursorRecord) => {
-    if (!window.confirm(`删除自定义指针「${cursor.name}」？`)) return
-    onDeleteCursor(cursor.id)
+
+  const commitCursorSizeChange = () => {
+    if (!selectedCustomCursor) return
+    if (pendingCursorSizePercent === selectedCustomCursorSizePercent) return
+    onResizeCursor(selectedCustomCursor.id, pendingCursorSizePercent)
   }
 
   return (
@@ -221,63 +211,49 @@ export function PetPane({
               </div>
             </div>
 
-            <div className="cursor-management-panel">
-              <div className="cursor-management-header">
-                <div>
-                  <h3>我的自定义指针</h3>
-                  <p>可管理、编辑或删除上传过的鼠标指针。</p>
-                </div>
-                <div className="cursor-management-actions">
-                  <button type="button" className="ghost accent" onClick={onImportCursor} disabled={saving}>
-                    上传指针
-                  </button>
-                  <button type="button" className="ghost" disabled={saving || customCursors.length === 0}>
-                    管理
-                  </button>
-                </div>
-              </div>
-
-              {customCursors.length > 0 ? (
-                <div className="cursor-library-list" role="list" aria-label="我的自定义指针">
-                  {customCursors.map((cursor) => {
-                    const active = settings.selectedCursorId === cursor.id
-                    return (
-                      <div key={cursor.id} className="cursor-library-row" role="listitem">
-                        <span className="cursor-library-preview">
-                          <img src={cursor.assetUrl} alt={`${cursor.name} 预览`} />
-                        </span>
-                        <span className="cursor-library-main">
-                          <span className="cursor-library-title">
-                            <strong>{cursor.name}</strong>
-                            {active ? <span className="cursor-usage-badge">使用中</span> : null}
-                          </span>
-                          <span className="cursor-library-meta">
-                            {formatCursorSize(cursor)} · {formatCursorDate(cursor.createdAt)}
-                          </span>
-                        </span>
-                        <span className="cursor-library-actions">
-                          <button type="button" className="ghost" onClick={() => promptRenameCursor(cursor)} disabled={saving}>
-                            编辑
-                          </button>
-                          <button type="button" className="ghost danger" onClick={() => confirmDeleteCursor(cursor)} disabled={saving}>
-                            删除
-                          </button>
-                        </span>
-                      </div>
-                    )
-                  })}
-                </div>
+            <div className="cursor-size-panel">
+              {selectedCustomCursor ? (
+                <>
+                  <div className="cursor-size-header">
+                    <div>
+                      <h3>自定义指针大小</h3>
+                      <p>仅作用于当前选中的自定义指针，并会同步调整指针落点。</p>
+                    </div>
+                    <div className="cursor-size-value">{pendingCursorSizePercent}%</div>
+                  </div>
+                  <div className="cursor-size-slider-row">
+                    <input
+                      className="range"
+                      type="range"
+                      min={String(CUSTOM_CURSOR_MIN_SIZE_PERCENT)}
+                      max={String(CUSTOM_CURSOR_MAX_SIZE_PERCENT)}
+                      step={String(CUSTOM_CURSOR_SIZE_STEP_PERCENT)}
+                      value={pendingCursorSizePercent}
+                      aria-label="自定义指针大小"
+                      onChange={(event) => setPendingCursorSizePercent(Number(event.target.value))}
+                      onMouseUp={commitCursorSizeChange}
+                      onTouchEnd={commitCursorSizeChange}
+                      onBlur={commitCursorSizeChange}
+                      onKeyUp={(event) => {
+                        if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'].includes(event.key)) {
+                          commitCursorSizeChange()
+                        }
+                      }}
+                      disabled={saving}
+                    />
+                  </div>
+                  <div className="cursor-size-meta">
+                    <span>{selectedCustomCursor.name}</span>
+                    <span>{pendingCursorSizePercent === selectedCustomCursorSizePercent ? formatCursorSize(selectedCustomCursor) : `${pendingCursorSizePercent}%`}</span>
+                  </div>
+                </>
               ) : (
-                <div className="cursor-library-empty">还没有上传自定义指针。</div>
+                <div>
+                  <h3>自定义指针大小</h3>
+                  <p>先在上方选择一个自定义指针，再调节它的显示大小。系统默认和内置指针不参与缩放。</p>
+                </div>
               )}
             </div>
-          </div>
-
-          <div className="cursor-guidance-note">
-            <span className="cursor-guidance-icon" aria-hidden="true">
-              <InfoIcon />
-            </span>
-            建议使用 32×32 / 64×64 PNG 格式，透明背景，文件大小不超过 500KB。
           </div>
         </div>
 
