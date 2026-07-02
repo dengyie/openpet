@@ -1,5 +1,7 @@
 const { IPC } = require('../../shared/ipc-channels')
 const {
+  createPersistedCursorRecord,
+  getBuiltinCursorById,
   normalizeCursorSettingsState,
   normalizeCustomCursorCollection,
   normalizeCustomCursorRecord,
@@ -19,6 +21,26 @@ const repairCustomCursorRecord = async (cursorAssetService, cursor) => {
   const normalized = normalizeCustomCursorRecord(cursor)
   if (!normalized) return null
   if (!hasIncompleteCustomCursorMetrics(normalized)) return normalized
+  const builtinCursor = createPersistedCursorRecord(getBuiltinCursorById(normalized.id))
+  if (builtinCursor) {
+    const repairedBaseRecord = normalizeCustomCursorRecord({
+      ...normalized,
+      assetPath: builtinCursor.assetPath,
+      assetUrl: builtinCursor.assetUrl,
+      fileName: builtinCursor.fileName,
+      width: builtinCursor.width,
+      height: builtinCursor.height,
+      hotspotX: builtinCursor.hotspotX,
+      hotspotY: builtinCursor.hotspotY,
+      baseWidth: builtinCursor.width,
+      baseHeight: builtinCursor.height,
+      baseHotspotX: builtinCursor.hotspotX,
+      baseHotspotY: builtinCursor.hotspotY,
+      sizePercent: 100
+    })
+    if (!repairedBaseRecord) return normalized
+    return resizeCustomCursorRecord(repairedBaseRecord, normalized.sizePercent) || repairedBaseRecord
+  }
   const repairedRuntimeCursor = await cursorAssetService.repairCursor(normalized)
   const repairedBaseRecord = normalizeCustomCursorRecord({
     ...normalized,

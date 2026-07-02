@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { ControlCenterSettings, CursorOption, CustomCursorRecord } from '../../../shared/openpet-contracts'
+import type { ControlCenterSettings, CursorOption } from '../../../shared/openpet-contracts'
 import {
   CUSTOM_CURSOR_MAX_SIZE_PERCENT,
   CUSTOM_CURSOR_MIN_SIZE_PERCENT,
@@ -40,7 +40,7 @@ function PlusIcon() {
   )
 }
 
-const formatCursorSize = (cursor: Pick<CustomCursorRecord, 'width' | 'height'>) => {
+const formatCursorSize = (cursor: Pick<CursorOption, 'width' | 'height'>) => {
   const width = Math.round(Number(cursor.width) || 0)
   const height = Math.round(Number(cursor.height) || 0)
   return width > 0 && height > 0 ? `${width}×${height}` : '尺寸未知'
@@ -61,14 +61,13 @@ export function PetPane({
 }: PetPaneProps) {
   const scalePercent = Math.round(settings.scale * 100)
   const visibleCursorOptions = cursorOptions.filter((option) => option.id !== SYSTEM_CURSOR_ID)
-  const customCursors = settings.customCursors
-  const selectedCustomCursor = customCursors.find((cursor) => cursor.id === settings.selectedCursorId) || null
-  const selectedCustomCursorSizePercent = Math.round(Number(selectedCustomCursor?.sizePercent) || 100)
-  const [pendingCursorSizePercent, setPendingCursorSizePercent] = useState(selectedCustomCursorSizePercent)
+  const selectedScalableCursor = visibleCursorOptions.find((cursor) => cursor.id === settings.selectedCursorId) || null
+  const selectedCursorSizePercent = Math.round(Number(selectedScalableCursor?.sizePercent) || 100)
+  const [pendingCursorSizePercent, setPendingCursorSizePercent] = useState(selectedCursorSizePercent)
 
   useEffect(() => {
-    setPendingCursorSizePercent(selectedCustomCursorSizePercent)
-  }, [selectedCustomCursor?.id, selectedCustomCursorSizePercent])
+    setPendingCursorSizePercent(selectedCursorSizePercent)
+  }, [selectedScalableCursor?.id, selectedCursorSizePercent])
 
   const updateHomeEnabled = (enabled: boolean) => onChange({
     grounded: enabled ? true : settings.grounded,
@@ -80,9 +79,9 @@ export function PetPane({
   })
 
   const commitCursorSizeChange = () => {
-    if (!selectedCustomCursor) return
-    if (pendingCursorSizePercent === selectedCustomCursorSizePercent) return
-    onResizeCursor(selectedCustomCursor.id, pendingCursorSizePercent)
+    if (!selectedScalableCursor) return
+    if (pendingCursorSizePercent === selectedCursorSizePercent) return
+    onResizeCursor(selectedScalableCursor.id, pendingCursorSizePercent)
   }
 
   return (
@@ -212,12 +211,12 @@ export function PetPane({
             </div>
 
             <div className="cursor-size-panel">
-              {selectedCustomCursor ? (
+              {selectedScalableCursor ? (
                 <>
                   <div className="cursor-size-header">
                     <div>
-                      <h3>自定义指针大小</h3>
-                      <p>仅作用于当前选中的自定义指针，并会同步调整指针落点。</p>
+                      <h3>当前指针大小</h3>
+                      <p>仅作用于当前选中的指针，并会按比例同步调整指针落点。</p>
                     </div>
                     <div className="cursor-size-value">{pendingCursorSizePercent}%</div>
                   </div>
@@ -229,7 +228,7 @@ export function PetPane({
                       max={String(CUSTOM_CURSOR_MAX_SIZE_PERCENT)}
                       step={String(CUSTOM_CURSOR_SIZE_STEP_PERCENT)}
                       value={pendingCursorSizePercent}
-                      aria-label="自定义指针大小"
+                      aria-label="当前指针大小"
                       onChange={(event) => setPendingCursorSizePercent(Number(event.target.value))}
                       onMouseUp={commitCursorSizeChange}
                       onTouchEnd={commitCursorSizeChange}
@@ -243,14 +242,14 @@ export function PetPane({
                     />
                   </div>
                   <div className="cursor-size-meta">
-                    <span>{selectedCustomCursor.name}</span>
-                    <span>{pendingCursorSizePercent === selectedCustomCursorSizePercent ? formatCursorSize(selectedCustomCursor) : `${pendingCursorSizePercent}%`}</span>
+                    <span>{selectedScalableCursor.name}</span>
+                    <span>{pendingCursorSizePercent === selectedCursorSizePercent ? formatCursorSize(selectedScalableCursor) : `${pendingCursorSizePercent}%`}</span>
                   </div>
                 </>
               ) : (
                 <div>
-                  <h3>自定义指针大小</h3>
-                  <p>先在上方选择一个自定义指针，再调节它的显示大小。系统默认和内置指针不参与缩放。</p>
+                  <h3>当前指针大小</h3>
+                  <p>先在上方选择一个指针，再调节它的显示大小。系统默认不参与缩放。</p>
                 </div>
               )}
             </div>

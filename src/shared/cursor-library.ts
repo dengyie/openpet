@@ -273,6 +273,17 @@ export const migrateLegacyCustomCursorRecord = (cursor: Partial<CustomCursorSett
 
 export const getBuiltinCursorById = (cursorId: string) => BUILTIN_CURSORS.find((cursor) => cursor.id === cursorId) || null
 
+export const createPersistedCursorRecord = (
+  cursor: Partial<CursorOption> | null | undefined
+): CustomCursorRecord | null => {
+  if (!cursor || typeof cursor !== 'object' || Array.isArray(cursor)) return null
+  return normalizeCustomCursorRecord({
+    ...cursor,
+    type: 'custom',
+    createdAt: typeof cursor.createdAt === 'string' && cursor.createdAt ? cursor.createdAt : 'builtin'
+  })
+}
+
 const toRuntimeCursor = (cursor: Pick<CursorOption, 'assetPath' | 'assetUrl' | 'fileName' | 'width' | 'height' | 'hotspotX' | 'hotspotY'>) => normalizeRuntimeCursor({
   enabled: true,
   assetPath: cursor.assetPath,
@@ -292,10 +303,10 @@ export const resolveSelectedCursor = ({
   customCursors?: Array<Partial<CustomCursorRecord> | null | undefined>
 }): CustomCursorSettings => {
   if (!selectedCursorId || selectedCursorId === SYSTEM_CURSOR_ID) return createDefaultRuntimeCursor()
-  const builtIn = getBuiltinCursorById(selectedCursorId)
-  if (builtIn) return toRuntimeCursor(builtIn)
   const customCursor = normalizeCustomCursorCollection(customCursors).find((cursor) => cursor.id === selectedCursorId)
-  return customCursor ? toRuntimeCursor(customCursor) : createDefaultRuntimeCursor()
+  if (customCursor) return toRuntimeCursor(customCursor)
+  const builtIn = getBuiltinCursorById(selectedCursorId)
+  return builtIn ? toRuntimeCursor(builtIn) : createDefaultRuntimeCursor()
 }
 
 export const normalizeCursorSettingsState = (
@@ -331,24 +342,33 @@ export const normalizeCursorSettingsState = (
   }
 }
 
-export const listCursorOptions = (customCursors: Array<Partial<CustomCursorRecord> | null | undefined> = []): CursorOption[] => ([
-  {
-    id: SYSTEM_CURSOR_ID,
-    type: 'system',
-    name: '系统默认',
-    assetPath: '',
-    assetUrl: SYSTEM_CURSOR_PREVIEW_URL,
-    fileName: 'system-default.svg',
-    width: 48,
-    height: 48,
-    byteSize: 0,
-    hotspotX: 0,
-    hotspotY: 0,
-    createdAt: 'builtin'
-  },
-  ...BUILTIN_CURSORS,
-  ...normalizeCustomCursorCollection(customCursors)
-])
+export const listCursorOptions = (customCursors: Array<Partial<CustomCursorRecord> | null | undefined> = []): CursorOption[] => {
+  const normalizedCustomCursors = normalizeCustomCursorCollection(customCursors)
+  const customCursorById = new Map(normalizedCustomCursors.map((cursor) => [cursor.id, cursor]))
+  const builtinIds = new Set(BUILTIN_CURSORS.map((cursor) => cursor.id))
+
+  return [
+    {
+      id: SYSTEM_CURSOR_ID,
+      type: 'system',
+      name: '系统默认',
+      assetPath: '',
+      assetUrl: SYSTEM_CURSOR_PREVIEW_URL,
+      fileName: 'system-default.svg',
+      width: 48,
+      height: 48,
+      byteSize: 0,
+      hotspotX: 0,
+      hotspotY: 0,
+      createdAt: 'builtin'
+    },
+    ...BUILTIN_CURSORS.map((cursor) => {
+      const overrideCursor = customCursorById.get(cursor.id)
+      return overrideCursor ? { ...cursor, ...overrideCursor, type: 'builtin' as const } : cursor
+    }),
+    ...normalizedCustomCursors.filter((cursor) => !builtinIds.has(cursor.id))
+  ]
+}
 
 export const resizeCustomCursorRecord = (
   cursor: Partial<CustomCursorRecord> | null | undefined,

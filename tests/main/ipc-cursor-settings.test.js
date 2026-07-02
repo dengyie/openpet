@@ -294,6 +294,100 @@ test('settings:get repairs legacy custom cursor records so size controls can use
   assert.equal(result.customCursors[0].sizePercent, 150)
 })
 
+test('settings:get repairs malformed built-in cursor overrides from the built-in catalog without file repair', async () => {
+  const ipcMain = createIpcMainStub()
+  let repairCursorCalls = 0
+  let savedSettings = null
+  let currentSettings = {
+    scale: 1,
+    walkSpeed: 2,
+    walkDuration: 15000,
+    bubbleDuration: 1300,
+    menuPosition: 'auto',
+    autoStart: false,
+    selectedCursorId: 'builtin-claw-purple',
+    customCursor: {
+      enabled: true,
+      assetPath: 'builtin://builtin-claw-purple',
+      assetUrl: 'data:image/svg+xml;utf8,builtin',
+      fileName: 'builtin-claw-purple.svg',
+      width: 48,
+      height: 48,
+      hotspotX: 2,
+      hotspotY: 2
+    },
+    customCursors: [{
+      id: 'builtin-claw-purple',
+      type: 'custom',
+      name: '爪爪紫',
+      assetPath: 'builtin://builtin-claw-purple',
+      assetUrl: 'data:image/svg+xml;utf8,builtin',
+      fileName: 'builtin-claw-purple.svg',
+      width: 0,
+      height: 0,
+      byteSize: 0,
+      hotspotX: 0,
+      hotspotY: 0,
+      createdAt: 'builtin',
+      sizePercent: 150,
+      baseWidth: 0,
+      baseHeight: 0,
+      baseHotspotX: 0,
+      baseHotspotY: 0
+    }],
+    petBehavior: {
+      grounded: false,
+      home: {
+        enabled: false,
+        radius: 'medium',
+        anchor: null
+      }
+    }
+  }
+
+  registerIpcHandlers(createRequiredServices({
+    ipcMainService: ipcMain,
+    petService: {
+      onSay: () => {},
+      onAction: () => {},
+      onEvent: () => {},
+      getAnimations: () => ({ actions: [] }),
+      getPreviewAnimations: () => ({ actions: [] }),
+      reloadAnimations: () => ({ actions: [] }),
+      previewSettings: () => {},
+      getSettings: () => currentSettings,
+      saveSettings: (settings) => {
+        currentSettings = settings
+        savedSettings = settings
+        return currentSettings
+      },
+      say: (payload) => payload,
+      playAction: (payload) => payload,
+      setEvent: (payload) => payload
+    },
+    cursorAssetService: {
+      repairCursor: async () => {
+        repairCursorCalls += 1
+        throw new Error('builtin override should repair from catalog')
+      }
+    }
+  }))
+
+  const result = await ipcMain.handlers.get(IPC.SETTINGS_GET)()
+
+  assert.ok(savedSettings)
+  assert.equal(repairCursorCalls, 0)
+  assert.equal(result.customCursors.length, 1)
+  assert.equal(result.customCursors[0].id, 'builtin-claw-purple')
+  assert.equal(result.customCursors[0].width, 72)
+  assert.equal(result.customCursors[0].height, 72)
+  assert.equal(result.customCursors[0].hotspotX, 3)
+  assert.equal(result.customCursors[0].hotspotY, 3)
+  assert.equal(result.customCursors[0].baseWidth, 48)
+  assert.equal(result.customCursors[0].baseHeight, 48)
+  assert.equal(result.customCursors[0].sizePercent, 150)
+})
+
 test('pet cursor focus request focuses the pet window only when it is unfocused', () => {
   const ipcMain = createIpcMainStub()
   const appFocusCalls = []

@@ -7,6 +7,7 @@ const {
   CUSTOM_CURSOR_MAX_BYTES,
   CUSTOM_CURSOR_MIN_SIZE_PERCENT,
   CUSTOM_CURSOR_SIZE_STEP_PERCENT,
+  createPersistedCursorRecord,
   LEGACY_CUSTOM_CURSOR_ID,
   SYSTEM_CURSOR_ID,
   listCursorOptions,
@@ -74,6 +75,28 @@ test('listCursorOptions returns system, built-ins, and custom cursors in order',
   assert.equal(options.length, 8)
 })
 
+test('listCursorOptions merges built-in cursor overrides without duplicating cards', () => {
+  const builtin = BUILTIN_CURSORS[0]
+  const options = listCursorOptions([{
+    ...createPersistedCursorRecord(builtin),
+    width: 72,
+    height: 72,
+    hotspotX: 3,
+    hotspotY: 3,
+    sizePercent: 150,
+    baseWidth: 48,
+    baseHeight: 48,
+    baseHotspotX: 2,
+    baseHotspotY: 2
+  }])
+
+  const matchingOptions = options.filter((option) => option.id === builtin.id)
+  assert.equal(matchingOptions.length, 1)
+  assert.equal(matchingOptions[0].type, 'builtin')
+  assert.equal(matchingOptions[0].width, 72)
+  assert.equal(matchingOptions[0].sizePercent, 150)
+})
+
 test('normalizeCursorSettingsState migrates a legacy hosted cursor into the new cursor library state', () => {
   const normalized = normalizeCursorSettingsState({
     selectedCursorId: '',
@@ -123,6 +146,31 @@ test('resolveSelectedCursor returns a disabled runtime cursor for system default
   assert.equal(builtin.width, BUILTIN_CURSORS[0].width)
   assert.equal(builtin.height, BUILTIN_CURSORS[0].height)
   assert.match(builtin.assetUrl, /^data:image\/svg\+xml/)
+})
+
+test('resolveSelectedCursor prefers persisted overrides for built-in cursors', () => {
+  const builtin = BUILTIN_CURSORS[0]
+  const runtime = resolveSelectedCursor({
+    selectedCursorId: builtin.id,
+    customCursors: [{
+      ...createPersistedCursorRecord(builtin),
+      width: 72,
+      height: 72,
+      hotspotX: 3,
+      hotspotY: 3,
+      sizePercent: 150,
+      baseWidth: 48,
+      baseHeight: 48,
+      baseHotspotX: 2,
+      baseHotspotY: 2
+    }]
+  })
+
+  assert.equal(runtime.enabled, true)
+  assert.equal(runtime.width, 72)
+  assert.equal(runtime.height, 72)
+  assert.equal(runtime.hotspotX, 3)
+  assert.equal(runtime.hotspotY, 3)
 })
 
 test('resolveSelectedCursor preserves explicit custom cursor hotspots for runtime overlay alignment', () => {

@@ -7,7 +7,8 @@ import {
   CUSTOM_CURSOR_MAX_SIZE_PERCENT,
   CUSTOM_CURSOR_MIN_SIZE_PERCENT,
   SYSTEM_CURSOR_ID,
-  createDefaultRuntimeCursor,
+  createPersistedCursorRecord,
+  getBuiltinCursorById,
   listCursorOptions,
   normalizeCursorSettingsState,
   normalizeCustomCursorCollection,
@@ -147,25 +148,27 @@ export function usePetSettingsPane() {
 
   const onResizeCursor = async (cursorId: string, sizePercent: number) => {
     const targetCursor = settings.customCursors.find((cursor) => cursor.id === cursorId)
+      || createPersistedCursorRecord(getBuiltinCursorById(cursorId))
     if (!targetCursor) {
-      setStatus('未找到要调整的自定义指针')
+      setStatus('未找到要调整的指针')
       return
     }
     const nextCursor = resizeCustomCursorRecord(targetCursor, sizePercent)
     if (!nextCursor) {
-      setStatus('自定义指针尺寸调整失败')
+      setStatus('指针尺寸调整失败')
       return
     }
     if (nextCursor.sizePercent === targetCursor.sizePercent) return
-    const nextCustomCursors = normalizeCustomCursorRecords(settings.customCursors.map((cursor) => (
-      cursor.id === cursorId ? nextCursor : cursor
-    )))
+    const nextCustomCursors = normalizeCustomCursorRecords([
+      ...settings.customCursors.filter((cursor) => cursor.id !== cursorId),
+      nextCursor
+    ])
     const nextSettings = applyCursorState(settings, { customCursors: nextCustomCursors })
     setSettings(nextSettings)
     await persistSettings(
       nextSettings,
       `已将 ${targetCursor.name} 调整为 ${Math.min(CUSTOM_CURSOR_MAX_SIZE_PERCENT, Math.max(CUSTOM_CURSOR_MIN_SIZE_PERCENT, sizePercent))}%`,
-      '自定义指针尺寸保存失败'
+      '指针尺寸保存失败'
     )
   }
 
