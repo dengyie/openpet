@@ -46,7 +46,7 @@ test('creator studio default flow blocks before generation when provider health 
 
   assert.equal(result.ok, true)
   assert.equal(result.state, 'blocked')
-  assert.match(result.message, /图片 Provider 配置/i)
+  assert.match(result.message, /AI -> 模型 Provider -> 图片模型 配置/i)
   assert.equal(result.runId, '')
   assert.equal(commands.length, 0)
 })

@@ -670,7 +670,7 @@ export function AiPane({
   })
 
   return (
-    <section className="pane">
+    <section className="pane ai-pane">
       <header className="pane-header">
         <div>
           <h1>AI</h1>
@@ -678,7 +678,38 @@ export function AiPane({
         </div>
       </header>
 
-      <CollapsibleAiSection title="聊天 Provider" note="OpenAI-compatible 聊天模型配置" defaultOpen>
+      <CollapsibleAiSection title="模型 Provider" note="统一管理聊天与图片生成模型；本地、代理、云端都使用 Base URL + API Key + Model" defaultOpen>
+        <div className="provider-hub" data-testid="ai-provider-hub">
+          <div className="provider-hub-intro">
+            <div>
+              <strong>Provider 总览</strong>
+              <span>OpenPet 把模型能力拆成两张卡：聊天模型负责宠物对话，图片模型负责 Creator Studio 生成。两者都必须显式配置 Base URL、API Key 和 Model，不再区分本地/cloud 模式。</span>
+            </div>
+            <div className="provider-hub-badges" aria-label="Provider capability summary">
+              <span>{activeConfig.hasApiKey ? '聊天密钥已保存' : '聊天密钥未保存'}</span>
+              <span>{activeImageGenerationConfig.hasApiKey ? '图片密钥已保存' : '图片密钥未保存'}</span>
+            </div>
+          </div>
+
+          <div className="provider-capability-grid">
+            <article className="provider-capability-card" data-testid="chat-provider-card">
+              <div className="provider-card-header">
+                <div>
+                  <h3>聊天模型</h3>
+                  <p>用于宠物气泡聊天、扩展聊天面板、人格生成、记忆抽取和行为编排。</p>
+                </div>
+                <div className="provider-card-actions">
+                  <button type="button" className="ghost" onClick={onDiscoverAiModels} disabled={saving}>
+                    刷新聊天模型
+                  </button>
+                  <button type="button" className="ghost" onClick={onTest} disabled={saving}>
+                    测试已保存配置
+                  </button>
+                  <button type="button" className="primary" onClick={onSave} disabled={saveDisabled}>
+                    {saving ? '保存中' : '保存聊天 Provider'}
+                  </button>
+                </div>
+              </div>
         <div className="section provider-summary" data-testid="ai-provider-summary">
           <div className="provider-feedback" data-testid="chat-provider-boundary">
             <strong>聊天 Provider 边界</strong>
@@ -723,28 +754,6 @@ export function AiPane({
               <option value="openai-compatible">OpenAI compatible</option>
             </select>
           </label>
-
-          <div className="field-row tall">
-            <div>
-              <div className="field-label">聊天 Provider 预设</div>
-              <div className="field-note">预设只填充 Base URL / Model，不读取也不覆盖 API Key。</div>
-            </div>
-            <div className="provider-preset-grid">
-              {chatProviderPresets.map((preset) => (
-                <button
-                  type="button"
-                  key={preset.id}
-                  className="provider-preset-card"
-                  onClick={() => applyChatProviderPreset(preset)}
-                  disabled={saving}
-                >
-                  <strong>{preset.title}</strong>
-                  <span>{preset.description}</span>
-                  <code>{preset.baseUrl}</code>
-                </button>
-              ))}
-            </div>
-          </div>
 
           <label className="field-row">
             <span className="field-label">Base URL</span>
@@ -871,31 +880,26 @@ export function AiPane({
           <span>{chatModelCompatibility.summary}</span>
         </div>
 
-        <div className="section-actions provider-actions-bottom">
-          <button type="button" className="ghost" onClick={onDiscoverAiModels} disabled={saving}>
-            刷新聊天模型
-          </button>
-          <button type="button" className="ghost" onClick={onTest} disabled={saving}>
-            测试已保存配置
-          </button>
-          <button type="button" className="primary" onClick={onSave} disabled={saveDisabled}>
-            {saving ? '保存中' : '保存聊天 Provider'}
-          </button>
-        </div>
-      </CollapsibleAiSection>
+            </article>
 
-      <CollapsibleAiSection title="图片 Provider" note="Creator Studio 生成图片使用的 OpenAI-compatible Provider" defaultOpen>
-        <div className="section-actions">
-          <button type="button" className="ghost" onClick={onDiscoverImageGenerationModels} disabled={saving}>
-            刷新图片模型
-          </button>
-          <button type="button" className="ghost" onClick={onCheckImageGenerationHealth} disabled={saving}>
-            检查图片健康
-          </button>
-          <button type="button" className="primary" onClick={onSaveImageGeneration} disabled={imageSaveDisabled}>
-            保存图片 Provider
-          </button>
-        </div>
+            <article className="provider-capability-card" data-testid="image-provider-card">
+              <div className="provider-card-header">
+                <div>
+                  <h3>图片模型</h3>
+                  <p>用于 Creator Studio 生成宠物立绘、动作帧和导入前图片资产。</p>
+                </div>
+                <div className="provider-card-actions">
+                  <button type="button" className="ghost" onClick={onDiscoverImageGenerationModels} disabled={saving}>
+                    刷新图片模型
+                  </button>
+                  <button type="button" className="ghost" onClick={onCheckImageGenerationHealth} disabled={saving}>
+                    检查图片健康
+                  </button>
+                  <button type="button" className="primary" onClick={onSaveImageGeneration} disabled={imageSaveDisabled}>
+                    保存图片 Provider
+                  </button>
+                </div>
+              </div>
 
         <div className="section">
           <div className="provider-feedback" data-testid="image-provider-boundary">
@@ -1061,6 +1065,9 @@ export function AiPane({
                 清除图片密钥
               </button>
             </div>
+          </div>
+        </div>
+            </article>
           </div>
         </div>
       </CollapsibleAiSection>

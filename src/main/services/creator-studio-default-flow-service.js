@@ -101,7 +101,7 @@ const createCreatorStudioDefaultFlowService = ({
     if (!health?.ok) {
       return createStructuredResult({
         state: 'blocked',
-        message: '请先到 AI -> 图片 Provider 配置并保存可用模型，然后再使用生成并导入'
+        message: '请先到 AI -> 模型 Provider -> 图片模型 配置并保存可用模型，然后再使用生成并导入'
       })
     }
 

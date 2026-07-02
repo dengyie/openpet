@@ -11,7 +11,26 @@ const aiSection = (page, name) => (
   })
 )
 
+const providerCard = (page, name) => (
+  page.getByTestId(name === '图片 Provider' ? 'image-provider-card' : 'chat-provider-card')
+)
+
+const chatBaseUrlInput = (page) => page.getByLabel('聊天 Base URL')
+const chatModelInput = (page) => page.getByLabel('聊天 Model')
+
 const expandAiSection = async (page, name) => {
+  if (name === '聊天 Provider' || name === '图片 Provider') {
+    const providerSection = aiSection(page, '模型 Provider')
+    await expect(providerSection).toHaveCount(1)
+    if (await providerSection.getAttribute('open') === null) {
+      await providerSection.locator('summary').click()
+    }
+    await expect(providerSection).toHaveAttribute('open', '')
+    const card = providerCard(page, name)
+    await expect(card).toHaveCount(1)
+    return card
+  }
+
   const section = aiSection(page, name)
   await expect(section).toHaveCount(1)
   if (await section.getAttribute('open') === null) {
@@ -73,15 +92,14 @@ test.describe('Control Center smoke', () => {
 
     const sectionHeadings = await page.locator('details.ai-section summary h2').allTextContents()
     expect(sectionHeadings).toEqual([
-      '聊天 Provider',
-      '图片 Provider',
+      '模型 Provider',
       '长期记忆',
       'Pet Persona Override',
       'Behavior',
       '聊天'
     ])
 
-    const coreSections = ['聊天 Provider', '图片 Provider']
+    const coreSections = ['模型 Provider']
     const secondarySections = ['长期记忆', 'Pet Persona Override', 'Behavior', '聊天']
 
     for (const sectionName of coreSections) {
@@ -194,11 +212,11 @@ test.describe('Control Center smoke', () => {
     await chatSection.getByLabel('聊天 API Key').fill('sk-demo-chat')
     await chatSection.getByRole('button', { name: '保存密钥' }).click()
     await chatSection.getByRole('button', { name: '本地/代理 OpenAI-compatible' }).click()
-    await expect(chatSection.getByLabel('聊天 Base URL')).toHaveValue('http://127.0.0.1:11434/v1')
-    await expect(chatSection.getByLabel('聊天 Model')).toHaveValue('qwen2.5:7b-instruct')
+    await expect(chatSection.getByLabel('聊天 Base URL')).toHaveValue('http://127.0.0.1:8317/v1')
+    await expect(chatSection.getByLabel('聊天 Model')).toHaveValue('gpt-4o-mini')
     await chatSection.getByRole('button', { name: '保存聊天 Provider' }).click()
     await chatSection.getByRole('button', { name: '刷新聊天模型' }).click()
-    await expect(chatSection.getByTestId('ai-chat-model-discovery')).toContainText('qwen2.5:7b-instruct')
+    await expect(chatSection.getByTestId('ai-chat-model-discovery')).toContainText('gpt-4o-mini')
 
     const imageSection = await expandAiSection(page, '图片 Provider')
     await imageSection.getByLabel('图片 API Key').fill('sk-demo-image')
@@ -628,12 +646,12 @@ test.describe('Control Center smoke', () => {
 
     await expect(page.getByTestId('ai-provider-summary')).toContainText('当前生效配置')
     await expect(page.getByTestId('ai-provider-active-summary')).toContainText('OpenAI compatible')
-    await page.getByRole('textbox', { name: 'Base URL', exact: true }).fill('https://user:pass@ai.example.test/v1?token=secret')
+    await chatBaseUrlInput(page).fill('https://user:pass@ai.example.test/v1?token=secret')
     await expect(page.getByTestId('ai-provider-validation-error')).toContainText('Base URL 不能包含用户名或密码')
     await expect(chatProviderSection.getByRole('button', { name: '保存聊天 Provider' })).toBeDisabled()
 
-    await page.getByRole('textbox', { name: 'Base URL', exact: true }).fill('https://ai.example.test/v1')
-    await page.getByRole('textbox', { name: 'Model', exact: true }).fill('openpet-test-model')
+    await chatBaseUrlInput(page).fill('https://ai.example.test/v1')
+    await chatModelInput(page).fill('openpet-test-model')
     await page.getByLabel('System Prompt').fill('Stay tiny, helpful, and local-first.')
     await page.getByRole('switch', { name: 'Enable AI memory' }).click()
     await expect(page.getByTestId('ai-provider-dirty-warning')).toContainText('未保存的 Provider 草稿')
@@ -670,8 +688,8 @@ test.describe('Control Center smoke', () => {
     await page.reload()
     await page.getByRole('button', { name: 'AI' }).click()
     await expandAiSection(page, '聊天 Provider')
-    await expect(page.getByRole('textbox', { name: 'Base URL', exact: true })).toHaveValue('https://ai.example.test/v1')
-    await expect(page.getByRole('textbox', { name: 'Model', exact: true })).toHaveValue('openpet-test-model')
+    await expect(chatBaseUrlInput(page)).toHaveValue('https://ai.example.test/v1')
+    await expect(chatModelInput(page)).toHaveValue('openpet-test-model')
     await expect(page.getByLabel('System Prompt')).toHaveValue('Stay tiny, helpful, and local-first.')
     await expect(page.getByRole('switch', { name: 'Enable AI memory' })).toHaveAttribute('aria-checked', 'true')
     await expect(page.locator('.field-row').filter({ has: page.getByText('API Key', { exact: true }) })).toContainText('已保存')
@@ -682,8 +700,8 @@ test.describe('Control Center smoke', () => {
     await page.getByRole('button', { name: 'AI' }).click()
     const chatProviderSection = await expandAiSection(page, '聊天 Provider')
 
-    await page.getByRole('textbox', { name: 'Base URL', exact: true }).fill('https://combo.example.test/v1')
-    await page.getByRole('textbox', { name: 'Model', exact: true }).fill('combo-test-model')
+    await chatBaseUrlInput(page).fill('https://combo.example.test/v1')
+    await chatModelInput(page).fill('combo-test-model')
     await page.getByPlaceholder('输入 API Key').fill('sk-combo-secret')
 
     await chatProviderSection.getByRole('button', { name: '测试已保存配置' }).click()
@@ -715,24 +733,24 @@ test.describe('Control Center smoke', () => {
     await expect(chatProviderSection.getByText('除 OpenPet 8317 外，预设只是 endpoint 模板，需要保存后测试确认。')).toBeVisible()
     await expect(chatProviderSection.getByRole('button', { name: 'OpenRouter' })).toContainText('endpoint 模板')
     await expect(chatProviderSection.getByRole('button', { name: 'OpenRouter' })).toContainText('未包含当前 OpenPet smoke 证据')
-    await page.getByRole('textbox', { name: 'Base URL', exact: true }).fill('https://dirty.example.test/v1')
-    await page.getByRole('textbox', { name: 'Model', exact: true }).fill('dirty-model')
+    await chatBaseUrlInput(page).fill('https://dirty.example.test/v1')
+    await chatModelInput(page).fill('dirty-model')
     await page.getByPlaceholder('输入 API Key').fill('sk-dirty-secret')
 
     await chatProviderSection.getByRole('button', { name: 'LM Studio' }).click()
-    await expect(page.getByRole('textbox', { name: 'Base URL', exact: true })).toHaveValue('http://127.0.0.1:1234/v1')
-    await expect(page.getByRole('textbox', { name: 'Model', exact: true })).toHaveValue('dirty-model')
+    await expect(chatBaseUrlInput(page)).toHaveValue('http://127.0.0.1:1234/v1')
+    await expect(chatModelInput(page)).toHaveValue('dirty-model')
     await expect(page.getByPlaceholder('输入 API Key')).toHaveValue('sk-dirty-secret')
 
     await chatProviderSection.getByRole('button', { name: 'OpenRouter' }).click()
-    await expect(page.getByRole('textbox', { name: 'Base URL', exact: true })).toHaveValue('https://openrouter.ai/api/v1')
-    await expect(page.getByRole('textbox', { name: 'Model', exact: true })).toHaveValue('dirty-model')
+    await expect(chatBaseUrlInput(page)).toHaveValue('https://openrouter.ai/api/v1')
+    await expect(chatModelInput(page)).toHaveValue('dirty-model')
     await expect(page.getByPlaceholder('输入 API Key')).toHaveValue('sk-dirty-secret')
 
     await chatProviderSection.getByRole('button', { name: 'OpenAI 官方' }).click()
 
-    await expect(page.getByRole('textbox', { name: 'Base URL', exact: true })).toHaveValue('https://api.openai.com/v1')
-    await expect(page.getByRole('textbox', { name: 'Model', exact: true })).toHaveValue('gpt-4o-mini')
+    await expect(chatBaseUrlInput(page)).toHaveValue('https://api.openai.com/v1')
+    await expect(chatModelInput(page)).toHaveValue('gpt-4o-mini')
     await expect(page.getByPlaceholder('输入 API Key')).toHaveValue('sk-dirty-secret')
     const chatDraftStatusRow = chatProviderSection.locator('.readonly-row').filter({ has: page.locator('strong', { hasText: /^草稿状态$/ }) })
     await expect(chatDraftStatusRow).toContainText('草稿未保存')
@@ -743,15 +761,15 @@ test.describe('Control Center smoke', () => {
     await page.getByRole('button', { name: 'AI' }).click()
 
     const chatProviderSection = await expandAiSection(page, '聊天 Provider')
-    await page.getByRole('textbox', { name: 'Base URL', exact: true }).fill('https://dirty-chat.example.test/v1')
-    await page.getByRole('textbox', { name: 'Model', exact: true }).fill('dirty-chat-model')
+    await chatBaseUrlInput(page).fill('https://dirty-chat.example.test/v1')
+    await chatModelInput(page).fill('dirty-chat-model')
     await page.getByPlaceholder('输入 API Key').fill('sk-chat-draft-secret')
     await expect(chatProviderSection.getByRole('button', { name: /OpenPet 8317 网关/ })).toContainText('已有归档 AI smoke')
     await expect(chatProviderSection.getByRole('button', { name: /OpenPet 8317 网关/ })).toContainText('/models 发现 gpt-5.5')
     await chatProviderSection.getByRole('button', { name: /OpenPet 8317 网关/ }).click()
 
-    await expect(page.getByRole('textbox', { name: 'Base URL', exact: true })).toHaveValue('http://127.0.0.1:8317/v1')
-    await expect(page.getByRole('textbox', { name: 'Model', exact: true })).toHaveValue('gpt-5.5')
+    await expect(chatBaseUrlInput(page)).toHaveValue('http://127.0.0.1:8317/v1')
+    await expect(chatModelInput(page)).toHaveValue('gpt-5.5')
     await expect(page.getByPlaceholder('输入 API Key')).toHaveValue('sk-chat-draft-secret')
 
     const imageProviderSection = await expandAiSection(page, '图片 Provider')
@@ -904,8 +922,8 @@ test.describe('Control Center smoke', () => {
     await page.getByRole('button', { name: 'AI' }).click()
 
     const chatProviderSection = await expandAiSection(page, '聊天 Provider')
-    await page.getByRole('textbox', { name: 'Base URL', exact: true }).fill('https://healthy-models.example.test/v1')
-    await page.getByRole('textbox', { name: 'Model', exact: true }).fill('deepseek-chat')
+    await chatBaseUrlInput(page).fill('https://healthy-models.example.test/v1')
+    await chatModelInput(page).fill('deepseek-chat')
     await chatProviderSection.getByRole('button', { name: '保存聊天 Provider' }).click()
 
     const apiKeyRow = page.locator('.field-row').filter({ has: page.getByText('API Key', { exact: true }) })
@@ -917,18 +935,18 @@ test.describe('Control Center smoke', () => {
     await expect(page.getByTestId('chat-model-discovery')).toContainText('deepseek-chat')
     await expect(page.getByTestId('chat-model-discovery')).toContainText('已包含当前模型')
 
-    await page.getByRole('textbox', { name: 'Model', exact: true }).fill('missing-chat-model')
+    await chatModelInput(page).fill('missing-chat-model')
     await chatProviderSection.getByRole('button', { name: '保存聊天 Provider' }).click()
     await chatProviderSection.getByRole('button', { name: '测试已保存配置' }).click()
 
     await expect(page.getByTestId('ai-provider-feedback')).toContainText('当前保存的聊天 Model 未出现在 /models 返回列表中')
     await expect(page.getByTestId('chat-model-discovery')).toContainText('当前保存的聊天 Model 未出现在探测列表中')
 
-    await page.getByRole('textbox', { name: 'Model', exact: true }).fill('draft-only-chat-model')
+    await chatModelInput(page).fill('draft-only-chat-model')
     await expect(chatProviderSection.locator('.readonly-row', { hasText: '草稿状态' })).toContainText('配置草稿未保存')
     await expect(page.getByTestId('chat-model-discovery')).toContainText('当前有未保存的聊天草稿')
 
-    await page.getByRole('textbox', { name: 'Model', exact: true }).fill('missing-chat-model')
+    await chatModelInput(page).fill('missing-chat-model')
     await apiKeyRow.getByPlaceholder('输入新密钥覆盖').fill('sk-chat-draft-only-9999')
     await expect(chatProviderSection.locator('.readonly-row', { hasText: '草稿状态' })).toContainText('密钥草稿未保存')
     await expect(page.getByTestId('chat-model-discovery')).toContainText('当前有未保存的聊天草稿')
@@ -943,7 +961,7 @@ test.describe('Control Center smoke', () => {
     await expect(page.getByTestId('chat-model-compatibility')).toContainText('OpenAI 官方兼容模式')
 
     await chatProviderSection.getByRole('button', { name: 'LM Studio' }).click()
-    await page.getByRole('textbox', { name: 'Model', exact: true }).fill('qwen2.5-7b-instruct')
+    await chatModelInput(page).fill('qwen2.5-7b-instruct')
     await expect(page.getByTestId('chat-model-compatibility')).toContainText('LM Studio 聊天兼容模式')
     await expect(page.getByTestId('chat-model-compatibility')).toContainText('打开本地服务')
 
@@ -951,7 +969,7 @@ test.describe('Control Center smoke', () => {
     await expect(page.getByTestId('chat-model-compatibility')).toContainText('OpenRouter 聊天兼容模式')
     await expect(page.getByTestId('chat-model-compatibility')).toContainText('OpenRouter 路由')
 
-    await page.getByRole('textbox', { name: 'Model', exact: true }).fill('deepseek-chat')
+    await chatModelInput(page).fill('deepseek-chat')
     await chatProviderSection.getByRole('button', { name: 'Together' }).click()
     await expect(page.getByTestId('chat-model-compatibility')).toContainText('deepseek-chat')
     await expect(page.getByTestId('chat-model-compatibility')).toContainText('Together 聊天兼容模式')
@@ -1052,13 +1070,14 @@ test.describe('Control Center smoke', () => {
     await page.getByRole('button', { name: 'AI' }).click()
 
     const chatSection = await expandAiSection(page, '聊天')
+    const chatStatus = page.getByTestId('ai-chat-status')
     await expect(chatSection).toContainText('默认在这里和宠物对话；需要长历史时可打开扩展聊天面板')
     await expect(page.getByTestId('ai-bubble-chat-state')).toContainText('当前未显示')
     await chatSection.getByRole('button', { name: '打开默认气泡聊天' }).click()
-    await expect(page.locator('.status-line')).toContainText('已打开默认气泡聊天')
+    await expect(chatStatus).toContainText('已打开默认气泡聊天')
     await expect(page.getByTestId('ai-bubble-chat-state')).toContainText('当前已显示')
     await chatSection.getByRole('button', { name: '打开扩展聊天面板' }).click()
-    await expect(page.locator('.status-line')).toContainText('已打开扩展聊天面板')
+    await expect(chatStatus).toContainText('已打开扩展聊天面板')
   })
 
   test('AI page refreshes BubbleChat visibility after the window is externally closed', async ({ page }) => {
@@ -1781,7 +1800,7 @@ test.describe('Control Center smoke', () => {
     await pluginRow.getByLabel('Creator Studio 请求').fill('给当前猫猫新增一个转圈动作')
     await pluginRow.getByRole('button', { name: '生成并导入' }).click()
 
-    await expect(page.locator('.status-line')).toContainText('请先到 AI -> 图片 Provider 配置并保存可用模型')
+    await expect(page.locator('.status-line')).toContainText('请先到 AI -> 模型 Provider -> 图片模型 配置并保存可用模型')
     await expect(pluginRow).not.toContainText('最近命令结果')
   })
 
