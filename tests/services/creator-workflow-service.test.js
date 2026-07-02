@@ -80,14 +80,66 @@ test('creator workflow service blocks before drafting runs when provider health 
   assert.equal(result.ok, true)
   assert.equal(result.state, 'provider-not-ready')
   assert.equal(result.code, 'missing_api_key')
-  assert.match(result.message, /Provider 配置/i)
+  assert.match(result.message, /AI -> 模型 Provider -> 图片模型 配置/i)
   assert.equal(commandCalls.length, 0)
 })
 
-test('creator workflow service imports an existing action and auto-applies clickAction', async () => {
+test('creator workflow service getState falls back quickly when provider health stalls', async () => {
+  const service = createCreatorWorkflowService({
+    pluginService: {
+      listPlugins: () => [createPluginView()],
+      runCommand: async () => ({}),
+      getPluginCreatorDataDir: () => '/tmp/openpet-plugin-data'
+    },
+    imageGenerationModelService: {
+      checkHealth: async () => new Promise(() => {}),
+      getConfig: () => ({ provider: 'openai-compatible', model: 'gpt-image-2' })
+    },
+    actionService: {
+      getConfig: () => ({ defaultAction: 'idle', clickAction: 'wave', actions: [{ id: 'idle' }, { id: 'wave' }] }),
+      acceptTriggerProposalItem: () => ({ animations: { clickAction: 'wave' } })
+    },
+    creatorReferenceService: {
+      getReference: () => null,
+      bindReference: async () => ({
+        replaced: false,
+        reference: {
+          targetType: EDITABLE_TARGET_TYPE,
+          targetId: EDITABLE_TARGET_ID,
+          assetPath: '/tmp/reference.png',
+          assetUrl: 'file:///tmp/reference.png',
+          fileName: 'reference.png',
+          width: 256,
+          height: 256,
+          contentHash: 'hash',
+          createdAt: '2026-07-02T10:00:00.000Z',
+          updatedAt: '2026-07-02T10:00:00.000Z'
+        }
+      }),
+      copyReferenceIntoRun: () => ({})
+    },
+    providerHealthTimeoutMs: 20
+  })
+
+  const result = await Promise.race([
+    service.getState(),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('creator getState timed out waiting for provider health')), 80))
+  ])
+
+  assert.equal(result.ok, true)
+  assert.equal(result.provider.ready, false)
+  assert.equal(result.provider.code, 'health_check_timeout')
+})
+
+test('creator workflow service imports an existing action and auto-applies clickAction even when the Creator Studio service is stopped', async () => {
   const commandCalls = []
   const copiedRuns = []
   const pluginDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-workflow-'))
+  const writeRunRecord = (run) => {
+    const runDir = path.join(pluginDataDir, 'runs', run.runId)
+    fs.mkdirSync(runDir, { recursive: true })
+    fs.writeFileSync(path.join(runDir, 'run.json'), `${JSON.stringify(run, null, 2)}\n`)
+  }
   const reference = {
     targetType: EDITABLE_TARGET_TYPE,
     targetId: EDITABLE_TARGET_ID,
@@ -103,11 +155,20 @@ test('creator workflow service imports an existing action and auto-applies click
 
   const service = createCreatorWorkflowService({
     pluginService: {
-      listPlugins: () => [createPluginView()],
+      listPlugins: () => [createPluginView({ serviceStatus: 'stopped' })],
       getPluginCreatorDataDir: () => pluginDataDir,
       runCommand: async (_pluginId, commandId, payload) => {
         commandCalls.push({ commandId, payload })
         if (commandId === 'draft-task') {
+          writeRunRecord({
+            runId: 'run-001',
+            status: 'draft',
+            currentStep: 'task_preview',
+            reviewStatus: 'pending',
+            importStatus: 'not-imported',
+            backend: 'provider',
+            artifacts: {}
+          })
           return {
             commandId,
             result: {
@@ -121,6 +182,15 @@ test('creator workflow service imports an existing action and auto-applies click
           }
         }
         if (commandId === 'confirm-task') {
+          writeRunRecord({
+            runId: 'run-001',
+            status: 'draft',
+            currentStep: 'confirmed',
+            reviewStatus: 'pending',
+            importStatus: 'not-imported',
+            backend: 'provider',
+            artifacts: {}
+          })
           return {
             commandId,
             result: {
@@ -134,6 +204,30 @@ test('creator workflow service imports an existing action and auto-applies click
           }
         }
         if (commandId === 'run-step') {
+          writeRunRecord({
+            runId: 'run-001',
+            status: 'ready_for_review',
+            currentStep: 'review',
+            reviewStatus: 'pending',
+            importStatus: 'not-imported',
+            backend: 'provider',
+            artifacts: {
+              generatedImage: {
+                generatedAt: '2026-07-02T10:10:00.000Z',
+                outputs: [{
+                  dataRelativePath: 'runs/run-001/frames/base/0001.png'
+                }],
+                conditioning: {
+                  mode: 'image-edit',
+                  endpoint: '/images/edits',
+                  referenceImageCount: 1,
+                  references: [{
+                    fileName: 'canonical-reference.png'
+                  }]
+                }
+              }
+            }
+          })
           return {
             commandId,
             result: {
@@ -147,6 +241,30 @@ test('creator workflow service imports an existing action and auto-applies click
           }
         }
         if (commandId === 'approve-run') {
+          writeRunRecord({
+            runId: 'run-001',
+            status: 'approved',
+            currentStep: 'approved',
+            reviewStatus: 'approved',
+            importStatus: 'not-imported',
+            backend: 'provider',
+            artifacts: {
+              generatedImage: {
+                generatedAt: '2026-07-02T10:10:00.000Z',
+                outputs: [{
+                  dataRelativePath: 'runs/run-001/frames/base/0001.png'
+                }],
+                conditioning: {
+                  mode: 'image-edit',
+                  endpoint: '/images/edits',
+                  referenceImageCount: 1,
+                  references: [{
+                    fileName: 'canonical-reference.png'
+                  }]
+                }
+              }
+            }
+          })
           return {
             commandId,
             result: {
@@ -160,6 +278,30 @@ test('creator workflow service imports an existing action and auto-applies click
           }
         }
         if (commandId === 'import-approved-action') {
+          writeRunRecord({
+            runId: 'run-001',
+            status: 'imported',
+            currentStep: 'imported',
+            reviewStatus: 'approved',
+            importStatus: 'imported',
+            backend: 'provider',
+            artifacts: {
+              generatedImage: {
+                generatedAt: '2026-07-02T10:10:00.000Z',
+                outputs: [{
+                  dataRelativePath: 'runs/run-001/frames/base/0001.png'
+                }],
+                conditioning: {
+                  mode: 'image-edit',
+                  endpoint: '/images/edits',
+                  referenceImageCount: 1,
+                  references: [{
+                    fileName: 'canonical-reference.png'
+                  }]
+                }
+              }
+            }
+          })
           return {
             commandId,
             result: {
@@ -224,6 +366,11 @@ test('creator workflow service imports an existing action and auto-applies click
   assert.equal(result.clickAction, 'spin')
   assert.equal(result.run.runId, 'run-001')
   assert.equal(result.run.importedActionId, 'spin')
+  assert.equal(result.diagnostics.runStatus, 'imported')
+  assert.equal(result.diagnostics.attemptStatus, 'completed')
+  assert.equal(result.diagnostics.outputCount, 1)
+  assert.equal(result.diagnostics.conditioning.mode, 'image-edit')
+  assert.deepEqual(result.diagnostics.conditioning.referenceFileNames, ['canonical-reference.png'])
   assert.deepEqual(commandCalls.map((entry) => entry.commandId), [
     'draft-task',
     'confirm-task',
@@ -239,12 +386,115 @@ test('creator workflow service imports an existing action and auto-applies click
   }])
 })
 
+test('creator workflow service surfaces failed run diagnostics from Creator Studio run records', async () => {
+  const pluginDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpet-creator-workflow-failed-'))
+  const runId = 'run-failed'
+  const runDir = path.join(pluginDataDir, 'runs', runId)
+  fs.mkdirSync(runDir, { recursive: true })
+  fs.writeFileSync(path.join(runDir, 'run.json'), `${JSON.stringify({
+    runId,
+    status: 'failed',
+    currentStep: 'generate',
+    reviewStatus: 'pending',
+    importStatus: 'not-imported',
+    backend: 'provider',
+    backendStatus: {
+      state: 'failed',
+      message: 'Provider queue overloaded'
+    },
+    error: 'Provider queue overloaded',
+    artifacts: {
+      generatedImage: {
+        failedAt: '2026-07-02T10:20:00.000Z',
+        outputs: [],
+        failure: {
+          message: 'Provider queue overloaded'
+        },
+        conditioning: {
+          mode: 'image-edit',
+          endpoint: '/images/edits',
+          referenceImageCount: 1,
+          references: [{
+            fileName: 'canonical-reference.png'
+          }]
+        }
+      }
+    }
+  }, null, 2)}\n`)
+  const reference = {
+    targetType: EDITABLE_TARGET_TYPE,
+    targetId: EDITABLE_TARGET_ID,
+    assetPath: '/tmp/reference.png',
+    assetUrl: 'file:///tmp/reference.png',
+    fileName: 'reference.png',
+    width: 512,
+    height: 512,
+    contentHash: 'hash',
+    createdAt: '2026-07-02T10:00:00.000Z',
+    updatedAt: '2026-07-02T10:00:00.000Z'
+  }
+
+  const service = createCreatorWorkflowService({
+    pluginService: {
+      listPlugins: () => [createPluginView({ serviceStatus: 'stopped' })],
+      getPluginCreatorDataDir: () => pluginDataDir,
+      runCommand: async (_pluginId, commandId) => {
+        if (commandId === 'draft-task') {
+          return {
+            commandId,
+            result: {
+              ok: true,
+              message: 'drafted',
+              run: {
+                runId,
+                taskStatus: 'confirmed'
+              }
+            }
+          }
+        }
+        if (commandId === 'run-step') {
+          throw new Error('Provider queue overloaded')
+        }
+        throw new Error(`Unexpected command: ${commandId}`)
+      }
+    },
+    imageGenerationModelService: {
+      checkHealth: async () => ({ ok: true, code: 'provider_healthy', message: 'ok' }),
+      getConfig: () => ({ provider: 'openai-compatible', model: 'gpt-image-2' })
+    },
+    actionService: {
+      getConfig: () => ({ defaultAction: 'idle', clickAction: 'wave', actions: [{ id: 'idle' }, { id: 'wave' }] }),
+      acceptTriggerProposalItem: () => ({ animations: { clickAction: 'wave' } })
+    },
+    creatorReferenceService: {
+      getReference: () => reference,
+      bindReference: async () => ({ replaced: false, reference }),
+      copyReferenceIntoRun: () => ({})
+    }
+  })
+
+  const result = await service.generateExistingAction({
+    actionName: 'spin',
+    motionPrompt: 'spin quickly'
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.state, 'review-required')
+  assert.equal(result.run.runId, runId)
+  assert.equal(result.diagnostics.runStatus, 'failed')
+  assert.equal(result.diagnostics.backendState, 'failed')
+  assert.equal(result.diagnostics.attemptStatus, 'failed')
+  assert.equal(result.diagnostics.failedAt, '2026-07-02T10:20:00.000Z')
+  assert.equal(result.diagnostics.failureReason, 'Provider queue overloaded')
+  assert.equal(result.diagnostics.conditioning.endpoint, '/images/edits')
+})
+
 test('creator workflow service binds a new character reference and completes a full-pet import', async () => {
   const bindCalls = []
   const copyCalls = []
   const service = createCreatorWorkflowService({
     pluginService: {
-      listPlugins: () => [createPluginView()],
+      listPlugins: () => [createPluginView({ serviceStatus: 'stopped' })],
       getPluginCreatorDataDir: () => '/tmp/openpet-plugin-data',
       runCommand: async (_pluginId, commandId) => {
         if (commandId === 'draft-task') {

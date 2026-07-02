@@ -1,3 +1,5 @@
+const fs = require('fs')
+const path = require('path')
 const { CODEX_ROWS } = require('../pet-pack/codex-pet')
 
 const CREATOR_STUDIO_PLUGIN_ID = 'openpet.creator-studio'
@@ -15,8 +17,26 @@ const EDITABLE_TARGET_TYPE = 'editable-action-host'
 const EDITABLE_TARGET_ID = 'legacy-editable-host'
 const EDITABLE_TARGET_NAME = 'Current Editable Character'
 const SAFE_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9:_-]*$/
+const DEFAULT_PROVIDER_HEALTH_TIMEOUT_MS = 3000
 
 const normalizeText = (value) => String(value || '').trim()
+
+const withTimeout = async (promise, timeoutMs, message) => {
+  const effectiveTimeoutMs = Math.max(1, Number(timeoutMs) || DEFAULT_PROVIDER_HEALTH_TIMEOUT_MS)
+  let timeoutHandle = null
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timeoutHandle = setTimeout(() => {
+          reject(new Error(message))
+        }, effectiveTimeoutMs)
+      })
+    ])
+  } finally {
+    if (timeoutHandle) clearTimeout(timeoutHandle)
+  }
+}
 
 const slugify = (value) => normalizeText(value)
   .toLowerCase()
@@ -68,17 +88,22 @@ const getTriggerProposalSubmission = (result) => {
     : null
 }
 
-const createDashboardView = (plugin) => ({
-  available: Boolean(plugin?.enabled && plugin?.runnable),
-  pluginId: CREATOR_STUDIO_PLUGIN_ID,
-  dashboardId: CREATOR_STUDIO_DASHBOARD_ID,
-  serviceStatus: getPluginServiceRuntimeStatus(plugin, CREATOR_STUDIO_SERVICE_ID),
-  reason: !plugin
-    ? 'Creator Studio plugin is not installed'
-    : (!plugin.enabled || !plugin.runnable || plugin.blockStatus?.blocked)
-      ? 'Creator Studio plugin is not ready'
-      : ''
-})
+const createDashboardView = (plugin) => {
+  const serviceStatus = getPluginServiceRuntimeStatus(plugin, CREATOR_STUDIO_SERVICE_ID)
+  return {
+    available: Boolean(plugin?.enabled && plugin?.runnable),
+    pluginId: CREATOR_STUDIO_PLUGIN_ID,
+    dashboardId: CREATOR_STUDIO_DASHBOARD_ID,
+    serviceStatus,
+    reason: !plugin
+      ? 'Creator Studio plugin is not installed'
+      : (!plugin.enabled || !plugin.runnable || plugin.blockStatus?.blocked)
+        ? 'Creator Studio plugin is not ready'
+        : serviceStatus !== 'running'
+          ? 'Creator Studio Service 当前未启动；你仍然可以直接生成并导入，只有查看高级任务详情时才需要启动它。'
+          : ''
+  }
+}
 
 const createEditableTargetView = (actionsConfig = {}) => ({
   targetType: EDITABLE_TARGET_TYPE,
@@ -149,7 +174,8 @@ const createWorkflowResult = ({
   reference = null,
   activePet = null,
   importedAction = null,
-  clickAction = ''
+  clickAction = '',
+  diagnostics = null
 }) => ({
   ok: true,
   state,
@@ -159,8 +185,60 @@ const createWorkflowResult = ({
   reference,
   activePet,
   importedAction,
-  clickAction: normalizeText(clickAction)
+  clickAction: normalizeText(clickAction),
+  diagnostics: diagnostics && typeof diagnostics === 'object'
+    ? diagnostics
+    : null
 })
+
+const readWorkflowDiagnostics = ({ pluginDataDir, runId }) => {
+  const normalizedRunId = normalizeText(runId)
+  if (!pluginDataDir || !normalizedRunId) return null
+  const runPath = path.join(path.resolve(pluginDataDir), 'runs', normalizedRunId, 'run.json')
+  if (!fs.existsSync(runPath)) return null
+  try {
+    const run = JSON.parse(fs.readFileSync(runPath, 'utf-8'))
+    const generatedImage = run?.artifacts?.generatedImage
+    const conditioning = generatedImage?.conditioning && typeof generatedImage.conditioning === 'object'
+      ? generatedImage.conditioning
+      : null
+    const references = Array.isArray(conditioning?.references) ? conditioning.references : []
+    const outputCount = Array.isArray(generatedImage?.outputs) ? generatedImage.outputs.length : 0
+    return {
+      runStatus: normalizeText(run?.status),
+      currentStep: normalizeText(run?.currentStep),
+      reviewStatus: normalizeText(run?.reviewStatus),
+      importStatus: normalizeText(run?.importStatus),
+      backend: normalizeText(run?.backend || run?.input?.backend),
+      backendState: normalizeText(run?.backendStatus?.state),
+      attemptStatus: normalizeText(
+        generatedImage?.failure?.message
+          ? 'failed'
+          : outputCount > 0
+            ? 'completed'
+            : generatedImage
+              ? 'attempted'
+              : 'unavailable'
+      ),
+      outputCount,
+      generatedAt: normalizeText(generatedImage?.generatedAt),
+      failedAt: normalizeText(generatedImage?.failedAt),
+      failureReason: normalizeText(generatedImage?.failure?.message || run?.error || run?.backendStatus?.message),
+      conditioning: conditioning
+        ? {
+            mode: normalizeText(conditioning.mode),
+            endpoint: normalizeText(conditioning.endpoint),
+            referenceImageCount: Number(conditioning.referenceImageCount) || 0,
+            referenceFileNames: references.map((reference) => (
+              normalizeText(reference?.fileName || reference?.relativePath)
+            )).filter(Boolean)
+          }
+        : null
+    }
+  } catch (_) {
+    return null
+  }
+}
 
 const createFullPetTask = ({ characterName, stylePrompt = '' }) => ({
   mode: 'full-pet',
@@ -209,7 +287,8 @@ const createCreatorWorkflowService = ({
   imageGenerationModelService,
   actionService,
   creatorReferenceService,
-  appLogService = null
+  appLogService = null,
+  providerHealthTimeoutMs = DEFAULT_PROVIDER_HEALTH_TIMEOUT_MS
 }) => {
   if (!pluginService?.listPlugins || !pluginService?.runCommand || !pluginService?.getPluginCreatorDataDir) {
     throw new Error('Plugin service is required for creator workflow service')
@@ -243,12 +322,18 @@ const createCreatorWorkflowService = ({
 
   const getProviderHealth = async () => {
     try {
-      return await imageGenerationModelService.checkHealth({})
+      return await withTimeout(
+        imageGenerationModelService.checkHealth({ timeoutMs: providerHealthTimeoutMs }),
+        providerHealthTimeoutMs,
+        `Image Provider health check timed out after ${providerHealthTimeoutMs}ms`
+      )
     } catch (error) {
+      const message = normalizeText(error?.message || 'Provider health check failed')
+      const isTimeout = /timed out/i.test(message)
       return {
         ok: false,
-        code: 'health_check_failed',
-        message: error?.message || 'Provider health check failed'
+        code: isTimeout ? 'health_check_timeout' : 'health_check_failed',
+        message
       }
     }
   }
@@ -290,9 +375,6 @@ const createCreatorWorkflowService = ({
     }
     if (!plugin.enabled || !plugin.runnable || plugin.blockStatus?.blocked) {
       throw new Error('请先启用 Creator Studio 插件')
-    }
-    if (getPluginServiceRuntimeStatus(plugin, CREATOR_STUDIO_SERVICE_ID) !== 'running') {
-      throw new Error('请先启动 Creator Studio Service')
     }
     return plugin
   }
@@ -369,7 +451,7 @@ const createCreatorWorkflowService = ({
       const result = createWorkflowResult({
         state: 'provider-not-ready',
         code: normalizeText(health?.code) || 'provider_not_ready',
-        message: '请先到 AI -> 图片 Provider 配置并保存可用模型，然后再使用生成流程'
+        message: '请先到 AI -> 模型 Provider -> 图片模型 配置并保存可用模型，然后再使用生成流程'
       })
       setLastRun(result.run)
       return result
@@ -379,6 +461,7 @@ const createCreatorWorkflowService = ({
     const commandId = resolveCommandId(plugin)
     let runId = ''
     let lastCommandResult = null
+    const getWorkflowDiagnostics = () => readWorkflowDiagnostics({ pluginDataDir, runId })
 
     try {
       const drafted = await pluginService.runCommand(CREATOR_STUDIO_PLUGIN_ID, commandId, {
@@ -447,7 +530,8 @@ const createCreatorWorkflowService = ({
             commandId: lastCommandResult?.commandId,
             message: getCommandMessage(lastCommandResult, 'Run requires review')
           }),
-          reference: creatorReferenceService.getReference(referenceTarget)
+          reference: creatorReferenceService.getReference(referenceTarget),
+          diagnostics: getWorkflowDiagnostics()
         })
         setLastRun(result.run)
         return result
@@ -475,7 +559,7 @@ const createCreatorWorkflowService = ({
           const result = createWorkflowResult({
             state: 'import-failed',
             code: submission?.ok === false ? 'trigger_proposal_submit_failed' : 'trigger_proposal_missing',
-            message: `动作已导入，但默认 clickAction 绑定未完成。请到 Creator Studio 或 Actions 面板继续处理 run ${runId}`,
+          message: `动作已导入，但默认 clickAction 绑定未完成。请到 Creator Studio 或 Actions 面板继续处理 run ${runId}`,
             run: createRunView({
               state: 'import-failed',
               mode,
@@ -488,7 +572,8 @@ const createCreatorWorkflowService = ({
             importedAction: {
               actionId: importedActionId,
               label: normalizeText(task.actions?.[0]?.name)
-            }
+            },
+            diagnostics: getWorkflowDiagnostics()
           })
           setLastRun(result.run)
           return result
@@ -514,7 +599,8 @@ const createCreatorWorkflowService = ({
             actionId: runView.importedActionId,
             label: normalizeText(task.actions?.[0]?.name)
           },
-          clickAction: clickAction || runView.importedActionId
+          clickAction: clickAction || runView.importedActionId,
+          diagnostics: getWorkflowDiagnostics()
         })
         setLastRun(result.run)
         return result
@@ -549,7 +635,8 @@ const createCreatorWorkflowService = ({
               defaultAction: normalizeText(pack.defaultAction),
               clickAction: normalizeText(pack.clickAction)
             }
-          : null
+          : null,
+        diagnostics: getWorkflowDiagnostics()
       })
       setLastRun(result.run)
       return result
@@ -581,7 +668,8 @@ const createCreatorWorkflowService = ({
               message: error.message || getCommandMessage(lastCommandResult, 'Workflow failed')
             })
           : null,
-        reference: creatorReferenceService.getReference(referenceTarget)
+        reference: creatorReferenceService.getReference(referenceTarget),
+        diagnostics: getWorkflowDiagnostics()
       })
       setLastRun(result.run)
       return result

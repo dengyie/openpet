@@ -51,14 +51,14 @@ test('creator studio default flow blocks before generation when provider health 
   assert.equal(commands.length, 0)
 })
 
-test('creator studio default flow auto-answers trigger, confirms, generates, approves, and imports action runs', async () => {
+test('creator studio default flow auto-answers trigger, confirms, generates, approves, and imports action runs without requiring the Creator Studio service to be running', async () => {
   const commandCalls = []
   const service = createCreatorStudioDefaultFlowService({
     imageGenerationModelService: {
       checkHealth: async () => ({ ok: true, code: 'provider_healthy', message: 'ok' })
     },
     pluginService: {
-      listPlugins: () => [createPluginView()],
+      listPlugins: () => [createPluginView({ serviceStatus: 'stopped' })],
       runCommand: async (pluginId, commandId, payload) => {
         commandCalls.push({ pluginId, commandId, payload })
         if (commandId === 'draft-task') {

@@ -106,6 +106,10 @@ button {
   max-width: 1180px;
 }
 
+.creator-pane {
+  max-width: 920px;
+}
+
 .pet-pane {
   width: 100%;
   max-width: 1480px;

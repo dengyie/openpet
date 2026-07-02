@@ -151,7 +151,8 @@ const registerPetWindowLifecycle = ({
   maybeRunPackagedRuntimeSmoke,
   maybeRunPackagedPluginCleanupEvidence,
   maybeRunPackagedCreatorStudioEvidence,
-  maybeRunPackagedCreatorStudioUiE2e
+  maybeRunPackagedCreatorStudioUiE2e,
+  maybeRunPackagedCreateUiSmoke
 }) => {
   let activePetWindow = petWindow
 
@@ -165,6 +166,10 @@ const registerPetWindowLifecycle = ({
     maybeRunPackagedCreatorStudioUiE2e({
       app,
       pluginService,
+      openControlCenter: () => createSettingsWindow(getPetWindow())
+    })
+    maybeRunPackagedCreateUiSmoke({
+      app,
       openControlCenter: () => createSettingsWindow(getPetWindow())
     })
   })

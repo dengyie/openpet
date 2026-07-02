@@ -1,7 +1,7 @@
 # One-Click Character Import And Action Generation Development Plan
 
 > Date: 2026-07-01
-> Status: active milestone spec (scope frozen for current round)
+> Status: active implementation spec (scope frozen for current round)
 > Scope: define the next bounded milestone for a user-first Creator Studio flow in OpenPet
 
 ## Current Round Freeze
@@ -10,15 +10,48 @@ This spec is the authority for the current bounded implementation round.
 
 Current execution scope:
 
-- Stage 1 only: host reference persistence, workflow orchestration, and renderer-safe IPC/contracts
-- Do not start Stage 2 Control Center `Create` UI in this round
-- Do not start Stage 3 Creator Studio alignment work in this round unless a true Stage 1 P0/P1 blocker requires a minimal compatibility fix
+- Stage 1 is complete: host reference persistence, workflow orchestration, and renderer-safe IPC/contracts
+- Stage 2 is the active implementation stage: Control Center `Create` default user path
+- Do not start Stage 3 Creator Studio alignment work in this round unless a true Stage 2 P0/P1 blocker requires a minimal compatibility fix
 
 Current round success gate:
 
-- Stage 1 deliverables compile, boot, and pass targeted tests
-- Review finds no remaining P0/P1 blockers in the Stage 1 delta
-- The round stops after Stage 1 summary and does not auto-expand into later stages
+- Stage 2 deliverables compile, boot, and pass the required Control Center and Node validation for this delta
+- Review finds no remaining P0/P1 blockers in the Stage 2 delta
+- The round stops after the Stage 2 summary and does not auto-expand into Stage 3
+
+## Implementation Snapshot (2026-07-02)
+
+This section records what is already implemented on the active development branch so the spec can act as both plan and execution guide.
+
+### Already landed in the current milestone branch
+
+- Stage 1 host groundwork is implemented:
+  - `creator-reference-service` persists canonical references in host-owned storage
+  - `creator-workflow-service` exposes a single host orchestration path for new-character and existing-character flows
+  - renderer-safe Creator IPC/contracts exist for state lookup and one-click generation
+- The ordinary-user `Create` tab is implemented in the Control Center branch delta:
+  - mode switch for `New Character` and `Existing Character`
+  - provider readiness gate shown in the user-facing surface
+  - required-input blocking before generation starts
+  - single in-progress state once generation begins
+  - success state with immediate "click the pet to verify" guidance
+  - advanced fallback entry to Creator Studio details
+- Control Center startup no longer depends on eager Creator loading:
+  - `Create` state is lazy-loaded only when the `Create` tab is active
+  - provider state for `Create` no longer blocks the rest of Control Center boot
+
+### Still required before this round can close
+
+- Re-run the Node core verification spine against the updated host service graph.
+- Resolve any runtime/bootstrap regressions introduced by the new Creator service injection points.
+- Confirm the advanced Creator Studio dashboard still works as a compatible fallback for run inspection and handoff debugging.
+
+### Practical reading of the current round boundary
+
+- Stage 2 is still the milestone owner: the default `Create` path is the primary deliverable.
+- Minimal Stage 3 fixes are allowed only when they are required to keep the Stage 2 path or existing advanced dashboard working.
+- This round does not expand into new asset semantics, new trigger UX, or new Codex pack mutation behavior.
 
 ## Goal
 
@@ -27,6 +60,17 @@ Ship a production-oriented default workflow for ordinary users:
 `upload image -> choose new character or existing character -> generate and import -> click to verify immediately`
 
 The design must hide Creator Studio task complexity by default, while preserving the advanced dashboard and manual command flow for debugging and power users.
+
+## Current Execution Checklist
+
+Use this checklist when continuing implementation in this milestone:
+
+- Keep the ordinary-user path centered in `Create`, not `Plugins`.
+- Keep the default provider path as the only happy-path entry.
+- Do not interrupt the user mid-flow once generation starts.
+- End existing-character success in a real applied `clickAction`, not a proposal-only handoff.
+- Treat Creator Studio as advanced fallback and diagnostics, not as required primary navigation.
+- Stop the round once the bounded verification spine is green and review finds no P0/P1 blockers.
 
 ## Product Principles
 
@@ -661,6 +705,10 @@ Verification:
 - Control Center UI tests for new and existing modes
 - smoke coverage for missing reference, provider not ready, and success flows
 
+Current implementation note:
+
+- This stage is already in execution on branch and should now be treated as a stabilization and verification phase, not a fresh design phase.
+
 ## Stage 3: Creator Studio and import-path alignment
 
 Deliverables:
@@ -675,6 +723,11 @@ Verification:
 - core tests for action import and click binding
 - Creator Studio integration tests
 - packaged-app/non-demo UI smoke for Create tab if feasible in current environment
+
+Current implementation note:
+
+- Only compatibility and P0/P1 stabilization work belongs here in the current round.
+- Any deeper Creator Studio UX redesign or new generation semantics stays in backlog unless a verified blocker forces it in.
 
 ## Acceptance Criteria
 
@@ -729,6 +782,11 @@ Use these commands as the default verification spine for this milestone:
 - `npm run test:core`
 - `npm run test:control-center`
 - `npm start`
+
+When closing the current branch round, also capture whether the following passed for the exact delta under review:
+
+- `npm run build:control-center`
+- `npm run check:node`
 
 Use these only when the stage actually touches the matching surfaces:
 
@@ -844,3 +902,14 @@ The milestone is done when both default user paths are true in the packaged app 
 - a user can generate and immediately click-test a custom action for the current editable character
 
 Anything beyond those two closed loops remains backlog unless it blocks them directly.
+
+## Current Round Close-Out Notes
+
+Before declaring this round complete, the final report should explicitly answer:
+
+- Does `Create` exist and behave as the ordinary-user primary path in non-demo UI?
+- Does existing-character generation end in an actually applied `clickAction`?
+- Does the advanced Creator Studio dashboard still open and remain usable for run detail/debugging?
+- Did the runtime bootstrap and Control Center verification spine pass on the exact branch head being delivered?
+
+If any answer is "no", the work stays inside this milestone only if it blocks the two promised user loops above.

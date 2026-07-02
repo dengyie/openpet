@@ -51,6 +51,7 @@ const { maybeRunPackagedRuntimeSmoke } = require('./src/main/packaged-runtime-sm
 const { maybeRunPackagedPluginCleanupEvidence } = require('./src/main/packaged-plugin-cleanup-evidence-runner')
 const { maybeRunPackagedCreatorStudioEvidence } = require('./src/main/packaged-creator-studio-evidence-runner')
 const { maybeRunPackagedCreatorStudioUiE2e } = require('./src/main/packaged-creator-studio-ui-e2e-runner')
+const { maybeRunPackagedCreateUiSmoke } = require('./src/main/packaged-create-ui-smoke-runner')
 const { createBasicBehaviorPlugin } = require('./src/main/plugins/official/basic-behavior')
 const packageJson = require('./package.json')
 
@@ -100,6 +101,7 @@ const bootstrapOpenPet = () => {
     maybeRunPackagedPluginCleanupEvidence,
     maybeRunPackagedCreatorStudioEvidence,
     maybeRunPackagedCreatorStudioUiE2e,
+    maybeRunPackagedCreateUiSmoke,
     factories: {
       createEventBus,
       createSettingsService,

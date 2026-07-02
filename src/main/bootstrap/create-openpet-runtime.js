@@ -31,6 +31,7 @@ const createOpenPetRuntime = ({
   maybeRunPackagedPluginCleanupEvidence,
   maybeRunPackagedCreatorStudioEvidence,
   maybeRunPackagedCreatorStudioUiE2e,
+  maybeRunPackagedCreateUiSmoke,
   factories,
   setPetWindow
 }) => {
@@ -208,7 +209,8 @@ const createOpenPetRuntime = ({
     maybeRunPackagedRuntimeSmoke,
     maybeRunPackagedPluginCleanupEvidence,
     maybeRunPackagedCreatorStudioEvidence,
-    maybeRunPackagedCreatorStudioUiE2e
+    maybeRunPackagedCreatorStudioUiE2e,
+    maybeRunPackagedCreateUiSmoke
   })
 
   return {

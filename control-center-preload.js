@@ -4,7 +4,7 @@
  * 暴露配置管理 UI 需要的最小主进程接口。AI、插件和本地服务后续也从这里扩展，
  * 不让管理页面直接接触 Node.js / Electron API。
  */
-const { contextBridge, ipcRenderer } = require('electron')
+const { contextBridge, ipcRenderer, webUtils } = require('electron')
 
 const IPC = {
   SETTINGS_GET: 'settings:get',
@@ -111,6 +111,13 @@ const IPC = {
 }
 
 contextBridge.exposeInMainWorld('controlCenterAPI', {
+  getPathForFile: (file) => {
+    try {
+      return webUtils.getPathForFile(file || null) || ''
+    } catch (_) {
+      return ''
+    }
+  },
   getSettings: () => ipcRenderer.invoke(IPC.SETTINGS_GET),
   saveSettings: (settings) => ipcRenderer.invoke(IPC.SETTINGS_SAVE, settings),
   importCursor: () => ipcRenderer.invoke(IPC.SETTINGS_IMPORT_CURSOR),
@@ -187,6 +194,7 @@ contextBridge.exposeInMainWorld('controlCenterAPI', {
   generateCreatorNewCharacter: (payload) => ipcRenderer.invoke(IPC.CREATOR_GENERATE_NEW_CHARACTER, payload),
   generateCreatorExistingAction: (payload) => ipcRenderer.invoke(IPC.CREATOR_GENERATE_EXISTING_ACTION, payload),
   getCreatorLastRun: () => ipcRenderer.invoke(IPC.CREATOR_GET_LAST_RUN),
+  playPetAction: (actionId) => ipcRenderer.invoke(IPC.PET_PLAY_ACTION, { actionId }),
   runCreatorStudioDefaultFlow: (prompt) => ipcRenderer.invoke(IPC.PLUGINS_RUN_CREATOR_STUDIO_DEFAULT_FLOW, { prompt }),
   runPluginCommand: (pluginId, commandId, payload) => ipcRenderer.invoke(IPC.PLUGINS_RUN_COMMAND, { pluginId, commandId, payload }),
   runPluginSetup: (pluginId, setupId) => ipcRenderer.invoke(IPC.PLUGINS_RUN_SETUP, { pluginId, setupId }),

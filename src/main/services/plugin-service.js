@@ -285,6 +285,41 @@ const createPluginService = ({ settingsService, petService, actionService, actio
     return realTargetPath
   }
 
+  const sanitizeCreatorModelReferenceImages = (manifest, referenceImages = []) => {
+    if (!Array.isArray(referenceImages)) return []
+    return referenceImages.map((referenceImage) => {
+      if (!referenceImage || typeof referenceImage !== 'object') {
+        throw new Error('Creator model reference image must be an object')
+      }
+      const relativePath = String(referenceImage.relativePath || '').trim()
+      if (!relativePath) {
+        throw new Error('Creator model reference image relativePath is required')
+      }
+      const resolvedPath = resolvePluginDataPath(manifest, relativePath)
+      const sanitized = {
+        path: resolvedPath,
+        relativePath: relativePath.replace(/\\/g, '/')
+      }
+      const metadataRelativePath = typeof referenceImage.metadataRelativePath === 'string'
+        ? referenceImage.metadataRelativePath.trim()
+        : ''
+      if (metadataRelativePath) {
+        resolvePluginDataPath(manifest, metadataRelativePath)
+        sanitized.metadataRelativePath = metadataRelativePath.replace(/\\/g, '/')
+      }
+      if (typeof referenceImage.fileName === 'string' && referenceImage.fileName.trim()) {
+        sanitized.fileName = referenceImage.fileName.trim()
+      }
+      if (typeof referenceImage.sha256 === 'string' && referenceImage.sha256.trim()) {
+        sanitized.sha256 = referenceImage.sha256.trim()
+      }
+      if (typeof referenceImage.role === 'string' && referenceImage.role.trim()) {
+        sanitized.role = referenceImage.role.trim()
+      }
+      return sanitized
+    })
+  }
+
   const selectCreatorAssetSourceDir = async () => {
     const selected = await selectCreatorAssetFrameFolder()
     if (selected?.canceled || !selected?.sourceDir) return { canceled: true }
@@ -478,6 +513,7 @@ const createPluginService = ({ settingsService, petService, actionService, actio
         ok: true,
         result: await imageGenerationModelService.generateImage({
           ...providerPayload,
+          referenceImages: sanitizeCreatorModelReferenceImages(plugin.manifest, payload.referenceImages),
           output: {
             ...(payload.output || {}),
             dataDir: ensurePluginCreatorDirs(plugin.manifest).dataDir

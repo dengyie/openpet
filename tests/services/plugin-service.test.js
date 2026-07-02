@@ -789,6 +789,12 @@ test('declaration-only creator model bridge exposes settings, health, and host-o
   await waitFor(() => spawned.length === 1)
   const baseUrl = spawned[0].options.env.OPENPET_BRIDGE_URL
   const token = spawned[0].options.env.OPENPET_BRIDGE_TOKEN
+  const pluginDataDir = service.getPluginCreatorDataDir('weather-declaration')
+  const referenceRelativePath = 'runs/demo-run/inputs/references/canonical-reference.png'
+  const metadataRelativePath = 'runs/demo-run/inputs/references/reference.json'
+  fs.mkdirSync(path.join(pluginDataDir, 'runs/demo-run/inputs/references'), { recursive: true })
+  fs.writeFileSync(path.join(pluginDataDir, referenceRelativePath), 'reference-image')
+  fs.writeFileSync(path.join(pluginDataDir, metadataRelativePath), '{"ok":true}')
 
   const settingsResponse = await requestBridge(`${baseUrl}/creator/model-settings`, { token })
   const healthResponse = await requestBridge(`${baseUrl}/creator/model-health-check`, {
@@ -809,7 +815,14 @@ test('declaration-only creator model bridge exposes settings, health, and host-o
         width: 1024,
         height: 1024,
         transparent: true
-      }
+      },
+      referenceImages: [{
+        path: '/tmp/should-be-ignored-reference.png',
+        relativePath: referenceRelativePath,
+        metadataRelativePath,
+        fileName: 'canonical-reference.png',
+        role: 'canonical-reference'
+      }]
     }
   })
 
@@ -835,6 +848,13 @@ test('declaration-only creator model bridge exposes settings, health, and host-o
   assert.equal(Object.hasOwn(bridgeCalls[1][1], 'backend'), false)
   assert.equal(bridgeCalls[1][1].output.dataRelativeDir, 'runs/demo-run/frames/base')
   assert.match(bridgeCalls[1][1].output.dataDir, /\.openpet\/weather-declaration\/data$/)
+  assert.deepEqual(bridgeCalls[1][1].referenceImages, [{
+    path: fs.realpathSync(path.join(pluginDataDir, referenceRelativePath)),
+    relativePath: referenceRelativePath,
+    metadataRelativePath,
+    fileName: 'canonical-reference.png',
+    role: 'canonical-reference'
+  }])
 })
 
 test('declaration-only creator pack manifest bridge reads validates and applies active pack metadata', async () => {

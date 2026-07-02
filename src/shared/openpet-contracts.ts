@@ -932,6 +932,7 @@ export interface PluginCommandViewState {
 export interface PluginCommandEntryViewState extends PluginCommandViewState {
   command: string
   cwd: string
+  timeoutMs?: number
 }
 
 export type PluginSetupRuntimeStatus = 'not-run' | 'running' | 'stopping' | 'succeeded' | 'failed'
@@ -1644,6 +1645,28 @@ export interface CreatorGenerateExistingActionRequest {
   referenceImagePath?: string
 }
 
+export interface CreatorWorkflowConditioningSummaryViewState {
+  mode: string
+  endpoint: string
+  referenceImageCount: number
+  referenceFileNames: string[]
+}
+
+export interface CreatorWorkflowDiagnosticsViewState {
+  runStatus: string
+  currentStep: string
+  reviewStatus: string
+  importStatus: string
+  backend: string
+  backendState: string
+  attemptStatus: string
+  outputCount: number
+  generatedAt: string
+  failedAt: string
+  failureReason: string
+  conditioning: CreatorWorkflowConditioningSummaryViewState | null
+}
+
 export interface CreatorWorkflowResult extends OkResponse {
   state: CreatorWorkflowState
   code: string
@@ -1653,6 +1676,12 @@ export interface CreatorWorkflowResult extends OkResponse {
   activePet?: PetPackSummary | null
   importedAction?: CreatorImportedActionViewState | null
   clickAction?: string
+  diagnostics?: CreatorWorkflowDiagnosticsViewState | null
+}
+
+export interface PetActionPlaybackResult extends OkResponse {
+  actionId: string
+  source?: string
 }
 
 export interface PluginDashboardOpenOptions {
@@ -2871,6 +2900,7 @@ export interface SignedReleaseClaimSummary {
 }
 
 export interface ControlCenterApi {
+  getPathForFile?: (file: File) => string
   getSettings: () => Promise<ControlCenterSettings>
   saveSettings: (settings: Partial<ControlCenterSettings>) => Promise<ControlCenterSettings>
   previewScale: (scale: number) => void
@@ -2938,6 +2968,7 @@ export interface ControlCenterApi {
   generateCreatorNewCharacter: (payload: CreatorGenerateNewCharacterRequest) => Promise<CreatorWorkflowResult>
   generateCreatorExistingAction: (payload: CreatorGenerateExistingActionRequest) => Promise<CreatorWorkflowResult>
   getCreatorLastRun: () => Promise<{ ok: boolean; run: CreatorLastRunViewState | null }>
+  playPetAction: (actionId: string) => Promise<PetActionPlaybackResult>
   runCreatorStudioDefaultFlow: (prompt: string) => Promise<CreatorStudioDefaultFlowResult>
   runPluginCommand: (pluginId: string, commandId: string, payload?: JsonObject) => Promise<PluginCommandRunResultViewState>
   runPluginSetup: (pluginId: string, setupId: string) => Promise<PluginSetupRunResultViewState>

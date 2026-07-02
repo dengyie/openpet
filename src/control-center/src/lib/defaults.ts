@@ -11,6 +11,7 @@ import type {
   CatalogState,
   ChatMessage,
   ControlCenterSettings,
+  CreatorReferenceViewState,
   CreatorLastRunViewState,
   CreatorStateViewState,
   CustomCursorSettings,
@@ -260,6 +261,19 @@ export const defaultCreatorLastRun = {
   importedPackId: '',
   activatedPackId: ''
 } satisfies CreatorLastRunViewState
+
+export const defaultCreatorReference = {
+  targetType: 'editable-action-host',
+  targetId: '',
+  assetPath: '',
+  assetUrl: '',
+  fileName: '',
+  width: 0,
+  height: 0,
+  contentHash: '',
+  createdAt: '',
+  updatedAt: ''
+} satisfies CreatorReferenceViewState
 
 export const defaultCreatorState = {
   ok: true,
@@ -566,6 +580,7 @@ export const cloneCreatorState = (
   },
   editableReference: state?.editableReference
     ? {
+        ...defaultCreatorReference,
         ...state.editableReference
       }
     : null,
@@ -574,6 +589,13 @@ export const cloneCreatorState = (
     ...defaultCreatorState.dashboard,
     ...(state?.dashboard || {})
   }
+})
+
+export const cloneCreatorReference = (
+  reference: Partial<CreatorReferenceViewState> | null | undefined
+): CreatorReferenceViewState => ({
+  ...defaultCreatorReference,
+  ...(reference || {})
 })
 
 export const cloneBlocklist = (blocklist: Partial<BlocklistState> | null | undefined): BlocklistState => ({

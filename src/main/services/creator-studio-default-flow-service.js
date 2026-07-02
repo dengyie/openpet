@@ -93,10 +93,6 @@ const createCreatorStudioDefaultFlowService = ({
     if (!plugin.enabled || !plugin.runnable || plugin.blockStatus?.blocked) {
       throw new Error('请先启用 Creator Studio 插件')
     }
-    if (getPluginServiceRuntimeStatus(plugin, CREATOR_STUDIO_SERVICE_ID) !== 'running') {
-      throw new Error('请先启动 Creator Studio Service，再使用生成并导入')
-    }
-
     const health = await imageGenerationModelService.checkHealth({})
     if (!health?.ok) {
       return createStructuredResult({
