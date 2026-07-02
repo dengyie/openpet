@@ -28,10 +28,32 @@ tool input, terminal transcripts, stdout, stderr, API keys, or full local paths.
 
 ## Manual Codex Setup
 
-Run the `Prepare Codex Hook Instructions` command from Control Center. It writes
-manual setup notes into `OPENPET_DATA_DIR/codex-hooks.manual.md` and creates an
-ingestion token at `OPENPET_DATA_DIR/ingest-token.txt`. The command does not
-modify `~/.codex` or any external agent config.
+For a one-command local setup, run:
+
+```sh
+npm run configure-agent-awareness:codex
+```
+
+The script creates or updates `~/.codex/hooks.json`, installs a best-effort
+sender at `~/.codex/hooks/openpet-agent-awareness.js`, and creates an ingestion
+token at `OPENPET_DATA_DIR/ingest-token.txt`. It preserves unrelated Codex
+hooks and backs up an existing `hooks.json` before changing it.
+
+Preview changes without writing files:
+
+```sh
+npm run configure-agent-awareness:codex -- --dry-run
+```
+
+Codex requires reviewing and trusting new command hooks before they run. After
+configuration, open a new Codex session and run `/hooks` once to trust the
+OpenPet hook.
+
+For manual setup instead, run the `Prepare Codex Hook Instructions` command from
+Control Center. It writes manual setup notes into
+`OPENPET_DATA_DIR/codex-hooks.manual.md` and creates an ingestion token at
+`OPENPET_DATA_DIR/ingest-token.txt`. The command does not modify `~/.codex` or
+any external agent config.
 
 Start the `Agent Awareness Service` entry before sending hook events. The service
 listens on `http://127.0.0.1:8795` and exposes:

@@ -204,7 +204,25 @@ minimum interval passes.
 
 ## Codex Setup Strategy
 
-`install-codex-hooks` writes:
+`npm run configure-agent-awareness:codex` provides the local one-command Codex
+setup path. It:
+
+```text
+~/.codex/hooks.json
+~/.codex/hooks/openpet-agent-awareness.js
+OPENPET_DATA_DIR/ingest-token.txt
+OPENPET_DATA_DIR/codex-hooks.manual.md
+```
+
+The script preserves unrelated Codex hooks, replaces older OpenPet hook
+handlers to stay idempotent, and backs up an existing `hooks.json` before
+writing changes. The generated Codex hook sender reads the ingest token from
+`OPENPET_DATA_DIR` at runtime; the token is not embedded in `hooks.json`.
+
+Codex still requires reviewing and trusting the new hook with `/hooks` before it
+runs. This is a Codex runtime trust gate, not an OpenPet limitation.
+
+`install-codex-hooks` remains the manual setup helper and writes:
 
 ```text
 OPENPET_DATA_DIR/ingest-token.txt
