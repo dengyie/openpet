@@ -1938,6 +1938,15 @@ button {
   gap: 8px;
 }
 
+.log-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #6b7280;
+  font-size: 12px;
+}
+
 .plugin-command-result {
   display: grid;
   gap: 6px;

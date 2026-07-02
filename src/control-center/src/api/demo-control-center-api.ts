@@ -1569,6 +1569,26 @@ const sendDemoPetChatMessage = async ({ message }: AiChatRequest = { message: ''
   }
 }
 
+const paginateEntries = <T,>(entries: T[], request: { page?: number, pageSize?: number } = {}) => {
+  const pageSize = Number.isInteger(Number(request.pageSize)) && Number(request.pageSize) > 0
+    ? Math.min(Number(request.pageSize), 200)
+    : 50
+  const page = Number.isInteger(Number(request.page)) && Number(request.page) > 0
+    ? Number(request.page)
+    : 1
+  const total = entries.length
+  const totalPages = Math.max(1, Math.ceil(total / pageSize))
+  const safePage = Math.min(page, totalPages)
+  const start = (safePage - 1) * pageSize
+  return {
+    entries: entries.slice(start, start + pageSize),
+    page: safePage,
+    pageSize,
+    total,
+    totalPages
+  }
+}
+
 const cloneDemoPluginLogs = (filters: PluginLogFilters = {}) => demoState.pluginLogs.filter((log) => {
   if (filters.pluginId && log.pluginId !== filters.pluginId) return false
   if (filters.level && log.level !== filters.level) return false
@@ -2706,7 +2726,7 @@ export const demoControlCenterAPI: ControlCenterApi = {
   },
   updatePlugin: async () => ({ ok: true, plugins: [] }),
   uninstallPlugin: async () => ({ ok: true, plugins: [] }),
-  getPluginLogs: async (filters) => cloneDemoPluginLogs(filters),
+  getPluginLogs: async (filters) => paginateEntries(cloneDemoPluginLogs(filters), filters || {}),
   exportPluginLogs: async (filters) => JSON.stringify(cloneDemoPluginLogs(filters), null, 2),
   clearPluginLogs: async () => {
     demoState.pluginLogs = []
@@ -2732,7 +2752,7 @@ export const demoControlCenterAPI: ControlCenterApi = {
     writeDemoState()
     return cloneServiceStatus(demoState.serviceStatus)
   },
-  getServiceLogs: async () => [],
+  getServiceLogs: async (filters) => paginateEntries([], filters || {}),
   exportServiceLogs: async () => '[]',
   clearServiceLogs: async () => [],
   rotateServiceToken: async () => {

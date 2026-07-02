@@ -1431,11 +1431,24 @@ export interface PluginLogEntry {
   message: string
 }
 
+export interface PaginatedLogsViewState<T> {
+  entries: T[]
+  page: number
+  pageSize: number
+  total: number
+  totalPages: number
+}
+
 export interface PluginLogFilters {
   pluginId?: string
   level?: string
   query?: string
   format?: 'json' | 'csv'
+}
+
+export interface PluginLogPageRequest extends PluginLogFilters {
+  page?: number
+  pageSize?: number
 }
 
 export interface CreatorActionsReadResponse {
@@ -2508,6 +2521,11 @@ export interface ServiceLogFilters {
   [key: string]: unknown
 }
 
+export interface ServiceLogPageRequest extends ServiceLogFilters {
+  page?: number
+  pageSize?: number
+}
+
 export interface ReleaseEvidenceFileSummary {
   path: string
   sha256: string
@@ -2987,13 +3005,13 @@ export interface ControlCenterApi {
   installPlugin: (selectionId: string) => Promise<PluginMutationResult>
   updatePlugin: (selectionId: string) => Promise<PluginMutationResult>
   uninstallPlugin: (pluginId: string, options?: { removeStorage?: boolean }) => Promise<PluginMutationResult>
-  getPluginLogs: (filters?: PluginLogFilters) => Promise<PluginLogEntry[]>
+  getPluginLogs: (filters?: PluginLogPageRequest) => Promise<PaginatedLogsViewState<PluginLogEntry>>
   exportPluginLogs: (filters?: PluginLogFilters) => Promise<string>
   clearPluginLogs: () => Promise<PluginLogEntry[]>
   clearPluginStorage: (pluginId: string) => Promise<Partial<PluginViewState>>
   getServiceStatus: () => Promise<ServiceStatusViewState>
   saveServiceConfig: (config: Partial<LocalHttpConfigViewState>) => Promise<ServiceStatusViewState>
-  getServiceLogs: (filters?: ServiceLogFilters) => Promise<ServiceLogEntry[]>
+  getServiceLogs: (filters?: ServiceLogPageRequest) => Promise<PaginatedLogsViewState<ServiceLogEntry>>
   exportServiceLogs: (filters?: ServiceLogFilters) => Promise<string>
   clearServiceLogs: () => Promise<ServiceLogEntry[]>
   rotateServiceToken: () => Promise<ServiceStatusViewState>

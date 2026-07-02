@@ -142,6 +142,32 @@ const createServiceHealthView = (health = {}, serviceEntry = {}) => {
 
 const isRecord = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 
+const normalizePageNumber = (value) => {
+  const numeric = Number(value)
+  return Number.isInteger(numeric) && numeric > 0 ? numeric : 1
+}
+
+const normalizePageSize = (value, fallback = 50) => {
+  const numeric = Number(value)
+  return Number.isInteger(numeric) && numeric > 0 ? Math.min(numeric, 200) : fallback
+}
+
+const paginateLogs = (entries, request = {}) => {
+  const pageSize = normalizePageSize(request.pageSize)
+  const page = normalizePageNumber(request.page)
+  const total = entries.length
+  const totalPages = Math.max(1, Math.ceil(total / pageSize))
+  const safePage = Math.min(page, totalPages)
+  const start = (safePage - 1) * pageSize
+  return {
+    entries: entries.slice(start, start + pageSize),
+    page: safePage,
+    pageSize,
+    total,
+    totalPages
+  }
+}
+
 const toSafeProposalSegment = (value, fallback = 'unknown') => {
   const normalized = String(value || '')
     .trim()
@@ -1738,6 +1764,7 @@ const createPluginService = ({ settingsService, petService, actionService, actio
   }
 
   const getLogs = (filters = {}) => filterLogs(getLogStore(), filters).map((entry) => ({ ...entry }))
+  const getLogPage = (filters = {}) => paginateLogs(getLogs(filters), filters)
 
   const exportLogEntries = ({ format = 'json', ...filters } = {}) => exportLogs(getLogs(filters), format)
 
@@ -1813,6 +1840,7 @@ const createPluginService = ({ settingsService, petService, actionService, actio
     checkServiceHealth,
     stopAllServices,
     getLogs,
+    getLogPage,
     exportLogs: exportLogEntries,
     clearLogs,
     setNativeExecutionApproved,

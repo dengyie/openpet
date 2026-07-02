@@ -6135,6 +6135,27 @@ test('plugin service filters and exports persisted logs', async () => {
   assert.match(exportedCsv, /Command started/)
 })
 
+test('plugin service paginates filtered logs for control center', async () => {
+  const service = createPluginService({
+    settingsService: createSettingsService({
+      plugins: { enabled: { 'official.basic-behavior': true } }
+    }),
+    petService: { say: async () => {} },
+    officialPlugins: [createOfficialPlugin()]
+  })
+
+  await service.runCommand('official.basic-behavior', 'greet')
+  await assert.rejects(() => service.runCommand('official.basic-behavior', 'missing'), /Plugin command not found/)
+
+  const page = service.getLogPage({ level: 'info', query: 'command', page: 2, pageSize: 1 })
+
+  assert.equal(page.page, 2)
+  assert.equal(page.pageSize, 1)
+  assert.equal(page.total, 3)
+  assert.equal(page.totalPages, 3)
+  assert.deepEqual(page.entries.map((entry) => `${entry.commandId}:${entry.message}`), ['greet:Command completed'])
+})
+
 test('plugin service exposes private storage stats and clears storage from control center', () => {
   const settingsService = createSettingsService({
     plugins: {
