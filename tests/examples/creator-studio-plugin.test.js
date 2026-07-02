@@ -1152,8 +1152,8 @@ test('creator studio run-step command uses host bridge for provider generation w
     assert.equal(run.artifacts.generatedImage.promptBuilder.version, 1)
     assert.equal(run.artifacts.generatedImage.promptBuilder.mode, 'single-action')
     assert.equal(run.artifacts.generatedImage.promptBuilder.promptPreview.truncated, false)
-    assert.match(run.artifacts.generatedImage.promptBuilder.promptPreview.text, /OpenPet desktop pet sprite asset/)
-    assert.match(run.artifacts.generatedImage.promptBuilder.promptPreview.text, /Action name: 原地打滚/)
+    assert.match(run.artifacts.generatedImage.promptBuilder.promptPreview.text, /Create one OpenPet action sheet of the current character doing this action: 原地打滚\./)
+    assert.match(run.artifacts.generatedImage.promptBuilder.promptPreview.text, /Action sheet label: 原地打滚\./)
     assert.deepEqual(run.artifacts.generatedImage.promptBuilder.warnings, [])
     assert.deepEqual(requests.map((entry) => entry.url), ['/creator/model-settings', '/creator/model-image-generate'])
   } finally {

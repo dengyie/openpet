@@ -1,4 +1,4 @@
-import { cloneActionsConfig, cloneAiConfig, cloneAiMemoryProfile, cloneAiPersonaProfile, cloneAiTalkTraceSummary, cloneCatalog, cloneChatMessages, cloneImageGenerationConfig, clonePetChatState, clonePetPacks, cloneServiceStatus, cloneSettings, defaultAboutInfo, defaultActionsConfig, defaultAiConfig, defaultAiMemoryProfile, defaultAiPersonaProfile, defaultAiTalkTraceSummary, defaultImageGenerationConfig, defaultPetChatState, defaultPetPacks, defaultServiceStatus, defaultSettings, defaultUpdateCheck } from '../lib/defaults.ts'
+import { cloneActionsConfig, cloneAiConfig, cloneAiMemoryProfile, cloneAiPersonaProfile, cloneAiTalkTraceSummary, cloneCatalog, cloneChatMessages, cloneCreatorLastRun, cloneCreatorReference, cloneCreatorState, cloneImageGenerationConfig, clonePetChatState, clonePetPacks, cloneServiceStatus, cloneSettings, defaultAboutInfo, defaultActionsConfig, defaultAiConfig, defaultAiMemoryProfile, defaultAiPersonaProfile, defaultAiTalkTraceSummary, defaultCreatorState, defaultImageGenerationConfig, defaultPetChatState, defaultPetPacks, defaultServiceStatus, defaultSettings, defaultUpdateCheck } from '../lib/defaults.ts'
 import { stripFileExtension } from '../../../shared/cursor-library.ts'
 import type {
   ActionFrameInspectRequest,
@@ -31,11 +31,20 @@ import type {
   ChatMessage,
   ControlCenterApi,
   ControlCenterSettings,
+  CreatorBindReferenceResult,
+  CreatorGenerateExistingActionRequest,
+  CreatorGenerateNewCharacterRequest,
+  CreatorLastRunViewState,
+  CreatorReferenceTargetType,
+  CreatorReferenceViewState,
+  CreatorStateViewState,
+  CreatorWorkflowResult,
   CreatorStudioDefaultFlowResult,
   CustomCursorRecord,
   ImageGenerationConfigViewState,
   JsonObject,
   PetChatBubbleViewState,
+  PetActionPlaybackResult,
   PetChatStateViewState,
   PetPackSummary,
   PetPackMutationResult,
@@ -1205,6 +1214,89 @@ const emitDemoActivePetPackChanged = (payload: ActivePetPackChangedEvent) => {
 }
 
 const demoState = readDemoState()
+const demoCreatorReferences = new Map<string, CreatorReferenceViewState>()
+let demoCreatorLastRun: CreatorLastRunViewState | null = null
+
+const getDemoCreatorReferenceKey = (targetType: CreatorReferenceTargetType, targetId: string) => `${targetType}:${targetId}`
+
+const getDemoEditableCreatorTarget = () => {
+  const activePack = demoState.petPacks.packs.find((pack) => pack.id === demoState.petPacks.activePackId) || demoState.petPacks.packs[0]
+  return {
+    ...defaultCreatorState.editableTarget,
+    displayName: activePack?.displayName || defaultCreatorState.editableTarget.displayName,
+    defaultAction: activePack?.defaultAction || '',
+    clickAction: activePack?.clickAction || '',
+    actionCount: Number(activePack?.actionCount || 0)
+  }
+}
+
+const createDemoCreatorState = (): CreatorStateViewState => {
+  const editableTarget = getDemoEditableCreatorTarget()
+  const editableReference = demoCreatorReferences.get(getDemoCreatorReferenceKey(editableTarget.targetType, editableTarget.targetId)) || null
+  return cloneCreatorState({
+    provider: {
+      ready: true,
+      code: 'provider_ready',
+      message: 'Demo image provider is ready',
+      provider: demoState.imageGenerationConfig.provider,
+      model: demoState.imageGenerationConfig.model
+    },
+    editableTarget,
+    editableReference,
+    lastRun: demoCreatorLastRun,
+    dashboard: {
+      available: true,
+      pluginId: 'openpet.creator-studio',
+      dashboardId: 'main',
+      serviceStatus: 'running',
+      reason: ''
+    }
+  })
+}
+
+const bindDemoCreatorReference = ({ targetType, targetId, sourcePath }: { targetType: CreatorReferenceTargetType; targetId: string; sourcePath: string }): CreatorBindReferenceResult => {
+  const key = getDemoCreatorReferenceKey(targetType, targetId)
+  const previous = demoCreatorReferences.get(key) || null
+  const now = new Date().toISOString()
+  const reference = cloneCreatorReference({
+    targetType,
+    targetId,
+    assetPath: sourcePath,
+    assetUrl: sourcePath,
+    fileName: sourcePath.split('/').pop() || 'reference.png',
+    width: 1024,
+    height: 1024,
+    contentHash: `demo-${targetType}-${targetId}`,
+    createdAt: previous?.createdAt || now,
+    updatedAt: now
+  })
+  demoCreatorReferences.set(key, reference)
+  return {
+    ok: true,
+    replaced: Boolean(previous),
+    reference
+  }
+}
+
+const getDemoActivePetSummary = () => {
+  const activePack = demoState.petPacks.packs.find((pack) => pack.id === demoState.petPacks.activePackId) || null
+  return activePack
+    ? {
+        id: activePack.id,
+        displayName: activePack.displayName,
+        version: activePack.version,
+        source: activePack.source,
+        active: activePack.active,
+        rootPath: activePack.rootPath
+      }
+    : null
+}
+
+const completeDemoCreatorRun = (run: Partial<CreatorLastRunViewState>) => {
+  demoCreatorLastRun = cloneCreatorLastRun(run)
+  return demoCreatorLastRun
+}
+
 const syncDemoStateFromStorage = () => {
   const nextState = readDemoState()
   demoState.settings = nextState.settings
@@ -1661,6 +1753,11 @@ export const demoControlCenterAPI: ControlCenterApi = {
   reinspectActionFrames: async ({ selectionId, actionId } = {}) => ({ ...createDemoInspection(actionId), selectionId: selectionId || 'demo-selection' }),
   clearActionFrameSelection: async () => ({ ok: true }),
   importActionFrames: async ({ actionId, label } = {}) => ({ ok: true, result: { importedAction: { id: actionId, label: label || actionId } }, animations: cloneActionsConfig(demoState.actionsConfig) }),
+  playPetAction: async (actionId: string): Promise<PetActionPlaybackResult> => ({
+    ok: true,
+    actionId,
+    source: 'demo-control-center'
+  }),
   saveActionsConfig: async (config) => {
     const triggerProposal = config?.triggerProposal
     const ruleProposal = triggerProposal && ['random', 'state', 'event'].includes(triggerProposal.type)
@@ -2364,6 +2461,72 @@ export const demoControlCenterAPI: ControlCenterApi = {
     return { id: pluginId, nativeExecutionApproved: approved }
   },
   savePluginConfig: async (pluginId, config) => ({ id: pluginId, config }),
+  getCreatorState: async () => createDemoCreatorState(),
+  bindCreatorReference: async ({ targetType, targetId, sourcePath }) => bindDemoCreatorReference({ targetType, targetId, sourcePath }),
+  generateCreatorNewCharacter: async (payload: CreatorGenerateNewCharacterRequest): Promise<CreatorWorkflowResult> => {
+    const targetId = `demo-pack:${String(payload.characterName || 'new-character').trim() || 'new-character'}`
+    const reference = bindDemoCreatorReference({
+      targetType: 'pet-pack',
+      targetId,
+      sourcePath: payload.referenceImagePath
+    }).reference
+    const run = completeDemoCreatorRun({
+      state: 'completed',
+      mode: 'new-character',
+      runId: `demo-new-character-${Date.now()}`,
+      commandId: 'generate-new-character',
+      message: `Imported demo character ${payload.characterName}`,
+      importedPackId: targetId,
+      activatedPackId: targetId
+    })
+    return {
+      ok: true,
+      state: 'completed',
+      code: 'completed',
+      message: `Imported demo character ${payload.characterName}`,
+      run,
+      reference,
+      activePet: getDemoActivePetSummary(),
+      diagnostics: null
+    }
+  },
+  generateCreatorExistingAction: async (payload: CreatorGenerateExistingActionRequest): Promise<CreatorWorkflowResult> => {
+    const editableTarget = getDemoEditableCreatorTarget()
+    const reference = payload.referenceImagePath
+      ? bindDemoCreatorReference({
+          targetType: editableTarget.targetType,
+          targetId: editableTarget.targetId,
+          sourcePath: payload.referenceImagePath
+        }).reference
+      : demoCreatorReferences.get(getDemoCreatorReferenceKey(editableTarget.targetType, editableTarget.targetId)) || null
+    const actionId = String(payload.actionName || 'custom-action').trim() || 'custom-action'
+    const run = completeDemoCreatorRun({
+      state: 'completed',
+      mode: 'existing-action',
+      runId: `demo-existing-action-${Date.now()}`,
+      commandId: 'generate-existing-action',
+      message: `Imported demo action ${actionId}`,
+      importedActionId: actionId
+    })
+    return {
+      ok: true,
+      state: 'completed',
+      code: 'completed',
+      message: `Imported demo action ${actionId}`,
+      run,
+      reference,
+      importedAction: {
+        actionId,
+        label: actionId
+      },
+      clickAction: actionId,
+      diagnostics: null
+    }
+  },
+  getCreatorLastRun: async () => ({
+    ok: true,
+    run: demoCreatorLastRun ? cloneCreatorLastRun(demoCreatorLastRun) : null
+  }),
   runCreatorStudioDefaultFlow: async (prompt) => createDemoCreatorStudioDefaultFlowResult(prompt),
   runPluginCommand: async (pluginId, commandId, payload) => {
     demoState.pluginLogs = [createDemoPluginLog(pluginId, 'Command completed', commandId), ...demoState.pluginLogs]
