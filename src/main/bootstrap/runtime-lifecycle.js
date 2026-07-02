@@ -1,6 +1,7 @@
 const { IPC } = require('../../shared/ipc-channels')
 
 const PLUGIN_SHUTDOWN_TIMEOUT_MS = 2000
+const noop = () => {}
 
 const registerRuntimeAppLifecycle = ({
   app,
@@ -148,11 +149,11 @@ const registerPetWindowLifecycle = ({
   pluginService,
   applyWindowScale,
   createPetRendererSettings,
-  maybeRunPackagedRuntimeSmoke,
-  maybeRunPackagedPluginCleanupEvidence,
-  maybeRunPackagedCreatorStudioEvidence,
-  maybeRunPackagedCreatorStudioUiE2e,
-  maybeRunPackagedCreateUiSmoke
+  maybeRunPackagedRuntimeSmoke = noop,
+  maybeRunPackagedPluginCleanupEvidence = noop,
+  maybeRunPackagedCreatorStudioEvidence = noop,
+  maybeRunPackagedCreatorStudioUiE2e = noop,
+  maybeRunPackagedCreateUiSmoke = noop
 }) => {
   let activePetWindow = petWindow
 

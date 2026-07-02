@@ -146,13 +146,15 @@ const normalizeEntryCommands = (commands = []) => {
   return commands.map((command) => {
     if (!command?.id) throw new Error('Plugin command entry id is required')
     assertSafeId(command.id, 'command entry id')
-    return {
+    const entry = {
       id: command.id,
       title: command.title || command.id,
       command: normalizeShellCommand(command.command, 'command'),
-      cwd: normalizeCwd(command.cwd, 'command entry cwd'),
-      timeoutMs: normalizeTimeoutMs(command.timeoutMs, 'command entry')
+      cwd: normalizeCwd(command.cwd, 'command entry cwd')
     }
+    const timeoutMs = normalizeTimeoutMs(command.timeoutMs, 'command entry')
+    if (timeoutMs !== undefined) entry.timeoutMs = timeoutMs
+    return entry
   })
 }
 

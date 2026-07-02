@@ -6,6 +6,7 @@ const DEFAULT_SCAN_INTERVAL_MS = 3000
 const DEFAULT_MAX_FILES = 12
 const DEFAULT_MAX_LINES_PER_FILE = 400
 const DEFAULT_MAX_SCAN_DEPTH = 5
+const DEFAULT_MAX_TAIL_BYTES = 256 * 1024
 
 const resolveCodexHome = ({ codexHome = process.env.CODEX_HOME || path.join(os.homedir(), '.codex') } = {}) => codexHome
 
@@ -130,20 +131,54 @@ const eventFromRolloutRecord = ({ filePath, record, sessionMeta = {}, fallbackTi
   return null
 }
 
+const readFirstLine = (fd, fileSize, maxBytes = 64 * 1024) => {
+  const chunks = []
+  let offset = 0
+  while (offset < fileSize && offset < maxBytes) {
+    const chunkSize = Math.min(8192, fileSize - offset, maxBytes - offset)
+    const buffer = Buffer.alloc(chunkSize)
+    const bytesRead = fs.readSync(fd, buffer, 0, chunkSize, offset)
+    if (!bytesRead) break
+    chunks.push(buffer.subarray(0, bytesRead))
+    const combined = Buffer.concat(chunks)
+    const newlineIndex = combined.indexOf(0x0a)
+    if (newlineIndex >= 0) return combined.subarray(0, newlineIndex).toString('utf-8').replace(/\r$/, '')
+    offset += bytesRead
+  }
+  return Buffer.concat(chunks).toString('utf-8').split(/\r?\n/, 1)[0] || ''
+}
+
+const readRolloutLines = ({ filePath, maxLines, maxTailBytes = DEFAULT_MAX_TAIL_BYTES }) => {
+  let fd = null
+  try {
+    fd = fs.openSync(filePath, 'r')
+    const stat = fs.fstatSync(fd)
+    if (!stat.size) return []
+    const tailBytes = Math.min(stat.size, Math.max(8192, Number(maxTailBytes) || DEFAULT_MAX_TAIL_BYTES))
+    const tailBuffer = Buffer.alloc(tailBytes)
+    fs.readSync(fd, tailBuffer, 0, tailBytes, stat.size - tailBytes)
+    const allTailLines = tailBuffer.toString('utf-8').split(/\r?\n/).filter(Boolean)
+    const tailLines = allTailLines.slice(-Math.max(1, maxLines))
+    const firstLine = tailBytes === stat.size
+      ? allTailLines[0]
+      : readFirstLine(fd, stat.size)
+    return [...new Set([firstLine, ...tailLines].filter(Boolean))]
+  } catch (_) {
+    return []
+  } finally {
+    if (fd !== null) {
+      try {
+        fs.closeSync(fd)
+      } catch (_) {}
+    }
+  }
+}
+
 const readRolloutEvents = ({
   filePath,
   maxLines = DEFAULT_MAX_LINES_PER_FILE
 }) => {
-  let text = ''
-  try {
-    text = fs.readFileSync(filePath, 'utf-8')
-  } catch (_) {
-    return []
-  }
-  const allLines = text.split(/\r?\n/).filter(Boolean)
-  const headLines = allLines.slice(0, 1)
-  const tailLines = allLines.slice(-Math.max(1, maxLines))
-  const lines = [...new Set([...headLines, ...tailLines])]
+  const lines = readRolloutLines({ filePath, maxLines })
   const events = []
   let sessionMeta = {}
   const fallbackTimestamp = Date.now()
@@ -242,5 +277,6 @@ module.exports = {
   eventFromRolloutRecord,
   listRolloutFiles,
   readRolloutEvents,
+  readRolloutLines,
   resolveCodexHome
 }
